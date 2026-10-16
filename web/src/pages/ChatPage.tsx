@@ -1,105 +1,48 @@
 import {
-  CheckOutlined, CodeOutlined, FileTextOutlined, PlusOutlined, RobotOutlined,
-  SendOutlined, StopOutlined, UserOutlined, WarningOutlined,
+  AlertOutlined, CloudServerOutlined, GlobalOutlined, LoginOutlined, PlusOutlined, RobotOutlined, SendOutlined, StopOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Avatar, Button, Card, Collapse, Empty, Flex, Form, Input, Modal, Radio, Space, Spin, Tag,
-  Typography, theme,
+  Alert, App, Button, Card, Col, Empty, Flex, Form, Input, Modal, Radio, Row, Segmented, Space, Spin, Tag, Typography, theme,
 } from 'antd'
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import {
   createAgentSession, decideApproval, fetchAgentSessions, fetchApprovals, fetchAssets, fetchSessionMessages,
-  sendSessionMessage, type AgentSession, type Approval, type ContentPart, type PiMessage,
+  sendSessionMessage, type AgentSession, type Approval, type PiMessage,
 } from '../api'
 import { useSession } from '../app/session'
-import { Markdown } from '../components/Markdown'
+import { ChatConversation, textOf, type ChatRow } from '../components/ChatConversation'
 import { SessionStatusTag, fmtTime } from '../components/format'
-import { useI18n } from '../i18n'
+import { useI18n, type MsgKey } from '../i18n'
 
-const textOf = (content: string | ContentPart[]) =>
-  typeof content === 'string' ? content : content.map(p => (p.type === 'text' ? p.text : '')).join('')
+// 常用提问模板：空会话时给出，点了只是填进输入框，发不发由人决定
+const TEMPLATES: { key: string; icon: ReactNode; title: MsgKey; prompt: MsgKey }[] = [
+  { key: 'inspect', icon: <CloudServerOutlined />, title: 'tplInspectTitle', prompt: 'tplInspectPrompt' },
+  { key: 'login', icon: <LoginOutlined />, title: 'tplLoginTitle', prompt: 'tplLoginPrompt' },
+  { key: 'network', icon: <GlobalOutlined />, title: 'tplNetworkTitle', prompt: 'tplNetworkPrompt' },
+  { key: 'incident', icon: <AlertOutlined />, title: 'tplIncidentTitle', prompt: 'tplIncidentPrompt' },
+]
 
-// 工具调用卡片：exec 显示主机与命令，report 显示标题、正文可展开，其余原样给参数
-function ToolCall({ name, args, hosts }: { name: string; args: Record<string, unknown>; hosts: Record<string, string> }) {
-  const { t } = useI18n()
-  if (name === 'report') {
-    return (
-      <Collapse
-        size="small"
-        className="chat-tool"
-        items={[{
-          key: 'r',
-          label: <Space><FileTextOutlined />{t('toolReport', { title: String(args.title ?? '') })}</Space>,
-          children: <Markdown text={String(args.markdown ?? '')} />,
-        }]}
-      />
-    )
-  }
-  const host = String(args.host ?? '')
-  return (
-    <Card size="small" className="chat-tool">
-      <Space size={6} className="chat-tool-title">
-        <CodeOutlined />
-        {name === 'exec' ? t('toolExec', { host: hosts[host] ?? host }) : t('toolCall', { name })}
-      </Space>
-      <pre className="chat-code">{name === 'exec' ? String(args.cmd ?? '') : JSON.stringify(args, null, 2)}</pre>
-    </Card>
-  )
-}
-
-function Bubble({ m, hosts }: { m: PiMessage; hosts: Record<string, string> }) {
+function Templates({ onPick }: { onPick: (prompt: string) => void }) {
   const { t } = useI18n()
   const { token } = theme.useToken()
-  if (m.role === 'user') {
-    return (
-      <Flex justify="flex-end" gap={8} className="chat-row">
-        <div className="chat-bubble chat-bubble-user" style={{ background: token.colorPrimaryBg }}>{textOf(m.content)}</div>
-        <Avatar icon={<UserOutlined />} />
-      </Flex>
-    )
-  }
-  if (m.role === 'toolResult') {
-    return (
-      <div className="chat-indent">
-        <Collapse
-          size="small"
-          className="chat-tool"
-          items={[{
-            key: 'r',
-            label: (
-              <Space>
-                {m.isError ? <WarningOutlined style={{ color: token.colorError }} /> : <CheckOutlined style={{ color: token.colorSuccess }} />}
-                {t(m.isError ? 'toolFailed' : 'toolResult', { name: m.toolName })}
-              </Space>
-            ),
-            children: <pre className="chat-code">{textOf(m.content)}</pre>,
-          }]}
-        />
-      </div>
-    )
-  }
-  const parts = m.content.filter(p => (p.type === 'text' && p.text) || p.type === 'toolCall')
   return (
-    <Flex gap={8} className="chat-row">
-      <Avatar icon={<RobotOutlined />} style={{ background: token.colorPrimary, flex: 'none' }} />
-      <Flex vertical gap={8} style={{ minWidth: 0, maxWidth: '85%' }}>
-        {parts.map((p, i) =>
-          p.type === 'text' ? (
-            <div key={i} className="chat-bubble" style={{ background: token.colorFillQuaternary }}>
-              <Markdown text={p.text} />
-            </div>
-          ) : p.type === 'toolCall' ? (
-            <ToolCall key={i} name={p.name} args={p.arguments ?? {}} hosts={hosts} />
-          ) : null,
-        )}
-        {m.errorMessage && <Alert type="error" showIcon title={m.errorMessage} />}
-        {(m.stopReason === 'length' || m.stopReason === 'max_turns') && (
-          <Alert type="warning" showIcon title={t('chatTruncated')} />
-        )}
-      </Flex>
-    </Flex>
+    <Row gutter={[12, 12]} style={{ maxWidth: 760, width: '100%' }}>
+      {TEMPLATES.map(x => (
+        <Col key={x.key} xs={24} md={12}>
+          <Card size="small" hoverable onClick={() => onPick(t(x.prompt))} style={{ height: '100%' }}>
+            <Space align="start">
+              <span style={{ color: token.colorPrimary, fontSize: 18 }}>{x.icon}</span>
+              <div>
+                <Typography.Text strong>{t(x.title)}</Typography.Text>
+                <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} style={{ margin: 0, fontSize: 12 }}>{t(x.prompt)}</Typography.Paragraph>
+              </div>
+            </Space>
+          </Card>
+        </Col>
+      ))}
+    </Row>
   )
 }
 
@@ -186,8 +129,10 @@ export function ChatPage() {
   const { t } = useI18n()
   const { me, group, groups, setGroupId } = useSession()
   const { sessionId } = useParams()
+  const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const client = useQueryClient()
+  const { message } = App.useApp()
   const { token } = theme.useToken()
   const [creating, setCreating] = useState(false)
   const [prompt, setPrompt] = useState('')
@@ -195,10 +140,12 @@ export function ChatPage() {
   const [pending, setPending] = useState<string | null>(null)
   // 流式中的消息：message_update 给的是累积的完整消息，直接替换
   const [live, setLive] = useState<PiMessage | null>(null)
-  const [runningTool, setRunningTool] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [kind, setKind] = useState<'' | 'chat' | 'task'>('')
   const abort = useRef<AbortController | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLTextAreaElement>(null)
 
   const sessions = useQuery({
     queryKey: ['sessions', group?.id],
@@ -207,11 +154,14 @@ export function ChatPage() {
   })
   const session = sessions.data?.find(s => s.id === sessionId)
   const isRunning = busy || session?.status === 'running'
+  const shown = (sessions.data ?? []).filter(s =>
+    (!kind || s.kind === kind) && (!search || (s.title ?? '').toLowerCase().includes(search.toLowerCase())),
+  )
 
   // 别的标签页或定时任务正在跑时，本页没有流，靠轮询跟上
   const messages = useQuery({
     queryKey: ['messages', sessionId],
-    queryFn: () => fetchSessionMessages(sessionId!).then(ms => ms.map(m => m.content)),
+    queryFn: () => fetchSessionMessages(sessionId!).then(ms => ms.map((m): ChatRow => ({ message: m.content, at: m.created_at }))),
     enabled: !!session,
     refetchInterval: session?.status === 'running' && !busy ? 3_000 : false,
   })
@@ -244,6 +194,15 @@ export function ChatPage() {
     return () => { stale = true }
   }, [sessionId, sessions.data, session, groups, group, setGroupId])
 
+  // 从资产详情"一键排查"或模板进来时带 ?prompt=，填进输入框后从地址栏拿掉
+  useEffect(() => {
+    const p = params.get('prompt')
+    if (!p || !session) return
+    setPrompt(p)
+    setParams({}, { replace: true })
+    input.current?.focus()
+  }, [params, session, setParams])
+
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'end' })
   }, [messages.data, live, pending, inline.length])
@@ -253,6 +212,18 @@ export function ChatPage() {
 
   const canChat = group?.role === 'admin' || group?.role === 'analyst'
   const canSend = !!session && canChat && session.initiator === me.username && session.status === 'idle' && !busy
+
+  // 没选会话时点模板：直接新建一个演练会话，把模板填进去
+  const startWith = async (text: string) => {
+    if (!group || !canChat) return
+    try {
+      const s = await createAgentSession({ groupId: group.id, dryRun: true })
+      client.invalidateQueries({ queryKey: ['sessions', group.id] })
+      navigate(`/chat/${s.id}?prompt=${encodeURIComponent(text)}`)
+    } catch (e) {
+      message.error(String(e))
+    }
+  }
 
   const submit = async () => {
     const text = prompt.trim()
@@ -273,8 +244,6 @@ export function ChatPage() {
           setLive(null)
           client.invalidateQueries({ queryKey: ['messages', session.id] })
         }
-        if (ev.type === 'tool_execution_start') setRunningTool(ev.toolName ?? '')
-        if (ev.type === 'tool_execution_end') setRunningTool(null)
       }, ctl.signal)
     } catch (e) {
       if (!ctl.signal.aborted) setError(String(e))
@@ -284,14 +253,19 @@ export function ChatPage() {
       await client.invalidateQueries({ queryKey: ['sessions', group?.id] })
       setLive(null)
       setPending(null)
-      setRunningTool(null)
       setBusy(false)
     }
   }
 
   const history = messages.data ?? []
   // 首条 user 消息入库前先占位，避免发出去的话"消失"一下
-  const showPending = pending && !history.some(m => m.role === 'user' && textOf(m.content) === pending)
+  const showPending = pending && !history.some(r => r.message.role === 'user' && textOf(r.message.content) === pending)
+  const rows: ChatRow[] = [
+    ...history,
+    ...(showPending ? [{ message: { role: 'user', content: pending } as PiMessage }] : []),
+    ...(live ? [{ message: live }] : []),
+  ]
+  const lastIsAssistant = rows.at(-1)?.message.role === 'assistant'
 
   if (!group) {
     return <Empty style={{ marginTop: 120 }} description={t('noGroupsHint')} />
@@ -304,28 +278,35 @@ export function ChatPage() {
         title={t('sessions')}
         size="small"
         extra={canChat && <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setCreating(true)}>{t('newChat')}</Button>}
-        styles={{ body: { padding: 0, overflow: 'auto', flex: 1 } }}
+        styles={{ body: { padding: 0, overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column' } }}
       >
-        {sessions.isPending && <Spin style={{ display: 'block', margin: 24 }} />}
-        {sessions.data?.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noSessions')} />}
-        {sessions.data?.map(s => (
-          <div
-            key={s.id}
-            className="chat-session-item"
-            style={s.id === sessionId ? { background: token.controlItemBgActive } : undefined}
-            onClick={() => navigate(`/chat/${s.id}`)}
-          >
-            <Typography.Text ellipsis strong style={{ display: 'block' }}>
-              {s.title || t(s.kind === 'task' ? 'taskSession' : 'chatSession')}
-            </Typography.Text>
-            <Space size={4} wrap style={{ marginTop: 4 }}>
-              <SessionStatusTag value={s.status} />
-              {s.kind === 'task' && <Tag>{t('taskSession')}</Tag>}
-              {s.dry_run === false && <Tag color="red">{t('liveRun')}</Tag>}
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(s.created_at)}</Typography.Text>
-            </Space>
-          </div>
-        ))}
+        <div className="chat-session-filter">
+          <Input.Search size="small" allowClear placeholder={t('searchSessions')} onChange={e => setSearch(e.target.value)} />
+          <Segmented size="small" block value={kind} onChange={v => setKind(v as '' | 'chat' | 'task')}
+            options={[{ value: '', label: t('all') }, { value: 'chat', label: t('chatSession') }, { value: 'task', label: t('taskSession') }]} />
+        </div>
+        <div style={{ overflow: 'auto', flex: 1 }}>
+          {sessions.isPending && <Spin style={{ display: 'block', margin: 24 }} />}
+          {sessions.data && shown.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noSessions')} />}
+          {shown.map(s => (
+            <div
+              key={s.id}
+              className="chat-session-item"
+              style={s.id === sessionId ? { background: token.controlItemBgActive } : undefined}
+              onClick={() => navigate(`/chat/${s.id}`)}
+            >
+              <Typography.Text ellipsis strong style={{ display: 'block' }}>
+                {s.title || t(s.kind === 'task' ? 'taskSession' : 'chatSession')}
+              </Typography.Text>
+              <Space size={4} wrap style={{ marginTop: 4 }}>
+                <SessionStatusTag value={s.status} />
+                {s.kind === 'task' && <Tag>{t('taskSession')}</Tag>}
+                {s.dry_run === false && <Tag color="red">{t('liveRun')}</Tag>}
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(s.created_at)}</Typography.Text>
+              </Space>
+            </div>
+          ))}
+        </div>
       </Card>
 
       <Card className="chat-main" size="small" styles={{ body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: 0 } }}
@@ -339,23 +320,27 @@ export function ChatPage() {
         extra={session && <Typography.Text type="secondary">{session.initiator} · {session.model}</Typography.Text>}
       >
         {!session ? (
-          <Empty style={{ margin: 'auto' }} image={<RobotOutlined style={{ fontSize: 56, color: token.colorPrimary }} />} description={t('pickSession')}>
-            {canChat && <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>{t('newChat')}</Button>}
-          </Empty>
+          <Flex vertical align="center" gap={20} className="chat-welcome">
+            <RobotOutlined style={{ fontSize: 48, color: token.colorPrimary }} />
+            <div style={{ textAlign: 'center' }}>
+              <Typography.Title level={4} style={{ margin: 0 }}>{t('welcomeTitle')}</Typography.Title>
+              <Typography.Text type="secondary">{t('welcomeSubtitle', { name: group.name })}</Typography.Text>
+            </div>
+            {canChat ? <Templates onPick={startWith} /> : <Alert type="info" showIcon title={t('chatReadonly')} />}
+          </Flex>
         ) : (
           <>
             <div className="chat-log">
               {messages.isPending && <Spin />}
-              {history.map((m, i) => <Bubble key={i} m={m} hosts={hosts} />)}
-              {showPending && <Bubble m={{ role: 'user', content: pending }} hosts={hosts} />}
-              {live && <Bubble m={live} hosts={hosts} />}
-              <InlineApprovals rows={inline} hosts={hosts} onDecided={() => approvals.refetch()} />
-              {runningTool !== null && (
-                <Space className="chat-indent" style={{ color: token.colorTextSecondary }}>
-                  <Spin size="small" />{t('toolRunning', { name: runningTool })}
-                </Space>
+              {!messages.isPending && rows.length === 0 && canSend && (
+                <Flex vertical align="center" gap={16} className="chat-welcome">
+                  <Typography.Text type="secondary">{t('templatesHint')}</Typography.Text>
+                  <Templates onPick={p => { setPrompt(p); input.current?.focus() }} />
+                </Flex>
               )}
-              {busy && runningTool === null && !live && (
+              <ChatConversation rows={rows} hosts={hosts} />
+              <InlineApprovals rows={inline} hosts={hosts} onDecided={() => approvals.refetch()} />
+              {busy && !lastIsAssistant && (
                 <Space className="chat-indent" style={{ color: token.colorTextSecondary }}><Spin size="small" />{t('thinking')}</Space>
               )}
               {session.error && <Alert className="chat-indent" type="error" showIcon title={session.error} />}
@@ -364,6 +349,7 @@ export function ChatPage() {
             </div>
             <div className="chat-composer" style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}>
               <Input.TextArea
+                ref={r => { input.current = r?.resizableTextArea?.textArea ?? null }}
                 value={prompt}
                 disabled={!canSend}
                 autoSize={{ minRows: 2, maxRows: 8 }}
@@ -398,4 +384,3 @@ export function ChatPage() {
     </div>
   )
 }
-

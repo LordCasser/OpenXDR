@@ -16,12 +16,12 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/incidents?status=` | incident 列表（最新 50 条），含派生严重度与告警数 |
+| GET | `/api/incidents?status=&assetId=` | incident 列表（最新 50 条），含派生严重度与告警数；`assetId` 筛涉及该主机的事件 |
 | GET | `/api/incidents/{id}` | 详情：实体图、告警明细（含原始事件）、AI verdict |
 | POST | `/api/incidents/{id}/status` | `{"status":"open\|closed\|false_positive"}` |
 | GET | `/api/incidents/{id}/report` | 事件报告（Markdown 附件下载）：判定、攻击链、涉及实体、告警时间线、处置记录、处置建议 |
 | GET | `/api/events` | 原始事件检索，参数见下 |
-| GET | `/api/stats` | 概览：24h 降噪漏斗、告警趋势、Top 规则、资产在线率 |
+| GET | `/api/stats` | 概览：24h 降噪漏斗、告警趋势、按级别的告警分布（`alertsBySeverity`）、Top 规则、资产在线率 |
 | GET | `/api/rules` | 引擎当前加载的规则（热重载后即时反映），含数据源覆盖标记与 ATT&CK 标签 |
 | GET | `/api/attack` | ATT&CK 覆盖矩阵：按杀伤链顺序的战术列与技术格，含未打标签、无数据源的规则数 |
 | POST | `/api/hunt` | 自然语言狩猎：`{"question"}` → `{answer, steps}`。模型用只读调查工具查证后作答，`steps` 是调用过的工具与参数，供复核。未配置 `AI_MODEL` 返回 503 |
@@ -54,7 +54,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/commands?incidentId=` | 指令历史 |
+| GET | `/api/commands?incidentId=&assetId=` | 指令历史，可按事件或主机筛选 |
 | POST | `/api/commands` | `{"kind":"kill_process\|isolate_host\|unisolate_host\|exec","assetId","incidentId","pid","dryRun"}`；`exec` 另带 `"cmd"`（必填）与 `"timeoutMs"`（0 = agent 默认 60s），结果回写 `exitCode` / `stdout` / `stderr` / `truncated`（各截断到 64KB） |
 
 需 server 配置 `RESPONSE_ENABLED=true`；隔离要求 `ISOLATION_ALLOW` 包含 server

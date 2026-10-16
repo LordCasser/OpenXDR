@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Badge, Card, Input, Select, Space, Table, Tag } from 'antd'
+import { App, Badge, Input, Select, Space, Table, Tag } from 'antd'
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { assignAsset, fetchAssets, unassignAsset, type Asset } from '../api'
 import { useSession } from '../app/session'
 import { fmtTime } from '../components/format'
-import { Page } from '../components/Page'
+import { FilterCard, Page } from '../components/Page'
 import { useI18n } from '../i18n'
 
 // 心跳超过 5 分钟视为失联——agent 掉线本身就是值得注意的信号
@@ -44,9 +45,9 @@ export function AssetsPage() {
 
   return (
     <Page title={t('navAssets')} subtitle={t('assetsSummary', { total, online: up })}>
-      <Card styles={{ body: { padding: 0 } }}
-        title={
-          <Space wrap style={{ padding: '8px 0' }}>
+      <FilterCard
+        filters={
+          <Space wrap>
             <Input.Search allowClear style={{ width: 280 }} placeholder={t('assetSearchHint')} onSearch={setQ} onChange={e => !e.target.value && setQ('')} />
             <Select style={{ width: 180 }} value={groupFilter} onChange={setGroupFilter} options={[{ value: '', label: t('allGroups') }, ...groupOptions]} />
           </Space>
@@ -59,7 +60,7 @@ export function AssetsPage() {
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
           columns={[
             { title: t('thStatus'), width: 100, render: (_, a) => <Badge status={online(a) ? 'success' : 'default'} text={t(online(a) ? 'online' : 'stale')} /> },
-            { title: t('thHostname'), dataIndex: 'hostname', sorter: (a, b) => a.hostname.localeCompare(b.hostname) },
+            { title: t('thHostname'), dataIndex: 'hostname', sorter: (a, b) => a.hostname.localeCompare(b.hostname), render: (v, a) => <Link to={`/assets/${a.id}`}>{v}</Link> },
             { title: 'OS', dataIndex: 'os', width: 100, render: v => v ?? '-' },
             { title: t('thIP'), dataIndex: 'ipAddrs', render: v => v?.join(', ') ?? '-' },
             {
@@ -72,7 +73,7 @@ export function AssetsPage() {
             { title: t('thLastSeen'), dataIndex: 'lastSeen', width: 180, render: fmtTime, sorter: (a, b) => a.lastSeen.localeCompare(b.lastSeen) },
           ]}
         />
-      </Card>
+      </FilterCard>
     </Page>
   )
 }

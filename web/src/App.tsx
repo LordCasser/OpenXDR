@@ -49,6 +49,8 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <Layout />,
+    // 首屏懒加载页面时的占位
+    hydrateFallbackElement: <Spin fullscreen />,
     children: [
       { index: true, element: <Home /> },
       { path: 'chat', ...page(() => import('./pages/ChatPage'), 'ChatPage') },
@@ -59,6 +61,7 @@ const router = createBrowserRouter([
       { path: 'events', ...page(() => import('./pages/EventsPage'), 'EventsPage') },
       { path: 'hunt', ...page(() => import('./pages/HuntPage'), 'HuntPage', true) },
       { path: 'assets', ...page(() => import('./pages/AssetsPage'), 'AssetsPage') },
+      { path: 'assets/:id', ...page(() => import('./pages/AssetDetailPage'), 'AssetDetailPage') },
       { path: 'reports', ...page(() => import('./pages/ReportsPage'), 'ReportsPage') },
       { path: 'tasks', ...page(() => import('./pages/TasksPage'), 'TasksPage') },
       { path: 'approvals', ...page(() => import('./pages/ApprovalsPage'), 'ApprovalsPage') },

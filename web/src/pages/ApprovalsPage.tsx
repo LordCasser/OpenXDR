@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { createPolicy, decideApproval, deletePolicy, fetchApprovals, fetchAssets, fetchPolicies, type Approval, type CommandPolicy } from '../api'
 import { useSession } from '../app/session'
+import { HostLink } from '../components/HostLink'
 import { Page } from '../components/Page'
 import { fmtTime } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
@@ -98,7 +99,7 @@ export function ApprovalsPage() {
   const pending = all.filter(a => a.status === 'pending')
   const columns = (withActions: boolean) => [
     { title: t('thTime'), dataIndex: 'created_at', width: 170, render: fmtTime },
-    { title: t('thHostname'), dataIndex: 'asset_id', width: 140, render: (v: string) => hosts[v] ?? v.slice(0, 8) },
+    { title: t('thHostname'), dataIndex: 'asset_id', width: 140, render: (v: string) => <HostLink id={v} /> },
     { title: t('apCmd'), dataIndex: 'cmd', render: (v: string) => <code className="cmd-cell">{v}</code> },
     { title: t('thMode'), dataIndex: 'dry_run', width: 90, render: (v: boolean) => <Tag color={v ? 'default' : 'red'}>{t(v ? 'dryRun' : 'liveRun')}</Tag> },
     { title: t('apRequester'), width: 140, render: (_: unknown, a: Approval) => <Space size={4}><Tag>{a.origin === 'ai' ? 'AI' : t('human')}</Tag>{a.requested_by}</Space> },

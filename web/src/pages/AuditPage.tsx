@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { Card, Input, Table, Tag } from 'antd'
+import { Input, Table, Tag } from 'antd'
 import { useState } from 'react'
 import { fetchAudit, type AuditRow } from '../api'
-import { Page } from '../components/Page'
+import { FilterCard, Page } from '../components/Page'
 import { fmtTime } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
@@ -42,8 +42,7 @@ export function AuditPage() {
 
   return (
     <Page title={t('navAudit')} subtitle={t('auditSubtitle')}>
-      <Card styles={{ body: { padding: 0 } }}
-        title={<Input.Search allowClear style={{ width: 300, margin: '8px 0' }} placeholder={t('auditSearchHint')} onSearch={setQ} onChange={e => !e.target.value && setQ('')} />}>
+      <FilterCard filters={<Input.Search allowClear style={{ width: 300 }} placeholder={t('auditSearchHint')} onSearch={setQ} onChange={e => !e.target.value && setQ('')} />}>
         <Table<AuditRow>
           size="small"
           rowKey="id"
@@ -59,7 +58,7 @@ export function AuditPage() {
             { title: t('thIP2'), dataIndex: 'remoteAddr', width: 150 },
           ]}
         />
-      </Card>
+      </FilterCard>
     </Page>
   )
 }

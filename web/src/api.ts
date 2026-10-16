@@ -96,8 +96,12 @@ export async function login(username: string, password: string): Promise<Me> {
 
 export const logout = () => post('/api/logout')
 
-export const fetchIncidents = (status?: string) =>
-  get<IncidentSummary[]>(status ? `/api/incidents?status=${status}` : '/api/incidents')
+export const fetchIncidents = (status?: string, assetId?: string) => {
+  const qs = new URLSearchParams()
+  if (status) qs.set('status', status)
+  if (assetId) qs.set('assetId', assetId)
+  return get<IncidentSummary[]>(`/api/incidents?${qs}`)
+}
 
 export const fetchIncident = (id: string) => get<IncidentDetail>(`/api/incidents/${id}`)
 
@@ -132,8 +136,8 @@ export interface CommandRow {
   completedAt: string | null
 }
 
-export const fetchCommands = (incidentId: string) =>
-  get<CommandRow[]>(`/api/commands?incidentId=${incidentId}`)
+export const fetchCommands = (filter: { incidentId?: string; assetId?: string }) =>
+  get<CommandRow[]>(`/api/commands?${new URLSearchParams(filter as Record<string, string>)}`)
 
 export async function issueCommand(body: {
   kind: string
@@ -199,6 +203,7 @@ export interface Stats {
   incidentsByStatus: Record<string, number>
   alertTrend: { hour: string; count: number }[]
   topRules: { ruleId: string; ruleTitle: string | null; count: number }[]
+  alertsBySeverity: Record<string, number>
   assetsTotal: number
   assetsOnline: number
 }
@@ -217,6 +222,7 @@ export interface EventRow {
 }
 
 export const searchEvents = (params: {
+  assetId?: string
   q?: string
   source?: string
   classUid?: number
@@ -224,6 +230,7 @@ export const searchEvents = (params: {
 }) => {
   const qs = new URLSearchParams()
   if (params.q) qs.set('q', params.q)
+  if (params.assetId) qs.set('assetId', params.assetId)
   if (params.source) qs.set('source', params.source)
   if (params.classUid) qs.set('classUid', String(params.classUid))
   if (params.hours)
@@ -423,6 +430,7 @@ export type PiMessage =
 
 export interface SessionMessage {
   id: string
+  created_at: string
   seq: number
   role: string
   content: PiMessage
@@ -582,3 +590,16 @@ export const updateTask = async (
   body: { enabled?: boolean; customSchedule?: string },
 ): Promise<TaskRow> => (await send('PATCH', `/api/tasks/${id}`, body)).json()
 export const fetchTaskRuns = (id: string) => get<TaskRunRow[]>(`/api/tasks/${id}/runs`)
+
+// 采集配置：随 Register 下发给 agent；字段缺省表示用 agent 内置默认
+export interface AgentConfig {
+  fileWatchDirs?: string[]
+  collectFiles?: boolean
+  collectAuth?: boolean
+  collectPersist?: boolean
+  collectNetwork?: boolean
+}
+
+export const fetchAgentConfig = (assetId: string) => get<AgentConfig>(`/api/assets/${assetId}/config`)
+export const saveAgentConfig = async (assetId: string, cfg: AgentConfig): Promise<AgentConfig> =>
+  (await send('PUT', `/api/assets/${assetId}/config`, cfg)).json()

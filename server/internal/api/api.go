@@ -91,6 +91,15 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 		if status := r.URL.Query().Get("status"); status != "" {
 			q = q.Where(incident.StatusEQ(status))
 		}
+		// 资产详情页：涉及这台主机的事件
+		if v := r.URL.Query().Get("assetId"); v != "" {
+			id, err := uuid.Parse(v)
+			if err != nil {
+				http.Error(w, "无效的 assetId", http.StatusBadRequest)
+				return
+			}
+			q = q.Where(incident.HasAlertsWith(alert.AssetIDEQ(id)))
+		}
 		incidents, err := q.Order(ent.Desc(incident.FieldCreatedAt)).Limit(50).All(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

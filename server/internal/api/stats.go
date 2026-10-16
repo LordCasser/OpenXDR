@@ -34,8 +34,10 @@ type statsResponse struct {
 	IncidentsByStatus map[string]int `json:"incidentsByStatus"`
 	AlertTrend        []trendBucket  `json:"alertTrend"`
 	TopRules          []topRule      `json:"topRules"`
-	AssetsTotal       int            `json:"assetsTotal"`
-	AssetsOnline      int            `json:"assetsOnline"`
+	// 24h 告警按级别累计（去重后计数求和），键为 1~5
+	AlertsBySeverity map[int16]int `json:"alertsBySeverity"`
+	AssetsTotal      int           `json:"assetsTotal"`
+	AssetsOnline     int           `json:"assetsOnline"`
 }
 
 func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
@@ -49,6 +51,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 		since := now.Add(-24 * time.Hour)
 		out := statsResponse{
 			IncidentsByStatus: map[string]int{},
+			AlertsBySeverity:  map[int16]int{},
 			AlertTrend:        make([]trendBucket, 24),
 		}
 
@@ -81,7 +84,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 		alerts, err := db.Alert.Query().
 			Where(entalert.TsGTE(since)).
 			Where(s.alert()...).
-			Select(entalert.FieldTs, entalert.FieldCount).
+			Select(entalert.FieldTs, entalert.FieldCount, entalert.FieldSeverity).
 			All(ctx)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -93,6 +96,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 		}
 		for _, a := range alerts {
 			out.Alerts24h += a.Count
+			out.AlertsBySeverity[a.Severity] += a.Count
 			if idx := int(a.Ts.Sub(base) / time.Hour); idx >= 0 && idx < 24 {
 				out.AlertTrend[idx].Count += a.Count
 			}

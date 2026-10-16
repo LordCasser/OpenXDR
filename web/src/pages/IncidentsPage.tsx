@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { Badge, Card, Segmented, Table, Tooltip } from 'antd'
+import { Badge, Segmented, Table, Tooltip } from 'antd'
 import { Link, useSearchParams } from 'react-router'
 import { fetchIncidents, type IncidentSummary } from '../api'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, fmtTime, incidentStatusKey } from '../components/format'
-import { Page } from '../components/Page'
+import { FilterCard, Page } from '../components/Page'
 import { useI18n, type MsgKey } from '../i18n'
 
 const VERDICT: Record<string, { key: MsgKey; status: 'error' | 'warning' | 'success' }> = {
@@ -25,8 +25,8 @@ export function IncidentsPage() {
 
   return (
     <Page title={t('navIncidents')} subtitle={t('incidentsSubtitle')}>
-      <Card styles={{ body: { padding: 0 } }}
-        title={
+      <FilterCard
+        filters={
           <Segmented
             value={status}
             onChange={v => setParams(v ? { status: String(v) } : {})}
@@ -59,7 +59,7 @@ export function IncidentsPage() {
             { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 180, render: fmtTime, defaultSortOrder: 'descend', sorter: (a, b) => a.createdAt.localeCompare(b.createdAt) },
           ]}
         />
-      </Card>
+      </FilterCard>
     </Page>
   )
 }

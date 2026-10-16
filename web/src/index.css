@@ -9,9 +9,25 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 
 .page { max-width: 1600px; margin: 0 auto; }
 .page-head { margin-bottom: 16px; }
+.filter-bar { padding: 12px 16px; border-bottom: 1px solid var(--ant-color-border-secondary); }
 
-.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-.login-brand { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 28px; }
+.login-wrap { min-height: 100vh; display: flex; }
+.login-hero {
+  flex: 1.2;
+  padding: 72px 8vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #fff;
+  background: radial-gradient(circle at 20% 20%, #2f6fd8 0%, #12407f 55%, #0b2a57 100%);
+}
+.login-hero-name { font-size: 26px; font-weight: 600; letter-spacing: .5px; }
+.login-hero-title { font-size: 34px; font-weight: 600; margin-top: 48px; line-height: 1.35; }
+.login-hero-sub { font-size: 16px; opacity: .75; margin-top: 10px; }
+.login-hero-point { font-size: 15px; opacity: .9; }
+.login-panel { flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+.login-form { width: 100%; max-width: 360px; }
+@media (max-width: 900px) { .login-hero { display: none; } }
 
 .json-block {
   margin: 0;
@@ -42,6 +58,13 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .chat-tool { max-width: 100%; }
 .chat-tool-title { color: var(--ant-color-text-secondary); font-size: 12px; }
 .chat-code { margin: 6px 0 0; white-space: pre-wrap; word-break: break-all; font-size: 12px; max-height: 360px; overflow: auto; }
+.chat-welcome { margin: auto; padding: 40px 24px; width: 100%; }
+.chat-session-filter { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--ant-color-border-secondary); }
+.chat-chain { border: 1px solid; border-radius: 8px; padding: 10px 14px 0; }
+.chat-chain-head { font-size: 12px; margin-bottom: 12px; }
+.chat-step pre.chat-code { background: var(--ant-color-fill-tertiary); padding: 6px 8px; border-radius: 4px; }
+.chat-step-out .ant-collapse-header { padding: 4px 0 !important; }
+.chat-meta { font-size: 12px; margin-top: 2px; }
 .chat-composer { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; }
 
 /* 助手回复与报告预览的 Markdown */
@@ -56,10 +79,15 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .markdown pre { padding: 10px 12px; border-radius: 6px; overflow-x: auto; background: var(--ant-color-fill-quaternary); }
 .markdown pre code { padding: 0; background: none; }
 
-/* 态势总览：24 小时告警柱状 */
-.trend { display: flex; align-items: flex-end; gap: 4px; height: 160px; }
-.trend-bar { flex: 1; height: 100%; display: flex; align-items: flex-end; }
-.trend-fill { width: 100%; border-radius: 3px 3px 0 0; }
+/* 态势总览：横向条形与小列表 */
+.bar-list { display: flex; flex-direction: column; gap: 12px; }
+.bar-row { display: grid; grid-template-columns: var(--label-w, 38%) 1fr; align-items: center; gap: 12px; }
+.bar-label { min-width: 0; overflow: hidden; }
+.bar-track { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bar-fill { height: 12px; border-radius: 0 4px 4px 0; }
+.mini-list { margin: 6px 0 16px; }
+.mini-row { padding: 6px 0; border-bottom: 1px solid var(--ant-color-border-secondary); }
+.mini-row:last-child { border-bottom: none; }
 
 /* ATT&CK 矩阵：每个战术一列 */
 .matrix { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }

@@ -165,6 +165,14 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 			}
 			q = q.Where(entcommand.IncidentIDEQ(id))
 		}
+		if v := r.URL.Query().Get("assetId"); v != "" {
+			id, err := uuid.Parse(v)
+			if err != nil {
+				http.Error(w, "无效的 assetId", http.StatusBadRequest)
+				return
+			}
+			q = q.Where(entcommand.AssetIDEQ(id))
+		}
 		cmds, err := q.Order(ent.Desc(entcommand.FieldCreatedAt)).Limit(100).All(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

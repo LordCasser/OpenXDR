@@ -1,10 +1,11 @@
 import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Col, Descriptions, Result, Row, Space, Spin, Table, Typography } from 'antd'
+import { App, Button, Card, Col, Descriptions, Result, Row, Skeleton, Space, Table, Typography } from 'antd'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { downloadReport, fetchAssets, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
 import { useCanActIn, useSession } from '../app/session'
+import { HostLink } from '../components/HostLink'
 import { IncidentGraph } from '../components/IncidentGraph'
 import { Page } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
@@ -26,7 +27,7 @@ export function IncidentDetailPage() {
   const asset = assets.find(a => a.id === inc?.assetId)
   const canAct = useCanActIn(asset?.groupId)
 
-  if (isPending) return <Spin style={{ display: 'block', marginTop: 120 }} />
+  if (isPending) return <Skeleton active paragraph={{ rows: 12 }} style={{ marginTop: 24 }} />
   if (error || !inc) {
     return <Result status="404" title={t('incidentNotFound')} extra={<Button onClick={() => navigate('/incidents')}>{t('backToList')}</Button>} />
   }
@@ -45,6 +46,7 @@ export function IncidentDetailPage() {
 
   return (
     <Page
+      crumb={inc.title ?? inc.id}
       title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} />{inc.title ?? inc.id}</Space>}
       extra={
         <>
@@ -88,7 +90,7 @@ export function IncidentDetailPage() {
                 <Descriptions.Item label={t('thSeverity')}><SeverityTag value={inc.severity} /></Descriptions.Item>
                 <Descriptions.Item label={t('thCreatedAt')}>{fmtTime(inc.createdAt)}</Descriptions.Item>
                 <Descriptions.Item label={t('thAlerts')}>{inc.alerts.length}</Descriptions.Item>
-                <Descriptions.Item label={t('thHostname')}>{asset?.hostname ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label={t('thHostname')}><HostLink id={inc.assetId} /></Descriptions.Item>
                 <Descriptions.Item label={t('group')}>{groups.find(g => g.id === asset?.groupId)?.name ?? '-'}</Descriptions.Item>
               </Descriptions>
             </Card>

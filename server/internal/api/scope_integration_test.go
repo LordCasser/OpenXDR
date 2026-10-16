@@ -85,6 +85,19 @@ func TestAPIGroupScope(t *testing.T) {
 	if stats.AssetsTotal != 1 || stats.Events24h != 2 || stats.Alerts24h != 2 || stats.IncidentsByStatus["open"] != 1 {
 		t.Errorf("统计应按组裁剪：%+v", stats)
 	}
+	if stats.AlertsBySeverity[3] != 2 || len(stats.AlertsBySeverity) != 1 {
+		t.Errorf("级别分布应只计组内 2 条中危：%v", stats.AlertsBySeverity)
+	}
+	// 资产详情：按主机筛事件与指令，组外主机筛出来也是空
+	if n := count("/api/incidents?assetId=" + a1.ID.String()); n != 1 {
+		t.Errorf("a1 涉及的可见 incident 应为 1，得到 %d", n)
+	}
+	if n := count("/api/incidents?assetId=" + b1.ID.String()); n != 0 {
+		t.Errorf("组外主机的 incident 不可见，得到 %d", n)
+	}
+	if n := count("/api/commands?assetId=" + a1.ID.String()); n != 0 {
+		t.Errorf("a1 没有指令，得到 %d", n)
+	}
 
 	// 组内只是 viewer：改 incident 状态与下发指令都不行
 	r, _ := postJSON(ts, "/api/incidents/"+incA.ID.String()+"/status", `{"status":"closed"}`)

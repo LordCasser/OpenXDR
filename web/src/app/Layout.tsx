@@ -1,73 +1,19 @@
 import {
-  AimOutlined, AlertOutlined, ApartmentOutlined, AuditOutlined, BugOutlined, CheckCircleOutlined,
-  ClockCircleOutlined, CloudServerOutlined, DashboardOutlined, FileSearchOutlined, FileTextOutlined,
-  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, RobotOutlined, SafetyOutlined,
-  SearchOutlined, StopOutlined, SunOutlined, TeamOutlined, TranslationOutlined, UserOutlined,
+  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, TranslationOutlined, UserOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Avatar, Badge, Button, Dropdown, Grid, Layout as AntLayout, Menu, Select, Space, Tag, Tooltip, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { fetchApprovals } from '../api'
 import { ROLE_KEY } from '../components/format'
-import { useI18n, type MsgKey } from '../i18n'
+import { useI18n } from '../i18n'
+import { Logo } from '../components/Logo'
+import { NAV, type NavItem } from './nav'
 import { useSession } from './session'
 import { useTheme } from './theme'
-
-interface NavItem {
-  path: string
-  key: MsgKey
-  icon: ReactNode
-  admin?: boolean
-}
-
-interface NavGroup {
-  key: MsgKey
-  items: NavItem[]
-  admin?: boolean
-}
-
-// 菜单即信息架构：对话是主入口，原有能力按运营动线归组
-const NAV: (NavItem | NavGroup)[] = [
-  { path: '/chat', key: 'navChat', icon: <RobotOutlined /> },
-  { path: '/overview', key: 'navOverview', icon: <DashboardOutlined /> },
-  {
-    key: 'navGroupOps',
-    items: [
-      { path: '/incidents', key: 'navIncidents', icon: <AlertOutlined /> },
-      { path: '/events', key: 'navEvents', icon: <SearchOutlined /> },
-      { path: '/hunt', key: 'navHunt', icon: <AimOutlined />, admin: true },
-    ],
-  },
-  { path: '/assets', key: 'navAssets', icon: <CloudServerOutlined /> },
-  {
-    key: 'navGroupAuto',
-    items: [
-      { path: '/reports', key: 'navReports', icon: <FileTextOutlined /> },
-      { path: '/tasks', key: 'navTasks', icon: <ClockCircleOutlined /> },
-      { path: '/approvals', key: 'navApprovals', icon: <CheckCircleOutlined /> },
-    ],
-  },
-  {
-    key: 'navGroupDetect',
-    items: [
-      { path: '/rules', key: 'navRules', icon: <FileSearchOutlined /> },
-      { path: '/attack', key: 'navAttack', icon: <BugOutlined /> },
-      { path: '/suppressions', key: 'navSuppressions', icon: <StopOutlined /> },
-      { path: '/intel', key: 'navIntel', icon: <SafetyOutlined /> },
-    ],
-  },
-  {
-    key: 'navGroupSystem',
-    admin: true,
-    items: [
-      { path: '/users', key: 'navUsers', icon: <UserOutlined /> },
-      { path: '/groups', key: 'navGroups', icon: <TeamOutlined /> },
-      { path: '/audit', key: 'navAudit', icon: <AuditOutlined /> },
-    ],
-  },
-]
 
 // 待审批数：只有组 admin 能看审批，Pi 正阻塞等着人，所以挂在顶栏
 function ApprovalBell() {
@@ -123,7 +69,7 @@ export function Layout() {
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
       <AntLayout.Sider
-        theme={dark ? 'dark' : 'light'}
+        theme="light"
         width={220}
         collapsed={collapsed}
         breakpoint="lg"
@@ -131,12 +77,12 @@ export function Layout() {
         style={{ borderRight: `1px solid ${token.colorBorderSecondary}`, position: 'sticky', top: 0, height: '100vh', overflow: 'auto' }}
       >
         <div className="brand" onClick={() => navigate('/chat')}>
-          <ApartmentOutlined style={{ fontSize: 22, color: token.colorPrimary }} />
+          <Logo />
           {!collapsed && <span className="brand-name">OpenXDR</span>}
         </div>
         <Menu
           mode="inline"
-          theme={dark ? 'dark' : 'light'}
+          theme="light"
           selectedKeys={[selected]}
           items={items}
           onClick={e => navigate(e.key)}

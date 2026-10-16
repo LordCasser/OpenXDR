@@ -1,12 +1,16 @@
-import { LockOutlined, UserOutlined, ApartmentOutlined } from '@ant-design/icons'
+import { CheckCircleFilled, LockOutlined, UserOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Card, Form, Input, Typography, theme } from 'antd'
+import { Alert, Button, Form, Input, Space, Typography, theme } from 'antd'
 import { useState } from 'react'
 import { login } from '../api'
-import { useI18n } from '../i18n'
+import { Logo } from '../components/Logo'
+import { useI18n, type MsgKey } from '../i18n'
 
+const POINTS: MsgKey[] = ['loginPoint1', 'loginPoint2', 'loginPoint3']
+
+// 左侧品牌介绍、右侧登录表单；窄屏只留表单
 export function LoginPage() {
-  const { t } = useI18n()
+  const { t, locale, setLocale } = useI18n()
   const { token } = theme.useToken()
   const client = useQueryClient()
   const [error, setError] = useState<string | null>(null)
@@ -25,24 +29,42 @@ export function LoginPage() {
   }
 
   return (
-    <div className="login-wrap" style={{ background: token.colorBgLayout }}>
-      <Card style={{ width: 380 }}>
-        <div className="login-brand">
-          <ApartmentOutlined style={{ fontSize: 32, color: token.colorPrimary }} />
-          <Typography.Title level={3} style={{ margin: 0 }}>OpenXDR</Typography.Title>
-          <Typography.Text type="secondary">{t('loginSubtitle')}</Typography.Text>
+    <div className="login-wrap">
+      <div className="login-hero">
+        <Space size={12} align="center">
+          <Logo size={44} />
+          <span className="login-hero-name">OpenXDR</span>
+        </Space>
+        <div className="login-hero-title">{t('loginHeroTitle')}</div>
+        <div className="login-hero-sub">{t('loginSubtitle')}</div>
+        <Space orientation="vertical" size={14} style={{ marginTop: 36 }}>
+          {POINTS.map(k => (
+            <Space key={k} size={10} align="start">
+              <CheckCircleFilled style={{ color: '#91caff', marginTop: 4 }} />
+              <span className="login-hero-point">{t(k)}</span>
+            </Space>
+          ))}
+        </Space>
+      </div>
+      <div className="login-panel" style={{ background: token.colorBgContainer }}>
+        <div className="login-form">
+          <Typography.Title level={3} style={{ marginBottom: 4 }}>{t('signInTitle')}</Typography.Title>
+          <Typography.Text type="secondary">{t('signInHint')}</Typography.Text>
+          <Form layout="vertical" size="large" onFinish={submit} requiredMark={false} style={{ marginTop: 32 }}>
+            <Form.Item name="username" rules={[{ required: true, message: t('usernameRequired') }]}>
+              <Input prefix={<UserOutlined />} placeholder={t('username')} autoFocus />
+            </Form.Item>
+            <Form.Item name="password" rules={[{ required: true, message: t('passwordRequired') }]}>
+              <Input.Password prefix={<LockOutlined />} placeholder={t('password')} />
+            </Form.Item>
+            {error && <Alert type="error" title={error} showIcon style={{ marginBottom: 16 }} />}
+            <Button type="primary" htmlType="submit" block loading={busy}>{t('signIn')}</Button>
+          </Form>
+          <Button type="link" style={{ marginTop: 24, padding: 0 }} onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}>
+            {locale === 'zh' ? 'English' : '中文'}
+          </Button>
         </div>
-        <Form layout="vertical" size="large" onFinish={submit} requiredMark={false}>
-          <Form.Item name="username" rules={[{ required: true, message: t('usernameRequired') }]}>
-            <Input prefix={<UserOutlined />} placeholder={t('username')} autoFocus />
-          </Form.Item>
-          <Form.Item name="password" rules={[{ required: true, message: t('passwordRequired') }]}>
-            <Input.Password prefix={<LockOutlined />} placeholder={t('password')} />
-          </Form.Item>
-          {error && <Alert type="error" title={error} showIcon style={{ marginBottom: 16 }} />}
-          <Button type="primary" htmlType="submit" block loading={busy}>{t('signIn')}</Button>
-        </Form>
-      </Card>
+      </div>
     </div>
   )
 }

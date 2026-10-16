@@ -28,7 +28,7 @@ export function ResponsePanel({ incidentId, assetId, canAct }: { incidentId: str
   const client = useQueryClient()
   const [live, setLive] = useState(false)
   const [busy, setBusy] = useState(false)
-  const history = useQuery({ queryKey: ['commands', incidentId], queryFn: () => fetchCommands(incidentId), refetchInterval: 5_000 })
+  const history = useQuery({ queryKey: ['commands', incidentId], queryFn: () => fetchCommands({ incidentId }), refetchInterval: 5_000 })
 
   const issue = (kind: string) => {
     if (!assetId) return
