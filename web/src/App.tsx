@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import {
-  Unauthorized, downloadReport, fetchIncident, fetchIncidents, fetchMe, logout, setIncidentStatus,
-  type IncidentDetail, type IncidentSummary, type Me,
+  Unauthorized, downloadReport, fetchAssets, fetchGroups, fetchIncident, fetchIncidents, fetchMe, logout,
+  setIncidentStatus,
+  type Asset, type GroupRow, type IncidentDetail, type IncidentSummary, type Me,
 } from './api'
 import { AssetList } from './AssetList'
 import { AttackMatrixView } from './AttackMatrixView'
@@ -59,6 +60,15 @@ export default function App() {
   const [showGroups, setShowGroups] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
   const [expandedAlert, setExpandedAlert] = useState<string | null>(null)
+  // 处置类操作还要看主机所在组的组内角色，与后端的两道检查一致
+  const [groups, setGroups] = useState<GroupRow[]>([])
+  const [assets, setAssets] = useState<Asset[]>([])
+
+  useEffect(() => {
+    if (!me || !expert) return
+    fetchGroups().then(setGroups).catch(() => {})
+    fetchAssets().then(setAssets).catch(() => {})
+  }, [me, expert])
 
   useEffect(() => {
     fetchMe().then(setMe).catch(() => setMe(null))
@@ -118,8 +128,12 @@ export default function App() {
     )
   }
 
+  // canWrite 管全局配置（抑制、情报、规则）；canAct 管落到具体主机上的处置
   const canWrite = me.role !== 'viewer'
   const isAdmin = me.role === 'admin'
+  const assetGroup = assets.find(a => a.id === detail?.assetId)?.groupId
+  const groupRole = groups.find(g => g.id === assetGroup)?.role
+  const canAct = isAdmin || (canWrite && (groupRole === 'admin' || groupRole === 'analyst'))
   const sevLabel = (n: number) => (n >= 1 && n <= 5 ? t(`sev${n}` as MsgKey) : String(n))
 
   return (
@@ -206,7 +220,7 @@ export default function App() {
                 <button onClick={() => downloadReport(detail.id, detail.title)}>
                   {t('exportReport')}
                 </button>
-                {canWrite && (
+                {canAct && (
                   <>
                     <button onClick={() => changeStatus('closed')}>{t('close')}</button>
                     <button onClick={() => changeStatus('false_positive')}>{t('markFp')}</button>
@@ -221,7 +235,7 @@ export default function App() {
             <VerdictCard verdict={detail.aiVerdict} />
 
             <h3>{t('responseTitle')}</h3>
-            <ResponsePanel incidentId={detail.id} assetId={detail.assetId} canAct={canWrite} />
+            <ResponsePanel incidentId={detail.id} assetId={detail.assetId} canAct={canAct} />
 
             <h3>{t('graphTitle')}</h3>
             <IncidentGraphView graph={detail.graph} />

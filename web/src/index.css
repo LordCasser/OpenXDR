@@ -239,7 +239,11 @@ h3 { font-size: 14px; color: var(--muted); margin: 24px 0 8px; }
 .subnav {
   padding: 8px 16px 0;
   font-size: 12px;
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
+/* 入口多了会换行，但单个入口不许被压成竖排 */
+.subnav > * { white-space: nowrap; }
 
 .login-wrap {
   display: flex;
@@ -442,3 +446,34 @@ h3 { font-size: 14px; color: var(--muted); margin: 24px 0 8px; }
 .approval-card .actions { margin-top: 8px; }
 .status-session-succeeded { color: var(--green); border-color: var(--green); }
 .modal h4 { margin: 14px 0 4px; font-size: 13px; }
+/* 助手回复按 Markdown 渲染：去掉 pre-wrap，收紧默认排版 */
+.msg-assistant { white-space: normal; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown h1, .markdown h2, .markdown h3 { font-size: 15px; margin: 12px 0 6px; }
+.markdown p, .markdown ul, .markdown ol { margin: 6px 0; }
+.markdown ul, .markdown ol { padding-left: 22px; }
+.markdown table { margin: 8px 0; font-size: 13px; }
+.markdown code { background: var(--bg); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+.markdown pre { background: var(--bg); padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
+.markdown pre code { padding: 0; }
+.markdown a { color: var(--accent); }
+.tool-card .markdown { margin-top: 6px; }
+.tool-card.tool-approval { border-left-color: var(--amber); }
+
+/* 窄屏：侧栏叠到上方，弹窗占满宽度 */
+@media (max-width: 760px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--border); }
+  .main { padding: 12px; }
+  .msg, .tool-card { max-width: 100%; }
+  .modal, .modal-wide { width: calc(100vw - 24px); }
+}
+.modal * + h3 { margin-top: 20px; }
+td select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 3px 6px;
+}

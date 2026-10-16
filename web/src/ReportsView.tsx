@@ -12,7 +12,8 @@ export function ReportsView({ groupId, groupName, onOpenSession, onClose }: {
   onClose: () => void
 }) {
   const { t } = useI18n()
-  const [rows, setRows] = useState<AgentReport[]>([])
+  // null = 加载中，别先闪一句"还没有报告"
+  const [rows, setRows] = useState<AgentReport[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -22,9 +23,9 @@ export function ReportsView({ groupId, groupName, onOpenSession, onClose }: {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal modal-wide" onClick={e => e.stopPropagation()}>
-        <h3>{t('reportsTitle', { name: groupName, n: rows.length })}</h3>
-        {rows.length === 0 && !error && <p className="muted">{t('noReports')}</p>}
-        {rows.length > 0 && (
+        <h3>{t('reportsTitle', { name: groupName, n: rows?.length ?? '…' })}</h3>
+        {rows?.length === 0 && <p className="muted">{t('noReports')}</p>}
+        {rows && rows.length > 0 && (
           <table>
             <thead>
               <tr><th>{t('thTime')}</th><th>{t('reportTitle')}</th><th></th></tr>

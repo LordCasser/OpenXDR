@@ -26,7 +26,7 @@ func TestSessionHistoryAndReports(t *testing.T) {
 	ctx, db := testdb.New(t)
 	group := db.Group.Create().SetName("g").SaveX(ctx)
 	user := db.User.Create().SetUsername("a").SetPasswordHash("unused").SetRole("admin").SaveX(ctx)
-	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SaveX(ctx)
+	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SetTitle("").SaveX(ctx)
 	db.Asset.Create().SetHostname("本组主机").SetGroupID(group.ID).SaveX(ctx)
 	otherGroup := db.Group.Create().SetName("other").SaveX(ctx)
 	db.Asset.Create().SetHostname("其他组秘密主机").SetGroupID(otherGroup.ID).SaveX(ctx)
@@ -61,8 +61,8 @@ func TestSessionHistoryAndReports(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := db.AgentSession.GetX(ctx, session.ID); got.Status != "idle" {
-		t.Fatalf("状态 %s", got.Status)
+	if got := db.AgentSession.GetX(ctx, session.ID); got.Status != "idle" || got.Title == nil || *got.Title != "检查" {
+		t.Fatalf("状态 %s，标题应取首句提问", got.Status)
 	}
 	if n := db.SessionMessage.Query().CountX(ctx); n != 4 {
 		t.Fatal(n)
@@ -79,7 +79,7 @@ func TestConcurrentSessionAndFailure(t *testing.T) {
 	ctx, db := testdb.New(t)
 	user := db.User.Create().SetUsername("a").SetPasswordHash("unused").SetRole("admin").SaveX(ctx)
 	group := db.Group.Create().SetName("g").SaveX(ctx)
-	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SaveX(ctx)
+	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SetTitle("").SaveX(ctx)
 	started, release := make(chan struct{}), make(chan struct{})
 	service := &Service{DB: db, Runtime: fakeRunner{func(context.Context, piruntime.Request, piruntime.Handler, piruntime.Observer) (*piruntime.Result, error) {
 		close(started)
@@ -104,7 +104,7 @@ func TestSessionGroupScope(t *testing.T) {
 	ctx, db := testdb.New(t)
 	user := db.User.Create().SetUsername("a").SetPasswordHash("unused").SetRole("analyst").SaveX(ctx)
 	group := db.Group.Create().SetName("g").SaveX(ctx)
-	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SaveX(ctx)
+	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SetTitle("").SaveX(ctx)
 	service := &Service{DB: db}
 	if _, err := service.Chat(ctx, session.ID, user, "检查", nil); err == nil {
 		t.Fatal("非成员不得执行")

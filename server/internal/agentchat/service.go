@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,6 +62,16 @@ func (s *Service) Chat(ctx context.Context, id uuid.UUID, u *ent.User, prompt st
 	}
 	if n != 1 {
 		return nil, errors.New("会话正在运行或已失败，请新建会话")
+	}
+	// 没起标题的会话用第一句提问当标题，列表里才分得清
+	if session.Title == nil || *session.Title == "" {
+		title := []rune(strings.TrimSpace(prompt))
+		if len(title) > 40 {
+			title = append(title[:40], '…')
+		}
+		if err := s.DB.AgentSession.UpdateOneID(id).SetTitle(string(title)).Exec(ctx); err != nil {
+			return nil, err
+		}
 	}
 	defer func() {
 		finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)

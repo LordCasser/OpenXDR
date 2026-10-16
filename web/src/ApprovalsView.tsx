@@ -25,20 +25,23 @@ function PolicyList({ groupId, origin, rows, onChange }: {
 }) {
   const { t } = useI18n()
   const [pattern, setPattern] = useState('')
+  const mine = rows.filter(p => p.origin === origin)
   return (
     <>
       <h4>{t(origin === 'ai' ? 'policyAiTitle' : 'policyHumanTitle')}</h4>
       <p className="muted">{t(origin === 'ai' ? 'policyAiHint' : 'policyHumanHint')}</p>
-      <table>
-        <tbody>
-          {rows.filter(p => p.origin === origin).map(p => (
-            <tr key={p.id}>
-              <td><code>{p.pattern}</code></td>
-              <td><button onClick={() => onChange(() => deletePolicy(p.id))}>{t('del')}</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {mine.length > 0 && (
+        <table>
+          <tbody>
+            {mine.map(p => (
+              <tr key={p.id}>
+                <td><code>{p.pattern}</code></td>
+                <td><div className="actions"><button onClick={() => onChange(() => deletePolicy(p.id))}>{t('del')}</button></div></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       <div className="field">
         <input placeholder={t('policyPattern')} value={pattern} onChange={e => setPattern(e.target.value)} />
         <button

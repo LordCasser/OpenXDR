@@ -96,26 +96,30 @@ export function GroupManagement({ onClose }: { onClose: () => void }) {
         {group && (
           <>
             <h3>{t('groupMembersTitle', { name: group.name })}</h3>
-            <table>
-              <thead>
-                <tr><th>{t('username')}</th><th>{t('thRole')}</th><th></th></tr>
-              </thead>
-              <tbody>
-                {members.map(m => (
-                  <tr key={m.userId}>
-                    <td>{m.username}</td>
-                    <td>
-                      <select value={m.role} onChange={e => run(() => setMember(group.id, m.userId, e.target.value))}>
-                        {Object.entries(ROLE_KEY).map(([r, k]) => <option key={r} value={r}>{t(k)}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <button onClick={() => run(() => removeMember(group.id, m.userId))}>{t('del')}</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {members.length > 0 && (
+              <table>
+                <thead>
+                  <tr><th>{t('username')}</th><th>{t('thRole')}</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {members.map(m => (
+                    <tr key={m.userId}>
+                      <td>{m.username}</td>
+                      <td>
+                        <select value={m.role} onChange={e => run(() => setMember(group.id, m.userId, e.target.value))}>
+                          {Object.entries(ROLE_KEY).map(([r, k]) => <option key={r} value={r}>{t(k)}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <div className="actions">
+                          <button onClick={() => run(() => removeMember(group.id, m.userId))}>{t('del')}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
             {members.length === 0 && <p className="muted">{t('noMembers')}</p>}
             <div className="field">
               <select value={newUser} onChange={e => setNewUser(e.target.value)}>
@@ -141,11 +145,13 @@ export function GroupManagement({ onClose }: { onClose: () => void }) {
                     <td>{a.hostname}</td>
                     <td className="muted">{groupName(a.groupId)}</td>
                     <td>
-                      {a.groupId === group.id ? (
-                        <button onClick={() => run(() => unassignAsset(group.id, a.id))}>{t('removeFromGroup')}</button>
-                      ) : (
-                        <button onClick={() => run(() => assignAsset(group.id, a.id))}>{t('addToGroup')}</button>
-                      )}
+                      <div className="actions">
+                        {a.groupId === group.id ? (
+                          <button onClick={() => run(() => unassignAsset(group.id, a.id))}>{t('removeFromGroup')}</button>
+                        ) : (
+                          <button onClick={() => run(() => assignAsset(group.id, a.id))}>{t('addToGroup')}</button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

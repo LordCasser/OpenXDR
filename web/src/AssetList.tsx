@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchAssets, type Asset } from './api'
+import { fetchAssets, fetchGroups, type Asset, type GroupRow } from './api'
 import { useI18n } from './i18n'
 
 const fmt = (iso: string) => new Date(iso).toLocaleString()
@@ -10,10 +10,14 @@ const STALE_MS = 5 * 60_000
 export function AssetList({ onClose }: { onClose: () => void }) {
   const { t } = useI18n()
   const [rows, setRows] = useState<Asset[]>([])
+  const [groups, setGroups] = useState<GroupRow[]>([])
 
   useEffect(() => {
     fetchAssets().then(setRows).catch(() => {})
+    fetchGroups().then(setGroups).catch(() => {})
   }, [])
+
+  const groupName = (id: string | null) => groups.find(g => g.id === id)?.name ?? t('ungrouped')
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -26,7 +30,7 @@ export function AssetList({ onClose }: { onClose: () => void }) {
             <thead>
               <tr>
                 <th></th><th>{t('thHostname')}</th><th>OS</th><th>{t('thIP')}</th>
-                <th>{t('thSource')}</th><th>{t('thLastSeen')}</th>
+                <th>{t('thGroup')}</th><th>{t('thSource')}</th><th>{t('thLastSeen')}</th>
               </tr>
             </thead>
             <tbody>
@@ -41,6 +45,7 @@ export function AssetList({ onClose }: { onClose: () => void }) {
                   <td>{a.hostname}</td>
                   <td className="muted">{a.os ?? '-'}</td>
                   <td className="muted">{a.ipAddrs?.join(', ') ?? '-'}</td>
+                  <td className="muted">{groupName(a.groupId)}</td>
                   <td className="muted">{a.agentId ? t('sourceAgent') : t('sourceLog')}</td>
                   <td title={t('firstSeenAt', { time: fmt(a.firstSeen) })}>{fmt(a.lastSeen)}</td>
                 </tr>
