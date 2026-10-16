@@ -92,6 +92,18 @@ func (f CommandPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommandPolicyMutation", m)
 }
 
+// The EnrollTokenFunc type is an adapter to allow the use of ordinary
+// function as EnrollToken mutator.
+type EnrollTokenFunc func(context.Context, *ent.EnrollTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EnrollTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EnrollTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EnrollTokenMutation", m)
+}
+
 // The EventFunc type is an adapter to allow the use of ordinary
 // function as Event mutator.
 type EventFunc func(context.Context, *ent.EventMutation) (ent.Value, error)

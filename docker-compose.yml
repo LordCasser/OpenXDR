@@ -68,10 +68,16 @@ services:
       TLS_CA_FILE: ${TLS_CA_FILE:-}
       TLS_CERT_FILE: ${TLS_CERT_FILE:-}
       TLS_KEY_FILE: ${TLS_KEY_FILE:-}
+      # 控制台「添加主机」一键接入：agent 连 server 的 gRPC 地址（主机上能访问到的），
+      # 开了 mTLS 时再配 CA 私钥用于签发主机证书；agent 安装包放在 ./dist
+      ENROLL_GRPC_URL: ${ENROLL_GRPC_URL:-}
+      TLS_CA_KEY_FILE: ${TLS_CA_KEY_FILE:-}
+      AGENT_DIST_DIR: /dist
     volumes:
       - ./rules:/rules:ro
       - ./tasks:/tasks:ro
       - ./certs:/certs:ro
+      - ./dist:/dist:ro
     ports:
       - "8080:8080"   # REST API
       - "8081:8081"   # gRPC：agent / sensor 接入

@@ -10,6 +10,7 @@ import (
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
@@ -148,6 +149,24 @@ func init() {
 	commandpolicyDescID := commandpolicyFields[0].Descriptor()
 	// commandpolicy.DefaultID holds the default value on creation for the id field.
 	commandpolicy.DefaultID = commandpolicyDescID.Default.(func() uuid.UUID)
+	enrolltokenFields := schema.EnrollToken{}.Fields()
+	_ = enrolltokenFields
+	// enrolltokenDescCreatedAt is the schema descriptor for created_at field.
+	enrolltokenDescCreatedAt := enrolltokenFields[4].Descriptor()
+	// enrolltoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	enrolltoken.DefaultCreatedAt = enrolltokenDescCreatedAt.Default.(func() time.Time)
+	// enrolltokenDescRevoked is the schema descriptor for revoked field.
+	enrolltokenDescRevoked := enrolltokenFields[6].Descriptor()
+	// enrolltoken.DefaultRevoked holds the default value on creation for the revoked field.
+	enrolltoken.DefaultRevoked = enrolltokenDescRevoked.Default.(bool)
+	// enrolltokenDescUses is the schema descriptor for uses field.
+	enrolltokenDescUses := enrolltokenFields[7].Descriptor()
+	// enrolltoken.DefaultUses holds the default value on creation for the uses field.
+	enrolltoken.DefaultUses = enrolltokenDescUses.Default.(int)
+	// enrolltokenDescID is the schema descriptor for id field.
+	enrolltokenDescID := enrolltokenFields[0].Descriptor()
+	// enrolltoken.DefaultID holds the default value on creation for the id field.
+	enrolltoken.DefaultID = enrolltokenDescID.Default.(func() uuid.UUID)
 	eventFields := schema.Event{}.Fields()
 	_ = eventFields
 	// eventDescID is the schema descriptor for id field.

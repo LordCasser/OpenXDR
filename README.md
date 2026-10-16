@@ -108,7 +108,31 @@ docker compose up -d
 5–13 秒，模型能从事件图里读出父进程并给出可执行的处置建议。推理型模型返回的
 `reasoning_content` 不影响解析，引擎只取 `content` 里的 JSON。
 
-采集端各自构建部署到被监控主机：
+### 添加主机
+
+在控制台「资产 → 添加主机」选好组，复制安装命令到被监控主机上执行：
+
+```bash
+# Linux（root）
+curl -fsSL http://<控制台>/api/enroll/install.sh | sudo sh -s -- http://<控制台> <接入令牌>
+# Windows（管理员 PowerShell）
+& ([scriptblock]::Create((irm http://<控制台>/api/enroll/install.ps1))) http://<控制台> <接入令牌>
+```
+
+脚本会下载 agent、在本机生成私钥并由 server 签发主机绑定证书、写好配置、注册为
+systemd 服务（Windows 为 SYSTEM 身份的开机计划任务）。主机自动进入令牌所属的组，
+自带只读巡检名单，当晚就会出现在每日巡检报告里。令牌按组签发、默认 7 天有效
+（最长 30 天）、有效期内可批量装机、随时可撤销。已有在线 agent 的主机名不能被
+重复接入，令牌也不能把别组的主机改到本组。
+
+server 侧需要三样东西才会开放在线接入（缺哪样控制台会直接说明）：
+
+- `ENROLL_GRPC_URL`：主机上能访问到的 gRPC 地址，如 `https://xdr.internal:8081`
+- 开了 mTLS 时：`TLS_CA_KEY_FILE` 指向 CA 私钥（gencerts 生成的 `ca.key`），用于签发主机证书
+- `AGENT_DIST_DIR`（compose 已挂 `./dist`）里放 agent 安装包：
+  `openxdr-agent-linux-amd64`、`openxdr-agent-linux-arm64`、`openxdr-agent-windows-amd64.exe`
+
+也可以手工构建部署：
 
 ```bash
 # 端点 agent（Linux 需 root 才能用 eBPF，否则自动回落轮询采集）
@@ -296,6 +320,7 @@ OPENXDR_CA=certs/ca.crt OPENXDR_CERT=certs/client.crt OPENXDR_KEY=certs/client.k
 ```
 
 三个变量必须同时配置，只配一部分会直接报错而不是悄悄降级成明文。
+目录里已有 `ca.crt`/`ca.key` 时 gencerts 沿用这个 CA 只签新证书，不会让已发出的证书失效。
 
 通用 client 证书所有采集端共用，持证者可以冒充任何主机上报。给 agent 逐台发
 绑定证书可以消除这一点（sensor 没有主机身份，继续用通用证书）：
@@ -340,6 +365,9 @@ server 全部通过环境变量配置，均有默认值：
 | `INTEL_RELOAD_SECONDS` | `30` | 威胁情报重载与命中计数回写周期 |
 | `WEBHOOK_MIN_SEVERITY` | `0` | 低于该级别的事件不推送（1 信息 ~ 5 严重），0 表示全推。控制台保存过通知配置后以控制台为准 |
 | `AGENT_SILENT_MINUTES` | `10` | agent 指令通道超过该时长没有心跳即判失联并通知，恢复时再通知一次 |
+| `ENROLL_GRPC_URL` | 空（不启用在线接入） | 写进 agent 配置的 gRPC 地址，主机上必须能访问 |
+| `TLS_CA_KEY_FILE` | 空 | CA 私钥，开了 mTLS 时在线接入用它签发主机证书 |
+| `AGENT_DIST_DIR` | 空 | agent 安装包目录，供安装脚本下载 |
 | `RESPONSE_ENABLED` | `false` | 是否允许下发响应指令 |
 | `ISOLATION_ALLOW` | 空 | 隔离主机时放行的地址，必须包含 server 的 gRPC 端点 |
 | `AUTO_RESPONSE_ENABLED` | `false` | AI 研判高置信度 malicious 时自动隔离涉事主机（依赖 `RESPONSE_ENABLED`） |

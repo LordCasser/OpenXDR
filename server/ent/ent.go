@@ -13,6 +13,7 @@ import (
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
@@ -100,6 +101,7 @@ func checkColumn(t, c string) error {
 			auditlog.Table:        auditlog.ValidColumn,
 			command.Table:         command.ValidColumn,
 			commandpolicy.Table:   commandpolicy.ValidColumn,
+			enrolltoken.Table:     enrolltoken.ValidColumn,
 			event.Table:           event.ValidColumn,
 			group.Table:           group.ValidColumn,
 			groupmember.Table:     groupmember.ValidColumn,

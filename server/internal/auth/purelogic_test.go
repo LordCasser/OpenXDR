@@ -16,6 +16,8 @@ func TestMinRoleRouteTable(t *testing.T) {
 		{"POST", "/api/users", "admin"},
 		{"GET", "/api/settings/notify", "admin"},
 		{"POST", "/api/settings/notify/test", "admin"},
+		// 接入令牌按组鉴权，由 handler 检查组 admin
+		{"POST", "/api/enroll-tokens", "viewer"},
 		{"GET", "/api/audit", "admin"},
 		{"DELETE", "/api/audit/123", "admin"},
 		// 其余只读走 viewer，写操作至少 analyst

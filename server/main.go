@@ -29,6 +29,7 @@ import (
 	"openxdr/server/internal/cluster"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/correlate"
+	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/grpcsvc"
 	"openxdr/server/internal/ingest"
@@ -155,9 +156,10 @@ func main() {
 		WaitTriage: os.Getenv("AI_MODEL") != "",
 	}
 	go cluster.RunLeader(ctx, db, "notify", notifier.Run)
+	silentAfter := time.Duration(getenvInt("AGENT_SILENT_MINUTES", 10)) * time.Minute
 	watcher := &liveness.Watcher{
 		DB: client, Notify: webhook.Send,
-		SilentAfter: time.Duration(getenvInt("AGENT_SILENT_MINUTES", 10)) * time.Minute,
+		SilentAfter: silentAfter,
 		Interval:    time.Minute,
 	}
 	go cluster.RunLeader(ctx, db, "liveness", watcher.Run)
@@ -282,12 +284,25 @@ func main() {
 	} else {
 		slog.Warn("预设任务未启用：未配置 PI_MODEL")
 	}
+	enrollSvc, err := enroll.FromEnv(client, silentAfter)
+	if err != nil {
+		slog.Error("主机接入配置无效", "err", err)
+		os.Exit(1)
+	}
+	if reason := enrollSvc.Disabled(); reason != "" {
+		slog.Warn("主机在线接入未启用", "reason", reason)
+	}
+	distDir := os.Getenv("AGENT_DIST_DIR")
 	routes := http.NewServeMux()
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook))
+	routes.Handle("/api/enroll-tokens", api.EnrollTokens(client, enrollSvc, distDir))
+	routes.Handle("/api/enroll-tokens/", api.EnrollTokens(client, enrollSvc, distDir))
 	routes.Handle("/", api.Handler(client, rules, rulesPath, hub, suppressions, intelStore, triageEngine, allowlist, chat))
 	app := auth.Middleware(client, routes)
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", telemetry.Handler(registry))
+	// 接入端点免登录：安装脚本与二进制公开，注册靠令牌
+	mux.Handle("/api/enroll/", enrollSvc.Public(distDir))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := db.PingContext(r.Context()); err != nil || !events.Ready() {

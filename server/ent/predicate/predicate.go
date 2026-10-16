@@ -27,6 +27,9 @@ type Command func(*sql.Selector)
 // CommandPolicy is the predicate function for commandpolicy builders.
 type CommandPolicy func(*sql.Selector)
 
+// EnrollToken is the predicate function for enrolltoken builders.
+type EnrollToken func(*sql.Selector)
+
 // Event is the predicate function for event builders.
 type Event func(*sql.Selector)
 

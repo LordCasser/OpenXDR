@@ -9,14 +9,40 @@ pub mod pb {
 }
 
 mod collector;
+mod enroll;
 mod process_identity;
 mod respond;
 mod tls;
 
 use pb::agent_service_client::AgentServiceClient;
 
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
+        ["version"] => println!("{}", env!("CARGO_PKG_VERSION")),
+        ["enroll-request", dir] => match enroll::request(dir.as_ref()) {
+            Ok(json) => println!("{json}"),
+            Err(e) => exit(&format!("生成接入请求失败：{e}")),
+        },
+        ["enroll-apply", dir] => {
+            if let Err(e) = enroll::apply(dir.as_ref(), std::io::stdin()) {
+                exit(&format!("写入接入配置失败：{e}"));
+            }
+        }
+        _ => {
+            enroll::load_env_file(&enroll::default_env_file());
+            agent();
+        }
+    }
+}
+
+fn exit(msg: &str) -> ! {
+    eprintln!("{msg}");
+    std::process::exit(1)
+}
+
 #[tokio::main]
-async fn main() {
+async fn agent() {
     let server = std::env::var("OPENXDR_SERVER").unwrap_or_else(|_| "http://127.0.0.1:8081".into());
 
     loop {
@@ -32,7 +58,7 @@ async fn run(server: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     let resp = client
         .register(pb::RegisterRequest {
-            hostname: gethostname::gethostname().to_string_lossy().into_owned(),
+            hostname: enroll::hostname(),
             os: std::env::consts::OS.into(),
             ip_addrs: local_ips(),
             agent_version: env!("CARGO_PKG_VERSION").into(),

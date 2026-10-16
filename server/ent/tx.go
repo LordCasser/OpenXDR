@@ -26,6 +26,8 @@ type Tx struct {
 	Command *CommandClient
 	// CommandPolicy is the client for interacting with the CommandPolicy builders.
 	CommandPolicy *CommandPolicyClient
+	// EnrollToken is the client for interacting with the EnrollToken builders.
+	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
 	// Group is the client for interacting with the Group builders.
@@ -192,6 +194,7 @@ func (tx *Tx) init() {
 	tx.AuditLog = NewAuditLogClient(tx.config)
 	tx.Command = NewCommandClient(tx.config)
 	tx.CommandPolicy = NewCommandPolicyClient(tx.config)
+	tx.EnrollToken = NewEnrollTokenClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupMember = NewGroupMemberClient(tx.config)

@@ -18,6 +18,7 @@ import (
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
@@ -59,6 +60,8 @@ type Client struct {
 	Command *CommandClient
 	// CommandPolicy is the client for interacting with the CommandPolicy builders.
 	CommandPolicy *CommandPolicyClient
+	// EnrollToken is the client for interacting with the EnrollToken builders.
+	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
 	// Group is the client for interacting with the Group builders.
@@ -105,6 +108,7 @@ func (c *Client) init() {
 	c.AuditLog = NewAuditLogClient(c.config)
 	c.Command = NewCommandClient(c.config)
 	c.CommandPolicy = NewCommandPolicyClient(c.config)
+	c.EnrollToken = NewEnrollTokenClient(c.config)
 	c.Event = NewEventClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupMember = NewGroupMemberClient(c.config)
@@ -218,6 +222,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AuditLog:        NewAuditLogClient(cfg),
 		Command:         NewCommandClient(cfg),
 		CommandPolicy:   NewCommandPolicyClient(cfg),
+		EnrollToken:     NewEnrollTokenClient(cfg),
 		Event:           NewEventClient(cfg),
 		Group:           NewGroupClient(cfg),
 		GroupMember:     NewGroupMemberClient(cfg),
@@ -258,6 +263,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AuditLog:        NewAuditLogClient(cfg),
 		Command:         NewCommandClient(cfg),
 		CommandPolicy:   NewCommandPolicyClient(cfg),
+		EnrollToken:     NewEnrollTokenClient(cfg),
 		Event:           NewEventClient(cfg),
 		Group:           NewGroupClient(cfg),
 		GroupMember:     NewGroupMemberClient(cfg),
@@ -302,8 +308,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
-		c.CommandPolicy, c.Event, c.Group, c.GroupMember, c.Incident, c.Intel,
-		c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
+		c.CommandPolicy, c.EnrollToken, c.Event, c.Group, c.GroupMember, c.Incident,
+		c.Intel, c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
 		c.Suppression, c.Task, c.TaskRun, c.User,
 	} {
 		n.Use(hooks...)
@@ -315,8 +321,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
-		c.CommandPolicy, c.Event, c.Group, c.GroupMember, c.Incident, c.Intel,
-		c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
+		c.CommandPolicy, c.EnrollToken, c.Event, c.Group, c.GroupMember, c.Incident,
+		c.Intel, c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
 		c.Suppression, c.Task, c.TaskRun, c.User,
 	} {
 		n.Intercept(interceptors...)
@@ -340,6 +346,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Command.mutate(ctx, m)
 	case *CommandPolicyMutation:
 		return c.CommandPolicy.mutate(ctx, m)
+	case *EnrollTokenMutation:
+		return c.EnrollToken.mutate(ctx, m)
 	case *EventMutation:
 		return c.Event.mutate(ctx, m)
 	case *GroupMutation:
@@ -1413,6 +1421,139 @@ func (c *CommandPolicyClient) mutate(ctx context.Context, m *CommandPolicyMutati
 		return (&CommandPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CommandPolicy mutation op: %q", m.Op())
+	}
+}
+
+// EnrollTokenClient is a client for the EnrollToken schema.
+type EnrollTokenClient struct {
+	config
+}
+
+// NewEnrollTokenClient returns a client for the EnrollToken from the given config.
+func NewEnrollTokenClient(c config) *EnrollTokenClient {
+	return &EnrollTokenClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `enrolltoken.Hooks(f(g(h())))`.
+func (c *EnrollTokenClient) Use(hooks ...Hook) {
+	c.hooks.EnrollToken = append(c.hooks.EnrollToken, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `enrolltoken.Intercept(f(g(h())))`.
+func (c *EnrollTokenClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EnrollToken = append(c.inters.EnrollToken, interceptors...)
+}
+
+// Create returns a builder for creating a EnrollToken entity.
+func (c *EnrollTokenClient) Create() *EnrollTokenCreate {
+	mutation := newEnrollTokenMutation(c.config, OpCreate)
+	return &EnrollTokenCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EnrollToken entities.
+func (c *EnrollTokenClient) CreateBulk(builders ...*EnrollTokenCreate) *EnrollTokenCreateBulk {
+	return &EnrollTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EnrollTokenClient) MapCreateBulk(slice any, setFunc func(*EnrollTokenCreate, int)) *EnrollTokenCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EnrollTokenCreateBulk{err: fmt.Errorf("calling to EnrollTokenClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EnrollTokenCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EnrollTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EnrollToken.
+func (c *EnrollTokenClient) Update() *EnrollTokenUpdate {
+	mutation := newEnrollTokenMutation(c.config, OpUpdate)
+	return &EnrollTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EnrollTokenClient) UpdateOne(_m *EnrollToken) *EnrollTokenUpdateOne {
+	mutation := newEnrollTokenMutation(c.config, OpUpdateOne, withEnrollToken(_m))
+	return &EnrollTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EnrollTokenClient) UpdateOneID(id uuid.UUID) *EnrollTokenUpdateOne {
+	mutation := newEnrollTokenMutation(c.config, OpUpdateOne, withEnrollTokenID(id))
+	return &EnrollTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EnrollToken.
+func (c *EnrollTokenClient) Delete() *EnrollTokenDelete {
+	mutation := newEnrollTokenMutation(c.config, OpDelete)
+	return &EnrollTokenDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EnrollTokenClient) DeleteOne(_m *EnrollToken) *EnrollTokenDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EnrollTokenClient) DeleteOneID(id uuid.UUID) *EnrollTokenDeleteOne {
+	builder := c.Delete().Where(enrolltoken.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EnrollTokenDeleteOne{builder}
+}
+
+// Query returns a query builder for EnrollToken.
+func (c *EnrollTokenClient) Query() *EnrollTokenQuery {
+	return &EnrollTokenQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEnrollToken},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EnrollToken entity by its id.
+func (c *EnrollTokenClient) Get(ctx context.Context, id uuid.UUID) (*EnrollToken, error) {
+	return c.Query().Where(enrolltoken.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EnrollTokenClient) GetX(ctx context.Context, id uuid.UUID) *EnrollToken {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *EnrollTokenClient) Hooks() []Hook {
+	return c.hooks.EnrollToken
+}
+
+// Interceptors returns the client interceptors.
+func (c *EnrollTokenClient) Interceptors() []Interceptor {
+	return c.inters.EnrollToken
+}
+
+func (c *EnrollTokenClient) mutate(ctx context.Context, m *EnrollTokenMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EnrollTokenCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EnrollTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EnrollTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EnrollTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EnrollToken mutation op: %q", m.Op())
 	}
 }
 
@@ -3329,13 +3470,15 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy, Event,
-		Group, GroupMember, Incident, Intel, ProcessBaseline, Report, Session,
-		SessionMessage, Setting, Suppression, Task, TaskRun, User []ent.Hook
+		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy,
+		EnrollToken, Event, Group, GroupMember, Incident, Intel, ProcessBaseline,
+		Report, Session, SessionMessage, Setting, Suppression, Task, TaskRun,
+		User []ent.Hook
 	}
 	inters struct {
-		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy, Event,
-		Group, GroupMember, Incident, Intel, ProcessBaseline, Report, Session,
-		SessionMessage, Setting, Suppression, Task, TaskRun, User []ent.Interceptor
+		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy,
+		EnrollToken, Event, Group, GroupMember, Incident, Intel, ProcessBaseline,
+		Report, Session, SessionMessage, Setting, Suppression, Task, TaskRun,
+		User []ent.Interceptor
 	}
 )

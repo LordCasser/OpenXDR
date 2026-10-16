@@ -74,14 +74,21 @@ services:
       AI_API_KEY: ${AI_API_KEY:-}
       PI_MODEL: ${PI_MODEL:-}
       TASKS_PATH: /tasks
-      # Pi query 工具：组 UUID → 组专属只读 DSN 的 JSON，建法见 deploy/pi-query/group-views.sql
+      # Pi query 工具：手工开通的组 UUID → 只读 DSN；openxdr 账号有 CREATEROLE 时自动开通，可留空
       PI_QUERY_DATABASE_URLS: ${PI_QUERY_DATABASE_URLS:-}
+      # 通知的首次默认值，控制台「系统设置 → 通知」保存后以控制台为准
       WEBHOOK_URL: ${WEBHOOK_URL:-}
       WEBHOOK_FORMAT: ${WEBHOOK_FORMAT:-generic}
+      # 控制台「添加主机」：agent 经 VIP 连 gRPC；CA 私钥放进 runtime/app-certs 并设
+      # TLS_CA_KEY_FILE=/certs/ca.key 才能在线签发；agent 安装包放在 ./dist
+      ENROLL_GRPC_URL: ${ENROLL_GRPC_URL:-https://10.1.1.199:8081}
+      TLS_CA_KEY_FILE: ${TLS_CA_KEY_FILE:-}
+      AGENT_DIST_DIR: /dist
     volumes:
       - ./rules:/rules:ro
       - ./tasks:/tasks:ro
       - ./runtime/app-certs:/certs:ro
+      - ./dist:/dist:ro
 
   keepalived:
     build: ./deploy/ha/keepalived
