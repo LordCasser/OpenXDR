@@ -172,6 +172,26 @@ func (_u *AssetUpdate) ClearGroupID() *AssetUpdate {
 	return _u
 }
 
+// SetSilentSince sets the "silent_since" field.
+func (_u *AssetUpdate) SetSilentSince(v time.Time) *AssetUpdate {
+	_u.mutation.SetSilentSince(v)
+	return _u
+}
+
+// SetNillableSilentSince sets the "silent_since" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableSilentSince(v *time.Time) *AssetUpdate {
+	if v != nil {
+		_u.SetSilentSince(*v)
+	}
+	return _u
+}
+
+// ClearSilentSince clears the value of the "silent_since" field.
+func (_u *AssetUpdate) ClearSilentSince() *AssetUpdate {
+	_u.mutation.ClearSilentSince()
+	return _u
+}
+
 // AddEventIDs adds the "events" edge to the Event entity by IDs.
 func (_u *AssetUpdate) AddEventIDs(ids ...uuid.UUID) *AssetUpdate {
 	_u.mutation.AddEventIDs(ids...)
@@ -369,6 +389,12 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.GroupIDCleared() {
 		_spec.ClearField(asset.FieldGroupID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.SilentSince(); ok {
+		_spec.SetField(asset.FieldSilentSince, field.TypeTime, value)
+	}
+	if _u.mutation.SilentSinceCleared() {
+		_spec.ClearField(asset.FieldSilentSince, field.TypeTime)
 	}
 	if _u.mutation.EventsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -663,6 +689,26 @@ func (_u *AssetUpdateOne) ClearGroupID() *AssetUpdateOne {
 	return _u
 }
 
+// SetSilentSince sets the "silent_since" field.
+func (_u *AssetUpdateOne) SetSilentSince(v time.Time) *AssetUpdateOne {
+	_u.mutation.SetSilentSince(v)
+	return _u
+}
+
+// SetNillableSilentSince sets the "silent_since" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableSilentSince(v *time.Time) *AssetUpdateOne {
+	if v != nil {
+		_u.SetSilentSince(*v)
+	}
+	return _u
+}
+
+// ClearSilentSince clears the value of the "silent_since" field.
+func (_u *AssetUpdateOne) ClearSilentSince() *AssetUpdateOne {
+	_u.mutation.ClearSilentSince()
+	return _u
+}
+
 // AddEventIDs adds the "events" edge to the Event entity by IDs.
 func (_u *AssetUpdateOne) AddEventIDs(ids ...uuid.UUID) *AssetUpdateOne {
 	_u.mutation.AddEventIDs(ids...)
@@ -890,6 +936,12 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.GroupIDCleared() {
 		_spec.ClearField(asset.FieldGroupID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.SilentSince(); ok {
+		_spec.SetField(asset.FieldSilentSince, field.TypeTime, value)
+	}
+	if _u.mutation.SilentSinceCleared() {
+		_spec.ClearField(asset.FieldSilentSince, field.TypeTime)
 	}
 	if _u.mutation.EventsCleared() {
 		edge := &sqlgraph.EdgeSpec{

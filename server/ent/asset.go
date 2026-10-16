@@ -35,6 +35,8 @@ type Asset struct {
 	Config json.RawMessage `json:"config,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *uuid.UUID `json:"group_id,omitempty"`
+	// SilentSince holds the value of the "silent_since" field.
+	SilentSince *time.Time `json:"silent_since,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AssetQuery when eager-loading is set.
 	Edges        AssetEdges `json:"edges"`
@@ -92,7 +94,7 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case asset.FieldHostname, asset.FieldOs:
 			values[i] = new(sql.NullString)
-		case asset.FieldFirstSeen, asset.FieldLastSeen:
+		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince:
 			values[i] = new(sql.NullTime)
 		case asset.FieldID:
 			values[i] = new(uuid.UUID)
@@ -171,6 +173,13 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.GroupID = new(uuid.UUID)
 				*_m.GroupID = *value.S.(*uuid.UUID)
+			}
+		case asset.FieldSilentSince:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field silent_since", values[i])
+			} else if value.Valid {
+				_m.SilentSince = new(time.Time)
+				*_m.SilentSince = value.Time
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -251,6 +260,11 @@ func (_m *Asset) String() string {
 	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.SilentSince; v != nil {
+		builder.WriteString("silent_since=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')
 	return builder.String()

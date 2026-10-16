@@ -54,6 +54,9 @@ type Session func(*sql.Selector)
 // SessionMessage is the predicate function for sessionmessage builders.
 type SessionMessage func(*sql.Selector)
 
+// Setting is the predicate function for setting builders.
+type Setting func(*sql.Selector)
+
 // Suppression is the predicate function for suppression builders.
 type Suppression func(*sql.Selector)
 

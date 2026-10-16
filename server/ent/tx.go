@@ -44,6 +44,8 @@ type Tx struct {
 	Session *SessionClient
 	// SessionMessage is the client for interacting with the SessionMessage builders.
 	SessionMessage *SessionMessageClient
+	// Setting is the client for interacting with the Setting builders.
+	Setting *SettingClient
 	// Suppression is the client for interacting with the Suppression builders.
 	Suppression *SuppressionClient
 	// Task is the client for interacting with the Task builders.
@@ -199,6 +201,7 @@ func (tx *Tx) init() {
 	tx.Report = NewReportClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
 	tx.SessionMessage = NewSessionMessageClient(tx.config)
+	tx.Setting = NewSettingClient(tx.config)
 	tx.Suppression = NewSuppressionClient(tx.config)
 	tx.Task = NewTaskClient(tx.config)
 	tx.TaskRun = NewTaskRunClient(tx.config)

@@ -64,13 +64,16 @@ docker compose up -d
 登录后可在界面里建号，角色三档：admin（用户管理）/ analyst（研判与处置）/ viewer（只读）。
 所有登录与处置操作都有审计日志，admin 可在界面查看。
 
-启用告警通知，把研判后的事件推到 IM 群（benign 判定不推，AI 说是噪声的不打扰人）：
+启用告警通知：admin 在控制台「系统设置 → 通知」填入 IM 机器人地址，点「发送测试」确认收到后保存。
+研判后的事件、主机失联与恢复、巡检报告都推到这里。benign 判定不推（AI 说是噪声的不打扰人），
+但高危及以上照推并标注「需人工复核」。格式支持 generic / dingtalk / feishu / wecom。
+也可以用环境变量给出首次部署的默认值，控制台保存过之后以控制台为准：
 
 ```bash
 WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=... \
 WEBHOOK_FORMAT=dingtalk \
 WEBHOOK_LINK_BASE=http://<控制台地址>:5173 \
-docker compose up -d   # 格式支持 generic / dingtalk / feishu / wecom
+docker compose up -d
 ```
 
 启用 AI 研判（不配置则只做规则告警和关联，不调用模型）：
@@ -335,7 +338,8 @@ server 全部通过环境变量配置，均有默认值：
 | `SYSLOG_ADDR` | 空（不启用） | syslog 监听地址，如 `:514`。UDP 与 TCP 同时监听 |
 | `SUPPRESSION_RELOAD_SECONDS` | `30` | 抑制规则重载与命中计数回写周期 |
 | `INTEL_RELOAD_SECONDS` | `30` | 威胁情报重载与命中计数回写周期 |
-| `WEBHOOK_MIN_SEVERITY` | `0` | 低于该级别的事件不推送（1 信息 ~ 5 严重），0 表示全推 |
+| `WEBHOOK_MIN_SEVERITY` | `0` | 低于该级别的事件不推送（1 信息 ~ 5 严重），0 表示全推。控制台保存过通知配置后以控制台为准 |
+| `AGENT_SILENT_MINUTES` | `10` | agent 指令通道超过该时长没有心跳即判失联并通知，恢复时再通知一次 |
 | `RESPONSE_ENABLED` | `false` | 是否允许下发响应指令 |
 | `ISOLATION_ALLOW` | 空 | 隔离主机时放行的地址，必须包含 server 的 gRPC 端点 |
 | `AUTO_RESPONSE_ENABLED` | `false` | AI 研判高置信度 malicious 时自动隔离涉事主机（依赖 `RESPONSE_ENABLED`） |

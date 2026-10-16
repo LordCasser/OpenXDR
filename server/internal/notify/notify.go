@@ -3,8 +3,9 @@
 //
 // 投递语义：
 //   - AI 启用时等研判完成再推，避免推完 AI 又改口；未启用则事件一出就推
-//   - benign 判定静默跳过：AI 说是噪声的不打扰人
-//   - 通知器启动前的历史事件不补发，防止首次启用时轰炸群
+//   - benign 判定静默跳过：AI 说是噪声的不打扰人。但高危及以上照推并标"需复核"——
+//     AI 会看错，高危事件被它一句"良性"吞掉的代价太大
+//   - 推送目标启用前的历史事件不补发，防止首次启用时轰炸群
 //   - 发送失败不落投递标记，下个周期自动重试
 package notify
 
@@ -22,33 +23,25 @@ import (
 	"openxdr/server/ent/incident"
 )
 
+// reviewSeverity 及以上的事件即使 AI 判良性也推送
+const reviewSeverity = 4
+
 type Notifier struct {
-	DB *ent.Client
-	// 目标 webhook，空则整个通知器不启用
-	URL string
-	// generic / dingtalk / feishu / wecom
-	Format   string
+	DB       *ent.Client
+	Settings *Settings
 	Interval time.Duration
 	// AI 启用时为 true：等 verdict 出来再推
 	WaitTriage bool
-	// 拼进消息的控制台链接前缀，如 https://xdr.example.com
-	LinkBase string
-	// 低于该级别的事件不推送，0 表示全推。降噪的最后一道闸
-	MinSeverity int16
-	Client      *http.Client
+	Client     *http.Client
 
+	// 推送目标启用的时刻；未配置目标时为零值
 	start time.Time
 }
 
 func (n *Notifier) Run(ctx context.Context) {
-	if n.URL == "" {
-		slog.Warn("告警通知未启用：未配置 WEBHOOK_URL")
-		return
-	}
 	if n.Client == nil {
 		n.Client = &http.Client{Timeout: 10 * time.Second}
 	}
-	n.start = time.Now()
 	ticker := time.NewTicker(n.Interval)
 	defer ticker.Stop()
 	for {
@@ -71,6 +64,14 @@ type verdict struct {
 }
 
 func (n *Notifier) sweep(ctx context.Context) error {
+	target := n.Settings.Load(ctx)
+	if target.URL == "" {
+		n.start = time.Time{}
+		return nil
+	}
+	if n.start.IsZero() {
+		n.start = time.Now()
+	}
 	incidents, err := n.DB.Incident.Query().
 		Where(incident.NotifiedAtIsNil()).
 		Order(ent.Asc(incident.FieldCreatedAt)).
@@ -81,27 +82,21 @@ func (n *Notifier) sweep(ctx context.Context) error {
 	}
 
 	for _, inc := range incidents {
-		send, why := n.decide(inc)
-		if !send {
-			if why == "wait" {
-				continue // 等研判，先不落标记
-			}
-			if err := n.markNotified(ctx, inc); err != nil {
-				return err
-			}
-			continue
-		}
-		msg, err := n.message(ctx, inc)
+		msg, err := n.message(ctx, inc, target.LinkBase)
 		if err != nil {
 			return err
 		}
-		if msg.Severity < n.MinSeverity {
+		send, why := n.decide(inc, msg.Severity)
+		if why == "wait" {
+			continue // 等研判，先不落标记
+		}
+		if !send || msg.Severity < target.MinSeverity {
 			if err := n.markNotified(ctx, inc); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := n.post(ctx, msg); err != nil {
+		if err := n.post(ctx, target, msg); err != nil {
 			slog.Error("webhook 推送失败，下周期重试", "incident", inc.ID, "err", err)
 			continue
 		}
@@ -114,7 +109,7 @@ func (n *Notifier) sweep(ctx context.Context) error {
 }
 
 // decide 是否推送。返回 (false, "wait") 表示暂缓，(false, 其他) 表示静默跳过。
-func (n *Notifier) decide(inc *ent.Incident) (bool, string) {
+func (n *Notifier) decide(inc *ent.Incident, severity int16) (bool, string) {
 	if inc.CreatedAt.Before(n.start) {
 		return false, "历史事件不补发"
 	}
@@ -130,7 +125,7 @@ func (n *Notifier) decide(inc *ent.Incident) (bool, string) {
 	}
 	var v verdict
 	_ = json.Unmarshal(inc.AiVerdict, &v)
-	if v.Verdict == "benign" {
+	if v.Verdict == "benign" && severity < reviewSeverity {
 		return false, "AI 判定良性"
 	}
 	return true, ""
@@ -153,7 +148,7 @@ type Message struct {
 	Link       string    `json:"link,omitempty"`
 }
 
-func (n *Notifier) message(ctx context.Context, inc *ent.Incident) (Message, error) {
+func (n *Notifier) message(ctx context.Context, inc *ent.Incident, linkBase string) (Message, error) {
 	alerts, err := n.DB.Alert.Query().
 		Where(alert.IncidentIDEQ(inc.ID)).
 		All(ctx)
@@ -174,15 +169,15 @@ func (n *Notifier) message(ctx context.Context, inc *ent.Incident) (Message, err
 		_ = json.Unmarshal(inc.AiVerdict, &v)
 		m.Verdict, m.Confidence, m.Summary = v.Verdict, v.Confidence, v.Summary
 	}
-	if n.LinkBase != "" {
-		m.Link = n.LinkBase + "/?incident=" + m.IncidentID
+	if linkBase != "" {
+		m.Link = linkBase + "/?incident=" + m.IncidentID
 	}
 	return m, nil
 }
 
 var severityText = []string{"-", "信息", "低危", "中危", "高危", "严重"}
 
-var verdictText = map[string]string{"malicious": "恶意", "suspicious": "可疑"}
+var verdictText = map[string]string{"malicious": "恶意", "suspicious": "可疑", "benign": "良性，但级别高需人工复核"}
 
 // text 各家 IM 共用的正文。
 func text(m Message) string {
@@ -224,8 +219,8 @@ func payload(format string, generic any, text string) []byte {
 	return b
 }
 
-func (n *Notifier) post(ctx context.Context, m Message) error {
-	return send(ctx, n.Client, n.URL, payload(n.Format, m, text(m)))
+func (n *Notifier) post(ctx context.Context, t Target, m Message) error {
+	return send(ctx, n.Client, t.URL, payload(t.Format, m, text(m)))
 }
 
 // Text 非 incident 的通知：任务报告、任务失败等。也是 generic 格式的推送体。
@@ -235,25 +230,35 @@ type Text struct {
 	Link  string `json:"link,omitempty"`
 }
 
-// Webhook 推送任意文本，与 incident 通知共用目标与格式。URL 为空时 Send 什么都不做。
+// Webhook 推送任意文本，与 incident 通知共用目标与格式。未配置目标时 Send 什么都不做。
 type Webhook struct {
-	URL    string
-	Format string
-	Client *http.Client
+	Settings *Settings
+	Client   *http.Client
 }
 
-func (h *Webhook) Send(ctx context.Context, t Text) error {
-	if h.URL == "" {
+// Send 的 path 是控制台内的相对链接，如 /?session=…，有链接前缀时才拼出来。
+func (h *Webhook) Send(ctx context.Context, title, body, path string) error {
+	return h.SendTo(ctx, h.Settings.Load(ctx), title, body, path)
+}
+
+// SendTo 推到指定目标，供"发送测试"在保存前验证配置。
+func (h *Webhook) SendTo(ctx context.Context, target Target, title, body, path string) error {
+	if target.URL == "" {
 		return nil
 	}
-	if h.Client == nil {
-		h.Client = &http.Client{Timeout: 10 * time.Second}
+	client := h.Client
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
 	}
-	body := "【OpenXDR】" + t.Title + "\n" + t.Body
+	t := Text{Title: title, Body: body}
+	if path != "" && target.LinkBase != "" {
+		t.Link = target.LinkBase + path
+	}
+	full := "【OpenXDR】" + t.Title + "\n" + t.Body
 	if t.Link != "" {
-		body += "\n" + t.Link
+		full += "\n" + t.Link
 	}
-	return send(ctx, h.Client, h.URL, payload(h.Format, t, body))
+	return send(ctx, client, target.URL, payload(target.Format, t, full))
 }
 
 func send(ctx context.Context, client *http.Client, url string, body []byte) error {

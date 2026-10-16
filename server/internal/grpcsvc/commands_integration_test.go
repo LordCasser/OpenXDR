@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -79,7 +80,7 @@ func TestAgentCommandsReplayAndComplete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := &Server{Hub: hub}
+	s := &Server{DB: client, Hub: hub}
 	// agent 认领后返回执行结果
 	agentClaim := &pb.CommandResult{AgentId: agentID.String()}
 	result := &pb.CommandResult{
@@ -88,8 +89,13 @@ func TestAgentCommandsReplayAndComplete(t *testing.T) {
 	}
 	stream := newFakeCommandsStream(ctx, []*pb.CommandResult{agentClaim, result})
 
+	before := time.Now()
 	if err := s.Commands(stream); err != nil {
 		t.Fatalf("Commands 失败: %v", err)
+	}
+	// 指令通道连上即刷新心跳
+	if got := client.Asset.GetX(ctx, asset.ID); got.LastSeen.Before(before) {
+		t.Errorf("连上指令通道应刷新 last_seen，实际 %v", got.LastSeen)
 	}
 
 	// 补发的指令应推给 agent 且内容正确

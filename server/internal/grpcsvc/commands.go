@@ -1,14 +1,21 @@
 package grpcsvc
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 
+	"openxdr/server/ent/asset"
 	"openxdr/server/pb"
 )
+
+// heartbeatInterval 指令通道在线期间刷新 last_seen 的周期。agent 一直挂着指令流，
+// 流在就说明 agent 活着，不需要额外的心跳 RPC。
+const heartbeatInterval = time.Minute
 
 // Commands 双向指令流。agent 连上后先发一条只带 agent_id 的消息认领连接，
 // 之后 server 单向推指令、agent 回执行结果。
@@ -34,6 +41,9 @@ func (s *Server) Commands(stream pb.AgentService_CommandsServer) error {
 	outbound := s.Hub.Attach(agentID)
 	defer s.Hub.Detach(agentID, outbound)
 	slog.Info("agent 指令通道已连接", "agent", agentID)
+	s.touch(ctx, agentID)
+	heartbeat := time.NewTicker(heartbeatInterval)
+	defer heartbeat.Stop()
 
 	// 只补发可重放的响应动作；直接写流，避免重连关闭 outbound 时仍向其发送。
 	for _, cmd := range s.Hub.PendingFor(ctx, agentID) {
@@ -59,6 +69,8 @@ func (s *Server) Commands(stream pb.AgentService_CommandsServer) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-heartbeat.C:
+			s.touch(ctx, agentID)
 		case err := <-recvErr:
 			if errors.Is(err, io.EOF) {
 				return nil
@@ -72,5 +84,11 @@ func (s *Server) Commands(stream pb.AgentService_CommandsServer) error {
 				return err
 			}
 		}
+	}
+}
+
+func (s *Server) touch(ctx context.Context, agentID uuid.UUID) {
+	if err := s.DB.Asset.Update().Where(asset.AgentIDEQ(agentID)).SetLastSeen(time.Now()).Exec(ctx); err != nil {
+		slog.Warn("刷新 agent 心跳失败", "agent", agentID, "err", err)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"openxdr/server/ent/schema"
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
+	"openxdr/server/ent/setting"
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
@@ -245,6 +246,14 @@ func init() {
 	sessionmessageDescID := sessionmessageFields[0].Descriptor()
 	// sessionmessage.DefaultID holds the default value on creation for the id field.
 	sessionmessage.DefaultID = sessionmessageDescID.Default.(func() uuid.UUID)
+	settingFields := schema.Setting{}.Fields()
+	_ = settingFields
+	// settingDescUpdatedAt is the schema descriptor for updated_at field.
+	settingDescUpdatedAt := settingFields[2].Descriptor()
+	// setting.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	setting.DefaultUpdatedAt = settingDescUpdatedAt.Default.(func() time.Time)
+	// setting.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	setting.UpdateDefaultUpdatedAt = settingDescUpdatedAt.UpdateDefault.(func() time.Time)
 	suppressionFields := schema.Suppression{}.Fields()
 	_ = suppressionFields
 	// suppressionDescCreatedAt is the schema descriptor for created_at field.

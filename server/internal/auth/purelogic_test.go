@@ -14,6 +14,8 @@ func TestMinRoleRouteTable(t *testing.T) {
 		// 用户与审计管理只有 admin 能碰，GET 也不例外
 		{"GET", "/api/users", "admin"},
 		{"POST", "/api/users", "admin"},
+		{"GET", "/api/settings/notify", "admin"},
+		{"POST", "/api/settings/notify/test", "admin"},
 		{"GET", "/api/audit", "admin"},
 		{"DELETE", "/api/audit/123", "admin"},
 		// 其余只读走 viewer，写操作至少 analyst

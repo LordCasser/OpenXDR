@@ -42,7 +42,7 @@ func ValidRole(role string) bool { _, ok := roleRank[role]; return ok }
 // minRole 请求要过的最低角色门槛。
 func minRole(method, path string) string {
 	switch {
-	case strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/audit"):
+	case strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/audit"), strings.HasPrefix(path, "/api/settings"):
 		return "admin"
 	// 狩猎直接读全量数据，没法按组裁剪，只留给 admin
 	case strings.HasPrefix(path, "/api/hunt"):

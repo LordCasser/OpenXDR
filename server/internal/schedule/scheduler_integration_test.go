@@ -52,11 +52,11 @@ func TestSchedulerTick(t *testing.T) {
 	var mu sync.Mutex
 	notes := map[string]string{}
 	s := &Scheduler{
-		DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute, LinkBase: "http://x",
-		Notify: func(_ context.Context, title, text string) error {
+		DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute,
+		Notify: func(_ context.Context, title, text, path string) error {
 			mu.Lock()
 			defer mu.Unlock()
-			notes[title] = text
+			notes[title] = text + "\n" + path
 			return nil
 		},
 		start: time.Now().Add(-10 * time.Minute),
@@ -89,7 +89,7 @@ func TestSchedulerTick(t *testing.T) {
 	}
 	// A 推报告（带摘要与链接），B 推失败
 	if len(notes) != 2 || !strings.Contains(notes["日报"], "一切正常") ||
-		!strings.Contains(notes["日报"], "http://x/api/agent-reports/") || notes["任务失败：巡检"] == "" {
+		!strings.Contains(notes["日报"], "/api/agent-reports/") || notes["任务失败：巡检"] == "" {
 		t.Errorf("通知不符：%v", notes)
 	}
 

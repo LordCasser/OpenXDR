@@ -28,20 +28,22 @@ func TestDecide(t *testing.T) {
 	cases := []struct {
 		name string
 		inc  *ent.Incident
+		sev  int16
 		send bool
 		why  string
 	}{
-		{"历史事件跳过", incidentAt(n.start.Add(-time.Minute), "open", ""), false, "历史事件不补发"},
-		{"已关闭跳过", incidentAt(fresh, "closed", ""), false, "已人工处理"},
-		{"误报跳过", incidentAt(fresh, "false_positive", ""), false, "已人工处理"},
-		{"未研判等待", incidentAt(fresh, "open", ""), false, "wait"},
-		{"良性静默", incidentAt(fresh, "triaged", `{"verdict":"benign"}`), false, "AI 判定良性"},
-		{"恶意推送", incidentAt(fresh, "triaged", `{"verdict":"malicious","confidence":90}`), true, ""},
-		{"可疑推送", incidentAt(fresh, "triaged", `{"verdict":"suspicious"}`), true, ""},
-		{"研判无法解析也推送", incidentAt(fresh, "triaged", `{"error":"unparseable"}`), true, ""},
+		{"历史事件跳过", incidentAt(n.start.Add(-time.Minute), "open", ""), 3, false, "历史事件不补发"},
+		{"已关闭跳过", incidentAt(fresh, "closed", ""), 3, false, "已人工处理"},
+		{"误报跳过", incidentAt(fresh, "false_positive", ""), 3, false, "已人工处理"},
+		{"未研判等待", incidentAt(fresh, "open", ""), 3, false, "wait"},
+		{"良性静默", incidentAt(fresh, "triaged", `{"verdict":"benign"}`), 3, false, "AI 判定良性"},
+		{"高危良性仍推送待复核", incidentAt(fresh, "triaged", `{"verdict":"benign"}`), 4, true, ""},
+		{"恶意推送", incidentAt(fresh, "triaged", `{"verdict":"malicious","confidence":90}`), 3, true, ""},
+		{"可疑推送", incidentAt(fresh, "triaged", `{"verdict":"suspicious"}`), 3, true, ""},
+		{"研判无法解析也推送", incidentAt(fresh, "triaged", `{"error":"unparseable"}`), 3, true, ""},
 	}
 	for _, c := range cases {
-		send, why := n.decide(c.inc)
+		send, why := n.decide(c.inc, c.sev)
 		if send != c.send || why != c.why {
 			t.Errorf("%s: want (%v,%q) got (%v,%q)", c.name, c.send, c.why, send, why)
 		}
@@ -50,7 +52,7 @@ func TestDecide(t *testing.T) {
 
 func TestDecideNoAI(t *testing.T) {
 	n := &Notifier{start: time.Now().Add(-time.Hour), WaitTriage: false}
-	if send, _ := n.decide(incidentAt(time.Now(), "open", "")); !send {
+	if send, _ := n.decide(incidentAt(time.Now(), "open", ""), 1); !send {
 		t.Fatal("AI 未启用时事件应立即推送")
 	}
 }
@@ -98,8 +100,9 @@ func TestWebhookSendText(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := &Webhook{URL: srv.URL, Format: "dingtalk"}
-	if err := h.Send(context.Background(), Text{Title: "每日巡检", Body: "3 台主机正常", Link: "http://x/r/1"}); err != nil {
+	h := &Webhook{}
+	target := Target{URL: srv.URL, Format: "dingtalk", LinkBase: "http://x"}
+	if err := h.SendTo(context.Background(), target, "每日巡检", "3 台主机正常", "/r/1"); err != nil {
 		t.Fatal(err)
 	}
 	var v struct {
@@ -113,7 +116,7 @@ func TestWebhookSendText(t *testing.T) {
 	}
 
 	// 未配置 URL：静默不发，也不报错
-	if err := (&Webhook{}).Send(context.Background(), Text{Title: "x"}); err != nil {
+	if err := h.SendTo(context.Background(), Target{}, "x", "", ""); err != nil {
 		t.Errorf("未配置时不应报错：%v", err)
 	}
 }

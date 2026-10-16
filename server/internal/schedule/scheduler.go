@@ -36,7 +36,8 @@ type Runner interface {
 }
 
 // Notifier 任务结果外发，nil 表示不外发。
-type Notifier func(ctx context.Context, title, text string) error
+// Notifier 推送一条通知；path 是控制台内的相对链接，由推送端拼前缀。
+type Notifier func(ctx context.Context, title, text, path string) error
 
 type Scheduler struct {
 	DB     *ent.Client
@@ -47,8 +48,6 @@ type Scheduler struct {
 	// 任务未指定模型时使用
 	DefaultModel string
 	Notify       Notifier
-	// 控制台链接前缀，拼进失败通知
-	LinkBase string
 	// 单次运行上限，含模型、工具与审批等待
 	Timeout time.Duration
 
@@ -234,10 +233,7 @@ func (s *Scheduler) execute(ctx context.Context, t *ent.Task, g *ent.Group, run 
 	// 巡检失败不能悄无声息：没人看控制台时，Webhook 是唯一的信号
 	if s.Notify != nil {
 		text := fmt.Sprintf("组「%s」的任务运行失败：%v", g.Name, err)
-		if s.LinkBase != "" {
-			text += "\n" + s.LinkBase + "/?session=" + session.ID.String()
-		}
-		if nerr := s.Notify(done, "任务失败："+t.Name, text); nerr != nil {
+		if nerr := s.Notify(done, "任务失败："+t.Name, text, "/?session="+session.ID.String()); nerr != nil {
 			slog.Error("任务失败通知发送失败", "run", run.ID, "err", nerr)
 		}
 	}
@@ -256,10 +252,7 @@ func (s *Scheduler) pushReports(ctx context.Context, g *ent.Group, session *ent.
 	}
 	for _, r := range reports {
 		text := fmt.Sprintf("组「%s」\n%s", g.Name, excerpt(r.Markdown, 300))
-		if s.LinkBase != "" {
-			text += "\n" + s.LinkBase + "/api/agent-reports/" + r.ID.String() + "/html"
-		}
-		if err := s.Notify(ctx, r.Title, text); err != nil {
+		if err := s.Notify(ctx, r.Title, text, "/api/agent-reports/"+r.ID.String()+"/html"); err != nil {
 			slog.Error("报告推送失败", "report", r.ID, "err", err)
 		}
 	}

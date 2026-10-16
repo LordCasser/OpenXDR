@@ -142,6 +142,7 @@ var (
 		{Name: "last_seen", Type: field.TypeTime},
 		{Name: "config", Type: field.TypeJSON, Nullable: true},
 		{Name: "group_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "silent_since", Type: field.TypeTime, Nullable: true},
 	}
 	// AssetsTable holds the schema information for the "assets" table.
 	AssetsTable = &schema.Table{
@@ -460,6 +461,18 @@ var (
 			},
 		},
 	}
+	// SettingsColumns holds the columns for the "settings" table.
+	SettingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "value", Type: field.TypeJSON},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// SettingsTable holds the schema information for the "settings" table.
+	SettingsTable = &schema.Table{
+		Name:       "settings",
+		Columns:    SettingsColumns,
+		PrimaryKey: []*schema.Column{SettingsColumns[0]},
+	}
 	// SuppressionsColumns holds the columns for the "suppressions" table.
 	SuppressionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -573,6 +586,7 @@ var (
 		ReportsTable,
 		SessionsTable,
 		SessionMessagesTable,
+		SettingsTable,
 		SuppressionsTable,
 		TasksTable,
 		TaskRunsTable,

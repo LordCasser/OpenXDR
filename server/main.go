@@ -34,6 +34,7 @@ import (
 	"openxdr/server/internal/ingest"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/janitor"
+	"openxdr/server/internal/liveness"
 	"openxdr/server/internal/notify"
 	"openxdr/server/internal/piruntime"
 	"openxdr/server/internal/report"
@@ -138,18 +139,27 @@ func main() {
 		go cluster.RunLeader(ctx, db, "triage", triageEngine.Run)
 	}
 
-	notifier := &notify.Notifier{
-		DB:          client,
+	// 推送目标以控制台保存的为准，环境变量只是首次部署的默认值
+	notifySettings := &notify.Settings{DB: client, Default: notify.Target{
 		URL:         os.Getenv("WEBHOOK_URL"),
 		Format:      getenv("WEBHOOK_FORMAT", "generic"),
-		Interval:    time.Duration(getenvInt("WEBHOOK_INTERVAL_SECONDS", 30)) * time.Second,
-		WaitTriage:  os.Getenv("AI_MODEL") != "",
 		LinkBase:    os.Getenv("WEBHOOK_LINK_BASE"),
 		MinSeverity: int16(getenvInt("WEBHOOK_MIN_SEVERITY", 0)),
+	}}
+	webhook := &notify.Webhook{Settings: notifySettings}
+	notifier := &notify.Notifier{
+		DB:         client,
+		Settings:   notifySettings,
+		Interval:   time.Duration(getenvInt("WEBHOOK_INTERVAL_SECONDS", 30)) * time.Second,
+		WaitTriage: os.Getenv("AI_MODEL") != "",
 	}
-	if notifier.URL != "" {
-		go cluster.RunLeader(ctx, db, "notify", notifier.Run)
+	go cluster.RunLeader(ctx, db, "notify", notifier.Run)
+	watcher := &liveness.Watcher{
+		DB: client, Notify: webhook.Send,
+		SilentAfter: time.Duration(getenvInt("AGENT_SILENT_MINUTES", 10)) * time.Minute,
+		Interval:    time.Minute,
 	}
+	go cluster.RunLeader(ctx, db, "liveness", watcher.Run)
 
 	dedupWindow := time.Duration(getenvInt("ALERT_DEDUP_WINDOW_MINUTES", 5)) * time.Minute
 	registry := prometheus.NewRegistry()
@@ -255,24 +265,23 @@ func main() {
 	go chat.Recover(ctx)
 	// 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
 	report.Chromium = getenv("CHROMIUM_PATH", "chromium")
-	webhook := &notify.Webhook{URL: os.Getenv("WEBHOOK_URL"), Format: getenv("WEBHOOK_FORMAT", "generic")}
 	scheduler := &schedule.Scheduler{
 		DB: client, Runner: chat,
 		Dir:          getenv("TASKS_PATH", "../tasks"),
 		Interval:     time.Duration(getenvInt("SCHEDULE_INTERVAL_SECONDS", 30)) * time.Second,
 		DefaultModel: chat.Model,
-		Notify: func(ctx context.Context, title, text string) error {
-			return webhook.Send(ctx, notify.Text{Title: title, Body: text})
-		},
-		LinkBase: os.Getenv("WEBHOOK_LINK_BASE"),
-		Timeout:  time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second,
+		Notify:       webhook.Send,
+		Timeout:      time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second,
 	}
 	if chat.Model != "" {
 		go cluster.RunLeader(ctx, db, "schedule", scheduler.Run)
 	} else {
 		slog.Warn("预设任务未启用：未配置 PI_MODEL")
 	}
-	app := auth.Middleware(client, api.Handler(client, rules, rulesPath, hub, suppressions, intelStore, triageEngine, allowlist, chat))
+	routes := http.NewServeMux()
+	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook))
+	routes.Handle("/", api.Handler(client, rules, rulesPath, hub, suppressions, intelStore, triageEngine, allowlist, chat))
+	app := auth.Middleware(client, routes)
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", telemetry.Handler(registry))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })

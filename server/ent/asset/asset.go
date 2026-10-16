@@ -31,6 +31,8 @@ const (
 	FieldConfig = "config"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldSilentSince holds the string denoting the silent_since field in the database.
+	FieldSilentSince = "silent_since"
 	// EdgeEvents holds the string denoting the events edge name in mutations.
 	EdgeEvents = "events"
 	// EdgeAlerts holds the string denoting the alerts edge name in mutations.
@@ -73,6 +75,7 @@ var Columns = []string{
 	FieldLastSeen,
 	FieldConfig,
 	FieldGroupID,
+	FieldSilentSince,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -130,6 +133,11 @@ func ByLastSeen(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// BySilentSince orders the results by the silent_since field.
+func BySilentSince(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSilentSince, opts...).ToFunc()
 }
 
 // ByEventsCount orders the results by events count.

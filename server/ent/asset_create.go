@@ -113,6 +113,20 @@ func (_c *AssetCreate) SetNillableGroupID(v *uuid.UUID) *AssetCreate {
 	return _c
 }
 
+// SetSilentSince sets the "silent_since" field.
+func (_c *AssetCreate) SetSilentSince(v time.Time) *AssetCreate {
+	_c.mutation.SetSilentSince(v)
+	return _c
+}
+
+// SetNillableSilentSince sets the "silent_since" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableSilentSince(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetSilentSince(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AssetCreate) SetID(v uuid.UUID) *AssetCreate {
 	_c.mutation.SetID(v)
@@ -298,6 +312,10 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GroupID(); ok {
 		_spec.SetField(asset.FieldGroupID, field.TypeUUID, value)
 		_node.GroupID = &value
+	}
+	if value, ok := _c.mutation.SilentSince(); ok {
+		_spec.SetField(asset.FieldSilentSince, field.TypeTime, value)
+		_node.SilentSince = &value
 	}
 	if nodes := _c.mutation.EventsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

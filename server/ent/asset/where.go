@@ -86,6 +86,11 @@ func GroupID(v uuid.UUID) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldGroupID, v))
 }
 
+// SilentSince applies equality check predicate on the "silent_since" field. It's identical to SilentSinceEQ.
+func SilentSince(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSilentSince, v))
+}
+
 // HostnameEQ applies the EQ predicate on the "hostname" field.
 func HostnameEQ(v string) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldHostname, v))
@@ -424,6 +429,56 @@ func GroupIDIsNil() predicate.Asset {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldGroupID))
+}
+
+// SilentSinceEQ applies the EQ predicate on the "silent_since" field.
+func SilentSinceEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSilentSince, v))
+}
+
+// SilentSinceNEQ applies the NEQ predicate on the "silent_since" field.
+func SilentSinceNEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldSilentSince, v))
+}
+
+// SilentSinceIn applies the In predicate on the "silent_since" field.
+func SilentSinceIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldSilentSince, vs...))
+}
+
+// SilentSinceNotIn applies the NotIn predicate on the "silent_since" field.
+func SilentSinceNotIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldSilentSince, vs...))
+}
+
+// SilentSinceGT applies the GT predicate on the "silent_since" field.
+func SilentSinceGT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldSilentSince, v))
+}
+
+// SilentSinceGTE applies the GTE predicate on the "silent_since" field.
+func SilentSinceGTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldSilentSince, v))
+}
+
+// SilentSinceLT applies the LT predicate on the "silent_since" field.
+func SilentSinceLT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldSilentSince, v))
+}
+
+// SilentSinceLTE applies the LTE predicate on the "silent_since" field.
+func SilentSinceLTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldSilentSince, v))
+}
+
+// SilentSinceIsNil applies the IsNil predicate on the "silent_since" field.
+func SilentSinceIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSilentSince))
+}
+
+// SilentSinceNotNil applies the NotNil predicate on the "silent_since" field.
+func SilentSinceNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSilentSince))
 }
 
 // HasEvents applies the HasEdge predicate on the "events" edge.

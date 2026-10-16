@@ -28,10 +28,10 @@ func TestSweep(t *testing.T) {
 	t.Cleanup(hook.Close)
 
 	n := &Notifier{
-		DB: client, URL: hook.URL, Format: "generic",
-		WaitTriage: true, LinkBase: "http://console",
-		Client: hook.Client(),
-		start:  time.Now().Add(-time.Minute),
+		DB: client, Settings: &Settings{DB: client, Default: Target{URL: hook.URL, Format: "generic", LinkBase: "http://console"}},
+		WaitTriage: true,
+		Client:     hook.Client(),
+		start:      time.Now().Add(-time.Minute),
 	}
 
 	title := "恶意进程链"
@@ -104,7 +104,7 @@ func TestSweepRetries(t *testing.T) {
 	t.Cleanup(hook.Close)
 
 	n := &Notifier{
-		DB: client, URL: hook.URL, Format: "generic",
+		DB: client, Settings: &Settings{DB: client, Default: Target{URL: hook.URL, Format: "generic"}},
 		Client: hook.Client(), start: time.Now().Add(-time.Minute),
 	}
 	inc, err := client.Incident.Create().
@@ -143,9 +143,8 @@ func TestSweepMinSeverity(t *testing.T) {
 	t.Cleanup(hook.Close)
 
 	n := &Notifier{
-		DB: client, URL: hook.URL, Format: "generic",
-		MinSeverity: 4,
-		Client:      hook.Client(), start: time.Now().Add(-time.Minute),
+		DB: client, Settings: &Settings{DB: client, Default: Target{URL: hook.URL, Format: "generic", MinSeverity: 4}},
+		Client: hook.Client(), start: time.Now().Add(-time.Minute),
 	}
 
 	low, err := client.Incident.Create().
@@ -179,5 +178,57 @@ func TestSweepMinSeverity(t *testing.T) {
 	got, _ := client.Incident.Query().Where(incident.IDEQ(low.ID)).Only(ctx)
 	if got.NotifiedAt == nil {
 		t.Fatal("低于阈值的事件应静默落标记")
+	}
+}
+
+// 控制台保存的目标覆盖环境变量默认值；从未配置目标时不推送也不落标记，配置后只推之后的事件。
+func TestSettingsOverrideAndLateEnable(t *testing.T) {
+	ctx, client := testdb.New(t)
+
+	var received int
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received++
+	}))
+	t.Cleanup(hook.Close)
+
+	settings := &Settings{DB: client}
+	if got := settings.Load(ctx); got.URL != "" {
+		t.Fatalf("未保存时应返回默认值，实际 %+v", got)
+	}
+	n := &Notifier{DB: client, Settings: settings, Client: hook.Client()}
+
+	before, _ := client.Incident.Create().SetGraph(json.RawMessage(`{}`)).SetStatus("open").Save(ctx)
+	if err := n.sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := client.Incident.Get(ctx, before.ID)
+	if got.NotifiedAt != nil || received != 0 {
+		t.Fatal("未配置目标时不应推送或落标记")
+	}
+
+	if err := settings.Save(ctx, Target{URL: hook.URL, Format: "generic"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := settings.Save(ctx, Target{URL: hook.URL, Format: "feishu"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := settings.Load(ctx); got.Format != "feishu" {
+		t.Fatalf("再次保存应覆盖，实际 %+v", got)
+	}
+	if err := n.sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if received != 0 {
+		t.Fatal("启用前的历史事件不应补发")
+	}
+	time.Sleep(10 * time.Millisecond)
+	if _, err := client.Incident.Create().SetGraph(json.RawMessage(`{}`)).SetStatus("open").Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if received != 1 {
+		t.Fatalf("启用后的新事件应推送 1 条，实际 %d", received)
 	}
 }

@@ -25,7 +25,7 @@
 ```
 correlate：未归属告警 → incident（10s 一批）
 triage：   open incident → LLM 研判 → verdict（30s 一批，需 AI_MODEL）
-notify：   研判后事件 → webhook（30s 一批，benign 不推）
+notify：   研判后事件 → webhook（30s 一批，benign 不推，高危 benign 照推待复核）
 ueba：     扫进程事件维护基线，首次出现合成 low 告警进同一管线（30s 一批）
 janitor：  过期事件/会话清理（60min 一批，告警引用的证据不删）
 ```
@@ -291,14 +291,21 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 
 ## 通知（`server/internal/notify`）
 
-- `WEBHOOK_URL` 未配置则整个通知器不启用（`notify.go:44-47`）
+- 推送目标存 `settings` 表的 `notify` 键，控制台「系统设置 → 通知」可改并发送测试；
+  从未保存过时用 `WEBHOOK_*` 环境变量（`notify/settings.go`）。未配置目标时通知器空转，
+  配置后只推之后的事件
 - 格式：generic 推 Message JSON；dingtalk/wecom 为 `{"msgtype":"text",...}`；
   feishu 为 `{"msg_type":"text",...}`；正文模板共用（`notify.go:144-227`）
-- **投递语义**：AI 启用时等 verdict 再推；benign 静默跳过；
-  closed/false_positive 不推；启动前历史事件不补发；失败下周期重试；
+- **投递语义**：AI 启用时等 verdict 再推；benign 静默跳过，但最高级别 ≥ 高危(4)
+  的照推并标「良性，但级别高需人工复核」——AI 会看错，高危事件不能被一句良性吞掉；
+  closed/false_positive 不推；目标启用前的历史事件不补发；失败下周期重试；
   每批 20 个（`notify.go:73-137`）
 - 阈值 `WEBHOOK_MIN_SEVERITY`（默认 0=全推），按 incident 内告警最高
   severity 过滤（`notify.go:98-103,156-168`）
+- 主机失联（`server/internal/liveness`）：agent 指令通道在线时每分钟刷新 `last_seen`；
+  超过 `AGENT_SILENT_MINUTES`（默认 10）没有心跳推一次「N 台主机失联」，恢复推一次
+  「N 台主机恢复」，同一次失联只推一次（`assets.silent_since`）。巡视器启动后先等满
+  该时长再判定，避免 server 重启期间把整片主机报成失联
 
 ## 数据保留（`server/internal/janitor`）
 
