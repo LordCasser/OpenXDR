@@ -35,6 +35,8 @@ type Asset struct {
 	Config json.RawMessage `json:"config,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *uuid.UUID `json:"group_id,omitempty"`
+	// AgentVersion holds the value of the "agent_version" field.
+	AgentVersion *string `json:"agent_version,omitempty"`
 	// SilentSince holds the value of the "silent_since" field.
 	SilentSince *time.Time `json:"silent_since,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -92,7 +94,7 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case asset.FieldIPAddrs, asset.FieldConfig:
 			values[i] = new([]byte)
-		case asset.FieldHostname, asset.FieldOs:
+		case asset.FieldHostname, asset.FieldOs, asset.FieldAgentVersion:
 			values[i] = new(sql.NullString)
 		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince:
 			values[i] = new(sql.NullTime)
@@ -173,6 +175,13 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.GroupID = new(uuid.UUID)
 				*_m.GroupID = *value.S.(*uuid.UUID)
+			}
+		case asset.FieldAgentVersion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field agent_version", values[i])
+			} else if value.Valid {
+				_m.AgentVersion = new(string)
+				*_m.AgentVersion = value.String
 			}
 		case asset.FieldSilentSince:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -260,6 +269,11 @@ func (_m *Asset) String() string {
 	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.AgentVersion; v != nil {
+		builder.WriteString("agent_version=")
+		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	if v := _m.SilentSince; v != nil {

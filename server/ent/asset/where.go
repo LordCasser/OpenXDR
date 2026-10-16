@@ -86,6 +86,11 @@ func GroupID(v uuid.UUID) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldGroupID, v))
 }
 
+// AgentVersion applies equality check predicate on the "agent_version" field. It's identical to AgentVersionEQ.
+func AgentVersion(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAgentVersion, v))
+}
+
 // SilentSince applies equality check predicate on the "silent_since" field. It's identical to SilentSinceEQ.
 func SilentSince(v time.Time) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldSilentSince, v))
@@ -429,6 +434,81 @@ func GroupIDIsNil() predicate.Asset {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldGroupID))
+}
+
+// AgentVersionEQ applies the EQ predicate on the "agent_version" field.
+func AgentVersionEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAgentVersion, v))
+}
+
+// AgentVersionNEQ applies the NEQ predicate on the "agent_version" field.
+func AgentVersionNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldAgentVersion, v))
+}
+
+// AgentVersionIn applies the In predicate on the "agent_version" field.
+func AgentVersionIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldAgentVersion, vs...))
+}
+
+// AgentVersionNotIn applies the NotIn predicate on the "agent_version" field.
+func AgentVersionNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldAgentVersion, vs...))
+}
+
+// AgentVersionGT applies the GT predicate on the "agent_version" field.
+func AgentVersionGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldAgentVersion, v))
+}
+
+// AgentVersionGTE applies the GTE predicate on the "agent_version" field.
+func AgentVersionGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldAgentVersion, v))
+}
+
+// AgentVersionLT applies the LT predicate on the "agent_version" field.
+func AgentVersionLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldAgentVersion, v))
+}
+
+// AgentVersionLTE applies the LTE predicate on the "agent_version" field.
+func AgentVersionLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldAgentVersion, v))
+}
+
+// AgentVersionContains applies the Contains predicate on the "agent_version" field.
+func AgentVersionContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldAgentVersion, v))
+}
+
+// AgentVersionHasPrefix applies the HasPrefix predicate on the "agent_version" field.
+func AgentVersionHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldAgentVersion, v))
+}
+
+// AgentVersionHasSuffix applies the HasSuffix predicate on the "agent_version" field.
+func AgentVersionHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldAgentVersion, v))
+}
+
+// AgentVersionIsNil applies the IsNil predicate on the "agent_version" field.
+func AgentVersionIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldAgentVersion))
+}
+
+// AgentVersionNotNil applies the NotNil predicate on the "agent_version" field.
+func AgentVersionNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldAgentVersion))
+}
+
+// AgentVersionEqualFold applies the EqualFold predicate on the "agent_version" field.
+func AgentVersionEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldAgentVersion, v))
+}
+
+// AgentVersionContainsFold applies the ContainsFold predicate on the "agent_version" field.
+func AgentVersionContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldAgentVersion, v))
 }
 
 // SilentSinceEQ applies the EQ predicate on the "silent_since" field.

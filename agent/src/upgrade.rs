@@ -1,0 +1,165 @@
+//! 自动升级：server 分发目录里放的是哪个版本，agent 就收敛到哪个版本。
+//!
+//! 流程：经已认证的 gRPC 通道下载 → 校验哈希 → 用新二进制跑一次 `version` 自检
+//! （架构、glibc 不兼容在这一步就暴露）→ 旧版改名 .prev 留作回滚 → 换上新版 → 退出，
+//! 由 systemd / 计划任务拉起新版。任何一步失败都保持旧版继续运行，下次重连再试。
+
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+use sha2::{Digest, Sha256};
+use tokio_stream::StreamExt;
+
+use crate::pb;
+use crate::pb::agent_service_client::AgentServiceClient;
+
+/// 换上新版后的退出码：非零，让各种守护方式都视为需要重启
+pub const EXIT_UPGRADED: i32 = 75;
+
+/// 当前二进制的哈希，进程生命周期内不变，算一次即可。算不出来返回空串，server 就不会要求升级。
+pub fn self_sha256() -> &'static str {
+    static SHA: OnceLock<String> = OnceLock::new();
+    SHA.get_or_init(|| {
+        std::env::current_exe()
+            .and_then(std::fs::File::open)
+            .and_then(sha256_hex)
+            .unwrap_or_default()
+    })
+}
+
+fn sha256_hex(mut r: impl Read) -> std::io::Result<String> {
+    let mut h = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        match r.read(&mut buf)? {
+            0 => break,
+            n => h.update(&buf[..n]),
+        }
+    }
+    Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// 下载并换上新版。成功返回 Ok(())，调用方随即退出进程。
+pub async fn apply(
+    client: &mut AgentServiceClient<tonic::transport::Channel>,
+    platform: &str,
+    sha256: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let data = download(client, platform, sha256).await?;
+    let version = install(&std::env::current_exe()?, &data)?;
+    eprintln!("已升级到 {version}，退出等待重新拉起");
+    Ok(())
+}
+
+async fn download(
+    client: &mut AgentServiceClient<tonic::transport::Channel>,
+    platform: &str,
+    sha256: &str,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut stream = client
+        .download_agent(pb::DownloadRequest {
+            platform: platform.into(),
+            sha256: sha256.into(),
+        })
+        .await?
+        .into_inner();
+    let mut data = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        data.extend(chunk?.data);
+    }
+    let got = sha256_hex(data.as_slice())?;
+    if got != sha256 {
+        return Err(format!("下载的安装包哈希不符：{got}").into());
+    }
+    Ok(data)
+}
+
+/// 新版先落到 .new 并自检，通过后旧版改名 .prev、新版就位。返回新版自报的版本号。
+fn install(exe: &Path, data: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
+    let new = with_suffix(exe, ".new");
+    write_executable(&new, data)?;
+    let check = std::process::Command::new(&new).arg("version").output();
+    let check = match check {
+        Ok(c) if c.status.success() => c,
+        Ok(c) => {
+            let _ = std::fs::remove_file(&new);
+            return Err(format!("新版自检失败：{}", String::from_utf8_lossy(&c.stderr)).into());
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&new);
+            return Err(format!("新版无法运行：{e}").into());
+        }
+    };
+    // 运行中的二进制在 Linux 和 Windows 上都允许改名
+    std::fs::rename(exe, with_suffix(exe, ".prev"))?;
+    std::fs::rename(&new, exe)?;
+    Ok(String::from_utf8_lossy(&check.stdout).trim().to_string())
+}
+
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut s = path.as_os_str().to_owned();
+    s.push(suffix);
+    s.into()
+}
+
+#[cfg(unix)]
+fn write_executable(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o755)
+        .open(path)?;
+    f.write_all(data)
+}
+
+#[cfg(not(unix))]
+fn write_executable(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    std::fs::write(path, data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 自检失败的新版不能换上去，旧版原地不动；自检通过才换，旧版留作 .prev。
+    #[cfg(unix)]
+    #[test]
+    fn install_swaps_only_after_self_check() {
+        let dir = std::env::temp_dir().join(format!("openxdr-upgrade-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("openxdr-agent");
+        std::fs::write(&exe, "old").unwrap();
+
+        assert!(install(&exe, b"#!/bin/sh\nexit 1\n").is_err());
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old");
+        assert!(!with_suffix(&exe, ".new").exists(), "自检失败应清掉 .new");
+        assert!(install(&exe, b"not an executable").is_err());
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old");
+
+        let good = b"#!/bin/sh\necho 9.9.9\n";
+        assert_eq!(install(&exe, good).unwrap(), "9.9.9");
+        assert_eq!(std::fs::read(&exe).unwrap(), good);
+        assert_eq!(
+            std::fs::read_to_string(with_suffix(&exe, ".prev")).unwrap(),
+            "old"
+        );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn hashes_and_suffixes() {
+        assert_eq!(
+            sha256_hex(&b"abc"[..]).unwrap(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        assert_eq!(self_sha256().len(), 64, "应能算出自身哈希");
+        assert_eq!(
+            with_suffix(Path::new("/usr/local/bin/openxdr-agent"), ".prev"),
+            PathBuf::from("/usr/local/bin/openxdr-agent.prev")
+        );
+    }
+}

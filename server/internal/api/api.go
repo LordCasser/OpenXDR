@@ -246,10 +246,13 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 			FirstSeen time.Time  `json:"firstSeen"`
 			LastSeen  time.Time  `json:"lastSeen"`
 			GroupID   *uuid.UUID `json:"groupId"`
+			// 失联通知已发出时的起始时刻，前端据此标红
+			SilentSince  *time.Time `json:"silentSince"`
+			AgentVersion *string    `json:"agentVersion"`
 		}
 		out := make([]assetRow, len(assets))
 		for i, a := range assets {
-			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen, a.GroupID}
+			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen, a.GroupID, a.SilentSince, a.AgentVersion}
 		}
 		writeJSON(w, out)
 	})

@@ -113,6 +113,20 @@ func (_c *AssetCreate) SetNillableGroupID(v *uuid.UUID) *AssetCreate {
 	return _c
 }
 
+// SetAgentVersion sets the "agent_version" field.
+func (_c *AssetCreate) SetAgentVersion(v string) *AssetCreate {
+	_c.mutation.SetAgentVersion(v)
+	return _c
+}
+
+// SetNillableAgentVersion sets the "agent_version" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableAgentVersion(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetAgentVersion(*v)
+	}
+	return _c
+}
+
 // SetSilentSince sets the "silent_since" field.
 func (_c *AssetCreate) SetSilentSince(v time.Time) *AssetCreate {
 	_c.mutation.SetSilentSince(v)
@@ -312,6 +326,10 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GroupID(); ok {
 		_spec.SetField(asset.FieldGroupID, field.TypeUUID, value)
 		_node.GroupID = &value
+	}
+	if value, ok := _c.mutation.AgentVersion(); ok {
+		_spec.SetField(asset.FieldAgentVersion, field.TypeString, value)
+		_node.AgentVersion = &value
 	}
 	if value, ok := _c.mutation.SilentSince(); ok {
 		_spec.SetField(asset.FieldSilentSince, field.TypeTime, value)

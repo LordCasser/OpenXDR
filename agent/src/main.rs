@@ -13,6 +13,7 @@ mod enroll;
 mod process_identity;
 mod respond;
 mod tls;
+mod upgrade;
 
 use pb::agent_service_client::AgentServiceClient;
 
@@ -62,9 +63,17 @@ async fn run(server: &str) -> Result<(), Box<dyn std::error::Error>> {
             os: std::env::consts::OS.into(),
             ip_addrs: local_ips(),
             agent_version: env!("CARGO_PKG_VERSION").into(),
+            arch: std::env::consts::ARCH.into(),
+            binary_sha256: upgrade::self_sha256().into(),
         })
         .await?
         .into_inner();
+    if !resp.upgrade_sha256.is_empty() {
+        match upgrade::apply(&mut client, &resp.upgrade_platform, &resp.upgrade_sha256).await {
+            Ok(()) => std::process::exit(upgrade::EXIT_UPGRADED),
+            Err(e) => eprintln!("自动升级失败，继续运行当前版本：{e}"),
+        }
+    }
     let cfg = collector::Config::parse(&resp.config_json);
     println!("registered: agent_id={} config={cfg:?}", resp.agent_id);
 
@@ -165,6 +174,14 @@ mod command_tests {
             _: Request<Streaming<pb::AgentEvent>>,
         ) -> Result<Response<pb::ReportAck>, Status> {
             Err(Status::unimplemented("测试不启动事件上报"))
+        }
+        type DownloadAgentStream =
+            tokio_stream::Iter<std::vec::IntoIter<Result<pb::AgentChunk, Status>>>;
+        async fn download_agent(
+            &self,
+            _: Request<pb::DownloadRequest>,
+        ) -> Result<Response<Self::DownloadAgentStream>, Status> {
+            Err(Status::unimplemented("测试不下载安装包"))
         }
         type CommandsStream = tokio_stream::Iter<std::vec::IntoIter<Result<pb::Command, Status>>>;
         async fn commands(

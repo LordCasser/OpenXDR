@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,11 +32,10 @@ func tokenRow(t *ent.EnrollToken) enrollTokenRow {
 }
 
 // EnrollTokens 接入令牌管理：组 admin 为本组签发与撤销，状态接口告诉前端能不能在线接入。
-func EnrollTokens(db *ent.Client, svc *enroll.Service, distDir string) http.Handler {
+func EnrollTokens(db *ent.Client, svc *enroll.Service, dist *enroll.Dist) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/enroll-tokens/status", func(w http.ResponseWriter, r *http.Request) {
-		platforms := enroll.Available(distDir)
-		slices.Sort(platforms)
+		platforms := dist.Available()
 		reason := svc.Disabled()
 		if reason == "" && len(platforms) == 0 {
 			reason = "server 未提供 agent 安装包（AGENT_DIST_DIR 未配置或为空）"

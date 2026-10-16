@@ -125,6 +125,11 @@ systemd 服务（Windows 为 SYSTEM 身份的开机计划任务）。主机自�
 （最长 30 天）、有效期内可批量装机、随时可撤销。已有在线 agent 的主机名不能被
 重复接入，令牌也不能把别组的主机改到本组。
 
+之后不用再登录主机升级：把新版安装包放进 server 的 `AGENT_DIST_DIR`，在线 agent 下次重连
+（server 滚动发布时就会重连）会经已认证的 gRPC 通道下载、校验哈希、自检能运行后替换自己并重启，
+旧版保留为 `openxdr-agent.prev`。分发目录里放的是哪个版本，整片主机就收敛到哪个版本；
+`AGENT_AUTO_UPGRADE=false` 关闭。资产详情里能看到每台主机的 agent 版本。
+
 server 侧需要三样东西才会开放在线接入（缺哪样控制台会直接说明）：
 
 - `ENROLL_GRPC_URL`：主机上能访问到的 gRPC 地址，如 `https://xdr.internal:8081`
@@ -367,7 +372,8 @@ server 全部通过环境变量配置，均有默认值：
 | `AGENT_SILENT_MINUTES` | `10` | agent 指令通道超过该时长没有心跳即判失联并通知，恢复时再通知一次 |
 | `ENROLL_GRPC_URL` | 空（不启用在线接入） | 写进 agent 配置的 gRPC 地址，主机上必须能访问 |
 | `TLS_CA_KEY_FILE` | 空 | CA 私钥，开了 mTLS 时在线接入用它签发主机证书 |
-| `AGENT_DIST_DIR` | 空 | agent 安装包目录，供安装脚本下载 |
+| `AGENT_DIST_DIR` | 空 | agent 安装包目录，供安装脚本下载，也是在线 agent 自动升级的目标版本 |
+| `AGENT_AUTO_UPGRADE` | `true` | 在线 agent 与安装包哈希不同时自动升级，`false` 关闭 |
 | `RESPONSE_ENABLED` | `false` | 是否允许下发响应指令 |
 | `ISOLATION_ALLOW` | 空 | 隔离主机时放行的地址，必须包含 server 的 gRPC 端点 |
 | `AUTO_RESPONSE_ENABLED` | `false` | AI 研判高置信度 malicious 时自动隔离涉事主机（依赖 `RESPONSE_ENABLED`） |

@@ -7,8 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"openxdr/server/internal/audit"
@@ -20,29 +18,8 @@ var installSh []byte
 //go:embed install.ps1
 var installPs1 []byte
 
-// Platforms 可分发的 agent 平台与 AGENT_DIST_DIR 里的文件名。
-var Platforms = map[string]string{
-	"linux-amd64":   "openxdr-agent-linux-amd64",
-	"linux-arm64":   "openxdr-agent-linux-arm64",
-	"windows-amd64": "openxdr-agent-windows-amd64.exe",
-}
-
-// Available AGENT_DIST_DIR 里实际放了二进制的平台。
-func Available(distDir string) []string {
-	var out []string
-	for p, name := range Platforms {
-		if distDir == "" {
-			break
-		}
-		if st, err := os.Stat(filepath.Join(distDir, name)); err == nil && st.Mode().IsRegular() {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 // Public 免登录的接入端点：安装脚本、agent 二进制与注册。注册靠令牌鉴权。
-func (s *Service) Public(distDir string) http.Handler {
+func (s *Service) Public(dist *Dist) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/enroll/install.sh", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
@@ -53,13 +30,19 @@ func (s *Service) Public(distDir string) http.Handler {
 		_, _ = w.Write(installPs1)
 	})
 	mux.HandleFunc("GET /api/enroll/agent/{platform}", func(w http.ResponseWriter, r *http.Request) {
-		name, ok := Platforms[r.PathValue("platform")]
-		if !ok || distDir == "" {
+		f, err := dist.Open(r.PathValue("platform"))
+		if err != nil {
 			http.Error(w, "server 未提供该平台的 agent（检查 AGENT_DIST_DIR）", http.StatusNotFound)
 			return
 		}
+		defer f.Close()
+		st, err := f.Stat()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/octet-stream")
-		http.ServeFile(w, r, filepath.Join(distDir, name))
+		http.ServeContent(w, r, "", st.ModTime(), f)
 	})
 	mux.HandleFunc("POST /api/enroll/register", func(w http.ResponseWriter, r *http.Request) {
 		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")

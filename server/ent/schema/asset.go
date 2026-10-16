@@ -30,6 +30,8 @@ func (Asset) Fields() []ent.Field {
 		field.JSON("config", json.RawMessage{}).Optional(),
 		// 所属组。未分组的资产只有全局 admin 可见可管
 		field.UUID("group_id", uuid.UUID{}).Optional().Nillable(),
+		// agent 自报的版本号，注册时更新
+		field.String("agent_version").Optional().Nillable(),
 		// 失联起始时刻：已发过失联通知，恢复后清空。避免同一次失联反复通知
 		field.Time("silent_since").Optional().Nillable(),
 	}

@@ -31,6 +31,8 @@ const (
 	FieldConfig = "config"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldAgentVersion holds the string denoting the agent_version field in the database.
+	FieldAgentVersion = "agent_version"
 	// FieldSilentSince holds the string denoting the silent_since field in the database.
 	FieldSilentSince = "silent_since"
 	// EdgeEvents holds the string denoting the events edge name in mutations.
@@ -75,6 +77,7 @@ var Columns = []string{
 	FieldLastSeen,
 	FieldConfig,
 	FieldGroupID,
+	FieldAgentVersion,
 	FieldSilentSince,
 }
 
@@ -133,6 +136,11 @@ func ByLastSeen(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// ByAgentVersion orders the results by the agent_version field.
+func ByAgentVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAgentVersion, opts...).ToFunc()
 }
 
 // BySilentSince orders the results by the silent_since field.

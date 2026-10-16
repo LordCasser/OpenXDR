@@ -3118,6 +3118,7 @@ type AssetMutation struct {
 	_config         *json.RawMessage
 	append_config   json.RawMessage
 	group_id        *uuid.UUID
+	agent_version   *string
 	silent_since    *time.Time
 	clearedFields   map[string]struct{}
 	events          map[uuid.UUID]struct{}
@@ -3623,6 +3624,55 @@ func (m *AssetMutation) ResetGroupID() {
 	delete(m.clearedFields, asset.FieldGroupID)
 }
 
+// SetAgentVersion sets the "agent_version" field.
+func (m *AssetMutation) SetAgentVersion(s string) {
+	m.agent_version = &s
+}
+
+// AgentVersion returns the value of the "agent_version" field in the mutation.
+func (m *AssetMutation) AgentVersion() (r string, exists bool) {
+	v := m.agent_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAgentVersion returns the old "agent_version" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldAgentVersion(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAgentVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAgentVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAgentVersion: %w", err)
+	}
+	return oldValue.AgentVersion, nil
+}
+
+// ClearAgentVersion clears the value of the "agent_version" field.
+func (m *AssetMutation) ClearAgentVersion() {
+	m.agent_version = nil
+	m.clearedFields[asset.FieldAgentVersion] = struct{}{}
+}
+
+// AgentVersionCleared returns if the "agent_version" field was cleared in this mutation.
+func (m *AssetMutation) AgentVersionCleared() bool {
+	_, ok := m.clearedFields[asset.FieldAgentVersion]
+	return ok
+}
+
+// ResetAgentVersion resets all changes to the "agent_version" field.
+func (m *AssetMutation) ResetAgentVersion() {
+	m.agent_version = nil
+	delete(m.clearedFields, asset.FieldAgentVersion)
+}
+
 // SetSilentSince sets the "silent_since" field.
 func (m *AssetMutation) SetSilentSince(t time.Time) {
 	m.silent_since = &t
@@ -3868,7 +3918,7 @@ func (m *AssetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.hostname != nil {
 		fields = append(fields, asset.FieldHostname)
 	}
@@ -3892,6 +3942,9 @@ func (m *AssetMutation) Fields() []string {
 	}
 	if m.group_id != nil {
 		fields = append(fields, asset.FieldGroupID)
+	}
+	if m.agent_version != nil {
+		fields = append(fields, asset.FieldAgentVersion)
 	}
 	if m.silent_since != nil {
 		fields = append(fields, asset.FieldSilentSince)
@@ -3920,6 +3973,8 @@ func (m *AssetMutation) Field(name string) (ent.Value, bool) {
 		return m.Config()
 	case asset.FieldGroupID:
 		return m.GroupID()
+	case asset.FieldAgentVersion:
+		return m.AgentVersion()
 	case asset.FieldSilentSince:
 		return m.SilentSince()
 	}
@@ -3947,6 +4002,8 @@ func (m *AssetMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldConfig(ctx)
 	case asset.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case asset.FieldAgentVersion:
+		return m.OldAgentVersion(ctx)
 	case asset.FieldSilentSince:
 		return m.OldSilentSince(ctx)
 	}
@@ -4014,6 +4071,13 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGroupID(v)
 		return nil
+	case asset.FieldAgentVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAgentVersion(v)
+		return nil
 	case asset.FieldSilentSince:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -4066,6 +4130,9 @@ func (m *AssetMutation) ClearedFields() []string {
 	if m.FieldCleared(asset.FieldGroupID) {
 		fields = append(fields, asset.FieldGroupID)
 	}
+	if m.FieldCleared(asset.FieldAgentVersion) {
+		fields = append(fields, asset.FieldAgentVersion)
+	}
 	if m.FieldCleared(asset.FieldSilentSince) {
 		fields = append(fields, asset.FieldSilentSince)
 	}
@@ -4097,6 +4164,9 @@ func (m *AssetMutation) ClearField(name string) error {
 		return nil
 	case asset.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case asset.FieldAgentVersion:
+		m.ClearAgentVersion()
 		return nil
 	case asset.FieldSilentSince:
 		m.ClearSilentSince()
@@ -4132,6 +4202,9 @@ func (m *AssetMutation) ResetField(name string) error {
 		return nil
 	case asset.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case asset.FieldAgentVersion:
+		m.ResetAgentVersion()
 		return nil
 	case asset.FieldSilentSince:
 		m.ResetSilentSince()

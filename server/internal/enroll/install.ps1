@@ -1,6 +1,7 @@
 # OpenXDR agent 一键安装（Windows，管理员 PowerShell）。在控制台「添加主机」复制命令执行：
 #   & ([scriptblock]::Create((irm <控制台>/api/enroll/install.ps1))) <控制台> <令牌>
-# 以 SYSTEM 身份的开机计划任务常驻，异常退出每分钟自动拉起。重复执行即重装。
+# 以 SYSTEM 身份的计划任务常驻：开机启动，另每 5 分钟检查一次，进程不在就拉起
+# （自动升级后的退出、意外崩溃都靠它恢复）。重复执行即重装。
 param([Parameter(Mandatory)][string]$Base, [Parameter(Mandatory)][string]$Token)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -41,10 +42,12 @@ if (Test-Path $bin) { Move-Item -Force $bin "$bin.prev" }
 Move-Item -Force $new $bin
 
 $action = New-ScheduledTaskAction -Execute $bin
-$trigger = New-ScheduledTaskTrigger -AtStartup
-$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
+$watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+$triggers = @((New-ScheduledTaskTrigger -AtStartup), $watchdog)
+# 已在运行时跳过新实例，重复触发只起到"不在就拉起"的作用
+$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
     -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Settings $settings `
+Register-ScheduledTask -TaskName $task -Action $action -Trigger $triggers -Settings $settings `
     -User 'SYSTEM' -RunLevel Highest | Out-Null
 Start-ScheduledTask -TaskName $task
 Write-Host "完成：$env:COMPUTERNAME 已接入，几秒后会出现在控制台资产列表"

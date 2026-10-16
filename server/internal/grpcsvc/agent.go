@@ -18,6 +18,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/asset"
 	"openxdr/server/internal/dedup"
+	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/ingest"
 	"openxdr/server/internal/intel"
@@ -36,6 +37,9 @@ type Server struct {
 	Suppress    *suppress.Store
 	Intel       *intel.Store
 	Events      eventbus.Bus
+	// agent 安装包与自动升级开关
+	Dist        *enroll.Dist
+	AutoUpgrade bool
 }
 
 func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
@@ -59,15 +63,54 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 		SetOs(req.Os).
 		SetAgentID(agentID).
 		SetIPAddrs(req.IpAddrs).
+		SetAgentVersion(req.AgentVersion).
 		SetLastSeen(time.Now()).
 		Exec(ctx); err != nil {
 		return nil, err
 	}
 	// 采集配置随注册下发：agent 断线重连会重新注册，改配置最迟一次重连后生效
-	return &pb.RegisterResponse{
+	resp := &pb.RegisterResponse{
 		AgentId:    agentID.String(),
 		ConfigJson: string(a.Config),
-	}, nil
+	}
+	// 自动升级：分发目录里的版本与 agent 自身不同就让它换。不报哈希的老 agent 不会升级，也不会被要求
+	if platform := enroll.Platform(req.Os, req.Arch); s.AutoUpgrade && req.BinarySha256 != "" && platform != "" {
+		if want := s.Dist.SHA256(platform); want != "" && want != req.BinarySha256 {
+			resp.UpgradeSha256, resp.UpgradePlatform = want, platform
+			slog.Info("下发 agent 升级", "host", req.Hostname, "from", req.AgentVersion, "platform", platform)
+		}
+	}
+	return resp, nil
+}
+
+// downloadChunk 每块 256 KiB，远小于 gRPC 默认的 4 MiB 消息上限
+const downloadChunk = 256 << 10
+
+// DownloadAgent 分块推送安装包。哈希不符说明分发目录刚换了版本，拒绝后 agent 下次注册拿新哈希重来。
+func (s *Server) DownloadAgent(req *pb.DownloadRequest, stream pb.AgentService_DownloadAgentServer) error {
+	if want := s.Dist.SHA256(req.Platform); want == "" || want != req.Sha256 {
+		return status.Error(codes.FailedPrecondition, "分发版本已变化或不存在")
+	}
+	f, err := s.Dist.Open(req.Platform)
+	if err != nil {
+		return status.Error(codes.NotFound, "安装包不存在")
+	}
+	defer f.Close()
+	buf := make([]byte, downloadChunk)
+	for {
+		n, err := f.Read(buf)
+		if n > 0 {
+			if serr := stream.Send(&pb.AgentChunk{Data: buf[:n]}); serr != nil {
+				return serr
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+	}
 }
 
 // 攒批落库的两个触发条件：满 batchSize 条，或距上次落库超过 flushInterval。

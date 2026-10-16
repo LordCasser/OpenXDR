@@ -142,6 +142,7 @@ var (
 		{Name: "last_seen", Type: field.TypeTime},
 		{Name: "config", Type: field.TypeJSON, Nullable: true},
 		{Name: "group_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "agent_version", Type: field.TypeString, Nullable: true},
 		{Name: "silent_since", Type: field.TypeTime, Nullable: true},
 	}
 	// AssetsTable holds the schema information for the "assets" table.

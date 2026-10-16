@@ -22,9 +22,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_Register_FullMethodName     = "/openxdr.agent.v1.AgentService/Register"
-	AgentService_ReportEvents_FullMethodName = "/openxdr.agent.v1.AgentService/ReportEvents"
-	AgentService_Commands_FullMethodName     = "/openxdr.agent.v1.AgentService/Commands"
+	AgentService_Register_FullMethodName      = "/openxdr.agent.v1.AgentService/Register"
+	AgentService_ReportEvents_FullMethodName  = "/openxdr.agent.v1.AgentService/ReportEvents"
+	AgentService_Commands_FullMethodName      = "/openxdr.agent.v1.AgentService/Commands"
+	AgentService_DownloadAgent_FullMethodName = "/openxdr.agent.v1.AgentService/DownloadAgent"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -38,6 +39,8 @@ type AgentServiceClient interface {
 	// 双向流：agent 保持连接等待指令，执行完把结果回传。
 	// agent 主动连出，不需要在被监控主机上开监听端口。
 	Commands(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[CommandResult, Command], error)
+	// 下载 server 分发的 agent 安装包，分块流式返回。走已认证的同一条通道，不另开下载地址
+	DownloadAgent(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AgentChunk], error)
 }
 
 type agentServiceClient struct {
@@ -84,6 +87,25 @@ func (c *agentServiceClient) Commands(ctx context.Context, opts ...grpc.CallOpti
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_CommandsClient = grpc.BidiStreamingClient[CommandResult, Command]
 
+func (c *agentServiceClient) DownloadAgent(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AgentChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_DownloadAgent_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadRequest, AgentChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_DownloadAgentClient = grpc.ServerStreamingClient[AgentChunk]
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -95,6 +117,8 @@ type AgentServiceServer interface {
 	// 双向流：agent 保持连接等待指令，执行完把结果回传。
 	// agent 主动连出，不需要在被监控主机上开监听端口。
 	Commands(grpc.BidiStreamingServer[CommandResult, Command]) error
+	// 下载 server 分发的 agent 安装包，分块流式返回。走已认证的同一条通道，不另开下载地址
+	DownloadAgent(*DownloadRequest, grpc.ServerStreamingServer[AgentChunk]) error
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -113,6 +137,9 @@ func (UnimplementedAgentServiceServer) ReportEvents(grpc.ClientStreamingServer[A
 }
 func (UnimplementedAgentServiceServer) Commands(grpc.BidiStreamingServer[CommandResult, Command]) error {
 	return status.Error(codes.Unimplemented, "method Commands not implemented")
+}
+func (UnimplementedAgentServiceServer) DownloadAgent(*DownloadRequest, grpc.ServerStreamingServer[AgentChunk]) error {
+	return status.Error(codes.Unimplemented, "method DownloadAgent not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -167,6 +194,17 @@ func _AgentService_Commands_Handler(srv interface{}, stream grpc.ServerStream) e
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_CommandsServer = grpc.BidiStreamingServer[CommandResult, Command]
 
+func _AgentService_DownloadAgent_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).DownloadAgent(m, &grpc.GenericServerStream[DownloadRequest, AgentChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_DownloadAgentServer = grpc.ServerStreamingServer[AgentChunk]
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +228,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _AgentService_Commands_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "DownloadAgent",
+			Handler:       _AgentService_DownloadAgent_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "agent.proto",

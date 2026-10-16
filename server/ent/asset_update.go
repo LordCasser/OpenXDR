@@ -172,6 +172,26 @@ func (_u *AssetUpdate) ClearGroupID() *AssetUpdate {
 	return _u
 }
 
+// SetAgentVersion sets the "agent_version" field.
+func (_u *AssetUpdate) SetAgentVersion(v string) *AssetUpdate {
+	_u.mutation.SetAgentVersion(v)
+	return _u
+}
+
+// SetNillableAgentVersion sets the "agent_version" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableAgentVersion(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetAgentVersion(*v)
+	}
+	return _u
+}
+
+// ClearAgentVersion clears the value of the "agent_version" field.
+func (_u *AssetUpdate) ClearAgentVersion() *AssetUpdate {
+	_u.mutation.ClearAgentVersion()
+	return _u
+}
+
 // SetSilentSince sets the "silent_since" field.
 func (_u *AssetUpdate) SetSilentSince(v time.Time) *AssetUpdate {
 	_u.mutation.SetSilentSince(v)
@@ -389,6 +409,12 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.GroupIDCleared() {
 		_spec.ClearField(asset.FieldGroupID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.AgentVersion(); ok {
+		_spec.SetField(asset.FieldAgentVersion, field.TypeString, value)
+	}
+	if _u.mutation.AgentVersionCleared() {
+		_spec.ClearField(asset.FieldAgentVersion, field.TypeString)
 	}
 	if value, ok := _u.mutation.SilentSince(); ok {
 		_spec.SetField(asset.FieldSilentSince, field.TypeTime, value)
@@ -689,6 +715,26 @@ func (_u *AssetUpdateOne) ClearGroupID() *AssetUpdateOne {
 	return _u
 }
 
+// SetAgentVersion sets the "agent_version" field.
+func (_u *AssetUpdateOne) SetAgentVersion(v string) *AssetUpdateOne {
+	_u.mutation.SetAgentVersion(v)
+	return _u
+}
+
+// SetNillableAgentVersion sets the "agent_version" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableAgentVersion(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetAgentVersion(*v)
+	}
+	return _u
+}
+
+// ClearAgentVersion clears the value of the "agent_version" field.
+func (_u *AssetUpdateOne) ClearAgentVersion() *AssetUpdateOne {
+	_u.mutation.ClearAgentVersion()
+	return _u
+}
+
 // SetSilentSince sets the "silent_since" field.
 func (_u *AssetUpdateOne) SetSilentSince(v time.Time) *AssetUpdateOne {
 	_u.mutation.SetSilentSince(v)
@@ -936,6 +982,12 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.GroupIDCleared() {
 		_spec.ClearField(asset.FieldGroupID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.AgentVersion(); ok {
+		_spec.SetField(asset.FieldAgentVersion, field.TypeString, value)
+	}
+	if _u.mutation.AgentVersionCleared() {
+		_spec.ClearField(asset.FieldAgentVersion, field.TypeString)
 	}
 	if value, ok := _u.mutation.SilentSince(); ok {
 		_spec.SetField(asset.FieldSilentSince, field.TypeTime, value)

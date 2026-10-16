@@ -14,6 +14,17 @@ service AgentService {
   // 双向流：agent 保持连接等待指令，执行完把结果回传。
   // agent 主动连出，不需要在被监控主机上开监听端口。
   rpc Commands(stream CommandResult) returns (stream Command);
+  // 下载 server 分发的 agent 安装包，分块流式返回。走已认证的同一条通道，不另开下载地址
+  rpc DownloadAgent(DownloadRequest) returns (stream AgentChunk);
+}
+
+message DownloadRequest {
+  string platform = 1;    // 如 linux-amd64，取 RegisterResponse.upgrade_platform
+  string sha256 = 2;      // 期望的版本；server 上已换成别的版本时拒绝，避免拼出半新半旧的文件
+}
+
+message AgentChunk {
+  bytes data = 1;
 }
 
 message Command {
@@ -63,6 +74,8 @@ message RegisterRequest {
   string os = 2;
   repeated string ip_addrs = 3;
   string agent_version = 4;
+  string arch = 5;           // Rust std::env::consts::ARCH，如 x86_64
+  string binary_sha256 = 6;  // 当前运行的 agent 二进制哈希，空表示不支持自动升级
 }
 
 message RegisterResponse {
@@ -70,6 +83,10 @@ message RegisterResponse {
   // 采集配置（JSON）。随注册下发，重连即生效——不做热更新：
   // agent 断线重连本就会重新注册，这条路已经够了
   string config_json = 2;
+  // 自动升级：server 分发的版本与 agent 当前二进制不同时给出，agent 下载、校验、自检后替换重启。
+  // 分发目录里放的是哪个版本，整片主机就收敛到哪个版本
+  string upgrade_sha256 = 3;
+  string upgrade_platform = 4;
 }
 
 message AgentEvent {

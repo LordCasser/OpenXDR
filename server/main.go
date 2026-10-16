@@ -223,6 +223,8 @@ func main() {
 		slog.Warn("gRPC 未启用 mTLS，采集端通信为明文，仅适合本机调试")
 	}
 	grpcServer := grpc.NewServer(tlsOpts...)
+	// agent 安装包：一键接入从这里下载，在线 agent 也按这里的版本自动升级（AGENT_AUTO_UPGRADE=false 关闭）
+	dist := &enroll.Dist{Dir: os.Getenv("AGENT_DIST_DIR")}
 	pb.RegisterAgentServiceServer(grpcServer, &grpcsvc.Server{
 		DB:          client,
 		Rules:       rules,
@@ -231,6 +233,8 @@ func main() {
 		Suppress:    suppressions,
 		Intel:       intelStore,
 		Events:      events,
+		Dist:        dist,
+		AutoUpgrade: os.Getenv("AGENT_AUTO_UPGRADE") != "false",
 	})
 	pb.RegisterSensorServiceServer(grpcServer, &grpcsvc.SensorServer{
 		DB:          client,
@@ -292,17 +296,17 @@ func main() {
 	if reason := enrollSvc.Disabled(); reason != "" {
 		slog.Warn("主机在线接入未启用", "reason", reason)
 	}
-	distDir := os.Getenv("AGENT_DIST_DIR")
 	routes := http.NewServeMux()
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook))
-	routes.Handle("/api/enroll-tokens", api.EnrollTokens(client, enrollSvc, distDir))
-	routes.Handle("/api/enroll-tokens/", api.EnrollTokens(client, enrollSvc, distDir))
+	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
+	routes.Handle("/api/enroll-tokens", enrollTokens)
+	routes.Handle("/api/enroll-tokens/", enrollTokens)
 	routes.Handle("/", api.Handler(client, rules, rulesPath, hub, suppressions, intelStore, triageEngine, allowlist, chat))
 	app := auth.Middleware(client, routes)
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", telemetry.Handler(registry))
 	// 接入端点免登录：安装脚本与二进制公开，注册靠令牌
-	mux.Handle("/api/enroll/", enrollSvc.Public(distDir))
+	mux.Handle("/api/enroll/", enrollSvc.Public(dist))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := db.PingContext(r.Context()); err != nil || !events.Ready() {

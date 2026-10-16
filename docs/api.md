@@ -64,7 +64,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/assets` | 资产清单（含 `groupId`，未分组为 null） |
+| GET | `/api/assets` | 资产清单（含 `groupId`，未分组为 null；`agentVersion` 为 agent 自报版本） |
 | GET | `/api/assets/{id}/config` | 该主机的采集配置 |
 | PUT | `/api/assets/{id}/config` | 设置采集配置：`{"fileWatchDirs":[...],"collectFiles":true,"collectAuth":true,"collectPersist":true,"collectNetwork":true}`。随 agent 下次注册（重连或重启）生效；`collectNetwork` 在 Linux eBPF 与 Windows ETW 路径生效 |
 | GET | `/api/users` | 用户列表（admin） |
@@ -72,6 +72,9 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | POST | `/api/users/{id}/password` | 重置密码（admin） |
 | DELETE | `/api/users/{id}` | 删号（admin） |
 | GET | `/api/audit` | 审计日志（admin） |
+| GET | `/api/settings/notify` | 通知配置 `{url,format,linkBase,minSeverity}`（admin）。未保存过时返回环境变量默认值 |
+| PUT | `/api/settings/notify` | 保存通知配置（admin）；`format` 取 generic / dingtalk / feishu / wecom，地址须为 http(s) |
+| POST | `/api/settings/notify/test` | 用请求体里的配置（不保存）发一条测试消息（admin），推送失败返回 502 |
 
 ## 资产组
 
@@ -94,6 +97,26 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | DELETE | `/api/groups/{id}/members/{userId}` | 移除成员（admin） |
 | PUT | `/api/groups/{id}/assets/{assetId}` | 资产归入该组，离开原组（admin） |
 | DELETE | `/api/groups/{id}/assets/{assetId}` | 资产移出该组；不在此组返回 409（admin） |
+
+建组自带只读巡检名单并自动开通组查询身份；删组一并回收（见 `docs/pi-backend.md`）。
+
+## 主机接入
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/enroll-tokens/status` | 在线接入是否可用：`{enabled, reason, platforms}`，`reason` 说明缺什么配置 |
+| GET | `/api/enroll-tokens?groupId=` | 本组令牌列表（组 admin），不含明文 |
+| POST | `/api/enroll-tokens` | `{"groupId","days"}` 签发令牌（组 admin），`days` 缺省 7、最长 30；明文 `token` 只在此返回一次 |
+| DELETE | `/api/enroll-tokens/{id}` | 撤销令牌（组 admin） |
+
+以下端点**免登录**，由安装脚本调用：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/enroll/install.sh` | Linux 安装脚本，参数 `<控制台地址> <令牌>` |
+| GET | `/api/enroll/install.ps1` | Windows 安装脚本，参数同上 |
+| GET | `/api/enroll/agent/{platform}` | agent 安装包，`linux-amd64` / `linux-arm64` / `windows-amd64` |
+| POST | `/api/enroll/register` | `Authorization: Bearer <令牌>`，请求体 `{"hostname","os","csr"}`；返回 `{server, ca, cert}`。令牌无效 401，主机名已有在线 agent 或主机已在别组 409，接入未启用 503 |
 
 ## 对接示例：定时同步情报源
 
