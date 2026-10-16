@@ -33,7 +33,7 @@ var investigationTools = []Tool{
 	makeTool("host_alerts",
 		"查询某主机最近的告警历史（含已关闭事件）。用于判断该主机是初犯还是惯犯、当前事件是否是更大活动的一部分。",
 		`{"type":"object","properties":{
-			"asset_id":{"type":"string","description":"主机的 asset ID（图里 asset 节点的 id 后缀）"},
+			"asset_id":{"type":"string","description":"主机的 asset ID（事件里的 asset_id，或图里 asset 节点的 id 后缀）"},
 			"days":{"type":"integer","description":"回溯天数，默认 7"}
 		},"required":["asset_id"]}`),
 }
@@ -61,10 +61,12 @@ func (e *Engine) execTool(ctx context.Context, name, args string) string {
 }
 
 type eventBrief struct {
-	Ts     string `json:"ts"`
-	Class  int    `json:"class"`
-	Source string `json:"source"`
-	Raw    string `json:"raw"`
+	Ts      string `json:"ts"`
+	Class   int    `json:"class"`
+	Source  string `json:"source"`
+	AssetID string `json:"asset_id,omitempty"`
+	Host    string `json:"host,omitempty"`
+	Raw     string `json:"raw"`
 }
 
 func (e *Engine) toolQueryEvents(ctx context.Context, args string) (any, error) {
@@ -89,6 +91,7 @@ func (e *Engine) toolQueryEvents(ctx context.Context, args string) (any, error) 
 			}),
 		).
 		Order(ent.Desc(entevent.FieldTs)).
+		WithAsset().
 		Limit(15).
 		All(ctx)
 	if err != nil {
@@ -118,6 +121,7 @@ func (e *Engine) toolProcessLineage(ctx context.Context, args string) (any, erro
 	for depth := 0; depth < 10; depth++ {
 		ev, err := e.DB.Event.Query().
 			Where(entevent.ProcessGUIDEQ(cur)).
+			WithAsset().
 			First(ctx)
 		if err != nil {
 			break
@@ -131,6 +135,7 @@ func (e *Engine) toolProcessLineage(ctx context.Context, args string) (any, erro
 
 	children, _ := e.DB.Event.Query().
 		Where(entevent.ParentProcessGUIDEQ(guid)).
+		WithAsset().
 		Limit(10).
 		All(ctx)
 	childOut := make([]eventBrief, len(children))
@@ -182,7 +187,11 @@ func (e *Engine) toolHostAlerts(ctx context.Context, args string) (any, error) {
 		}
 		out[i] = alertBrief{Ts: a.Ts.Format(time.RFC3339), Rule: rule, Severity: a.Severity, Count: a.Count}
 	}
-	return out, nil
+	host := ""
+	if as, err := e.DB.Asset.Get(ctx, assetID); err == nil {
+		host = as.Hostname
+	}
+	return map[string]any{"host": host, "alerts": out}, nil
 }
 
 func brief(ev *ent.Event) eventBrief {
@@ -190,12 +199,20 @@ func brief(ev *ent.Event) eventBrief {
 	if len(raw) > 300 {
 		raw = raw[:300] + "…"
 	}
-	return eventBrief{
+	b := eventBrief{
 		Ts:     ev.Ts.Format(time.RFC3339),
 		Class:  ev.ClassUID,
 		Source: ev.Source,
 		Raw:    raw,
 	}
+	// 只给 asset ID 模型没法在结论里说出是哪台机器
+	if ev.AssetID != nil {
+		b.AssetID = ev.AssetID.String()
+	}
+	if ev.Edges.Asset != nil {
+		b.Host = ev.Edges.Asset.Hostname
+	}
+	return b
 }
 
 // escapeLike 关键词是字面量，% _ \ 要转义，不能让模型输出变成通配符。

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"openxdr/server/ent"
 )
 
@@ -43,6 +45,16 @@ func TestBrief(t *testing.T) {
 	}
 	if len(b.Raw) != 303 {
 		t.Errorf("过长 raw 应截断到 300+省略号，实际 %d 字符", len(b.Raw))
+	}
+	if b.AssetID != "" || b.Host != "" {
+		t.Errorf("无资产的事件不应带主机字段: %+v", b)
+	}
+
+	id := uuid.New()
+	ev.AssetID = &id
+	ev.Edges.Asset = &ent.Asset{ID: id, Hostname: "pve1"}
+	if b := brief(ev); b.AssetID != id.String() || b.Host != "pve1" {
+		t.Errorf("brief 应带资产 ID 与主机名: %+v", b)
 	}
 }
 

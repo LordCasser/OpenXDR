@@ -224,6 +224,9 @@ func TestToolHostAlerts(t *testing.T) {
 	if !strings.Contains(string(got), "r-1") {
 		t.Errorf("告警历史应含 rule r-1：%s", got)
 	}
+	if !strings.Contains(string(got), `"host":"web01"`) {
+		t.Errorf("告警历史应带主机名：%s", got)
+	}
 	// 非法 asset id → 错误
 	if _, err := e.toolHostAlerts(ctx, `{"asset_id":"nope"}`); err == nil {
 		t.Error("非法 asset id 应返回错误")
