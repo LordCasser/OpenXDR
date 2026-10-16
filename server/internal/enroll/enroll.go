@@ -133,25 +133,24 @@ func (s *Service) Enroll(ctx context.Context, token string, req Request) (*ent.A
 	if reason := s.Disabled(); reason != "" {
 		return nil, Grant{}, errors.New(reason)
 	}
-	if !hostnameRe.MatchString(req.Hostname) {
-		return nil, Grant{}, ErrHostname
-	}
-	var cert []byte
-	if s.CA != nil {
-		var err error
-		if cert, err = s.sign(req.CSR, req.Hostname); err != nil {
-			return nil, Grant{}, err
-		}
-	}
-
 	tx, err := s.DB.Tx(ctx)
 	if err != nil {
 		return nil, Grant{}, err
 	}
 	defer tx.Rollback()
+	// 先验令牌：没有有效令牌的请求碰不到后面任何逻辑，也拿不到更具体的报错
 	t, err := tx.EnrollToken.Query().Where(enrolltoken.TokenHashEQ(hash(token))).Only(ctx)
 	if err != nil || t.Revoked || time.Now().After(t.ExpiresAt) {
 		return nil, Grant{}, ErrToken
+	}
+	if !hostnameRe.MatchString(req.Hostname) {
+		return nil, Grant{}, ErrHostname
+	}
+	var cert []byte
+	if s.CA != nil {
+		if cert, err = s.sign(req.CSR, req.Hostname); err != nil {
+			return nil, Grant{}, err
+		}
 	}
 	a, err := tx.Asset.Query().Where(asset.HostnameEQ(req.Hostname)).First(ctx)
 	switch {

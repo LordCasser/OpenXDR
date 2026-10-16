@@ -114,6 +114,9 @@ func TestEnrollIssuesBoundCertAndGuardsIdentity(t *testing.T) {
 	if _, _, err := s.Enroll(ctx, "oxe_wrong", Request{Hostname: "web03", CSR: csr(t, "x")}); !errors.Is(err, ErrToken) {
 		t.Errorf("错误令牌应拒绝：%v", err)
 	}
+	if _, _, err := s.Enroll(ctx, "oxe_wrong", Request{Hostname: "../x", CSR: "garbage"}); !errors.Is(err, ErrToken) {
+		t.Errorf("令牌无效时应先报令牌错误，不暴露后续校验：%v", err)
+	}
 
 	expired, row, _ := s.Issue(ctx, web.ID, "admin", time.Hour)
 	client.EnrollToken.UpdateOne(row).SetExpiresAt(time.Now().Add(-time.Minute)).ExecX(ctx)
