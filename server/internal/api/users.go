@@ -10,6 +10,7 @@ import (
 
 	"openxdr/server/ent"
 	entauditlog "openxdr/server/ent/auditlog"
+	"openxdr/server/ent/groupmember"
 	entsession "openxdr/server/ent/session"
 	entuser "openxdr/server/ent/user"
 	"openxdr/server/internal/audit"
@@ -91,8 +92,12 @@ func mapUsers(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// 会话一并吊销，删号即离场
+		// 会话与组成员关系一并清掉，删号即离场
 		if _, err := db.Session.Delete().Where(entsession.UserIDEQ(id)).Exec(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if _, err := db.GroupMember.Delete().Where(groupmember.UserIDEQ(id)).Exec(r.Context()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -152,6 +152,26 @@ func (_u *AssetUpdate) ClearConfig() *AssetUpdate {
 	return _u
 }
 
+// SetGroupID sets the "group_id" field.
+func (_u *AssetUpdate) SetGroupID(v uuid.UUID) *AssetUpdate {
+	_u.mutation.SetGroupID(v)
+	return _u
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableGroupID(v *uuid.UUID) *AssetUpdate {
+	if v != nil {
+		_u.SetGroupID(*v)
+	}
+	return _u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (_u *AssetUpdate) ClearGroupID() *AssetUpdate {
+	_u.mutation.ClearGroupID()
+	return _u
+}
+
 // AddEventIDs adds the "events" edge to the Event entity by IDs.
 func (_u *AssetUpdate) AddEventIDs(ids ...uuid.UUID) *AssetUpdate {
 	_u.mutation.AddEventIDs(ids...)
@@ -343,6 +363,12 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ConfigCleared() {
 		_spec.ClearField(asset.FieldConfig, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GroupID(); ok {
+		_spec.SetField(asset.FieldGroupID, field.TypeUUID, value)
+	}
+	if _u.mutation.GroupIDCleared() {
+		_spec.ClearField(asset.FieldGroupID, field.TypeUUID)
 	}
 	if _u.mutation.EventsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -617,6 +643,26 @@ func (_u *AssetUpdateOne) ClearConfig() *AssetUpdateOne {
 	return _u
 }
 
+// SetGroupID sets the "group_id" field.
+func (_u *AssetUpdateOne) SetGroupID(v uuid.UUID) *AssetUpdateOne {
+	_u.mutation.SetGroupID(v)
+	return _u
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableGroupID(v *uuid.UUID) *AssetUpdateOne {
+	if v != nil {
+		_u.SetGroupID(*v)
+	}
+	return _u
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (_u *AssetUpdateOne) ClearGroupID() *AssetUpdateOne {
+	_u.mutation.ClearGroupID()
+	return _u
+}
+
 // AddEventIDs adds the "events" edge to the Event entity by IDs.
 func (_u *AssetUpdateOne) AddEventIDs(ids ...uuid.UUID) *AssetUpdateOne {
 	_u.mutation.AddEventIDs(ids...)
@@ -838,6 +884,12 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.ConfigCleared() {
 		_spec.ClearField(asset.FieldConfig, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.GroupID(); ok {
+		_spec.SetField(asset.FieldGroupID, field.TypeUUID, value)
+	}
+	if _u.mutation.GroupIDCleared() {
+		_spec.ClearField(asset.FieldGroupID, field.TypeUUID)
 	}
 	if _u.mutation.EventsCleared() {
 		edge := &sqlgraph.EdgeSpec{

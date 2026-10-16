@@ -21,6 +21,11 @@ func TestMinRoleRouteTable(t *testing.T) {
 		{"GET", "/api/events", "viewer"},
 		{"POST", "/api/intel", "analyst"},
 		{"DELETE", "/api/events/1", "analyst"},
+		// 组：读按成员身份过滤，写只有 admin
+		{"GET", "/api/groups", "viewer"},
+		{"POST", "/api/groups", "admin"},
+		{"PUT", "/api/groups/1/members/2", "admin"},
+		{"DELETE", "/api/groups/1/assets/2", "admin"},
 	}
 	for _, c := range cases {
 		if got := minRole(c.method, c.path); got != c.want {
@@ -71,5 +76,23 @@ func TestAuthWriteJSON(t *testing.T) {
 	want := `{"hello":"世界"}` + "\n"
 	if rec.Body.String() != want {
 		t.Errorf("输出 = %q, want %q", rec.Body.String(), want)
+	}
+}
+
+func TestAllowed(t *testing.T) {
+	cases := []struct {
+		role, min string
+		want      bool
+	}{
+		{"admin", "admin", true},
+		{"admin", "viewer", true},
+		{"analyst", "admin", false},
+		{"viewer", "viewer", true},
+		{"", "viewer", false}, // 非成员什么都过不了
+	}
+	for _, c := range cases {
+		if got := Allowed(c.role, c.min); got != c.want {
+			t.Errorf("Allowed(%q, %q) = %v, want %v", c.role, c.min, got, c.want)
+		}
 	}
 }

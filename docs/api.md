@@ -2,7 +2,7 @@
 
 Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cookie
 （`openxdr_session`）。权限约定：**GET = viewer 及以上，写操作 = analyst 及以上，
-`/api/users` 与 `/api/audit` = admin**。
+`/api/users`、`/api/audit` 与 `/api/groups` 写操作 = admin**。
 
 ## 认证
 
@@ -55,7 +55,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/commands?incidentId=` | 指令历史 |
-| POST | `/api/commands` | `{"kind":"kill_process\|isolate_host\|unisolate_host","assetId","incidentId","pid","dryRun"}` |
+| POST | `/api/commands` | `{"kind":"kill_process\|isolate_host\|unisolate_host\|exec","assetId","incidentId","pid","dryRun"}`；`exec` 另带 `"cmd"`（必填）与 `"timeoutMs"`（0 = agent 默认 60s），结果回写 `exitCode` / `stdout` / `stderr` / `truncated`（各截断到 64KB） |
 
 需 server 配置 `RESPONSE_ENABLED=true`；隔离要求 `ISOLATION_ALLOW` 包含 server
 的 gRPC 端点，否则 agent 拒绝执行。
@@ -64,7 +64,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/assets` | 资产清单 |
+| GET | `/api/assets` | 资产清单（含 `groupId`，未分组为 null） |
 | GET | `/api/assets/{id}/config` | 该主机的采集配置 |
 | PUT | `/api/assets/{id}/config` | 设置采集配置：`{"fileWatchDirs":[...],"collectFiles":true,"collectAuth":true,"collectPersist":true,"collectNetwork":true}`。随 agent 下次注册（重连或重启）生效；`collectNetwork` 在 Linux eBPF 与 Windows ETW 路径生效 |
 | GET | `/api/users` | 用户列表（admin） |
@@ -72,6 +72,22 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | POST | `/api/users/{id}/password` | 重置密码（admin） |
 | DELETE | `/api/users/{id}` | 删号（admin） |
 | GET | `/api/audit` | 审计日志（admin） |
+
+## 资产组
+
+一台主机属于至多一个组；用户在每个组内有各自角色（admin / analyst / viewer），
+全局 admin 天然是所有组的 admin。实现见 `server/internal/api/groups.go`。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/groups` | 当前用户可见的组：`[{"id","name","role","assetCount"}]`，非成员看不到 |
+| POST | `/api/groups` | 建组：`{"name"}`（admin） |
+| DELETE | `/api/groups/{id}` | 删组：资产退回未分组，成员关系清除（admin） |
+| GET | `/api/groups/{id}/members` | 成员名单（组 admin） |
+| PUT | `/api/groups/{id}/members/{userId}` | 设定成员角色：`{"role"}`，不存在则添加（admin） |
+| DELETE | `/api/groups/{id}/members/{userId}` | 移除成员（admin） |
+| PUT | `/api/groups/{id}/assets/{assetId}` | 资产归入该组，离开原组（admin） |
+| DELETE | `/api/groups/{id}/assets/{assetId}` | 资产移出该组；不在此组返回 409（admin） |
 
 ## 对接示例：定时同步情报源
 

@@ -11,6 +11,8 @@ import (
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/event"
+	"openxdr/server/ent/group"
+	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/processbaseline"
@@ -88,6 +90,8 @@ func checkColumn(t, c string) error {
 			auditlog.Table:        auditlog.ValidColumn,
 			command.Table:         command.ValidColumn,
 			event.Table:           event.ValidColumn,
+			group.Table:           group.ValidColumn,
+			groupmember.Table:     groupmember.ValidColumn,
 			incident.Table:        incident.ValidColumn,
 			intel.Table:           intel.ValidColumn,
 			processbaseline.Table: processbaseline.ValidColumn,

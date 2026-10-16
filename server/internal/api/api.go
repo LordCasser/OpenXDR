@@ -66,6 +66,7 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 	mapReport(mux, db, rules)
 	mapAgentConfig(mux, db)
 	mapUsers(mux, db)
+	mapGroups(mux, db)
 
 	mux.HandleFunc("GET /api/incidents", func(w http.ResponseWriter, r *http.Request) {
 		q := db.Incident.Query()
@@ -203,10 +204,11 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 			AgentID   *uuid.UUID `json:"agentId"`
 			FirstSeen time.Time  `json:"firstSeen"`
 			LastSeen  time.Time  `json:"lastSeen"`
+			GroupID   *uuid.UUID `json:"groupId"`
 		}
 		out := make([]assetRow, len(assets))
 		for i, a := range assets {
-			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen}
+			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen, a.GroupID}
 		}
 		writeJSON(w, out)
 	})

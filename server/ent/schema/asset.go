@@ -28,6 +28,8 @@ func (Asset) Fields() []ent.Field {
 		field.Time("last_seen").Default(time.Now),
 		// 采集配置，随 Register 下发给 agent。为空表示用 agent 内置默认
 		field.JSON("config", json.RawMessage{}).Optional(),
+		// 所属组。未分组的资产只有全局 admin 可见可管
+		field.UUID("group_id", uuid.UUID{}).Optional().Nillable(),
 	}
 }
 

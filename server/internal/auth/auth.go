@@ -16,9 +16,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/user"
 	"openxdr/server/internal/audit"
@@ -42,11 +44,31 @@ func minRole(method, path string) string {
 	switch {
 	case strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/audit"):
 		return "admin"
+	// 组的增删、成员与资产归属只有 admin 能改；列表按成员身份过滤，viewer 可读
+	case strings.HasPrefix(path, "/api/groups") && method != http.MethodGet:
+		return "admin"
 	case method == http.MethodGet:
 		return "viewer"
 	default:
 		return "analyst"
 	}
+}
+
+// Allowed 角色 role 是否达到门槛 min。空角色（非成员）什么都过不了。
+func Allowed(role, min string) bool { return role != "" && roleRank[role] >= roleRank[min] }
+
+// GroupRole 用户在组内的有效角色：全局 admin 即组 admin，其余看成员记录，非成员返回空。
+func GroupRole(ctx context.Context, db *ent.Client, u *ent.User, groupID uuid.UUID) string {
+	if u.Role == "admin" {
+		return "admin"
+	}
+	m, err := db.GroupMember.Query().
+		Where(groupmember.GroupIDEQ(groupID), groupmember.UserIDEQ(u.ID)).
+		Only(ctx)
+	if err != nil {
+		return ""
+	}
+	return m.Role
 }
 
 type userKey struct{}

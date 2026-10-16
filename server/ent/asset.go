@@ -33,6 +33,8 @@ type Asset struct {
 	LastSeen time.Time `json:"last_seen,omitempty"`
 	// Config holds the value of the "config" field.
 	Config json.RawMessage `json:"config,omitempty"`
+	// GroupID holds the value of the "group_id" field.
+	GroupID *uuid.UUID `json:"group_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AssetQuery when eager-loading is set.
 	Edges        AssetEdges `json:"edges"`
@@ -84,7 +86,7 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case asset.FieldAgentID:
+		case asset.FieldAgentID, asset.FieldGroupID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case asset.FieldIPAddrs, asset.FieldConfig:
 			values[i] = new([]byte)
@@ -163,6 +165,13 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field config: %w", err)
 				}
 			}
+		case asset.FieldGroupID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field group_id", values[i])
+			} else if value.Valid {
+				_m.GroupID = new(uuid.UUID)
+				*_m.GroupID = *value.S.(*uuid.UUID)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -238,6 +247,11 @@ func (_m *Asset) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("config=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Config))
+	builder.WriteString(", ")
+	if v := _m.GroupID; v != nil {
+		builder.WriteString("group_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

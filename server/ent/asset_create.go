@@ -99,6 +99,20 @@ func (_c *AssetCreate) SetConfig(v json.RawMessage) *AssetCreate {
 	return _c
 }
 
+// SetGroupID sets the "group_id" field.
+func (_c *AssetCreate) SetGroupID(v uuid.UUID) *AssetCreate {
+	_c.mutation.SetGroupID(v)
+	return _c
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableGroupID(v *uuid.UUID) *AssetCreate {
+	if v != nil {
+		_c.SetGroupID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AssetCreate) SetID(v uuid.UUID) *AssetCreate {
 	_c.mutation.SetID(v)
@@ -280,6 +294,10 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Config(); ok {
 		_spec.SetField(asset.FieldConfig, field.TypeJSON, value)
 		_node.Config = value
+	}
+	if value, ok := _c.mutation.GroupID(); ok {
+		_spec.SetField(asset.FieldGroupID, field.TypeUUID, value)
+		_node.GroupID = &value
 	}
 	if nodes := _c.mutation.EventsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

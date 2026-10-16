@@ -81,6 +81,11 @@ func LastSeen(v time.Time) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldLastSeen, v))
 }
 
+// GroupID applies equality check predicate on the "group_id" field. It's identical to GroupIDEQ.
+func GroupID(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldGroupID, v))
+}
+
 // HostnameEQ applies the EQ predicate on the "hostname" field.
 func HostnameEQ(v string) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldHostname, v))
@@ -369,6 +374,56 @@ func ConfigIsNil() predicate.Asset {
 // ConfigNotNil applies the NotNil predicate on the "config" field.
 func ConfigNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldConfig))
+}
+
+// GroupIDEQ applies the EQ predicate on the "group_id" field.
+func GroupIDEQ(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldGroupID, v))
+}
+
+// GroupIDNEQ applies the NEQ predicate on the "group_id" field.
+func GroupIDNEQ(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldGroupID, v))
+}
+
+// GroupIDIn applies the In predicate on the "group_id" field.
+func GroupIDIn(vs ...uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldGroupID, vs...))
+}
+
+// GroupIDNotIn applies the NotIn predicate on the "group_id" field.
+func GroupIDNotIn(vs ...uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldGroupID, vs...))
+}
+
+// GroupIDGT applies the GT predicate on the "group_id" field.
+func GroupIDGT(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldGroupID, v))
+}
+
+// GroupIDGTE applies the GTE predicate on the "group_id" field.
+func GroupIDGTE(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldGroupID, v))
+}
+
+// GroupIDLT applies the LT predicate on the "group_id" field.
+func GroupIDLT(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldGroupID, v))
+}
+
+// GroupIDLTE applies the LTE predicate on the "group_id" field.
+func GroupIDLTE(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldGroupID, v))
+}
+
+// GroupIDIsNil applies the IsNil predicate on the "group_id" field.
+func GroupIDIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldGroupID))
+}
+
+// GroupIDNotNil applies the NotNil predicate on the "group_id" field.
+func GroupIDNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldGroupID))
 }
 
 // HasEvents applies the HasEdge predicate on the "events" edge.

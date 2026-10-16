@@ -68,6 +68,7 @@ var (
 		{Name: "first_seen", Type: field.TypeTime},
 		{Name: "last_seen", Type: field.TypeTime},
 		{Name: "config", Type: field.TypeJSON, Nullable: true},
+		{Name: "group_id", Type: field.TypeUUID, Nullable: true},
 	}
 	// AssetsTable holds the schema information for the "assets" table.
 	AssetsTable = &schema.Table{
@@ -190,6 +191,43 @@ var (
 				Name:    "event_parent_process_guid",
 				Unique:  false,
 				Columns: []*schema.Column{EventsColumns[5]},
+			},
+		},
+	}
+	// GroupsColumns holds the columns for the "groups" table.
+	GroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString, Unique: true},
+	}
+	// GroupsTable holds the schema information for the "groups" table.
+	GroupsTable = &schema.Table{
+		Name:       "groups",
+		Columns:    GroupsColumns,
+		PrimaryKey: []*schema.Column{GroupsColumns[0]},
+	}
+	// GroupMembersColumns holds the columns for the "group_members" table.
+	GroupMembersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "user_id", Type: field.TypeUUID},
+		{Name: "role", Type: field.TypeString},
+	}
+	// GroupMembersTable holds the schema information for the "group_members" table.
+	GroupMembersTable = &schema.Table{
+		Name:       "group_members",
+		Columns:    GroupMembersColumns,
+		PrimaryKey: []*schema.Column{GroupMembersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "groupmember_group_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{GroupMembersColumns[1], GroupMembersColumns[2]},
+			},
+			{
+				Name:    "groupmember_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{GroupMembersColumns[2]},
 			},
 		},
 	}
@@ -322,6 +360,8 @@ var (
 		AuditLogsTable,
 		CommandsTable,
 		EventsTable,
+		GroupsTable,
+		GroupMembersTable,
 		IncidentsTable,
 		IntelsTable,
 		ProcessBaselinesTable,

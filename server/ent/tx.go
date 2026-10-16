@@ -22,6 +22,10 @@ type Tx struct {
 	Command *CommandClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
+	// Group is the client for interacting with the Group builders.
+	Group *GroupClient
+	// GroupMember is the client for interacting with the GroupMember builders.
+	GroupMember *GroupMemberClient
 	// Incident is the client for interacting with the Incident builders.
 	Incident *IncidentClient
 	// Intel is the client for interacting with the Intel builders.
@@ -170,6 +174,8 @@ func (tx *Tx) init() {
 	tx.AuditLog = NewAuditLogClient(tx.config)
 	tx.Command = NewCommandClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
+	tx.Group = NewGroupClient(tx.config)
+	tx.GroupMember = NewGroupMemberClient(tx.config)
 	tx.Incident = NewIncidentClient(tx.config)
 	tx.Intel = NewIntelClient(tx.config)
 	tx.ProcessBaseline = NewProcessBaselineClient(tx.config)
