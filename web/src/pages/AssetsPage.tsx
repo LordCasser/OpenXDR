@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Badge, Input, Select, Space, Table, Tag } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import { App, Badge, Button, Input, Select, Space, Table, Tag, Tooltip } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { assignAsset, fetchAssets, unassignAsset, type Asset } from '../api'
 import { useSession } from '../app/session'
+import { AddHostModal } from '../components/AddHostModal'
 import { fmtTime } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
 import { useI18n } from '../i18n'
@@ -19,6 +21,9 @@ export function AssetsPage() {
   const { groups, isAdmin } = useSession()
   const [q, setQ] = useState('')
   const [groupFilter, setGroupFilter] = useState<string>('')
+  const [adding, setAdding] = useState(false)
+  // 组 admin 才能为本组签发接入令牌
+  const canAdd = groups.some(g => g.role === 'admin')
   const { data, isPending } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
 
   const online = (a: Asset) => Date.now() - Date.parse(a.lastSeen) < STALE_MS
@@ -44,7 +49,9 @@ export function AssetsPage() {
   const up = (data ?? []).filter(online).length
 
   return (
-    <Page title={t('navAssets')} subtitle={t('assetsSummary', { total, online: up })}>
+    <Page title={t('navAssets')} subtitle={t('assetsSummary', { total, online: up })}
+      extra={canAdd && <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>{t('addHost')}</Button>}>
+      <AddHostModal open={adding} onClose={() => setAdding(false)} />
       <FilterCard
         filters={
           <Space wrap>
@@ -59,7 +66,13 @@ export function AssetsPage() {
           dataSource={rows}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
           columns={[
-            { title: t('thStatus'), width: 100, render: (_, a) => <Badge status={online(a) ? 'success' : 'default'} text={t(online(a) ? 'online' : 'stale')} /> },
+            {
+              title: t('thStatus'), width: 100,
+              // 已发过失联通知的标红：这是要人去处理的，不只是暂时没数据
+              render: (_, a) => a.silentSince
+                ? <Tooltip title={t('silentSince', { time: fmtTime(a.silentSince) })}><Badge status="error" text={t('silent')} /></Tooltip>
+                : <Badge status={online(a) ? 'success' : 'default'} text={t(online(a) ? 'online' : 'stale')} />,
+            },
             { title: t('thHostname'), dataIndex: 'hostname', sorter: (a, b) => a.hostname.localeCompare(b.hostname), render: (v, a) => <Link to={`/assets/${a.id}`}>{v}</Link> },
             { title: 'OS', dataIndex: 'os', width: 100, render: v => v ?? '-' },
             { title: t('thIP'), dataIndex: 'ipAddrs', render: v => v?.join(', ') ?? '-' },

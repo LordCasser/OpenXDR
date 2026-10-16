@@ -1,5 +1,5 @@
 import {
-  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, TranslationOutlined, UserOutlined,
+  AppstoreOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, TranslationOutlined, UserOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -11,9 +11,11 @@ import { fetchApprovals } from '../api'
 import { ROLE_KEY } from '../components/format'
 import { useI18n } from '../i18n'
 import { Logo } from '../components/Logo'
-import { NAV, type NavItem } from './nav'
+import { NAV, type NavGroup, type NavItem } from './nav'
 import { useSession } from './session'
 import { useTheme } from './theme'
+
+const MORE = 'more'
 
 // 待审批数：只有组 admin 能看审批，Pi 正阻塞等着人，所以挂在顶栏
 function ApprovalBell() {
@@ -51,16 +53,18 @@ export function Layout() {
 
   const visible = (x: { admin?: boolean }) => !x.admin || isAdmin
   const toItem = (n: NavItem) => ({ key: n.path, icon: n.icon, label: t(n.key) })
-  // 收起时分组标题挤不下，换成分隔线
   type Item = NonNullable<MenuProps['items']>[number]
-  const items: Item[] = NAV.filter(visible).flatMap((n): Item[] =>
-    !('items' in n)
-      ? [toItem(n)]
-      : collapsed && wide
-        ? [{ type: 'divider' as const, key: n.key }, ...n.items.filter(visible).map(toItem)]
-        : [{ type: 'group' as const, key: n.key, label: t(n.key), children: n.items.filter(visible).map(toItem) }],
-  )
+  const navGroups: NavGroup[] = NAV.filter((n): n is NavGroup => 'items' in n).filter(visible)
+  // 平铺的是日常入口；分组都收进「更多」，默认折叠，当前页在里面时才展开
+  const items: Item[] = [
+    ...NAV.filter((n): n is NavItem => !('items' in n)).filter(visible).map(toItem),
+    {
+      key: MORE, icon: <AppstoreOutlined />, label: t('navMore'),
+      children: navGroups.map(g => ({ type: 'group' as const, key: g.key, label: t(g.key), children: g.items.filter(visible).map(toItem) })),
+    },
+  ]
   const selected = '/' + location.pathname.split('/')[1]
+  const inMore = navGroups.some(g => g.items.some(i => i.path === selected))
 
   const collapse = () => {
     localStorage.setItem('siderCollapsed', collapsed ? '0' : '1')
@@ -75,12 +79,12 @@ export function Layout() {
           <Link className="brand" to="/chat" aria-label="OpenXDR">
             <Logo />{!collapsed && <span className="brand-name">OpenXDR</span>}
           </Link>
-          <Menu mode="inline" selectedKeys={[selected]} items={items} onClick={e => navigate(e.key)} style={{ borderInlineEnd: 'none' }} />
+          <Menu mode="inline" selectedKeys={[selected]} defaultOpenKeys={inMore ? [MORE] : []} items={items} onClick={e => navigate(e.key)} style={{ borderInlineEnd: 'none' }} />
         </AntLayout.Sider>
       ) : (
         <Drawer title={<Space><Logo /><span>OpenXDR</span></Space>} placement="left" size={280}
           open={menuOpen} onClose={() => setMenuOpen(false)} styles={{ body: { padding: 0 } }}>
-          <Menu mode="inline" selectedKeys={[selected]} items={items}
+          <Menu mode="inline" selectedKeys={[selected]} defaultOpenKeys={inMore ? [MORE] : []} items={items}
             onClick={e => { navigate(e.key); setMenuOpen(false) }} />
         </Drawer>
       )}

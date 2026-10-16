@@ -1,7 +1,7 @@
 import { ArrowLeftOutlined, RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Badge, Button, Card, Col, Descriptions, Empty, Form, Result, Row, Select, Skeleton, Space, Switch, Table, Tabs, Tag,
+  Alert, App, Badge, Button, Card, Col, Descriptions, Empty, Form, Result, Row, Select, Skeleton, Space, Switch, Table, Tabs, Tag, Tooltip,
   Typography,
 } from 'antd'
 import { useEffect, useState } from 'react'
@@ -113,7 +113,9 @@ export function AssetDetailPage() {
   return (
     <Page
       crumb={asset.hostname}
-      title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')} />{asset.hostname}<Badge status={online ? 'success' : 'default'} text={t(online ? 'online' : 'stale')} /></Space>}
+      title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')} />{asset.hostname}{asset.silentSince
+        ? <Tooltip title={t('silentSince', { time: fmtTime(asset.silentSince) })}><Badge status="error" text={t('silent')} /></Tooltip>
+        : <Badge status={online ? 'success' : 'default'} text={t(online ? 'online' : 'stale')} />}</Space>}
       extra={canAct && asset.groupId && <Button type="primary" icon={<RobotOutlined />} loading={starting} onClick={investigate}>{t('investigateHost')}</Button>}
     >
       <Row gutter={[16, 16]}>
@@ -126,6 +128,7 @@ export function AssetDetailPage() {
               <Descriptions.Item label={t('thSource')}>{asset.agentId ? 'agent' : t('sourceLog')}</Descriptions.Item>
               <Descriptions.Item label={t('firstSeen')}>{fmtTime(asset.firstSeen)}</Descriptions.Item>
               <Descriptions.Item label={t('thLastSeen')}>{fmtTime(asset.lastSeen)}</Descriptions.Item>
+              <Descriptions.Item label={t('agentVersion')}>{asset.agentVersion ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="Agent ID">{asset.agentId ? <Typography.Text className="mono" copyable style={{ fontSize: 12 }}>{asset.agentId}</Typography.Text> : '-'}</Descriptions.Item>
               <Descriptions.Item label="ID"><Typography.Text className="mono" copyable style={{ fontSize: 12 }}>{asset.id}</Typography.Text></Descriptions.Item>
             </Descriptions>

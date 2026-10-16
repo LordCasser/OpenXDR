@@ -173,6 +173,9 @@ export interface Asset {
   firstSeen: string
   lastSeen: string
   groupId: string | null
+  // 已发出失联通知的起始时刻，恢复后为 null
+  silentSince: string | null
+  agentVersion: string | null
 }
 
 export const fetchAssets = () => get<Asset[]>('/api/assets')
@@ -397,6 +400,39 @@ export const setMember = (groupId: string, userId: string, role: string) =>
   send('PUT', `/api/groups/${groupId}/members/${userId}`, { role })
 export const removeMember = (groupId: string, userId: string) =>
   send('DELETE', `/api/groups/${groupId}/members/${userId}`)
+// 通知配置：控制台保存的为准，未保存过时后端返回环境变量默认值
+export interface NotifySettings {
+  url: string
+  format: 'generic' | 'dingtalk' | 'feishu' | 'wecom'
+  linkBase: string
+  minSeverity: number
+}
+export const fetchNotifySettings = () => get<NotifySettings>('/api/settings/notify')
+export const saveNotifySettings = (s: NotifySettings) => send('PUT', '/api/settings/notify', s)
+export const testNotifySettings = (s: NotifySettings) => send('POST', '/api/settings/notify/test', s)
+
+// 主机接入：令牌按组签发，明文只在创建时返回一次
+export interface EnrollStatus {
+  enabled: boolean
+  reason: string
+  platforms: string[]
+}
+export interface EnrollToken {
+  id: string
+  groupId: string
+  createdBy: string
+  createdAt: string
+  expiresAt: string
+  revoked: boolean
+  uses: number
+  token?: string
+}
+export const fetchEnrollStatus = () => get<EnrollStatus>('/api/enroll-tokens/status')
+export const fetchEnrollTokens = (groupId: string) => get<EnrollToken[]>(`/api/enroll-tokens?groupId=${groupId}`)
+export const createEnrollToken = async (groupId: string, days: number): Promise<EnrollToken> =>
+  (await send('POST', '/api/enroll-tokens', { groupId, days })).json()
+export const revokeEnrollToken = (id: string) => send('DELETE', `/api/enroll-tokens/${id}`)
+
 export const assignAsset = (groupId: string, assetId: string) =>
   send('PUT', `/api/groups/${groupId}/assets/${assetId}`)
 export const unassignAsset = (groupId: string, assetId: string) =>

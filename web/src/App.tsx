@@ -72,6 +72,7 @@ const router = createBrowserRouter([
       { path: 'users', ...page(() => import('./pages/UsersPage'), 'UsersPage', true) },
       { path: 'groups', ...page(() => import('./pages/GroupsPage'), 'GroupsPage', true) },
       { path: 'audit', ...page(() => import('./pages/AuditPage'), 'AuditPage', true) },
+      { path: 'settings', ...page(() => import('./pages/SettingsPage'), 'SettingsPage', true) },
       { path: '*', element: <NotFound /> },
     ],
   },
