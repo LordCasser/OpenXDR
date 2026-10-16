@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -107,7 +108,8 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 	paths := make([]string, 0, len(fresh))
 	assets := map[uuid.UUID]bool{}
 	for k := range fresh {
-		paths = append(paths, k.exe)
+		// 旧版基线可能存着合并前的写法，一并查出来
+		paths = append(paths, k.exe, legacyPath(k.exe))
 		assets[k.asset] = true
 	}
 	known, err := e.DB.ProcessBaseline.Query().
@@ -117,7 +119,7 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	for _, b := range known {
-		delete(fresh, comboKey{b.AssetID, b.ExePath})
+		delete(fresh, comboKey{b.AssetID, canonicalPath(b.ExePath)})
 	}
 	if len(fresh) == 0 {
 		return len(events), nil
@@ -193,5 +195,28 @@ func exePath(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &doc) != nil {
 		return ""
 	}
-	return doc.Process.File.Path
+	return canonicalPath(doc.Process.File.Path)
+}
+
+// usrMerged 是 merged-usr 下指向 /usr 的顶层目录。
+var usrMerged = []string{"/bin/", "/sbin/", "/lib/", "/lib64/"}
+
+// canonicalPath 把 /bin/rm 归到 /usr/bin/rm。主流发行版早已 merged-usr，
+// 两种写法是同一个文件，按原样记基线会让同一进程"首次出现"两次。
+// 代价是非 merged-usr 的老系统上两者不再区分——那只影响首次出现，不影响规则匹配。
+func canonicalPath(p string) string {
+	for _, d := range usrMerged {
+		if strings.HasPrefix(p, d) {
+			return "/usr" + p
+		}
+	}
+	return p
+}
+
+// legacyPath 是 canonicalPath 的逆：/usr/bin/rm → /bin/rm，其余原样返回。
+func legacyPath(p string) string {
+	if q := strings.TrimPrefix(p, "/usr"); q != p && canonicalPath(q) == p {
+		return q
+	}
+	return p
 }

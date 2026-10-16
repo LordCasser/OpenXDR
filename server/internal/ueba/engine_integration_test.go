@@ -113,3 +113,31 @@ func TestLearningIsPerAsset(t *testing.T) {
 		t.Errorf("新资产在学习期内不应告警，实际 %d 条", n)
 	}
 }
+
+// merged-usr 下 /bin/x 与 /usr/bin/x 是同一文件：旧基线里存的写法也要认，不重复告警。
+func TestUsrMergedPathsShareBaseline(t *testing.T) {
+	ctx, client := testdb.New(t)
+	asset, _ := client.Asset.Create().SetHostname("h1").Save(ctx)
+	e := newEngine(client)
+
+	now := time.Now()
+	// 旧版本写入的未归一化基线
+	if err := client.ProcessBaseline.Create().SetAssetID(asset.ID).
+		SetExePath("/bin/rm").SetFirstSeen(now.Add(-8 * 24 * time.Hour)).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	procEvent(t, ctx, client, asset.ID, "/usr/bin/rm", now)
+	procEvent(t, ctx, client, asset.ID, "/bin/rm", now)
+	procEvent(t, ctx, client, asset.ID, "/bin/awk", now)
+	procEvent(t, ctx, client, asset.ID, "/usr/bin/awk", now)
+	if _, err := e.batch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	alerts, _ := client.Alert.Query().All(ctx)
+	if len(alerts) != 1 {
+		t.Fatalf("只有 awk 是首次出现，应 1 条告警，实际 %d", len(alerts))
+	}
+	if n, _ := client.ProcessBaseline.Query().Count(ctx); n != 2 {
+		t.Errorf("基线应为旧 /bin/rm 与新 /usr/bin/awk 两条，实际 %d", n)
+	}
+}

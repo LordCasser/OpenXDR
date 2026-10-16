@@ -25,3 +25,24 @@ func TestExePath(t *testing.T) {
 		t.Errorf("非法 JSON 应返回空串，实际 %q", got)
 	}
 }
+
+func TestCanonicalPath(t *testing.T) {
+	cases := []struct{ in, canon, legacy string }{
+		{"/bin/rm", "/usr/bin/rm", "/bin/rm"},
+		{"/sbin/zpool", "/usr/sbin/zpool", "/sbin/zpool"},
+		{"/lib/systemd/systemd-hostnamed", "/usr/lib/systemd/systemd-hostnamed", "/lib/systemd/systemd-hostnamed"},
+		{"/usr/bin/rm", "/usr/bin/rm", "/bin/rm"},
+		{"/usr/local/bin/x", "/usr/local/bin/x", "/usr/local/bin/x"},
+		{"/binx/y", "/binx/y", "/binx/y"},
+		{"/opt/app/server", "/opt/app/server", "/opt/app/server"},
+		{`C:\Windows\System32\cmd.exe`, `C:\Windows\System32\cmd.exe`, `C:\Windows\System32\cmd.exe`},
+	}
+	for _, c := range cases {
+		if got := canonicalPath(c.in); got != c.canon {
+			t.Errorf("canonicalPath(%q) = %q, want %q", c.in, got, c.canon)
+		}
+		if got := legacyPath(canonicalPath(c.in)); got != c.legacy {
+			t.Errorf("legacyPath(%q) = %q, want %q", canonicalPath(c.in), got, c.legacy)
+		}
+	}
+}
