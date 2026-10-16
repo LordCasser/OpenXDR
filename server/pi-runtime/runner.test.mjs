@@ -1,0 +1,111 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { createInterface } from 'node:readline';
+import { run } from './runner.mjs';
+
+const tool = { name: 'query', description: '查询测试数据', parameters: {
+  type: 'object', properties: { sql: { type: 'string' } }, required: ['sql'], additionalProperties: false,
+} };
+
+async function mockModel(t, responder) {
+  const server = createServer(async (req, res) => {
+    let body = '';
+    for await (const part of req) body += part;
+    responder(JSON.parse(body), res);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  return `http://127.0.0.1:${server.address().port}/v1`;
+}
+
+function completion(res, delta, reason) {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+  res.write(`data: ${JSON.stringify({ id: 'test', object: 'chat.completion.chunk',
+    model: 'test', choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
+  res.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: reason }],
+    usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } })}\n\ndata: [DONE]\n\n`);
+}
+
+const toolDelta = { role: 'assistant', tool_calls: [{ index: 0, id: 'call_1', type: 'function',
+  function: { name: 'query', arguments: '{"sql":"select 1"}' } }] };
+
+test('真实 SDK + JSONL 子进程完成工具往返与最终回答', { timeout: 15000 }, async t => {
+  let calls = 0;
+  const apiBase = await mockModel(t, (body, res) => {
+    calls++;
+    assert.equal(body.model, 'test');
+    assert.deepEqual(body.tools.map(item => item.function.name), ['query']);
+    if (calls === 1) completion(res, toolDelta, 'tool_calls');
+    else {
+      assert.equal(body.messages.find(message => message.role === 'tool').content, '查询结果 1');
+      completion(res, { role: 'assistant', content: '巡检完成' }, 'stop');
+    }
+  });
+  const child = spawn(process.execPath, [new URL('./runner.mjs', import.meta.url).pathname], { stdio: ['pipe', 'pipe', 'pipe'] });
+  t.after(() => child.kill());
+  let stderr = '';
+  child.stderr.on('data', data => { stderr += data; });
+  const exited = new Promise(resolve => child.once('close', resolve));
+  const lines = createInterface({ input: child.stdout });
+  child.stdin.write(JSON.stringify({ type: 'run', api_base: apiBase, model: 'test', prompt: '测试', tools: [tool] }) + '\n');
+  const events = [];
+  for await (const line of lines) {
+    const event = JSON.parse(line);
+    events.push(event);
+    if (event.type === 'tool_request') {
+      assert.deepEqual(event.args, { sql: 'select 1' });
+      child.stdin.write(JSON.stringify({ type: 'tool_result', call_id: event.call_id,
+        success: true, output: '查询结果 1' }) + '\n');
+    }
+  }
+  assert.equal(await exited, 0, stderr);
+  assert.equal(calls, 2);
+  assert.equal(events.at(-1).response, '巡检完成');
+  assert.equal(events.at(-1).stop_reason, 'stop');
+  assert.ok(events.some(event => event.event?.type === 'tool_execution_end'));
+  assert.ok(events.some(event => event.event?.type === 'message_end' && event.event.message.role === 'toolResult'));
+});
+
+test('达到轮数限制时停止，不宣称自然完成', async t => {
+  const apiBase = await mockModel(t, (_, res) => completion(res, toolDelta, 'tool_calls'));
+  const events = [];
+  await run({ type: 'run', api_base: apiBase, model: 'test', prompt: '测试', tools: [tool], max_turns: 1 },
+    event => events.push(event), async () => ({ success: false, output: '未获审批' }));
+  assert.equal(events.at(-1).stop_reason, 'max_turns');
+  assert.ok(events.some(event => event.event?.type === 'tool_execution_end' && event.event.isError));
+});
+
+test('供应商失败不能生成成功结果', async t => {
+  const apiBase = await mockModel(t, (_, res) => {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end('{"error":{"message":"无效密钥"}}');
+  });
+  const events = [];
+  await assert.rejects(run({ type: 'run', api_base: apiBase, model: 'test', prompt: '测试' },
+    event => events.push(event)), /无效密钥|401/);
+  assert.ok(events.every(event => event.type !== 'result'));
+});
+
+test('拒绝重复工具名和无效输入', async () => {
+  await assert.rejects(run({ type: 'run', api_base: 'http://localhost', model: 'test', prompt: '测试', tools: [tool, tool] }), /工具/);
+  await assert.rejects(run({ type: 'run' }), /prompt/);
+});
+
+test('父进程关闭输入时终止待完成的模型请求', { timeout: 5000 }, async t => {
+  let requested;
+  const started = new Promise(resolve => { requested = resolve; });
+  const apiBase = await mockModel(t, () => requested());
+  const child = spawn(process.execPath, [new URL('./runner.mjs', import.meta.url).pathname]);
+  t.after(() => child.kill());
+  let output = '';
+  child.stdout.on('data', data => { output += data; });
+  child.stderr.resume();
+  const exited = new Promise(resolve => child.once('close', resolve));
+  child.stdin.write(JSON.stringify({ type: 'run', api_base: apiBase, model: 'test', prompt: '测试' }) + '\n');
+  await started;
+  child.stdin.end();
+  assert.equal(await exited, 1);
+  assert.ok(output.split('\n').filter(Boolean).map(line => JSON.parse(line)).some(event => event.type === 'error'));
+});

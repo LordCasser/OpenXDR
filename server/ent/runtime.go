@@ -5,15 +5,18 @@ package ent
 import (
 	"openxdr/server/ent/agentsession"
 	"openxdr/server/ent/alert"
+	"openxdr/server/ent/approval"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
+	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/processbaseline"
+	"openxdr/server/ent/report"
 	"openxdr/server/ent/schema"
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
@@ -34,8 +37,12 @@ func init() {
 	agentsessionDescCreatedAt := agentsessionFields[1].Descriptor()
 	// agentsession.DefaultCreatedAt holds the default value on creation for the created_at field.
 	agentsession.DefaultCreatedAt = agentsessionDescCreatedAt.Default.(func() time.Time)
+	// agentsessionDescDryRun is the schema descriptor for dry_run field.
+	agentsessionDescDryRun := agentsessionFields[6].Descriptor()
+	// agentsession.DefaultDryRun holds the default value on creation for the dry_run field.
+	agentsession.DefaultDryRun = agentsessionDescDryRun.Default.(bool)
 	// agentsessionDescStatus is the schema descriptor for status field.
-	agentsessionDescStatus := agentsessionFields[7].Descriptor()
+	agentsessionDescStatus := agentsessionFields[8].Descriptor()
 	// agentsession.DefaultStatus holds the default value on creation for the status field.
 	agentsession.DefaultStatus = agentsessionDescStatus.Default.(string)
 	// agentsessionDescID is the schema descriptor for id field.
@@ -52,6 +59,20 @@ func init() {
 	alertDescID := alertFields[0].Descriptor()
 	// alert.DefaultID holds the default value on creation for the id field.
 	alert.DefaultID = alertDescID.Default.(func() uuid.UUID)
+	approvalFields := schema.Approval{}.Fields()
+	_ = approvalFields
+	// approvalDescCreatedAt is the schema descriptor for created_at field.
+	approvalDescCreatedAt := approvalFields[1].Descriptor()
+	// approval.DefaultCreatedAt holds the default value on creation for the created_at field.
+	approval.DefaultCreatedAt = approvalDescCreatedAt.Default.(func() time.Time)
+	// approvalDescDryRun is the schema descriptor for dry_run field.
+	approvalDescDryRun := approvalFields[9].Descriptor()
+	// approval.DefaultDryRun holds the default value on creation for the dry_run field.
+	approval.DefaultDryRun = approvalDescDryRun.Default.(bool)
+	// approvalDescID is the schema descriptor for id field.
+	approvalDescID := approvalFields[0].Descriptor()
+	// approval.DefaultID holds the default value on creation for the id field.
+	approval.DefaultID = approvalDescID.Default.(func() uuid.UUID)
 	assetFields := schema.Asset{}.Fields()
 	_ = assetFields
 	// assetDescFirstSeen is the schema descriptor for first_seen field.
@@ -106,6 +127,20 @@ func init() {
 	commandDescID := commandFields[0].Descriptor()
 	// command.DefaultID holds the default value on creation for the id field.
 	command.DefaultID = commandDescID.Default.(func() uuid.UUID)
+	commandpolicyFields := schema.CommandPolicy{}.Fields()
+	_ = commandpolicyFields
+	// commandpolicyDescCreatedAt is the schema descriptor for created_at field.
+	commandpolicyDescCreatedAt := commandpolicyFields[1].Descriptor()
+	// commandpolicy.DefaultCreatedAt holds the default value on creation for the created_at field.
+	commandpolicy.DefaultCreatedAt = commandpolicyDescCreatedAt.Default.(func() time.Time)
+	// commandpolicyDescPattern is the schema descriptor for pattern field.
+	commandpolicyDescPattern := commandpolicyFields[5].Descriptor()
+	// commandpolicy.PatternValidator is a validator for the "pattern" field. It is called by the builders before save.
+	commandpolicy.PatternValidator = commandpolicyDescPattern.Validators[0].(func(string) error)
+	// commandpolicyDescID is the schema descriptor for id field.
+	commandpolicyDescID := commandpolicyFields[0].Descriptor()
+	// commandpolicy.DefaultID holds the default value on creation for the id field.
+	commandpolicy.DefaultID = commandpolicyDescID.Default.(func() uuid.UUID)
 	eventFields := schema.Event{}.Fields()
 	_ = eventFields
 	// eventDescID is the schema descriptor for id field.
@@ -170,6 +205,20 @@ func init() {
 	processbaselineDescID := processbaselineFields[0].Descriptor()
 	// processbaseline.DefaultID holds the default value on creation for the id field.
 	processbaseline.DefaultID = processbaselineDescID.Default.(func() uuid.UUID)
+	reportFields := schema.Report{}.Fields()
+	_ = reportFields
+	// reportDescCreatedAt is the schema descriptor for created_at field.
+	reportDescCreatedAt := reportFields[1].Descriptor()
+	// report.DefaultCreatedAt holds the default value on creation for the created_at field.
+	report.DefaultCreatedAt = reportDescCreatedAt.Default.(func() time.Time)
+	// reportDescTitle is the schema descriptor for title field.
+	reportDescTitle := reportFields[4].Descriptor()
+	// report.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	report.TitleValidator = reportDescTitle.Validators[0].(func(string) error)
+	// reportDescID is the schema descriptor for id field.
+	reportDescID := reportFields[0].Descriptor()
+	// report.DefaultID holds the default value on creation for the id field.
+	report.DefaultID = reportDescID.Default.(func() uuid.UUID)
 	sessionFields := schema.Session{}.Fields()
 	_ = sessionFields
 	// sessionDescCreatedAt is the schema descriptor for created_at field.

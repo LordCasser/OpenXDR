@@ -1,0 +1,130 @@
+package agentchat
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"strings"
+	"time"
+)
+
+// query 的 DSN 必须属于仅能读取当前组视图的专用登录角色，绝不复用平台连接。
+func query(ctx context.Context, dsn, statement string) (string, error) {
+	if dsn == "" {
+		return "", errors.New("当前组未配置只读查询身份")
+	}
+	if len(statement) == 0 || len(statement) > 16384 {
+		return "", errors.New("SQL 长度须为 1–16384")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return "", errors.New("只读查询连接配置无效")
+	}
+	defer db.Close()
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return "", errors.New("无法开启只读查询事务")
+	}
+	defer tx.Rollback()
+	var unsafe bool
+	if err := tx.QueryRowContext(ctx, `SELECT rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname = current_user`).Scan(&unsafe); err != nil || unsafe {
+		return "", errors.New("查询身份不可具备管理或绕过 RLS 权限")
+	}
+	// 拒绝能直接读取业务基表的账号，只允许管理员预先授予的组视图。
+	var baseAccess bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+ SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%'
+ AND c.relkind IN ('r','p','m','f') AND (has_table_privilege(current_user,c.oid,'SELECT') OR has_any_column_privilege(current_user,c.oid,'SELECT')))`).Scan(&baseAccess); err != nil || baseAccess {
+		return "", errors.New("查询身份不得直接读取业务基表，只能读取授权视图")
+	}
+	// 先让 PostgreSQL 单独解析原始语句（不执行），避免闭合括号/注释逃出限额包装。
+	prepared, err := tx.PrepareContext(ctx, statement)
+	if err != nil {
+		return "", errors.New("只读 SQL 必须是独立的合法语句")
+	}
+	if err := prepared.Close(); err != nil {
+		return "", errors.New("关闭查询预解析失败")
+	}
+	// 子查询限制只允许一条可查询语句；权限仍以数据库角色/授权视图为边界。
+	// 在数据库端拦截大行，避免 Scan 后才限额导致服务器先接收任意大的字段。
+	rows, err := tx.QueryContext(ctx, `SELECT CASE WHEN octet_length(row_to_json(xdr_result)::text) <= 65536
+ THEN row_to_json(xdr_result)::text ELSE NULL END FROM (
+`+statement+`
+) AS xdr_result LIMIT 201`)
+	if err != nil {
+		return "", errors.New("只读 SQL 查询失败，请检查语法与视图权限")
+	}
+	defer rows.Close()
+	result := queryResult{Columns: []string{}, Rows: [][]json.RawMessage{}}
+	for rows.Next() {
+		if len(result.Rows) == 200 {
+			result.Truncated = true
+			break
+		}
+		var raw sql.NullString
+		if err := rows.Scan(&raw); err != nil {
+			return "", err
+		}
+		if !raw.Valid {
+			result.Truncated = true
+			break
+		}
+		columns, values, err := decodeQueryRow(raw.String)
+		if err != nil {
+			return "", err
+		}
+		if len(result.Rows) == 0 {
+			result.Columns = columns
+		}
+		result.Rows = append(result.Rows, values)
+		encoded, err := marshal(result)
+		if err != nil {
+			return "", err
+		}
+		if len(encoded) > 65536 {
+			result.Rows = result.Rows[:len(result.Rows)-1]
+			result.Truncated = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", errors.New("只读查询中断")
+	}
+	return marshal(result)
+}
+
+type queryResult struct {
+	Columns   []string            `json:"columns"`
+	Rows      [][]json.RawMessage `json:"rows"`
+	Truncated bool                `json:"truncated"`
+}
+
+// 按数据库输出顺序解码，不用 map 丢失列序或同名列。
+func decodeQueryRow(raw string) ([]string, []json.RawMessage, error) {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return nil, nil, errors.New("查询结果不是行对象")
+	}
+	columns := []string{}
+	values := []json.RawMessage{}
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return nil, nil, err
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, nil, err
+		}
+		columns = append(columns, key.(string))
+		values = append(values, value)
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, nil, err
+	}
+	return columns, values, nil
+}

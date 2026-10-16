@@ -21,7 +21,7 @@ func (Command) Fields() []ent.Field {
 		field.UUID("id", uuid.UUID{}).Default(newV7),
 		field.Time("created_at").Default(time.Now),
 		field.String("kind"),
-		// pending 待下发 / sent 已下发待回执 / succeeded / failed / unsupported
+		// pending 待下发 / sent 已下发待回执 / unknown 投递结果未知 / succeeded / failed / unsupported
 		field.String("status").Default("pending"),
 		field.Bool("dry_run").Default(true),
 		field.UUID("asset_id", uuid.UUID{}),

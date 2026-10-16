@@ -10,6 +10,8 @@ import (
 	"openxdr/server/ent"
 	entcommand "openxdr/server/ent/command"
 	"openxdr/server/internal/audit"
+	"openxdr/server/internal/auth"
+	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/response"
 )
 
@@ -52,7 +54,7 @@ type issueBody struct {
 	TimeoutMS   uint32     `json:"timeoutMs"`
 }
 
-func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndpoints []string) {
+func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndpoints []string, gate *commandgate.Gate) {
 	api.HandleFunc("POST /api/commands", func(w http.ResponseWriter, r *http.Request) {
 		var body issueBody
 		if json.NewDecoder(r.Body).Decode(&body) != nil {
@@ -91,7 +93,23 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 			req.AllowEndpoints = selfEndpoints
 		}
 
-		cmd, err := hub.Issue(r.Context(), req)
+		var cmd *ent.Command
+		var err error
+		if body.Kind == "exec" {
+			a, e := db.Asset.Get(r.Context(), body.AssetID)
+			if e != nil || a.GroupID == nil {
+				http.Error(w, "exec 资产必须归组", http.StatusConflict)
+				return
+			}
+			u := auth.From(r.Context())
+			if u == nil {
+				http.Error(w, "未认证", http.StatusUnauthorized)
+				return
+			}
+			cmd, err = gate.Issue(r.Context(), commandgate.Request{UserID: u.ID, GroupID: *a.GroupID, Origin: "human", Command: req})
+		} else {
+			cmd, err = hub.Issue(r.Context(), req)
+		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
@@ -109,6 +127,26 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 		writeJSON(w, toRow(cmd))
 	})
 
+	api.HandleFunc("GET /api/commands/{id}", func(w http.ResponseWriter, r *http.Request) {
+		cmd, ok := getByPath(w, r, "id", "command", db.Command.Get)
+		if !ok {
+			return
+		}
+		asset, err := db.Asset.Get(r.Context(), cmd.AssetID)
+		if err != nil {
+			http.Error(w, "资产不存在", 404)
+			return
+		}
+		if asset.GroupID != nil {
+			if !requireGroup(w, r, db, *asset.GroupID, "viewer") {
+				return
+			}
+		} else if u := auth.From(r.Context()); u == nil || u.Role != "admin" {
+			http.Error(w, "无未分组资产权限", 403)
+			return
+		}
+		writeJSON(w, toRow(cmd))
+	})
 	api.HandleFunc("GET /api/commands", func(w http.ResponseWriter, r *http.Request) {
 		q := db.Command.Query()
 		if v := r.URL.Query().Get("incidentId"); v != "" {

@@ -47,6 +47,9 @@ func minRole(method, path string) string {
 	// 组的增删、成员与资产归属只有 admin 能改；列表按成员身份过滤，viewer 可读
 	case strings.HasPrefix(path, "/api/groups") && method != http.MethodGet:
 		return "admin"
+		// Pi 的写权限由具体 handler 按组检查，不能被全局 viewer 角色提前截断。
+	case strings.HasPrefix(path, "/api/agent-sessions"), strings.HasPrefix(path, "/api/command-policies"), strings.HasPrefix(path, "/api/approvals"):
+		return "viewer"
 	case method == http.MethodGet:
 		return "viewer"
 	default:

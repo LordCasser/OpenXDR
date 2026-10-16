@@ -47,6 +47,13 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 	t.Helper()
 	dels := []func(context.Context) (int, error){
+		func(ctx context.Context) (int, error) { return c.Approval.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.CommandPolicy.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.Report.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.SessionMessage.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.AgentSession.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.GroupMember.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.Group.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Alert.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Event.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Incident.Delete().Exec(ctx) },

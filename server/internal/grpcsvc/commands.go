@@ -35,11 +35,10 @@ func (s *Server) Commands(stream pb.AgentService_CommandsServer) error {
 	defer s.Hub.Detach(agentID, outbound)
 	slog.Info("agent 指令通道已连接", "agent", agentID)
 
-	// 断线重连后补发未回执的指令，否则它们会永远停在"已下发"
+	// 只补发可重放的响应动作；直接写流，避免重连关闭 outbound 时仍向其发送。
 	for _, cmd := range s.Hub.PendingFor(ctx, agentID) {
-		select {
-		case outbound <- s.Hub.ToProto(cmd):
-		default:
+		if err := stream.Send(s.Hub.ToProto(cmd)); err != nil {
+			return err
 		}
 	}
 
@@ -52,7 +51,7 @@ func (s *Server) Commands(stream pb.AgentService_CommandsServer) error {
 				recvErr <- err
 				return
 			}
-			s.Hub.Complete(ctx, res)
+			s.Hub.Complete(ctx, agentID, res)
 		}
 	}()
 

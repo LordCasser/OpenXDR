@@ -8,6 +8,7 @@ package response
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -23,6 +24,9 @@ import (
 
 // 单个 agent 的指令缓冲。满了说明 agent 卡住，此时拒绝新指令而不是无限堆积
 const pendingPerAgent = 32
+
+// ErrDeliveryUnknown 表示已尝试投递，调用方不能将其当作未执行并重试。
+var ErrDeliveryUnknown = errors.New("指令投递结果未知")
 
 type Hub struct {
 	DB      *ent.Client
@@ -68,12 +72,8 @@ func (h *Hub) Attach(agentID uuid.UUID) chan *pb.Command {
 	h.conns[agentID] = ch
 	if h.Router != nil {
 		h.routeDetach[agentID] = h.Router.Attach(agentID, func(cmd *pb.Command) error {
-			select {
-			case ch <- cmd:
-				return nil
-			default:
-				return fmt.Errorf("agent 指令队列已满")
-			}
+			_, err := h.enqueue(agentID, ch, cmd)
+			return err
 		})
 	}
 	h.mu.Unlock()
@@ -121,24 +121,40 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 		return nil, err
 	}
 
-	h.mu.RLock()
-	ch, online := h.conns[*a.AgentID]
-	h.mu.RUnlock()
-	if !online {
-		if h.Router == nil {
-			return h.finish(ctx, cmd.ID, "failed", "agent 未连接指令通道")
-		}
-		if err := h.Router.Deliver(ctx, *a.AgentID, req.toProto(cmd.ID)); err != nil {
+	online, err := h.enqueue(*a.AgentID, nil, req.toProto(cmd.ID))
+	if online {
+		if err != nil {
 			return h.finish(ctx, cmd.ID, "failed", err.Error())
 		}
 		return h.mark(ctx, cmd.ID, "sent")
 	}
+	if h.Router == nil {
+		return h.finish(ctx, cmd.ID, "failed", "agent 未连接指令通道")
+	}
+	if err := h.Router.Deliver(ctx, *a.AgentID, req.toProto(cmd.ID)); err != nil {
+		// 投递响应丢失不能证明远端没有执行，EXEC 不允许自动重放。
+		status := "failed"
+		if req.Kind == "exec" {
+			status = "unknown"
+		}
+		return h.finish(ctx, cmd.ID, status, err.Error())
+	}
+	return h.mark(ctx, cmd.ID, "sent")
+}
 
+// enqueue 与重连关闭通道共用锁；旧 Router 回调不能向新连接投递。
+func (h *Hub) enqueue(agentID uuid.UUID, expected chan *pb.Command, cmd *pb.Command) (bool, error) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	ch, ok := h.conns[agentID]
+	if !ok || (expected != nil && ch != expected) {
+		return false, fmt.Errorf("agent 指令连接已失效")
+	}
 	select {
-	case ch <- req.toProto(cmd.ID):
-		return h.mark(ctx, cmd.ID, "sent")
+	case ch <- cmd:
+		return true, nil
 	default:
-		return h.finish(ctx, cmd.ID, "failed", "agent 指令队列已满")
+		return true, fmt.Errorf("agent 指令队列已满")
 	}
 }
 
@@ -200,11 +216,26 @@ func resultStatus(st pb.CommandResult_Status) string {
 }
 
 func (h *Hub) mark(ctx context.Context, id uuid.UUID, status string) (*ent.Command, error) {
-	return h.DB.Command.UpdateOneID(id).SetStatus(status).Save(ctx)
+	// 快速回执可能先于投递确认到达，不能把终态改回 sent。
+	if _, err := h.DB.Command.Update().Where(entcommand.IDEQ(id), entcommand.StatusEQ("pending")).SetStatus(status).Save(ctx); err != nil {
+		return nil, fmt.Errorf("%w：命令 %s 可能已下发，状态回写失败，禁止自动重试: %v", ErrDeliveryUnknown, id, err)
+	}
+	cmd, err := h.DB.Command.Get(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w：命令 %s 已投递，读取状态失败，禁止自动重试: %v", ErrDeliveryUnknown, id, err)
+	}
+	return cmd, nil
 }
 
 func (h *Hub) finish(ctx context.Context, id uuid.UUID, status, detail string) (*ent.Command, error) {
-	return h.finishUpdate(id, status, detail).Save(ctx)
+	update := h.DB.Command.Update().Where(entcommand.IDEQ(id), entcommand.StatusEQ("pending")).SetStatus(status).SetDetail(detail)
+	if status != "unknown" {
+		update.SetCompletedAt(time.Now())
+	}
+	if _, err := update.Save(ctx); err != nil {
+		return nil, err
+	}
+	return h.DB.Command.Get(ctx, id)
 }
 
 func (h *Hub) finishUpdate(id uuid.UUID, status, detail string) *ent.CommandUpdateOne {
@@ -233,7 +264,7 @@ func (h *Hub) ToProto(cmd *ent.Command) *pb.Command {
 
 // Complete 回写执行结果。agent 上报的 command_id 必须能对上库里的记录，
 // 对不上就丢弃——不接受来路不明的执行结果污染审计。
-func (h *Hub) Complete(ctx context.Context, res *pb.CommandResult) {
+func (h *Hub) Complete(ctx context.Context, agentID uuid.UUID, res *pb.CommandResult) {
 	if res.CommandId == "" {
 		return // 认领连接的首条消息
 	}
@@ -241,9 +272,16 @@ func (h *Hub) Complete(ctx context.Context, res *pb.CommandResult) {
 	if err != nil {
 		return
 	}
+	// agentID 来自已认证的流，不信任回执里自报的 AgentId。
+	scope := entcommand.HasAssetWith(asset.AgentIDEQ(agentID))
+	cmd, err := h.DB.Command.Query().Where(entcommand.IDEQ(id), scope).Only(ctx)
+	if err != nil {
+		slog.Warn("拒绝非所属资产的指令回执", "agent", agentID, "command", id)
+		return
+	}
 	status := resultStatus(res.Status)
-	upd := h.finishUpdate(id, status, res.Detail)
-	if kind, err := h.DB.Command.Query().Where(entcommand.IDEQ(id)).Select(entcommand.FieldKind).String(ctx); err == nil && kind == "exec" {
+	upd := h.finishUpdate(id, status, res.Detail).Where(scope, entcommand.StatusIn("pending", "sent", "unknown"))
+	if cmd.Kind == "exec" {
 		upd.SetExitCode(res.ExitCode).SetStdout(res.Stdout).SetStderr(res.Stderr).SetTruncated(res.Truncated)
 	}
 	if _, err := upd.Save(ctx); err != nil {
@@ -253,15 +291,14 @@ func (h *Hub) Complete(ctx context.Context, res *pb.CommandResult) {
 	}
 }
 
-// PendingFor 取回某 agent 已下发但未回执的指令。断线重连后补发，
-// 否则指令会随连接一起消失，界面上永远停在"已下发"。
+// PendingFor 仅补发原有响应动作；EXEC 可能已经执行，重连时不得重复下发。
 func (h *Hub) PendingFor(ctx context.Context, agentID uuid.UUID) []*ent.Command {
 	a, err := h.DB.Asset.Query().Where(asset.AgentIDEQ(agentID)).First(ctx)
 	if err != nil {
 		return nil
 	}
 	cmds, err := h.DB.Command.Query().
-		Where(entcommand.AssetIDEQ(a.ID), entcommand.StatusEQ("sent")).
+		Where(entcommand.AssetIDEQ(a.ID), entcommand.StatusEQ("sent"), entcommand.KindNEQ("exec")).
 		Order(ent.Asc(entcommand.FieldCreatedAt)).
 		All(ctx)
 	if err != nil {

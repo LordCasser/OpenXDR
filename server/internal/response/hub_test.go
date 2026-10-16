@@ -212,3 +212,23 @@ func TestHubOnlineLocalOnly(t *testing.T) {
 		t.Error("本地通道存在应在线")
 	}
 }
+
+func TestEnqueueDuringReconnect(t *testing.T) {
+	h := NewHub(nil, true)
+	id := uuid.New()
+	old := h.Attach(id)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 1000 {
+			h.Attach(id)
+		}
+	}()
+	for range 1000 {
+		_, _ = h.enqueue(id, nil, &pb.Command{})
+	}
+	<-done
+	if online, err := h.enqueue(id, old, &pb.Command{}); online || err == nil {
+		t.Fatal("旧 Router 回调应被拒绝")
+	}
+}

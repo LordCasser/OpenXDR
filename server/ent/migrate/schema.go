@@ -16,6 +16,7 @@ var (
 		{Name: "group_id", Type: field.TypeUUID},
 		{Name: "initiator", Type: field.TypeString},
 		{Name: "model", Type: field.TypeString},
+		{Name: "dry_run", Type: field.TypeBool, Default: true},
 		{Name: "title", Type: field.TypeString, Nullable: true},
 		{Name: "status", Type: field.TypeString, Default: "running"},
 		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -86,6 +87,41 @@ var (
 				Name:    "alert_asset_id_ts",
 				Unique:  false,
 				Columns: []*schema.Column{AlertsColumns[6], AlertsColumns[1]},
+			},
+		},
+	}
+	// ApprovalsColumns holds the columns for the "approvals" table.
+	ApprovalsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "asset_id", Type: field.TypeUUID},
+		{Name: "requested_by", Type: field.TypeString},
+		{Name: "origin", Type: field.TypeEnum, Enums: []string{"ai", "human"}},
+		{Name: "cmd", Type: field.TypeString, Size: 2147483647},
+		{Name: "timeout_ms", Type: field.TypeUint32},
+		{Name: "dry_run", Type: field.TypeBool, Default: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "approved", "rejected", "expired", "cancelled", "consumed"}, Default: "pending"},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "decided_by", Type: field.TypeString, Nullable: true},
+		{Name: "decided_at", Type: field.TypeTime, Nullable: true},
+	}
+	// ApprovalsTable holds the schema information for the "approvals" table.
+	ApprovalsTable = &schema.Table{
+		Name:       "approvals",
+		Columns:    ApprovalsColumns,
+		PrimaryKey: []*schema.Column{ApprovalsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "approval_group_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalsColumns[2], ApprovalsColumns[10]},
+			},
+			{
+				Name:    "approval_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalsColumns[11]},
 			},
 		},
 	}
@@ -173,6 +209,28 @@ var (
 				Name:    "command_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{CommandsColumns[1]},
+			},
+		},
+	}
+	// CommandPoliciesColumns holds the columns for the "command_policies" table.
+	CommandPoliciesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "origin", Type: field.TypeEnum, Enums: []string{"ai", "human"}},
+		{Name: "mode", Type: field.TypeEnum, Enums: []string{"allow", "deny"}},
+		{Name: "pattern", Type: field.TypeString},
+	}
+	// CommandPoliciesTable holds the schema information for the "command_policies" table.
+	CommandPoliciesTable = &schema.Table{
+		Name:       "command_policies",
+		Columns:    CommandPoliciesColumns,
+		PrimaryKey: []*schema.Column{CommandPoliciesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "commandpolicy_group_id_origin",
+				Unique:  false,
+				Columns: []*schema.Column{CommandPoliciesColumns[2], CommandPoliciesColumns[3]},
 			},
 		},
 	}
@@ -324,6 +382,33 @@ var (
 			},
 		},
 	}
+	// ReportsColumns holds the columns for the "reports" table.
+	ReportsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "session_id", Type: field.TypeUUID},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "title", Type: field.TypeString, Size: 200},
+		{Name: "markdown", Type: field.TypeString, Size: 2147483647},
+	}
+	// ReportsTable holds the schema information for the "reports" table.
+	ReportsTable = &schema.Table{
+		Name:       "reports",
+		Columns:    ReportsColumns,
+		PrimaryKey: []*schema.Column{ReportsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "report_group_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{ReportsColumns[3], ReportsColumns[1]},
+			},
+			{
+				Name:    "report_session_id",
+				Unique:  false,
+				Columns: []*schema.Column{ReportsColumns[2]},
+			},
+		},
+	}
 	// SessionsColumns holds the columns for the "sessions" table.
 	SessionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -410,15 +495,18 @@ var (
 	Tables = []*schema.Table{
 		AgentSessionsTable,
 		AlertsTable,
+		ApprovalsTable,
 		AssetsTable,
 		AuditLogsTable,
 		CommandsTable,
+		CommandPoliciesTable,
 		EventsTable,
 		GroupsTable,
 		GroupMembersTable,
 		IncidentsTable,
 		IntelsTable,
 		ProcessBaselinesTable,
+		ReportsTable,
 		SessionsTable,
 		SessionMessagesTable,
 		SuppressionsTable,

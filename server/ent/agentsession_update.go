@@ -99,6 +99,20 @@ func (_u *AgentSessionUpdate) SetNillableModel(v *string) *AgentSessionUpdate {
 	return _u
 }
 
+// SetDryRun sets the "dry_run" field.
+func (_u *AgentSessionUpdate) SetDryRun(v bool) *AgentSessionUpdate {
+	_u.mutation.SetDryRun(v)
+	return _u
+}
+
+// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
+func (_u *AgentSessionUpdate) SetNillableDryRun(v *bool) *AgentSessionUpdate {
+	if v != nil {
+		_u.SetDryRun(*v)
+	}
+	return _u
+}
+
 // SetTitle sets the "title" field.
 func (_u *AgentSessionUpdate) SetTitle(v string) *AgentSessionUpdate {
 	_u.mutation.SetTitle(v)
@@ -229,6 +243,9 @@ func (_u *AgentSessionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(agentsession.FieldModel, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.DryRun(); ok {
+		_spec.SetField(agentsession.FieldDryRun, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Title(); ok {
 		_spec.SetField(agentsession.FieldTitle, field.TypeString, value)
 	}
@@ -336,6 +353,20 @@ func (_u *AgentSessionUpdateOne) SetModel(v string) *AgentSessionUpdateOne {
 func (_u *AgentSessionUpdateOne) SetNillableModel(v *string) *AgentSessionUpdateOne {
 	if v != nil {
 		_u.SetModel(*v)
+	}
+	return _u
+}
+
+// SetDryRun sets the "dry_run" field.
+func (_u *AgentSessionUpdateOne) SetDryRun(v bool) *AgentSessionUpdateOne {
+	_u.mutation.SetDryRun(v)
+	return _u
+}
+
+// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
+func (_u *AgentSessionUpdateOne) SetNillableDryRun(v *bool) *AgentSessionUpdateOne {
+	if v != nil {
+		_u.SetDryRun(*v)
 	}
 	return _u
 }
@@ -499,6 +530,9 @@ func (_u *AgentSessionUpdateOne) sqlSave(ctx context.Context) (_node *AgentSessi
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(agentsession.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DryRun(); ok {
+		_spec.SetField(agentsession.FieldDryRun, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Title(); ok {
 		_spec.SetField(agentsession.FieldTitle, field.TypeString, value)

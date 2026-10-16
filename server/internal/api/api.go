@@ -13,7 +13,9 @@ import (
 	"openxdr/server/ent/alert"
 	entasset "openxdr/server/ent/asset"
 	"openxdr/server/ent/incident"
+	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/audit"
+	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/sigma"
@@ -53,10 +55,20 @@ type incidentDetail struct {
 	Alerts  []alertRow `json:"alerts"`
 }
 
-func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, h hunter, selfEndpoints []string) http.Handler {
+func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, h hunter, selfEndpoints []string, chats ...*agentchat.Service) http.Handler {
 	mux := http.NewServeMux()
 	mapHunt(mux, db, h)
-	mapCommands(mux, db, hub, selfEndpoints)
+	gate := &commandgate.Gate{DB: db, Hub: hub}
+	var chat *agentchat.Service
+	if len(chats) > 0 {
+		chat = chats[0]
+	}
+	if chat != nil && chat.Gate != nil {
+		gate = chat.Gate
+	}
+	mapCommands(mux, db, hub, selfEndpoints, gate)
+	mapCommandPolicy(mux, db, gate)
+	mapAgentSessions(mux, db, chat)
 	mapSuppressions(mux, db, suppressions, rules)
 	mapIntel(mux, db, intelStore)
 	mapStats(mux, db, rules)

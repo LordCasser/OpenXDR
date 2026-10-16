@@ -24,6 +24,8 @@ const (
 	FieldInitiator = "initiator"
 	// FieldModel holds the string denoting the model field in the database.
 	FieldModel = "model"
+	// FieldDryRun holds the string denoting the dry_run field in the database.
+	FieldDryRun = "dry_run"
 	// FieldTitle holds the string denoting the title field in the database.
 	FieldTitle = "title"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -44,6 +46,7 @@ var Columns = []string{
 	FieldGroupID,
 	FieldInitiator,
 	FieldModel,
+	FieldDryRun,
 	FieldTitle,
 	FieldStatus,
 	FieldError,
@@ -63,6 +66,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultDryRun holds the default value on creation for the "dry_run" field.
+	DefaultDryRun bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// DefaultID holds the default value on creation for the "id" field.
@@ -100,6 +105,11 @@ func ByInitiator(opts ...sql.OrderTermOption) OrderOption {
 // ByModel orders the results by the model field.
 func ByModel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldModel, opts...).ToFunc()
+}
+
+// ByDryRun orders the results by the dry_run field.
+func ByDryRun(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDryRun, opts...).ToFunc()
 }
 
 // ByTitle orders the results by the title field.

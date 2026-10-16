@@ -12,6 +12,9 @@ type AgentSession func(*sql.Selector)
 // Alert is the predicate function for alert builders.
 type Alert func(*sql.Selector)
 
+// Approval is the predicate function for approval builders.
+type Approval func(*sql.Selector)
+
 // Asset is the predicate function for asset builders.
 type Asset func(*sql.Selector)
 
@@ -20,6 +23,9 @@ type AuditLog func(*sql.Selector)
 
 // Command is the predicate function for command builders.
 type Command func(*sql.Selector)
+
+// CommandPolicy is the predicate function for commandpolicy builders.
+type CommandPolicy func(*sql.Selector)
 
 // Event is the predicate function for event builders.
 type Event func(*sql.Selector)
@@ -38,6 +44,9 @@ type Intel func(*sql.Selector)
 
 // ProcessBaseline is the predicate function for processbaseline builders.
 type ProcessBaseline func(*sql.Selector)
+
+// Report is the predicate function for report builders.
+type Report func(*sql.Selector)
 
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)

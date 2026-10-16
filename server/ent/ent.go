@@ -8,15 +8,18 @@ import (
 	"fmt"
 	"openxdr/server/ent/agentsession"
 	"openxdr/server/ent/alert"
+	"openxdr/server/ent/approval"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
+	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/processbaseline"
+	"openxdr/server/ent/report"
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/suppression"
@@ -89,15 +92,18 @@ func checkColumn(t, c string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			agentsession.Table:    agentsession.ValidColumn,
 			alert.Table:           alert.ValidColumn,
+			approval.Table:        approval.ValidColumn,
 			asset.Table:           asset.ValidColumn,
 			auditlog.Table:        auditlog.ValidColumn,
 			command.Table:         command.ValidColumn,
+			commandpolicy.Table:   commandpolicy.ValidColumn,
 			event.Table:           event.ValidColumn,
 			group.Table:           group.ValidColumn,
 			groupmember.Table:     groupmember.ValidColumn,
 			incident.Table:        incident.ValidColumn,
 			intel.Table:           intel.ValidColumn,
 			processbaseline.Table: processbaseline.ValidColumn,
+			report.Table:          report.ValidColumn,
 			session.Table:         session.ValidColumn,
 			sessionmessage.Table:  sessionmessage.ValidColumn,
 			suppression.Table:     suppression.ValidColumn,

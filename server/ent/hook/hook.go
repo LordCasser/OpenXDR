@@ -32,6 +32,18 @@ func (f AlertFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AlertMutation", m)
 }
 
+// The ApprovalFunc type is an adapter to allow the use of ordinary
+// function as Approval mutator.
+type ApprovalFunc func(context.Context, *ent.ApprovalMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ApprovalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ApprovalMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalMutation", m)
+}
+
 // The AssetFunc type is an adapter to allow the use of ordinary
 // function as Asset mutator.
 type AssetFunc func(context.Context, *ent.AssetMutation) (ent.Value, error)
@@ -66,6 +78,18 @@ func (f CommandFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommandMutation", m)
+}
+
+// The CommandPolicyFunc type is an adapter to allow the use of ordinary
+// function as CommandPolicy mutator.
+type CommandPolicyFunc func(context.Context, *ent.CommandPolicyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CommandPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CommandPolicyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommandPolicyMutation", m)
 }
 
 // The EventFunc type is an adapter to allow the use of ordinary
@@ -138,6 +162,18 @@ func (f ProcessBaselineFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProcessBaselineMutation", m)
+}
+
+// The ReportFunc type is an adapter to allow the use of ordinary
+// function as Report mutator.
+type ReportFunc func(context.Context, *ent.ReportMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ReportFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ReportMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ReportMutation", m)
 }
 
 // The SessionFunc type is an adapter to allow the use of ordinary

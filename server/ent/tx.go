@@ -16,12 +16,16 @@ type Tx struct {
 	AgentSession *AgentSessionClient
 	// Alert is the client for interacting with the Alert builders.
 	Alert *AlertClient
+	// Approval is the client for interacting with the Approval builders.
+	Approval *ApprovalClient
 	// Asset is the client for interacting with the Asset builders.
 	Asset *AssetClient
 	// AuditLog is the client for interacting with the AuditLog builders.
 	AuditLog *AuditLogClient
 	// Command is the client for interacting with the Command builders.
 	Command *CommandClient
+	// CommandPolicy is the client for interacting with the CommandPolicy builders.
+	CommandPolicy *CommandPolicyClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
 	// Group is the client for interacting with the Group builders.
@@ -34,6 +38,8 @@ type Tx struct {
 	Intel *IntelClient
 	// ProcessBaseline is the client for interacting with the ProcessBaseline builders.
 	ProcessBaseline *ProcessBaselineClient
+	// Report is the client for interacting with the Report builders.
+	Report *ReportClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
 	// SessionMessage is the client for interacting with the SessionMessage builders.
@@ -175,15 +181,18 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.AgentSession = NewAgentSessionClient(tx.config)
 	tx.Alert = NewAlertClient(tx.config)
+	tx.Approval = NewApprovalClient(tx.config)
 	tx.Asset = NewAssetClient(tx.config)
 	tx.AuditLog = NewAuditLogClient(tx.config)
 	tx.Command = NewCommandClient(tx.config)
+	tx.CommandPolicy = NewCommandPolicyClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupMember = NewGroupMemberClient(tx.config)
 	tx.Incident = NewIncidentClient(tx.config)
 	tx.Intel = NewIntelClient(tx.config)
 	tx.ProcessBaseline = NewProcessBaselineClient(tx.config)
+	tx.Report = NewReportClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
 	tx.SessionMessage = NewSessionMessageClient(tx.config)
 	tx.Suppression = NewSuppressionClient(tx.config)

@@ -28,6 +28,8 @@ type AgentSession struct {
 	Initiator string `json:"initiator,omitempty"`
 	// Model holds the value of the "model" field.
 	Model string `json:"model,omitempty"`
+	// DryRun holds the value of the "dry_run" field.
+	DryRun bool `json:"dry_run,omitempty"`
 	// Title holds the value of the "title" field.
 	Title *string `json:"title,omitempty"`
 	// Status holds the value of the "status" field.
@@ -44,6 +46,8 @@ func (*AgentSession) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case agentsession.FieldDryRun:
+			values[i] = new(sql.NullBool)
 		case agentsession.FieldKind, agentsession.FieldInitiator, agentsession.FieldModel, agentsession.FieldTitle, agentsession.FieldStatus, agentsession.FieldError:
 			values[i] = new(sql.NullString)
 		case agentsession.FieldCreatedAt, agentsession.FieldFinishedAt:
@@ -100,6 +104,12 @@ func (_m *AgentSession) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field model", values[i])
 			} else if value.Valid {
 				_m.Model = value.String
+			}
+		case agentsession.FieldDryRun:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field dry_run", values[i])
+			} else if value.Valid {
+				_m.DryRun = value.Bool
 			}
 		case agentsession.FieldTitle:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -178,6 +188,9 @@ func (_m *AgentSession) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("model=")
 	builder.WriteString(_m.Model)
+	builder.WriteString(", ")
+	builder.WriteString("dry_run=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DryRun))
 	builder.WriteString(", ")
 	if v := _m.Title; v != nil {
 		builder.WriteString("title=")

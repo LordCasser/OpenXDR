@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
@@ -16,14 +17,17 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/api"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/cluster"
+	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/correlate"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/grpcsvc"
@@ -31,6 +35,7 @@ import (
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/janitor"
 	"openxdr/server/internal/notify"
+	"openxdr/server/internal/piruntime"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
@@ -235,7 +240,17 @@ func main() {
 
 	httpAddr := getenv("HTTP_ADDR", ":8080")
 	slog.Info("HTTP 启动", "addr", httpAddr)
-	app := auth.Middleware(client, api.Handler(client, rules, rulesPath, hub, suppressions, intelStore, triageEngine, allowlist))
+	queryURLs := map[uuid.UUID]string{}
+	if raw := os.Getenv("PI_QUERY_DATABASE_URLS"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &queryURLs); err != nil {
+			slog.Error("PI_QUERY_DATABASE_URLS 必须是组 UUID 到只读 DSN 的 JSON 对象")
+			os.Exit(1)
+		}
+	}
+	chat := &agentchat.Service{DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second},
+		Runtime: piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second},
+		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), QueryURLs: queryURLs}
+	app := auth.Middleware(client, api.Handler(client, rules, rulesPath, hub, suppressions, intelStore, triageEngine, allowlist, chat))
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", telemetry.Handler(registry))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
@@ -247,7 +262,7 @@ func main() {
 		_, _ = w.Write([]byte("ready\n"))
 	})
 	mux.Handle("/", app)
-	httpServer := &http.Server{Addr: httpAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	httpServer := &http.Server{Addr: httpAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	httpErr := make(chan error, 1)
 	go func() { httpErr <- httpServer.ListenAndServe() }()
 	select {

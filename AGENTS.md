@@ -100,7 +100,9 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `dedup` / `suppress`：告警去重与误报抑制
 - `correlate`：按实体把告警关联成 incident 事件图
 - `ueba`：首次出现检测（先学习后告警）
-- `triage`：AI 研判引擎 + 对话式狩猎（共用同一套有边界的调查工具）
+- `triage`：保留旧 AI 研判引擎与对话式狩猎
+- `piruntime` / `agentchat`：Pi 子进程、会话消息、exec/query/report 与 POST SSE
+- `commandgate`：人工与 AI exec 的组权限、命令名单、阻塞审批与审计
 - `response`：响应处置（结束进程 / 主机隔离），含自动响应钩子
 - `notify`：Webhook 通知（generic / dingtalk / feishu / wecom）
 - `syslog`：syslog 接入（UDP+TCP，RFC3164/RFC5424）
@@ -123,8 +125,10 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - **安全优先于便利**：危险能力默认关闭且多道闸门（`RESPONSE_ENABLED`、dry-run 优先、
   `ISOLATION_ALLOW` 隔离自保）；抑制与情报都可撤销、有有效期、持续累计命中计数；
   所有登录与处置操作落审计日志。
-- **AI 边界**：LLM 只能调用参数空间受限且已转义的调查工具，刻意不做 NL2SQL；
-  研判最多 6 轮，模型不支持 tool calling 时自动退化单轮；模型输出视为不可信输入。
+- **AI 边界**：旧 triage 仍使用受限调查工具与最多 6 轮研判；Pi 会话使用
+  `agentchat` / `commandgate`：exec 绑定组、名单与审批，query 仅使用组专属只读视图身份，
+  report 绑定会话归组。Pi 不注册本机 shell/文件工具，模型不能改写身份、来源或 dry-run。
+  模型输出与工具结果视为不可信输入；配置和接口见 `docs/pi-backend.md`。
 - **Rust 特性**：默认构建不依赖任何外部二进制（protoc 由 crate 分发）；
   `ebpf`/`xdp` 是可选特性，CI 单独构建。写采集端代码注意 `cfg(target_os)` 分支，
   Linux CI 上通过 Windows 交叉编译 clippy 来守 Windows 代码。

@@ -59,6 +59,21 @@ jobs:
         working-directory: server
         run: go run ./cmd/detectcheck --strict
 
+  pi-runtime:
+    name: Pi runtime (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/pi-runtime/package-lock.json
+      - working-directory: server/pi-runtime
+        run: npm ci --ignore-scripts
+      - working-directory: server/pi-runtime
+        run: npm test
+
   web:
     name: Web (React)
     runs-on: ubuntu-latest

@@ -1,7 +1,8 @@
 # AI 原生架构（设计稿）
 
-> 状态：**设计定稿，未实现**。本文记录 2026-10-16 讨论确定的演进方向；
-> 实现落地后各节改为以代码为准并标注源码位置。
+> 状态：**M1 第 1–4 步后端已实现，待真实模型/主机验收；第 5–6 步待完成**。
+> 本文仍保留总体设计；当前接口与限制见 [Pi 后端接入](pi-backend.md)。
+> Pi 使用 0.84.4 SDK + 自定义 JSONL，不是 Pi CLI extension；旧 triage 暂时保留。
 
 核心理念：**纳管即安全**——主机装上 agent、划进组，就自动获得持续的运维与安全巡检，
 人通过对话使用平台，而不是在告警列表里翻找。
@@ -50,7 +51,7 @@
   崩溃只影响单个会话。
 - **不改 Pi**：只用 Pi 原生扩展机制：
   - `extension`（TS，几十行）：注册下文四个工具，实现为调用平台本地 API；
-    关闭 Pi 内置 read/write/edit/bash（原型阶段可保留，见"暂缓"）。
+    当前 SDK runner 不注册 Pi 内置 read/write/edit/bash。
   - `skills/`：巡检方法、表结构说明、报告模板、端网互证方法等知识，随仓库维护。
 - **会话身份**：拉起进程时注入短期 token，绑定发起人（定时任务为系统身份）与所属组；
   所有工具调用由平台 API 按 token 判权，Pi 侧不做任何权限判断。
@@ -58,8 +59,10 @@
   专家模式查看与审计；不依赖 Pi 自带的 jsonl 会话文件。
 - **多模型**：模型按任务配置（YAML 字段），对话使用组默认模型；Pi 本身支持多家
   provider，平台只负责把模型配置传给进程。
-- **未验证**：extension 注册工具的接口、RPC 事件格式目前只读过第三方资料，
-  实现前须对照 `badlogic/pi-mono` 仓库核实。
+- **当前实现**：`server/pi-runtime/runner.mjs` 使用锁定版本的原生 `Agent` SDK，
+  工具由 Go 通过 JSONL 提供；不存在开放的本地 HTTP 工具 API，也无需向子进程注入
+  平台短期 token。身份由 `agentchat` 的 Go 回调闭包绑定，授权在平台执行。
+  完整消息入 `SessionMessage`，实时事件经 POST SSE 输出。SDK 接口已对照安装包源码并用 mock 模型验证。
 
 ## 工具
 
@@ -152,7 +155,6 @@ prompt: |
 - 提示注入防护：会话资产作用域（会话只能对绑定资产执行）、工具结果隔离标记
 - 名单匹配升级为命令 AST 解析（`mvdan.cc/sh`），拒绝 `eval` / 命令替换等不可静态判定结构
 - agent 本地硬禁止策略（远程不可改）
-- 关闭 Pi 内置 bash 等工具
 - 单会话 token / 费用预算
 
 ## 里程碑 M1
@@ -161,7 +163,7 @@ prompt: |
 
 1. 协议与 agent：`EXEC` 命令执行（超时、截断、Linux / Windows）
 2. server：组 + 资产归组 + 按组 RBAC
-3. server：Pi 托管（子进程、RPC、事件入库）+ `xdr` extension + 工具 API（`exec` / `query` / `report`）
+3. server：Pi 托管（子进程、JSONL、消息入库）+ 平台工具回调（`exec` / `query` / `report`）；当前使用 SDK，SQL 须配置组专属只读账号
 4. server：命令白名单 / 黑名单 + 阻塞审批
 5. web：Agent 对话页（工具调用渲染为卡片）+ 审批入口
 6. 调度器 + 一个天级巡检任务 + 报告 Markdown / HTML / PDF + Webhook 外发
