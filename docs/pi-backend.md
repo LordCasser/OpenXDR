@@ -64,6 +64,9 @@ SSE 用 fetch 读取 POST 响应，不能直接用浏览器 EventSource：
 执行只允许当前组资产；等待审批后会再次检查成员角色和资产归组。
 
 - AI：完整命令匹配任一 allow 名单后放行，否则等待审批。空名单意味着全部审批。
+  新建的组自带一套只读巡检名单（`commandgate.DefaultAIAllow`，Linux 与 Windows 各一套，按整条命令
+  字面匹配），建好即可巡检；删组时名单一并清掉。每轮会话把本组 AI 免审批名单随资产清单交给模型
+  （`no_approval_commands`），模型据此原样调用，名单外的照常走审批。
 - 人工：匹配任一 deny 名单后等待审批，否则放行。空名单意味着没有额外审批。
 - origin 固定为入口身份；创建名单时，AI 自动使用 allow，人工自动使用 deny。
 - pattern 为 Go 正则，平台强制完整字符串匹配。例如 `whoami` 不匹配 `whoami; id`。
@@ -90,16 +93,25 @@ EXEC 在重连时不自动补发，避免原命令已执行但回执丢失造成
 最多 200 行和 8 KiB 序列化结果（含列名和元数据）。大行在数据库端拦截后才传输，
 超限显式截断，不把部分结果当作完整覆盖；零行或首行超限时 columns 可能为空。
 
-配置 `PI_QUERY_DATABASE_URLS` 前，数据库管理员必须为**每个组建立独立登录角色**，
-只给该组固定过滤条件视图的 SELECT 权限，不授予其他组视图、业务基表或特权角色成员身份。
-视图的组过滤应由数据库定义固化，不能依赖可被 SQL 修改的 session setting。
+每个组使用**独立登录角色**，只能 SELECT 该组固定过滤条件的视图，读不到其他组视图、业务基表，
+也没有特权角色成员身份。视图的组过滤由数据库定义固化，不依赖可被 SQL 修改的 session setting。
 平台拒绝 superuser、CREATEROLE、CREATEDB、REPLICATION、BYPASSRLS 或能直接 SELECT
-业务基表（包括列级授权）的账号。组视图的过滤内容与授权范围仍由数据库管理员负责，运行时不自动创建角色或视图。
+业务基表（包括列级授权）的账号。
+
+**自动开通**（`server/internal/queryrole`）：平台数据库账号有 CREATEROLE（或是超级用户）时，
+建组即为该组建 schema `xdr_g_<组 UUID 末 12 位>` 与角色 `<schema>_ro`，随机密码存在组记录上
+（不经任何接口返回）；server 启动时给所有组补齐并刷新视图定义，删组时回收 schema 与角色。
+开通用事务级 advisory lock 串行化，集群多节点并发安全。HA 部署在 patroni 初始化时已给 openxdr
+账号 CREATEROLE；已有集群执行一次 `ALTER ROLE openxdr CREATEROLE`。
+
+**手工开通**：平台账号没有 CREATEROLE 时（启动日志会提示），用 `deploy/pi-query/group-views.sql`
+（psql 变量传组 UUID、schema、角色与密码，可重复执行）建视图与角色，再写进
+`PI_QUERY_DATABASE_URLS`（JSON：组 UUID → DSN）。手工配置的身份始终优先于自动开通。
+两种方式建的都是 assets / events / alerts / incidents / commands 五个按组固化过滤的视图，
+incident 与 REST 同口径（全部告警都在本组才可见），角色只读、5 秒超时、最多 5 个连接。
 不得填写平台的 `DATABASE_URL`，也不要让不同组共用可读全部组的账号。
 
-建组视图与角色可直接用 `deploy/pi-query/group-views.sql`（psql 变量传组 UUID、schema、角色与密码，可重复执行）：它建 assets / events / alerts / incidents / commands 五个按组固化过滤的视图，incident 与 REST 同口径（全部告警都在本组才可见），角色只读、5 秒超时、最多 5 个连接。
-
-未配置时完全不注册 query，不回退到平台数据库账号。SQL 不能用于写入报告；报告走
+组未开通时完全不注册 query，不回退到平台数据库账号。SQL 不能用于写入报告；报告走
 `report({title,markdown})`，平台强制绑定当前组和会话。
 
 ## 预设任务

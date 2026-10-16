@@ -18,6 +18,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldQueryPassword holds the string denoting the query_password field in the database.
+	FieldQueryPassword = "query_password"
 	// Table holds the table name of the group in the database.
 	Table = "groups"
 )
@@ -27,6 +29,7 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldName,
+	FieldQueryPassword,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -62,4 +65,9 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByQueryPassword orders the results by the query_password field.
+func ByQueryPassword(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQueryPassword, opts...).ToFunc()
 }

@@ -3,6 +3,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -10,10 +13,13 @@ import (
 
 	"openxdr/server/ent"
 	entasset "openxdr/server/ent/asset"
+	"openxdr/server/ent/commandpolicy"
 	entgroup "openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
+	"openxdr/server/internal/commandgate"
+	"openxdr/server/internal/queryrole"
 )
 
 type groupRow struct {
@@ -32,7 +38,13 @@ type memberRow struct {
 
 // mapGroups 资产组与组内授权。写操作已被 RBAC 拦成 admin 专属；
 // 读操作按组内角色过滤：看不到不属于自己的组。
-func mapGroups(api *http.ServeMux, db *ent.Client) {
+// queryProvisioner 组查询身份的开通与回收（internal/queryrole）。
+type queryProvisioner interface {
+	Ensure(context.Context, uuid.UUID) error
+	Drop(context.Context, uuid.UUID) error
+}
+
+func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 	api.HandleFunc("GET /api/groups", func(w http.ResponseWriter, r *http.Request) {
 		u := auth.From(r.Context())
 		q := db.Group.Query()
@@ -73,7 +85,15 @@ func mapGroups(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, "name 必填", http.StatusBadRequest)
 			return
 		}
-		g, err := db.Group.Create().SetName(body.Name).Save(r.Context())
+		// 新组自带只读巡检名单，建好就能巡检，不用先去配名单
+		var g *ent.Group
+		err := withTx(r, db, func(tx *ent.Tx) error {
+			var err error
+			if g, err = tx.Group.Create().SetName(body.Name).Save(r.Context()); err != nil {
+				return err
+			}
+			return commandgate.SeedDefaults(r.Context(), tx.Client(), g.ID)
+		})
 		if ent.IsConstraintError(err) {
 			http.Error(w, "组名已存在", http.StatusConflict)
 			return
@@ -82,7 +102,13 @@ func mapGroups(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		audit.Log(r.Context(), db, r, "group_created", g.ID.String(), g.Name)
+		audit.Log(r.Context(), db, r, "group_created", g.ID.String(), fmt.Sprintf("%s（默认只读名单 %d 条）", g.Name, len(commandgate.DefaultAIAllow)))
+		// 查询身份开通失败不影响建组：没权限时退回手工开通，其余错误下次启动补齐
+		if queries != nil {
+			if err := queries.Ensure(r.Context(), g.ID); err != nil && !errors.Is(err, queryrole.ErrNotAllowed) {
+				slog.Error("开通组查询身份失败", "group", g.ID, "err", err)
+			}
+		}
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, groupRow{g.ID, g.CreatedAt, g.Name, "admin", 0})
 	})
@@ -100,11 +126,19 @@ func mapGroups(api *http.ServeMux, db *ent.Client) {
 			if _, err := tx.GroupMember.Delete().Where(groupmember.GroupIDEQ(g.ID)).Exec(r.Context()); err != nil {
 				return err
 			}
+			if _, err := tx.CommandPolicy.Delete().Where(commandpolicy.GroupIDEQ(g.ID)).Exec(r.Context()); err != nil {
+				return err
+			}
 			return tx.Group.DeleteOneID(g.ID).Exec(r.Context())
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if queries != nil {
+			if err := queries.Drop(r.Context(), g.ID); err != nil {
+				slog.Error("回收组查询身份失败", "group", g.ID, "err", err)
+			}
 		}
 		audit.Log(r.Context(), db, r, "group_deleted", g.ID.String(), g.Name)
 		w.WriteHeader(http.StatusNoContent)

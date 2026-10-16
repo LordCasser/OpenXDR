@@ -78,7 +78,11 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 	mapReport(mux, db, rules)
 	mapAgentConfig(mux, db)
 	mapUsers(mux, db)
-	mapGroups(mux, db)
+	var queries queryProvisioner
+	if chat != nil {
+		queries, _ = chat.Query.(queryProvisioner)
+	}
+	mapGroups(mux, db, queries)
 	mapTasks(mux, db)
 	mapReportRender(mux, db)
 

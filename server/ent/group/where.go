@@ -65,6 +65,11 @@ func Name(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldName, v))
 }
 
+// QueryPassword applies equality check predicate on the "query_password" field. It's identical to QueryPasswordEQ.
+func QueryPassword(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldQueryPassword, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldCreatedAt, v))
@@ -168,6 +173,81 @@ func NameEqualFold(v string) predicate.Group {
 // NameContainsFold applies the ContainsFold predicate on the "name" field.
 func NameContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldName, v))
+}
+
+// QueryPasswordEQ applies the EQ predicate on the "query_password" field.
+func QueryPasswordEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldQueryPassword, v))
+}
+
+// QueryPasswordNEQ applies the NEQ predicate on the "query_password" field.
+func QueryPasswordNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldQueryPassword, v))
+}
+
+// QueryPasswordIn applies the In predicate on the "query_password" field.
+func QueryPasswordIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldQueryPassword, vs...))
+}
+
+// QueryPasswordNotIn applies the NotIn predicate on the "query_password" field.
+func QueryPasswordNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldQueryPassword, vs...))
+}
+
+// QueryPasswordGT applies the GT predicate on the "query_password" field.
+func QueryPasswordGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldQueryPassword, v))
+}
+
+// QueryPasswordGTE applies the GTE predicate on the "query_password" field.
+func QueryPasswordGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldQueryPassword, v))
+}
+
+// QueryPasswordLT applies the LT predicate on the "query_password" field.
+func QueryPasswordLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldQueryPassword, v))
+}
+
+// QueryPasswordLTE applies the LTE predicate on the "query_password" field.
+func QueryPasswordLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldQueryPassword, v))
+}
+
+// QueryPasswordContains applies the Contains predicate on the "query_password" field.
+func QueryPasswordContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldQueryPassword, v))
+}
+
+// QueryPasswordHasPrefix applies the HasPrefix predicate on the "query_password" field.
+func QueryPasswordHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldQueryPassword, v))
+}
+
+// QueryPasswordHasSuffix applies the HasSuffix predicate on the "query_password" field.
+func QueryPasswordHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldQueryPassword, v))
+}
+
+// QueryPasswordIsNil applies the IsNil predicate on the "query_password" field.
+func QueryPasswordIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldQueryPassword))
+}
+
+// QueryPasswordNotNil applies the NotNil predicate on the "query_password" field.
+func QueryPasswordNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldQueryPassword))
+}
+
+// QueryPasswordEqualFold applies the EqualFold predicate on the "query_password" field.
+func QueryPasswordEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldQueryPassword, v))
+}
+
+// QueryPasswordContainsFold applies the ContainsFold predicate on the "query_password" field.
+func QueryPasswordContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldQueryPassword, v))
 }
 
 // And groups predicates with the AND operator between them.

@@ -8119,15 +8119,16 @@ func (m *EventMutation) ResetEdge(name string) error {
 // GroupMutation represents an operation that mutates the Group nodes in the graph.
 type GroupMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *uuid.UUID
-	created_at    *time.Time
-	name          *string
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*Group, error)
-	predicates    []predicate.Group
+	op             Op
+	typ            string
+	id             *uuid.UUID
+	created_at     *time.Time
+	name           *string
+	query_password *string
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*Group, error)
+	predicates     []predicate.Group
 }
 
 var _ ent.Mutation = (*GroupMutation)(nil)
@@ -8306,6 +8307,55 @@ func (m *GroupMutation) ResetName() {
 	m.name = nil
 }
 
+// SetQueryPassword sets the "query_password" field.
+func (m *GroupMutation) SetQueryPassword(s string) {
+	m.query_password = &s
+}
+
+// QueryPassword returns the value of the "query_password" field in the mutation.
+func (m *GroupMutation) QueryPassword() (r string, exists bool) {
+	v := m.query_password
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQueryPassword returns the old "query_password" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldQueryPassword(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQueryPassword is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQueryPassword requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQueryPassword: %w", err)
+	}
+	return oldValue.QueryPassword, nil
+}
+
+// ClearQueryPassword clears the value of the "query_password" field.
+func (m *GroupMutation) ClearQueryPassword() {
+	m.query_password = nil
+	m.clearedFields[group.FieldQueryPassword] = struct{}{}
+}
+
+// QueryPasswordCleared returns if the "query_password" field was cleared in this mutation.
+func (m *GroupMutation) QueryPasswordCleared() bool {
+	_, ok := m.clearedFields[group.FieldQueryPassword]
+	return ok
+}
+
+// ResetQueryPassword resets all changes to the "query_password" field.
+func (m *GroupMutation) ResetQueryPassword() {
+	m.query_password = nil
+	delete(m.clearedFields, group.FieldQueryPassword)
+}
+
 // Where appends a list predicates to the GroupMutation builder.
 func (m *GroupMutation) Where(ps ...predicate.Group) {
 	m.predicates = append(m.predicates, ps...)
@@ -8340,12 +8390,15 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 2)
+	fields := make([]string, 0, 3)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
 	if m.name != nil {
 		fields = append(fields, group.FieldName)
+	}
+	if m.query_password != nil {
+		fields = append(fields, group.FieldQueryPassword)
 	}
 	return fields
 }
@@ -8359,6 +8412,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case group.FieldName:
 		return m.Name()
+	case group.FieldQueryPassword:
+		return m.QueryPassword()
 	}
 	return nil, false
 }
@@ -8372,6 +8427,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldCreatedAt(ctx)
 	case group.FieldName:
 		return m.OldName(ctx)
+	case group.FieldQueryPassword:
+		return m.OldQueryPassword(ctx)
 	}
 	return nil, fmt.Errorf("unknown Group field %s", name)
 }
@@ -8394,6 +8451,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
+		return nil
+	case group.FieldQueryPassword:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQueryPassword(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Group field %s", name)
@@ -8424,7 +8488,11 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *GroupMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(group.FieldQueryPassword) {
+		fields = append(fields, group.FieldQueryPassword)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -8437,6 +8505,11 @@ func (m *GroupMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *GroupMutation) ClearField(name string) error {
+	switch name {
+	case group.FieldQueryPassword:
+		m.ClearQueryPassword()
+		return nil
+	}
 	return fmt.Errorf("unknown Group nullable field %s", name)
 }
 
@@ -8449,6 +8522,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldName:
 		m.ResetName()
+		return nil
+	case group.FieldQueryPassword:
+		m.ResetQueryPassword()
 		return nil
 	}
 	return fmt.Errorf("unknown Group field %s", name)

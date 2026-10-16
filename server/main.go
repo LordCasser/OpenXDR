@@ -37,6 +37,7 @@ import (
 	"openxdr/server/internal/liveness"
 	"openxdr/server/internal/notify"
 	"openxdr/server/internal/piruntime"
+	"openxdr/server/internal/queryrole"
 	"openxdr/server/internal/report"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/schedule"
@@ -54,8 +55,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	db, err := sql.Open("pgx", getenv("DATABASE_URL",
-		"postgres://openxdr:openxdr@localhost:5432/openxdr?sslmode=disable"))
+	dsn := getenv("DATABASE_URL", "postgres://openxdr:openxdr@localhost:5432/openxdr?sslmode=disable")
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		slog.Error("数据库连接失败", "err", err)
 		os.Exit(1)
@@ -259,9 +260,12 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	// 组查询身份：手工配置的优先，其余由平台账号自动开通（需 CREATEROLE）
+	queryRoles := &queryrole.Provisioner{DB: db, Client: client, BaseDSN: dsn, Static: queryURLs}
+	go queryRoles.Reconcile(ctx)
 	chat := &agentchat.Service{Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second},
 		Runtime: piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second},
-		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), QueryURLs: queryURLs}
+		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), Query: queryRoles}
 	go chat.Recover(ctx)
 	// 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
 	report.Chromium = getenv("CHROMIUM_PATH", "chromium")

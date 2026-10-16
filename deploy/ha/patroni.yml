@@ -48,6 +48,7 @@ bootstrap:
       password: __OPENXDR_PASSWORD_YAML__
       options:
         - createdb
+        - createrole
 
 postgresql:
   listen: 0.0.0.0:5432

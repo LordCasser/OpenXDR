@@ -56,6 +56,26 @@ func (_u *GroupUpdate) SetNillableName(v *string) *GroupUpdate {
 	return _u
 }
 
+// SetQueryPassword sets the "query_password" field.
+func (_u *GroupUpdate) SetQueryPassword(v string) *GroupUpdate {
+	_u.mutation.SetQueryPassword(v)
+	return _u
+}
+
+// SetNillableQueryPassword sets the "query_password" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableQueryPassword(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetQueryPassword(*v)
+	}
+	return _u
+}
+
+// ClearQueryPassword clears the value of the "query_password" field.
+func (_u *GroupUpdate) ClearQueryPassword() *GroupUpdate {
+	_u.mutation.ClearQueryPassword()
+	return _u
+}
+
 // Mutation returns the GroupMutation object of the builder.
 func (_u *GroupUpdate) Mutation() *GroupMutation {
 	return _u.mutation
@@ -103,6 +123,12 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(group.FieldName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.QueryPassword(); ok {
+		_spec.SetField(group.FieldQueryPassword, field.TypeString, value)
+	}
+	if _u.mutation.QueryPasswordCleared() {
+		_spec.ClearField(group.FieldQueryPassword, field.TypeString)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{group.Label}
@@ -148,6 +174,26 @@ func (_u *GroupUpdateOne) SetNillableName(v *string) *GroupUpdateOne {
 	if v != nil {
 		_u.SetName(*v)
 	}
+	return _u
+}
+
+// SetQueryPassword sets the "query_password" field.
+func (_u *GroupUpdateOne) SetQueryPassword(v string) *GroupUpdateOne {
+	_u.mutation.SetQueryPassword(v)
+	return _u
+}
+
+// SetNillableQueryPassword sets the "query_password" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableQueryPassword(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetQueryPassword(*v)
+	}
+	return _u
+}
+
+// ClearQueryPassword clears the value of the "query_password" field.
+func (_u *GroupUpdateOne) ClearQueryPassword() *GroupUpdateOne {
+	_u.mutation.ClearQueryPassword()
 	return _u
 }
 
@@ -227,6 +273,12 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(group.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.QueryPassword(); ok {
+		_spec.SetField(group.FieldQueryPassword, field.TypeString, value)
+	}
+	if _u.mutation.QueryPasswordCleared() {
+		_spec.ClearField(group.FieldQueryPassword, field.TypeString)
 	}
 	_node = &Group{config: _u.config}
 	_spec.Assign = _node.assignValues

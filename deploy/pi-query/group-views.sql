@@ -1,4 +1,6 @@
--- 为一个组建立 Pi query 工具专用的只读视图与登录角色。
+-- 为一个组建立 Pi query 工具专用的只读视图与登录角色（手工开通）。
+-- 平台数据库账号有 CREATEROLE 时 server 会自动开通，不需要这个脚本；
+-- 视图定义与 server/internal/queryrole 同一口径，改一边须同步另一边。
 -- 组过滤写死在视图定义里，角色只能读本 schema 的视图、读不到任何业务基表
 -- （server/internal/agentchat/query.go 会逐项校验，不满足就拒绝查询）。
 --

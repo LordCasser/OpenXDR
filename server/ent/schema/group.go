@@ -19,6 +19,8 @@ func (Group) Fields() []ent.Field {
 		field.UUID("id", uuid.UUID{}).Default(newV7),
 		field.Time("created_at").Default(time.Now),
 		field.String("name").Unique(),
+		// 自动开通的组查询角色密码（见 internal/queryrole），空表示未开通。只在服务端使用，不经任何接口返回
+		field.String("query_password").Optional().Sensitive(),
 	}
 }
 

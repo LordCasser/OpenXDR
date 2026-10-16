@@ -21,8 +21,10 @@ type Group struct {
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Name holds the value of the "name" field.
-	Name         string `json:"name,omitempty"`
-	selectValues sql.SelectValues
+	Name string `json:"name,omitempty"`
+	// QueryPassword holds the value of the "query_password" field.
+	QueryPassword string `json:"-"`
+	selectValues  sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -30,7 +32,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case group.FieldName:
+		case group.FieldName, group.FieldQueryPassword:
 			values[i] = new(sql.NullString)
 		case group.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -68,6 +70,12 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				_m.Name = value.String
+			}
+		case group.FieldQueryPassword:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field query_password", values[i])
+			} else if value.Valid {
+				_m.QueryPassword = value.String
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -110,6 +118,8 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
+	builder.WriteString(", ")
+	builder.WriteString("query_password=<sensitive>")
 	builder.WriteByte(')')
 	return builder.String()
 }
