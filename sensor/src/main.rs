@@ -11,6 +11,8 @@ mod report;
 mod tls;
 mod x509;
 
+// 生成代码不归我们管，新版 clippy 对 tonic 的 async_trait 展开报 double_must_use
+#[allow(clippy::double_must_use)]
 pub mod pb {
     tonic::include_proto!("openxdr.sensor.v1");
 }

@@ -91,8 +91,10 @@ fn read_new(t: &mut Tail) -> Vec<LoginRecord> {
     t.offset += whole as u64;
 
     buf[..whole]
-        .chunks_exact(RECORD_SIZE)
-        .filter_map(parse_record)
+        .as_chunks::<RECORD_SIZE>()
+        .0
+        .iter()
+        .filter_map(|r| parse_record(r))
         .collect()
 }
 

@@ -143,8 +143,10 @@ fn parse_records(buf: &[u8]) -> Vec<(u32, String)> {
             break; // 长度越界说明缓冲不可信，剩下的整条丢弃
         }
         let chars: Vec<u16> = buf[off + HEADER_LEN..off + HEADER_LEN + name_len]
-            .chunks_exact(2)
-            .map(|c| u16::from_ne_bytes([c[0], c[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&c| u16::from_ne_bytes(c))
             .collect();
         out.push((action, String::from_utf16_lossy(&chars)));
         if next == 0 {

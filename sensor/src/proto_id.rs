@@ -525,8 +525,10 @@ fn be16(buf: &[u8], pos: usize) -> Option<u16> {
 }
 
 fn u16_list(buf: &[u8]) -> Vec<u16> {
-    buf.chunks_exact(2)
-        .map(|c| u16::from_be_bytes([c[0], c[1]]))
+    buf.as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&c| u16::from_be_bytes(c))
         .filter(|v| !is_grease(*v))
         .collect()
 }

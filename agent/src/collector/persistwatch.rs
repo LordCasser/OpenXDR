@@ -619,8 +619,10 @@ mod winreg {
             let value_name = String::from_utf16_lossy(&name[..name_len as usize]);
             let content = if kind == REG_SZ || kind == REG_EXPAND_SZ {
                 let wide: Vec<u16> = data[..data_len as usize]
-                    .chunks_exact(2)
-                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|&c| u16::from_le_bytes(c))
                     .take_while(|&c| c != 0)
                     .collect();
                 String::from_utf16_lossy(&wide)
