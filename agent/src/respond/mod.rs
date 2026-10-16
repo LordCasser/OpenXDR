@@ -135,10 +135,20 @@ mod tests {
         // dry-run 不会真杀进程，用测试进程自己的 pid 保证 /proc 下可读
         let mut c = cmd(CommandKind::KillProcess);
         c.dry_run = true;
-        c.pid = std::process::id();
+        // 独立短命测试进程，避免与并发身份测试互相覆盖。
+        let mut child = std::process::Command::new("sleep")
+            .arg("10")
+            .spawn()
+            .unwrap();
+        c.pid = child.id();
+        let guid = uuid::Uuid::new_v4();
+        crate::process_identity::record(c.pid, guid);
+        c.process_guid = guid.to_string();
         let r = execute("agent-1", &c).await;
         assert_eq!(r.status, Status::Succeeded as i32);
         assert!(r.detail.contains("dry-run"));
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     #[cfg(target_os = "linux")]

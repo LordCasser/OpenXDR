@@ -75,6 +75,11 @@ func StartedAt(v time.Time) predicate.TaskRun {
 	return predicate.TaskRun(sql.FieldEQ(FieldStartedAt, v))
 }
 
+// ScheduledAt applies equality check predicate on the "scheduled_at" field. It's identical to ScheduledAtEQ.
+func ScheduledAt(v time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldEQ(FieldScheduledAt, v))
+}
+
 // FinishedAt applies equality check predicate on the "finished_at" field. It's identical to FinishedAtEQ.
 func FinishedAt(v time.Time) predicate.TaskRun {
 	return predicate.TaskRun(sql.FieldEQ(FieldFinishedAt, v))
@@ -283,6 +288,56 @@ func StartedAtLT(v time.Time) predicate.TaskRun {
 // StartedAtLTE applies the LTE predicate on the "started_at" field.
 func StartedAtLTE(v time.Time) predicate.TaskRun {
 	return predicate.TaskRun(sql.FieldLTE(FieldStartedAt, v))
+}
+
+// ScheduledAtEQ applies the EQ predicate on the "scheduled_at" field.
+func ScheduledAtEQ(v time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldEQ(FieldScheduledAt, v))
+}
+
+// ScheduledAtNEQ applies the NEQ predicate on the "scheduled_at" field.
+func ScheduledAtNEQ(v time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldNEQ(FieldScheduledAt, v))
+}
+
+// ScheduledAtIn applies the In predicate on the "scheduled_at" field.
+func ScheduledAtIn(vs ...time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldIn(FieldScheduledAt, vs...))
+}
+
+// ScheduledAtNotIn applies the NotIn predicate on the "scheduled_at" field.
+func ScheduledAtNotIn(vs ...time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldNotIn(FieldScheduledAt, vs...))
+}
+
+// ScheduledAtGT applies the GT predicate on the "scheduled_at" field.
+func ScheduledAtGT(v time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldGT(FieldScheduledAt, v))
+}
+
+// ScheduledAtGTE applies the GTE predicate on the "scheduled_at" field.
+func ScheduledAtGTE(v time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldGTE(FieldScheduledAt, v))
+}
+
+// ScheduledAtLT applies the LT predicate on the "scheduled_at" field.
+func ScheduledAtLT(v time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldLT(FieldScheduledAt, v))
+}
+
+// ScheduledAtLTE applies the LTE predicate on the "scheduled_at" field.
+func ScheduledAtLTE(v time.Time) predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldLTE(FieldScheduledAt, v))
+}
+
+// ScheduledAtIsNil applies the IsNil predicate on the "scheduled_at" field.
+func ScheduledAtIsNil() predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldIsNull(FieldScheduledAt))
+}
+
+// ScheduledAtNotNil applies the NotNil predicate on the "scheduled_at" field.
+func ScheduledAtNotNil() predicate.TaskRun {
+	return predicate.TaskRun(sql.FieldNotNull(FieldScheduledAt))
 }
 
 // FinishedAtEQ applies the EQ predicate on the "finished_at" field.

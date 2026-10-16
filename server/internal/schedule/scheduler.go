@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"openxdr/server/ent"
 	entasset "openxdr/server/ent/asset"
 	entgroup "openxdr/server/ent/group"
@@ -82,43 +84,42 @@ func (s *Scheduler) tick(ctx context.Context, now time.Time) error {
 		return err
 	}
 	for _, t := range tasks {
-		due, err := s.due(ctx, t, now)
-		if err != nil {
-			slog.Error("任务到期判断失败", "task", t.ID, "err", err)
-			continue
-		}
-		if due {
-			s.fire(ctx, t)
-		}
+		s.fireDue(ctx, t, now)
 	}
 	return nil
 }
 
-// due 从上一次运行（从没跑过就从本节点接管时刻）起算下一个触发点。
+// due 按组从上次运行起算；从未运行的组使用任务的持久创建时间。
 // 停机或停用期间错过的多个周期只补跑一次。
-func (s *Scheduler) due(ctx context.Context, t *ent.Task, now time.Time) (bool, error) {
+func (s *Scheduler) due(ctx context.Context, t *ent.Task, groupID uuid.UUID, now time.Time) (time.Time, error) {
 	expr := t.Schedule
 	if t.CustomSchedule != nil {
 		expr = *t.CustomSchedule
 	}
 	sched, err := ParseSchedule(expr)
 	if err != nil {
-		return false, err
+		return time.Time{}, err
 	}
-	base := s.start
-	last, err := s.DB.TaskRun.Query().Where(taskrun.TaskIDEQ(t.ID)).
+	base := t.CreatedAt
+	last, err := s.DB.TaskRun.Query().Where(taskrun.TaskIDEQ(t.ID), taskrun.GroupIDEQ(groupID)).
 		Order(ent.Desc(taskrun.FieldStartedAt)).First(ctx)
 	if err != nil && !ent.IsNotFound(err) {
-		return false, err
+		return time.Time{}, err
 	}
 	if last != nil {
 		base = last.StartedAt
 	}
-	return !sched.Next(base).After(now), nil
+	next := sched.Next(base)
+	if next.After(now) {
+		return time.Time{}, nil
+	}
+	return next, nil
 }
 
 // fire 每个目标组一个会话。空组不跑；上一轮还在跑的组跳过本轮，不叠加。
-func (s *Scheduler) fire(ctx context.Context, t *ent.Task) {
+func (s *Scheduler) fire(ctx context.Context, t *ent.Task) { s.fireDue(ctx, t, time.Now()) }
+
+func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 	if s.slots == nil {
 		s.slots = make(chan struct{}, 4)
 	}
@@ -139,6 +140,14 @@ func (s *Scheduler) fire(ctx context.Context, t *ent.Task) {
 		model = s.DefaultModel
 	}
 	for _, g := range groups {
+		scheduled, err := s.due(ctx, t, g.ID, now)
+		if err != nil {
+			slog.Error("任务到期判断失败", "task", t.ID, "group", g.ID, "err", err)
+			continue
+		}
+		if scheduled.IsZero() {
+			continue
+		}
 		n, err := s.DB.Asset.Query().Where(entasset.GroupIDEQ(g.ID)).Count(ctx)
 		if err != nil || n == 0 {
 			continue
@@ -157,7 +166,7 @@ func (s *Scheduler) fire(ctx context.Context, t *ent.Task) {
 		case <-ctx.Done():
 			return
 		}
-		run, session, err := s.begin(ctx, t, g, model)
+		run, session, err := s.begin(ctx, t, g, model, scheduled)
 		if err != nil {
 			<-s.slots
 			slog.Error("创建任务运行失败", "task", t.ID, "group", g.Name, "err", err)
@@ -172,7 +181,7 @@ func (s *Scheduler) fire(ctx context.Context, t *ent.Task) {
 	}
 }
 
-func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model string) (*ent.TaskRun, *ent.AgentSession, error) {
+func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model string, scheduled time.Time) (*ent.TaskRun, *ent.AgentSession, error) {
 	tx, err := s.DB.Tx(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -186,7 +195,7 @@ func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model 
 		return nil, nil, err
 	}
 	run, err := tx.TaskRun.Create().
-		SetTaskID(t.ID).SetGroupID(g.ID).SetSessionID(session.ID).
+		SetTaskID(t.ID).SetGroupID(g.ID).SetSessionID(session.ID).SetScheduledAt(scheduled).
 		Save(ctx)
 	if err != nil {
 		_ = tx.Rollback()

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ func (Task) Fields() []ent.Field {
 	return []ent.Field{
 		// YAML 里的 id，如 daily-host-inspection
 		field.String("id").Immutable(),
+		field.Time("created_at").Default(time.Now).Annotations(entsql.DefaultExpr("CURRENT_TIMESTAMP")),
 		field.String("name"),
 		// 五段 cron，来自 YAML
 		field.String("schedule"),
@@ -50,6 +52,7 @@ func (TaskRun) Fields() []ent.Field {
 		field.UUID("group_id", uuid.UUID{}),
 		field.UUID("session_id", uuid.UUID{}).Optional().Nillable(),
 		field.Time("started_at").Default(time.Now),
+		field.Time("scheduled_at").Optional().Nillable(),
 		field.Time("finished_at").Optional().Nillable(),
 		// running / succeeded / failed
 		field.String("status").Default("running"),
@@ -60,6 +63,7 @@ func (TaskRun) Fields() []ent.Field {
 func (TaskRun) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("task_id", "started_at"),
+		index.Fields("task_id", "group_id", "scheduled_at").Unique(),
 		index.Fields("status"),
 	}
 }

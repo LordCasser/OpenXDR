@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/command"
@@ -33,6 +34,10 @@ type Command struct {
 	IncidentID *uuid.UUID `json:"incident_id,omitempty"`
 	// ProcessGUID holds the value of the "process_guid" field.
 	ProcessGUID *uuid.UUID `json:"process_guid,omitempty"`
+	// Pid holds the value of the "pid" field.
+	Pid uint32 `json:"pid,omitempty"`
+	// AllowEndpoints holds the value of the "allow_endpoints" field.
+	AllowEndpoints []string `json:"allow_endpoints,omitempty"`
 	// IssuedBy holds the value of the "issued_by" field.
 	IssuedBy string `json:"issued_by,omitempty"`
 	// Detail holds the value of the "detail" field.
@@ -84,9 +89,11 @@ func (*Command) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case command.FieldIncidentID, command.FieldProcessGUID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
+		case command.FieldAllowEndpoints:
+			values[i] = new([]byte)
 		case command.FieldDryRun, command.FieldTruncated:
 			values[i] = new(sql.NullBool)
-		case command.FieldTimeoutMs, command.FieldExitCode:
+		case command.FieldPid, command.FieldTimeoutMs, command.FieldExitCode:
 			values[i] = new(sql.NullInt64)
 		case command.FieldKind, command.FieldStatus, command.FieldIssuedBy, command.FieldDetail, command.FieldCmd, command.FieldStdout, command.FieldStderr:
 			values[i] = new(sql.NullString)
@@ -158,6 +165,20 @@ func (_m *Command) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ProcessGUID = new(uuid.UUID)
 				*_m.ProcessGUID = *value.S.(*uuid.UUID)
+			}
+		case command.FieldPid:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field pid", values[i])
+			} else if value.Valid {
+				_m.Pid = uint32(value.Int64)
+			}
+		case command.FieldAllowEndpoints:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field allow_endpoints", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.AllowEndpoints); err != nil {
+					return fmt.Errorf("unmarshal field allow_endpoints: %w", err)
+				}
 			}
 		case command.FieldIssuedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -284,6 +305,12 @@ func (_m *Command) String() string {
 		builder.WriteString("process_guid=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("pid=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Pid))
+	builder.WriteString(", ")
+	builder.WriteString("allow_endpoints=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllowEndpoints))
 	builder.WriteString(", ")
 	builder.WriteString("issued_by=")
 	builder.WriteString(_m.IssuedBy)

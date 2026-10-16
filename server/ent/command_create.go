@@ -104,6 +104,26 @@ func (_c *CommandCreate) SetNillableProcessGUID(v *uuid.UUID) *CommandCreate {
 	return _c
 }
 
+// SetPid sets the "pid" field.
+func (_c *CommandCreate) SetPid(v uint32) *CommandCreate {
+	_c.mutation.SetPid(v)
+	return _c
+}
+
+// SetNillablePid sets the "pid" field if the given value is not nil.
+func (_c *CommandCreate) SetNillablePid(v *uint32) *CommandCreate {
+	if v != nil {
+		_c.SetPid(*v)
+	}
+	return _c
+}
+
+// SetAllowEndpoints sets the "allow_endpoints" field.
+func (_c *CommandCreate) SetAllowEndpoints(v []string) *CommandCreate {
+	_c.mutation.SetAllowEndpoints(v)
+	return _c
+}
+
 // SetIssuedBy sets the "issued_by" field.
 func (_c *CommandCreate) SetIssuedBy(v string) *CommandCreate {
 	_c.mutation.SetIssuedBy(v)
@@ -296,6 +316,10 @@ func (_c *CommandCreate) defaults() {
 		v := command.DefaultDryRun
 		_c.mutation.SetDryRun(v)
 	}
+	if _, ok := _c.mutation.Pid(); !ok {
+		v := command.DefaultPid
+		_c.mutation.SetPid(v)
+	}
 	if _, ok := _c.mutation.IssuedBy(); !ok {
 		v := command.DefaultIssuedBy
 		_c.mutation.SetIssuedBy(v)
@@ -330,6 +354,9 @@ func (_c *CommandCreate) check() error {
 	}
 	if _, ok := _c.mutation.AssetID(); !ok {
 		return &ValidationError{Name: "asset_id", err: errors.New(`ent: missing required field "Command.asset_id"`)}
+	}
+	if _, ok := _c.mutation.Pid(); !ok {
+		return &ValidationError{Name: "pid", err: errors.New(`ent: missing required field "Command.pid"`)}
 	}
 	if _, ok := _c.mutation.IssuedBy(); !ok {
 		return &ValidationError{Name: "issued_by", err: errors.New(`ent: missing required field "Command.issued_by"`)}
@@ -401,6 +428,14 @@ func (_c *CommandCreate) createSpec() (*Command, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ProcessGUID(); ok {
 		_spec.SetField(command.FieldProcessGUID, field.TypeUUID, value)
 		_node.ProcessGUID = &value
+	}
+	if value, ok := _c.mutation.Pid(); ok {
+		_spec.SetField(command.FieldPid, field.TypeUint32, value)
+		_node.Pid = value
+	}
+	if value, ok := _c.mutation.AllowEndpoints(); ok {
+		_spec.SetField(command.FieldAllowEndpoints, field.TypeJSON, value)
+		_node.AllowEndpoints = value
 	}
 	if value, ok := _c.mutation.IssuedBy(); ok {
 		_spec.SetField(command.FieldIssuedBy, field.TypeString, value)

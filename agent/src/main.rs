@@ -9,6 +9,7 @@ pub mod pb {
 }
 
 mod collector;
+mod process_identity;
 mod respond;
 mod tls;
 
@@ -53,7 +54,18 @@ async fn run(server: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 /// 常驻指令通道：先发一条带 agent_id 的空结果认领连接，
 /// 之后逐条执行 server 推来的指令并回执。
-async fn command_loop(mut client: AgentServiceClient<tonic::transport::Channel>, agent_id: String) {
+async fn command_loop(client: AgentServiceClient<tonic::transport::Channel>, agent_id: String) {
+    loop {
+        command_stream(client.clone(), agent_id.clone()).await;
+        eprintln!("指令通道断开，5 秒后重连");
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+}
+
+async fn command_stream(
+    mut client: AgentServiceClient<tonic::transport::Channel>,
+    agent_id: String,
+) {
     let (tx, rx) = tokio::sync::mpsc::channel(32);
     // 认领消息：只带 agent_id，command_id 为空
     if tx
@@ -105,4 +117,72 @@ fn local_ips() -> Vec<String> {
         .filter(|i| !i.is_loopback())
         .map(|i| i.addr.ip().to_string())
         .collect()
+}
+
+#[cfg(test)]
+mod command_tests {
+    use super::*;
+    use pb::agent_service_server::{AgentService, AgentServiceServer};
+    use tonic::{Request, Response, Status, Streaming};
+
+    struct Server(tokio::sync::mpsc::Sender<()>);
+    #[tonic::async_trait]
+    impl AgentService for Server {
+        async fn register(
+            &self,
+            _: Request<pb::RegisterRequest>,
+        ) -> Result<Response<pb::RegisterResponse>, Status> {
+            Err(Status::unimplemented("测试只使用指令流"))
+        }
+        async fn report_events(
+            &self,
+            _: Request<Streaming<pb::AgentEvent>>,
+        ) -> Result<Response<pb::ReportAck>, Status> {
+            Err(Status::unimplemented("测试不启动事件上报"))
+        }
+        type CommandsStream = tokio_stream::Iter<std::vec::IntoIter<Result<pb::Command, Status>>>;
+        async fn commands(
+            &self,
+            request: Request<Streaming<pb::CommandResult>>,
+        ) -> Result<Response<Self::CommandsStream>, Status> {
+            let first = request.into_inner().message().await?.unwrap();
+            assert_eq!(first.agent_id, "reconnect-test");
+            self.0.send(()).await.unwrap();
+            // 正常关闭指令流，不断开 HTTP/2 连接。
+            Ok(Response::new(tokio_stream::iter(Vec::new())))
+        }
+    }
+    #[tokio::test]
+    async fn command_stream_reconnects_without_event_stream_restart() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (connections, incoming) = tokio::sync::mpsc::channel(4);
+        let accept = tokio::spawn(async move {
+            loop {
+                let socket = listener.accept().await.map(|(s, _)| s);
+                if connections.send(socket).await.is_err() {
+                    return;
+                }
+            }
+        });
+        let (seen, mut calls) = tokio::sync::mpsc::channel(4);
+        let server = tokio::spawn(
+            tonic::transport::Server::builder()
+                .add_service(AgentServiceServer::new(Server(seen)))
+                .serve_with_incoming(ReceiverStream::new(incoming)),
+        );
+        let client = AgentServiceClient::connect(format!("http://{addr}"))
+            .await
+            .unwrap();
+        let commands = tokio::spawn(command_loop(client, "reconnect-test".into()));
+        let result = tokio::time::timeout(Duration::from_secs(8), async {
+            assert!(calls.recv().await.is_some());
+            assert!(calls.recv().await.is_some());
+        })
+        .await;
+        commands.abort();
+        server.abort();
+        accept.abort();
+        result.unwrap();
+    }
 }

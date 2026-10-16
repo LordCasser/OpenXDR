@@ -61,6 +61,20 @@ func (_c *TaskRunCreate) SetNillableStartedAt(v *time.Time) *TaskRunCreate {
 	return _c
 }
 
+// SetScheduledAt sets the "scheduled_at" field.
+func (_c *TaskRunCreate) SetScheduledAt(v time.Time) *TaskRunCreate {
+	_c.mutation.SetScheduledAt(v)
+	return _c
+}
+
+// SetNillableScheduledAt sets the "scheduled_at" field if the given value is not nil.
+func (_c *TaskRunCreate) SetNillableScheduledAt(v *time.Time) *TaskRunCreate {
+	if v != nil {
+		_c.SetScheduledAt(*v)
+	}
+	return _c
+}
+
 // SetFinishedAt sets the "finished_at" field.
 func (_c *TaskRunCreate) SetFinishedAt(v time.Time) *TaskRunCreate {
 	_c.mutation.SetFinishedAt(v)
@@ -230,6 +244,10 @@ func (_c *TaskRunCreate) createSpec() (*TaskRun, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.StartedAt(); ok {
 		_spec.SetField(taskrun.FieldStartedAt, field.TypeTime, value)
 		_node.StartedAt = value
+	}
+	if value, ok := _c.mutation.ScheduledAt(); ok {
+		_spec.SetField(taskrun.FieldScheduledAt, field.TypeTime, value)
+		_node.ScheduledAt = &value
 	}
 	if value, ok := _c.mutation.FinishedAt(); ok {
 		_spec.SetField(taskrun.FieldFinishedAt, field.TypeTime, value)

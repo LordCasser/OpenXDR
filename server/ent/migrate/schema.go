@@ -181,6 +181,8 @@ var (
 		{Name: "dry_run", Type: field.TypeBool, Default: true},
 		{Name: "incident_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "process_guid", Type: field.TypeUUID, Nullable: true},
+		{Name: "pid", Type: field.TypeUint32, Default: 0},
+		{Name: "allow_endpoints", Type: field.TypeJSON, Nullable: true},
 		{Name: "issued_by", Type: field.TypeString, Default: "api"},
 		{Name: "detail", Type: field.TypeString, Nullable: true},
 		{Name: "cmd", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -200,7 +202,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "commands_assets_commands",
-				Columns:    []*schema.Column{CommandsColumns[16]},
+				Columns:    []*schema.Column{CommandsColumns[18]},
 				RefColumns: []*schema.Column{AssetsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -209,7 +211,7 @@ var (
 			{
 				Name:    "command_asset_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{CommandsColumns[16], CommandsColumns[3]},
+				Columns: []*schema.Column{CommandsColumns[18], CommandsColumns[3]},
 			},
 			{
 				Name:    "command_created_at",
@@ -486,6 +488,7 @@ var (
 	// TasksColumns holds the columns for the "tasks" table.
 	TasksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("CURRENT_TIMESTAMP")},
 		{Name: "name", Type: field.TypeString},
 		{Name: "schedule", Type: field.TypeString},
 		{Name: "custom_schedule", Type: field.TypeString, Nullable: true},
@@ -510,6 +513,7 @@ var (
 		{Name: "group_id", Type: field.TypeUUID},
 		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime},
+		{Name: "scheduled_at", Type: field.TypeTime, Nullable: true},
 		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
 		{Name: "status", Type: field.TypeString, Default: "running"},
 		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -526,9 +530,14 @@ var (
 				Columns: []*schema.Column{TaskRunsColumns[1], TaskRunsColumns[4]},
 			},
 			{
+				Name:    "taskrun_task_id_group_id_scheduled_at",
+				Unique:  true,
+				Columns: []*schema.Column{TaskRunsColumns[1], TaskRunsColumns[2], TaskRunsColumns[5]},
+			},
+			{
 				Name:    "taskrun_status",
 				Unique:  false,
-				Columns: []*schema.Column{TaskRunsColumns[6]},
+				Columns: []*schema.Column{TaskRunsColumns[7]},
 			},
 		},
 	}

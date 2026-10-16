@@ -91,6 +91,11 @@ func ProcessGUID(v uuid.UUID) predicate.Command {
 	return predicate.Command(sql.FieldEQ(FieldProcessGUID, v))
 }
 
+// Pid applies equality check predicate on the "pid" field. It's identical to PidEQ.
+func Pid(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldPid, v))
+}
+
 // IssuedBy applies equality check predicate on the "issued_by" field. It's identical to IssuedByEQ.
 func IssuedBy(v string) predicate.Command {
 	return predicate.Command(sql.FieldEQ(FieldIssuedBy, v))
@@ -434,6 +439,56 @@ func ProcessGUIDIsNil() predicate.Command {
 // ProcessGUIDNotNil applies the NotNil predicate on the "process_guid" field.
 func ProcessGUIDNotNil() predicate.Command {
 	return predicate.Command(sql.FieldNotNull(FieldProcessGUID))
+}
+
+// PidEQ applies the EQ predicate on the "pid" field.
+func PidEQ(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldPid, v))
+}
+
+// PidNEQ applies the NEQ predicate on the "pid" field.
+func PidNEQ(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldNEQ(FieldPid, v))
+}
+
+// PidIn applies the In predicate on the "pid" field.
+func PidIn(vs ...uint32) predicate.Command {
+	return predicate.Command(sql.FieldIn(FieldPid, vs...))
+}
+
+// PidNotIn applies the NotIn predicate on the "pid" field.
+func PidNotIn(vs ...uint32) predicate.Command {
+	return predicate.Command(sql.FieldNotIn(FieldPid, vs...))
+}
+
+// PidGT applies the GT predicate on the "pid" field.
+func PidGT(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldGT(FieldPid, v))
+}
+
+// PidGTE applies the GTE predicate on the "pid" field.
+func PidGTE(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldGTE(FieldPid, v))
+}
+
+// PidLT applies the LT predicate on the "pid" field.
+func PidLT(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldLT(FieldPid, v))
+}
+
+// PidLTE applies the LTE predicate on the "pid" field.
+func PidLTE(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldLTE(FieldPid, v))
+}
+
+// AllowEndpointsIsNil applies the IsNil predicate on the "allow_endpoints" field.
+func AllowEndpointsIsNil() predicate.Command {
+	return predicate.Command(sql.FieldIsNull(FieldAllowEndpoints))
+}
+
+// AllowEndpointsNotNil applies the NotNil predicate on the "allow_endpoints" field.
+func AllowEndpointsNotNil() predicate.Command {
+	return predicate.Command(sql.FieldNotNull(FieldAllowEndpoints))
 }
 
 // IssuedByEQ applies the EQ predicate on the "issued_by" field.

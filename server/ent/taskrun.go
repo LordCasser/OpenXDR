@@ -26,6 +26,8 @@ type TaskRun struct {
 	SessionID *uuid.UUID `json:"session_id,omitempty"`
 	// StartedAt holds the value of the "started_at" field.
 	StartedAt time.Time `json:"started_at,omitempty"`
+	// ScheduledAt holds the value of the "scheduled_at" field.
+	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
 	// FinishedAt holds the value of the "finished_at" field.
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 	// Status holds the value of the "status" field.
@@ -44,7 +46,7 @@ func (*TaskRun) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case taskrun.FieldTaskID, taskrun.FieldStatus, taskrun.FieldError:
 			values[i] = new(sql.NullString)
-		case taskrun.FieldStartedAt, taskrun.FieldFinishedAt:
+		case taskrun.FieldStartedAt, taskrun.FieldScheduledAt, taskrun.FieldFinishedAt:
 			values[i] = new(sql.NullTime)
 		case taskrun.FieldID, taskrun.FieldGroupID:
 			values[i] = new(uuid.UUID)
@@ -93,6 +95,13 @@ func (_m *TaskRun) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field started_at", values[i])
 			} else if value.Valid {
 				_m.StartedAt = value.Time
+			}
+		case taskrun.FieldScheduledAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field scheduled_at", values[i])
+			} else if value.Valid {
+				_m.ScheduledAt = new(time.Time)
+				*_m.ScheduledAt = value.Time
 			}
 		case taskrun.FieldFinishedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -163,6 +172,11 @@ func (_m *TaskRun) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("started_at=")
 	builder.WriteString(_m.StartedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	if v := _m.ScheduledAt; v != nil {
+		builder.WriteString("scheduled_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.FinishedAt; v != nil {
 		builder.WriteString("finished_at=")

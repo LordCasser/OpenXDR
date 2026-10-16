@@ -113,16 +113,20 @@ func init() {
 	commandDescDryRun := commandFields[4].Descriptor()
 	// command.DefaultDryRun holds the default value on creation for the dry_run field.
 	command.DefaultDryRun = commandDescDryRun.Default.(bool)
+	// commandDescPid is the schema descriptor for pid field.
+	commandDescPid := commandFields[8].Descriptor()
+	// command.DefaultPid holds the default value on creation for the pid field.
+	command.DefaultPid = commandDescPid.Default.(uint32)
 	// commandDescIssuedBy is the schema descriptor for issued_by field.
-	commandDescIssuedBy := commandFields[8].Descriptor()
+	commandDescIssuedBy := commandFields[10].Descriptor()
 	// command.DefaultIssuedBy holds the default value on creation for the issued_by field.
 	command.DefaultIssuedBy = commandDescIssuedBy.Default.(string)
 	// commandDescTimeoutMs is the schema descriptor for timeout_ms field.
-	commandDescTimeoutMs := commandFields[11].Descriptor()
+	commandDescTimeoutMs := commandFields[13].Descriptor()
 	// command.DefaultTimeoutMs holds the default value on creation for the timeout_ms field.
 	command.DefaultTimeoutMs = commandDescTimeoutMs.Default.(uint32)
 	// commandDescTruncated is the schema descriptor for truncated field.
-	commandDescTruncated := commandFields[15].Descriptor()
+	commandDescTruncated := commandFields[17].Descriptor()
 	// command.DefaultTruncated holds the default value on creation for the truncated field.
 	command.DefaultTruncated = commandDescTruncated.Default.(bool)
 	// commandDescID is the schema descriptor for id field.
@@ -261,28 +265,32 @@ func init() {
 	suppression.DefaultID = suppressionDescID.Default.(func() uuid.UUID)
 	taskFields := schema.Task{}.Fields()
 	_ = taskFields
+	// taskDescCreatedAt is the schema descriptor for created_at field.
+	taskDescCreatedAt := taskFields[1].Descriptor()
+	// task.DefaultCreatedAt holds the default value on creation for the created_at field.
+	task.DefaultCreatedAt = taskDescCreatedAt.Default.(func() time.Time)
 	// taskDescEnabled is the schema descriptor for enabled field.
-	taskDescEnabled := taskFields[4].Descriptor()
+	taskDescEnabled := taskFields[5].Descriptor()
 	// task.DefaultEnabled holds the default value on creation for the enabled field.
 	task.DefaultEnabled = taskDescEnabled.Default.(bool)
 	// taskDescModel is the schema descriptor for model field.
-	taskDescModel := taskFields[5].Descriptor()
+	taskDescModel := taskFields[6].Descriptor()
 	// task.DefaultModel holds the default value on creation for the model field.
 	task.DefaultModel = taskDescModel.Default.(string)
 	// taskDescTargetGroup is the schema descriptor for target_group field.
-	taskDescTargetGroup := taskFields[6].Descriptor()
+	taskDescTargetGroup := taskFields[7].Descriptor()
 	// task.DefaultTargetGroup holds the default value on creation for the target_group field.
 	task.DefaultTargetGroup = taskDescTargetGroup.Default.(string)
 	// taskDescApprovalTimeoutSeconds is the schema descriptor for approval_timeout_seconds field.
-	taskDescApprovalTimeoutSeconds := taskFields[7].Descriptor()
+	taskDescApprovalTimeoutSeconds := taskFields[8].Descriptor()
 	// task.DefaultApprovalTimeoutSeconds holds the default value on creation for the approval_timeout_seconds field.
 	task.DefaultApprovalTimeoutSeconds = taskDescApprovalTimeoutSeconds.Default.(int64)
 	// taskDescDryRun is the schema descriptor for dry_run field.
-	taskDescDryRun := taskFields[8].Descriptor()
+	taskDescDryRun := taskFields[9].Descriptor()
 	// task.DefaultDryRun holds the default value on creation for the dry_run field.
 	task.DefaultDryRun = taskDescDryRun.Default.(bool)
 	// taskDescRemoved is the schema descriptor for removed field.
-	taskDescRemoved := taskFields[10].Descriptor()
+	taskDescRemoved := taskFields[11].Descriptor()
 	// task.DefaultRemoved holds the default value on creation for the removed field.
 	task.DefaultRemoved = taskDescRemoved.Default.(bool)
 	taskrunFields := schema.TaskRun{}.Fields()
@@ -292,7 +300,7 @@ func init() {
 	// taskrun.DefaultStartedAt holds the default value on creation for the started_at field.
 	taskrun.DefaultStartedAt = taskrunDescStartedAt.Default.(func() time.Time)
 	// taskrunDescStatus is the schema descriptor for status field.
-	taskrunDescStatus := taskrunFields[6].Descriptor()
+	taskrunDescStatus := taskrunFields[7].Descriptor()
 	// taskrun.DefaultStatus holds the default value on creation for the status field.
 	taskrun.DefaultStatus = taskrunDescStatus.Default.(string)
 	// taskrunDescID is the schema descriptor for id field.

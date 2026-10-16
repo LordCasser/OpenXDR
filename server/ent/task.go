@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"openxdr/server/ent/task"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -16,6 +17,8 @@ type Task struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
+	// CreatedAt holds the value of the "created_at" field.
+	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Schedule holds the value of the "schedule" field.
@@ -50,6 +53,8 @@ func (*Task) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case task.FieldID, task.FieldName, task.FieldSchedule, task.FieldCustomSchedule, task.FieldModel, task.FieldTargetGroup, task.FieldPrompt:
 			values[i] = new(sql.NullString)
+		case task.FieldCreatedAt:
+			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -70,6 +75,12 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
 				_m.ID = value.String
+			}
+		case task.FieldCreatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field created_at", values[i])
+			} else if value.Valid {
+				_m.CreatedAt = value.Time
 			}
 		case task.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -168,6 +179,9 @@ func (_m *Task) String() string {
 	var builder strings.Builder
 	builder.WriteString("Task(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("created_at=")
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")

@@ -24,6 +24,7 @@ impl ProcessRegistry {
     pub fn register(&mut self, pid: u32, ppid: Option<u32>) -> (Uuid, Option<Uuid>) {
         let parent = ppid.and_then(|p| self.guids.get(&p).map(|e| e.guid));
         let guid = Uuid::new_v4();
+        crate::process_identity::record(pid, guid);
 
         self.seq += 1;
         let seq = self.seq;

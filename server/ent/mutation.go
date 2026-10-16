@@ -4845,32 +4845,36 @@ func (m *AuditLogMutation) ResetEdge(name string) error {
 // CommandMutation represents an operation that mutates the Command nodes in the graph.
 type CommandMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *uuid.UUID
-	created_at    *time.Time
-	kind          *string
-	status        *string
-	dry_run       *bool
-	incident_id   *uuid.UUID
-	process_guid  *uuid.UUID
-	issued_by     *string
-	detail        *string
-	cmd           *string
-	timeout_ms    *uint32
-	addtimeout_ms *int32
-	exit_code     *int32
-	addexit_code  *int32
-	stdout        *string
-	stderr        *string
-	truncated     *bool
-	completed_at  *time.Time
-	clearedFields map[string]struct{}
-	asset         *uuid.UUID
-	clearedasset  bool
-	done          bool
-	oldValue      func(context.Context) (*Command, error)
-	predicates    []predicate.Command
+	op                    Op
+	typ                   string
+	id                    *uuid.UUID
+	created_at            *time.Time
+	kind                  *string
+	status                *string
+	dry_run               *bool
+	incident_id           *uuid.UUID
+	process_guid          *uuid.UUID
+	pid                   *uint32
+	addpid                *int32
+	allow_endpoints       *[]string
+	appendallow_endpoints []string
+	issued_by             *string
+	detail                *string
+	cmd                   *string
+	timeout_ms            *uint32
+	addtimeout_ms         *int32
+	exit_code             *int32
+	addexit_code          *int32
+	stdout                *string
+	stderr                *string
+	truncated             *bool
+	completed_at          *time.Time
+	clearedFields         map[string]struct{}
+	asset                 *uuid.UUID
+	clearedasset          bool
+	done                  bool
+	oldValue              func(context.Context) (*Command, error)
+	predicates            []predicate.Command
 }
 
 var _ ent.Mutation = (*CommandMutation)(nil)
@@ -5253,6 +5257,127 @@ func (m *CommandMutation) ProcessGUIDCleared() bool {
 func (m *CommandMutation) ResetProcessGUID() {
 	m.process_guid = nil
 	delete(m.clearedFields, command.FieldProcessGUID)
+}
+
+// SetPid sets the "pid" field.
+func (m *CommandMutation) SetPid(u uint32) {
+	m.pid = &u
+	m.addpid = nil
+}
+
+// Pid returns the value of the "pid" field in the mutation.
+func (m *CommandMutation) Pid() (r uint32, exists bool) {
+	v := m.pid
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPid returns the old "pid" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldPid(ctx context.Context) (v uint32, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPid is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPid requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPid: %w", err)
+	}
+	return oldValue.Pid, nil
+}
+
+// AddPid adds u to the "pid" field.
+func (m *CommandMutation) AddPid(u int32) {
+	if m.addpid != nil {
+		*m.addpid += u
+	} else {
+		m.addpid = &u
+	}
+}
+
+// AddedPid returns the value that was added to the "pid" field in this mutation.
+func (m *CommandMutation) AddedPid() (r int32, exists bool) {
+	v := m.addpid
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPid resets all changes to the "pid" field.
+func (m *CommandMutation) ResetPid() {
+	m.pid = nil
+	m.addpid = nil
+}
+
+// SetAllowEndpoints sets the "allow_endpoints" field.
+func (m *CommandMutation) SetAllowEndpoints(s []string) {
+	m.allow_endpoints = &s
+	m.appendallow_endpoints = nil
+}
+
+// AllowEndpoints returns the value of the "allow_endpoints" field in the mutation.
+func (m *CommandMutation) AllowEndpoints() (r []string, exists bool) {
+	v := m.allow_endpoints
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowEndpoints returns the old "allow_endpoints" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldAllowEndpoints(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowEndpoints is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowEndpoints requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowEndpoints: %w", err)
+	}
+	return oldValue.AllowEndpoints, nil
+}
+
+// AppendAllowEndpoints adds s to the "allow_endpoints" field.
+func (m *CommandMutation) AppendAllowEndpoints(s []string) {
+	m.appendallow_endpoints = append(m.appendallow_endpoints, s...)
+}
+
+// AppendedAllowEndpoints returns the list of values that were appended to the "allow_endpoints" field in this mutation.
+func (m *CommandMutation) AppendedAllowEndpoints() ([]string, bool) {
+	if len(m.appendallow_endpoints) == 0 {
+		return nil, false
+	}
+	return m.appendallow_endpoints, true
+}
+
+// ClearAllowEndpoints clears the value of the "allow_endpoints" field.
+func (m *CommandMutation) ClearAllowEndpoints() {
+	m.allow_endpoints = nil
+	m.appendallow_endpoints = nil
+	m.clearedFields[command.FieldAllowEndpoints] = struct{}{}
+}
+
+// AllowEndpointsCleared returns if the "allow_endpoints" field was cleared in this mutation.
+func (m *CommandMutation) AllowEndpointsCleared() bool {
+	_, ok := m.clearedFields[command.FieldAllowEndpoints]
+	return ok
+}
+
+// ResetAllowEndpoints resets all changes to the "allow_endpoints" field.
+func (m *CommandMutation) ResetAllowEndpoints() {
+	m.allow_endpoints = nil
+	m.appendallow_endpoints = nil
+	delete(m.clearedFields, command.FieldAllowEndpoints)
 }
 
 // SetIssuedBy sets the "issued_by" field.
@@ -5759,7 +5884,7 @@ func (m *CommandMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CommandMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 18)
 	if m.created_at != nil {
 		fields = append(fields, command.FieldCreatedAt)
 	}
@@ -5780,6 +5905,12 @@ func (m *CommandMutation) Fields() []string {
 	}
 	if m.process_guid != nil {
 		fields = append(fields, command.FieldProcessGUID)
+	}
+	if m.pid != nil {
+		fields = append(fields, command.FieldPid)
+	}
+	if m.allow_endpoints != nil {
+		fields = append(fields, command.FieldAllowEndpoints)
 	}
 	if m.issued_by != nil {
 		fields = append(fields, command.FieldIssuedBy)
@@ -5830,6 +5961,10 @@ func (m *CommandMutation) Field(name string) (ent.Value, bool) {
 		return m.IncidentID()
 	case command.FieldProcessGUID:
 		return m.ProcessGUID()
+	case command.FieldPid:
+		return m.Pid()
+	case command.FieldAllowEndpoints:
+		return m.AllowEndpoints()
 	case command.FieldIssuedBy:
 		return m.IssuedBy()
 	case command.FieldDetail:
@@ -5871,6 +6006,10 @@ func (m *CommandMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldIncidentID(ctx)
 	case command.FieldProcessGUID:
 		return m.OldProcessGUID(ctx)
+	case command.FieldPid:
+		return m.OldPid(ctx)
+	case command.FieldAllowEndpoints:
+		return m.OldAllowEndpoints(ctx)
 	case command.FieldIssuedBy:
 		return m.OldIssuedBy(ctx)
 	case command.FieldDetail:
@@ -5947,6 +6086,20 @@ func (m *CommandMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetProcessGUID(v)
 		return nil
+	case command.FieldPid:
+		v, ok := value.(uint32)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPid(v)
+		return nil
+	case command.FieldAllowEndpoints:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowEndpoints(v)
+		return nil
 	case command.FieldIssuedBy:
 		v, ok := value.(string)
 		if !ok {
@@ -6018,6 +6171,9 @@ func (m *CommandMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *CommandMutation) AddedFields() []string {
 	var fields []string
+	if m.addpid != nil {
+		fields = append(fields, command.FieldPid)
+	}
 	if m.addtimeout_ms != nil {
 		fields = append(fields, command.FieldTimeoutMs)
 	}
@@ -6032,6 +6188,8 @@ func (m *CommandMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *CommandMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case command.FieldPid:
+		return m.AddedPid()
 	case command.FieldTimeoutMs:
 		return m.AddedTimeoutMs()
 	case command.FieldExitCode:
@@ -6045,6 +6203,13 @@ func (m *CommandMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *CommandMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case command.FieldPid:
+		v, ok := value.(int32)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPid(v)
+		return nil
 	case command.FieldTimeoutMs:
 		v, ok := value.(int32)
 		if !ok {
@@ -6072,6 +6237,9 @@ func (m *CommandMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(command.FieldProcessGUID) {
 		fields = append(fields, command.FieldProcessGUID)
+	}
+	if m.FieldCleared(command.FieldAllowEndpoints) {
+		fields = append(fields, command.FieldAllowEndpoints)
 	}
 	if m.FieldCleared(command.FieldDetail) {
 		fields = append(fields, command.FieldDetail)
@@ -6110,6 +6278,9 @@ func (m *CommandMutation) ClearField(name string) error {
 		return nil
 	case command.FieldProcessGUID:
 		m.ClearProcessGUID()
+		return nil
+	case command.FieldAllowEndpoints:
+		m.ClearAllowEndpoints()
 		return nil
 	case command.FieldDetail:
 		m.ClearDetail()
@@ -6157,6 +6328,12 @@ func (m *CommandMutation) ResetField(name string) error {
 		return nil
 	case command.FieldProcessGUID:
 		m.ResetProcessGUID()
+		return nil
+	case command.FieldPid:
+		m.ResetPid()
+		return nil
+	case command.FieldAllowEndpoints:
+		m.ResetAllowEndpoints()
 		return nil
 	case command.FieldIssuedBy:
 		m.ResetIssuedBy()
@@ -13284,6 +13461,7 @@ type TaskMutation struct {
 	op                          Op
 	typ                         string
 	id                          *string
+	created_at                  *time.Time
 	name                        *string
 	schedule                    *string
 	custom_schedule             *string
@@ -13403,6 +13581,42 @@ func (m *TaskMutation) IDs(ctx context.Context) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TaskMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TaskMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TaskMutation) ResetCreatedAt() {
+	m.created_at = nil
 }
 
 // SetName sets the "name" field.
@@ -13832,7 +14046,10 @@ func (m *TaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaskMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
+	if m.created_at != nil {
+		fields = append(fields, task.FieldCreatedAt)
+	}
 	if m.name != nil {
 		fields = append(fields, task.FieldName)
 	}
@@ -13871,6 +14088,8 @@ func (m *TaskMutation) Fields() []string {
 // schema.
 func (m *TaskMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case task.FieldCreatedAt:
+		return m.CreatedAt()
 	case task.FieldName:
 		return m.Name()
 	case task.FieldSchedule:
@@ -13900,6 +14119,8 @@ func (m *TaskMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TaskMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case task.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
 	case task.FieldName:
 		return m.OldName(ctx)
 	case task.FieldSchedule:
@@ -13929,6 +14150,13 @@ func (m *TaskMutation) OldField(ctx context.Context, name string) (ent.Value, er
 // type.
 func (m *TaskMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case task.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
 	case task.FieldName:
 		v, ok := value.(string)
 		if !ok {
@@ -14072,6 +14300,9 @@ func (m *TaskMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TaskMutation) ResetField(name string) error {
 	switch name {
+	case task.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
 	case task.FieldName:
 		m.ResetName()
 		return nil
@@ -14164,6 +14395,7 @@ type TaskRunMutation struct {
 	group_id      *uuid.UUID
 	session_id    *uuid.UUID
 	started_at    *time.Time
+	scheduled_at  *time.Time
 	finished_at   *time.Time
 	status        *string
 	error         *string
@@ -14434,6 +14666,55 @@ func (m *TaskRunMutation) ResetStartedAt() {
 	m.started_at = nil
 }
 
+// SetScheduledAt sets the "scheduled_at" field.
+func (m *TaskRunMutation) SetScheduledAt(t time.Time) {
+	m.scheduled_at = &t
+}
+
+// ScheduledAt returns the value of the "scheduled_at" field in the mutation.
+func (m *TaskRunMutation) ScheduledAt() (r time.Time, exists bool) {
+	v := m.scheduled_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScheduledAt returns the old "scheduled_at" field's value of the TaskRun entity.
+// If the TaskRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskRunMutation) OldScheduledAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScheduledAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScheduledAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScheduledAt: %w", err)
+	}
+	return oldValue.ScheduledAt, nil
+}
+
+// ClearScheduledAt clears the value of the "scheduled_at" field.
+func (m *TaskRunMutation) ClearScheduledAt() {
+	m.scheduled_at = nil
+	m.clearedFields[taskrun.FieldScheduledAt] = struct{}{}
+}
+
+// ScheduledAtCleared returns if the "scheduled_at" field was cleared in this mutation.
+func (m *TaskRunMutation) ScheduledAtCleared() bool {
+	_, ok := m.clearedFields[taskrun.FieldScheduledAt]
+	return ok
+}
+
+// ResetScheduledAt resets all changes to the "scheduled_at" field.
+func (m *TaskRunMutation) ResetScheduledAt() {
+	m.scheduled_at = nil
+	delete(m.clearedFields, taskrun.FieldScheduledAt)
+}
+
 // SetFinishedAt sets the "finished_at" field.
 func (m *TaskRunMutation) SetFinishedAt(t time.Time) {
 	m.finished_at = &t
@@ -14602,7 +14883,7 @@ func (m *TaskRunMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaskRunMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.task_id != nil {
 		fields = append(fields, taskrun.FieldTaskID)
 	}
@@ -14614,6 +14895,9 @@ func (m *TaskRunMutation) Fields() []string {
 	}
 	if m.started_at != nil {
 		fields = append(fields, taskrun.FieldStartedAt)
+	}
+	if m.scheduled_at != nil {
+		fields = append(fields, taskrun.FieldScheduledAt)
 	}
 	if m.finished_at != nil {
 		fields = append(fields, taskrun.FieldFinishedAt)
@@ -14640,6 +14924,8 @@ func (m *TaskRunMutation) Field(name string) (ent.Value, bool) {
 		return m.SessionID()
 	case taskrun.FieldStartedAt:
 		return m.StartedAt()
+	case taskrun.FieldScheduledAt:
+		return m.ScheduledAt()
 	case taskrun.FieldFinishedAt:
 		return m.FinishedAt()
 	case taskrun.FieldStatus:
@@ -14663,6 +14949,8 @@ func (m *TaskRunMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldSessionID(ctx)
 	case taskrun.FieldStartedAt:
 		return m.OldStartedAt(ctx)
+	case taskrun.FieldScheduledAt:
+		return m.OldScheduledAt(ctx)
 	case taskrun.FieldFinishedAt:
 		return m.OldFinishedAt(ctx)
 	case taskrun.FieldStatus:
@@ -14705,6 +14993,13 @@ func (m *TaskRunMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStartedAt(v)
+		return nil
+	case taskrun.FieldScheduledAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScheduledAt(v)
 		return nil
 	case taskrun.FieldFinishedAt:
 		v, ok := value.(time.Time)
@@ -14760,6 +15055,9 @@ func (m *TaskRunMutation) ClearedFields() []string {
 	if m.FieldCleared(taskrun.FieldSessionID) {
 		fields = append(fields, taskrun.FieldSessionID)
 	}
+	if m.FieldCleared(taskrun.FieldScheduledAt) {
+		fields = append(fields, taskrun.FieldScheduledAt)
+	}
 	if m.FieldCleared(taskrun.FieldFinishedAt) {
 		fields = append(fields, taskrun.FieldFinishedAt)
 	}
@@ -14782,6 +15080,9 @@ func (m *TaskRunMutation) ClearField(name string) error {
 	switch name {
 	case taskrun.FieldSessionID:
 		m.ClearSessionID()
+		return nil
+	case taskrun.FieldScheduledAt:
+		m.ClearScheduledAt()
 		return nil
 	case taskrun.FieldFinishedAt:
 		m.ClearFinishedAt()
@@ -14808,6 +15109,9 @@ func (m *TaskRunMutation) ResetField(name string) error {
 		return nil
 	case taskrun.FieldStartedAt:
 		m.ResetStartedAt()
+		return nil
+	case taskrun.FieldScheduledAt:
+		m.ResetScheduledAt()
 		return nil
 	case taskrun.FieldFinishedAt:
 		m.ResetFinishedAt()

@@ -161,3 +161,9 @@ PDF 最多同时渲染 2 份，另容纳 8 个等待请求。队列满时返回�
 报告独立 HTML 自带 CSP，只允许内联样式及 data 图片；HTTP 页面额外启用 sandbox。
 PDF 的 Chromium 同时设置阻断代理（包括 loopback）与 DNS 规则，禁止报告里的 IP 或域名外链请求。
 任务定义与运行记录均按组可见；没有任何组的普通用户看不到通配组任务定义。
+
+调度按 `(task_id, group_id)` 分别计算到期时间，从任务持久创建时间起算；
+运行记录保存 `scheduled_at`，同任务、同组、同触发时刻有数据库唯一约束。
+只启动部分组后发生重启，尚未启动的组会补跑一次，不重放已启动组的命令。
+Windows 隔离的 WFP 权重设计依据 [Microsoft Filter Arbitration](https://learn.microsoft.com/en-us/windows/win32/fwp/filter-arbitration)：
+许可和默认阻断置于同一独立子层；不覆盖其他产品或系统策略的阻断。

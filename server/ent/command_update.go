@@ -13,6 +13,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 )
@@ -137,6 +138,45 @@ func (_u *CommandUpdate) SetNillableProcessGUID(v *uuid.UUID) *CommandUpdate {
 // ClearProcessGUID clears the value of the "process_guid" field.
 func (_u *CommandUpdate) ClearProcessGUID() *CommandUpdate {
 	_u.mutation.ClearProcessGUID()
+	return _u
+}
+
+// SetPid sets the "pid" field.
+func (_u *CommandUpdate) SetPid(v uint32) *CommandUpdate {
+	_u.mutation.ResetPid()
+	_u.mutation.SetPid(v)
+	return _u
+}
+
+// SetNillablePid sets the "pid" field if the given value is not nil.
+func (_u *CommandUpdate) SetNillablePid(v *uint32) *CommandUpdate {
+	if v != nil {
+		_u.SetPid(*v)
+	}
+	return _u
+}
+
+// AddPid adds value to the "pid" field.
+func (_u *CommandUpdate) AddPid(v int32) *CommandUpdate {
+	_u.mutation.AddPid(v)
+	return _u
+}
+
+// SetAllowEndpoints sets the "allow_endpoints" field.
+func (_u *CommandUpdate) SetAllowEndpoints(v []string) *CommandUpdate {
+	_u.mutation.SetAllowEndpoints(v)
+	return _u
+}
+
+// AppendAllowEndpoints appends value to the "allow_endpoints" field.
+func (_u *CommandUpdate) AppendAllowEndpoints(v []string) *CommandUpdate {
+	_u.mutation.AppendAllowEndpoints(v)
+	return _u
+}
+
+// ClearAllowEndpoints clears the value of the "allow_endpoints" field.
+func (_u *CommandUpdate) ClearAllowEndpoints() *CommandUpdate {
+	_u.mutation.ClearAllowEndpoints()
 	return _u
 }
 
@@ -403,6 +443,23 @@ func (_u *CommandUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.ProcessGUIDCleared() {
 		_spec.ClearField(command.FieldProcessGUID, field.TypeUUID)
 	}
+	if value, ok := _u.mutation.Pid(); ok {
+		_spec.SetField(command.FieldPid, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.AddedPid(); ok {
+		_spec.AddField(command.FieldPid, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.AllowEndpoints(); ok {
+		_spec.SetField(command.FieldAllowEndpoints, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedAllowEndpoints(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, command.FieldAllowEndpoints, value)
+		})
+	}
+	if _u.mutation.AllowEndpointsCleared() {
+		_spec.ClearField(command.FieldAllowEndpoints, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.IssuedBy(); ok {
 		_spec.SetField(command.FieldIssuedBy, field.TypeString, value)
 	}
@@ -610,6 +667,45 @@ func (_u *CommandUpdateOne) SetNillableProcessGUID(v *uuid.UUID) *CommandUpdateO
 // ClearProcessGUID clears the value of the "process_guid" field.
 func (_u *CommandUpdateOne) ClearProcessGUID() *CommandUpdateOne {
 	_u.mutation.ClearProcessGUID()
+	return _u
+}
+
+// SetPid sets the "pid" field.
+func (_u *CommandUpdateOne) SetPid(v uint32) *CommandUpdateOne {
+	_u.mutation.ResetPid()
+	_u.mutation.SetPid(v)
+	return _u
+}
+
+// SetNillablePid sets the "pid" field if the given value is not nil.
+func (_u *CommandUpdateOne) SetNillablePid(v *uint32) *CommandUpdateOne {
+	if v != nil {
+		_u.SetPid(*v)
+	}
+	return _u
+}
+
+// AddPid adds value to the "pid" field.
+func (_u *CommandUpdateOne) AddPid(v int32) *CommandUpdateOne {
+	_u.mutation.AddPid(v)
+	return _u
+}
+
+// SetAllowEndpoints sets the "allow_endpoints" field.
+func (_u *CommandUpdateOne) SetAllowEndpoints(v []string) *CommandUpdateOne {
+	_u.mutation.SetAllowEndpoints(v)
+	return _u
+}
+
+// AppendAllowEndpoints appends value to the "allow_endpoints" field.
+func (_u *CommandUpdateOne) AppendAllowEndpoints(v []string) *CommandUpdateOne {
+	_u.mutation.AppendAllowEndpoints(v)
+	return _u
+}
+
+// ClearAllowEndpoints clears the value of the "allow_endpoints" field.
+func (_u *CommandUpdateOne) ClearAllowEndpoints() *CommandUpdateOne {
+	_u.mutation.ClearAllowEndpoints()
 	return _u
 }
 
@@ -905,6 +1001,23 @@ func (_u *CommandUpdateOne) sqlSave(ctx context.Context) (_node *Command, err er
 	}
 	if _u.mutation.ProcessGUIDCleared() {
 		_spec.ClearField(command.FieldProcessGUID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.Pid(); ok {
+		_spec.SetField(command.FieldPid, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.AddedPid(); ok {
+		_spec.AddField(command.FieldPid, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.AllowEndpoints(); ok {
+		_spec.SetField(command.FieldAllowEndpoints, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedAllowEndpoints(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, command.FieldAllowEndpoints, value)
+		})
+	}
+	if _u.mutation.AllowEndpointsCleared() {
+		_spec.ClearField(command.FieldAllowEndpoints, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.IssuedBy(); ok {
 		_spec.SetField(command.FieldIssuedBy, field.TypeString, value)

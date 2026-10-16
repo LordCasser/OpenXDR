@@ -22,6 +22,8 @@ const (
 	FieldSessionID = "session_id"
 	// FieldStartedAt holds the string denoting the started_at field in the database.
 	FieldStartedAt = "started_at"
+	// FieldScheduledAt holds the string denoting the scheduled_at field in the database.
+	FieldScheduledAt = "scheduled_at"
 	// FieldFinishedAt holds the string denoting the finished_at field in the database.
 	FieldFinishedAt = "finished_at"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -39,6 +41,7 @@ var Columns = []string{
 	FieldGroupID,
 	FieldSessionID,
 	FieldStartedAt,
+	FieldScheduledAt,
 	FieldFinishedAt,
 	FieldStatus,
 	FieldError,
@@ -89,6 +92,11 @@ func BySessionID(opts ...sql.OrderTermOption) OrderOption {
 // ByStartedAt orders the results by the started_at field.
 func ByStartedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStartedAt, opts...).ToFunc()
+}
+
+// ByScheduledAt orders the results by the scheduled_at field.
+func ByScheduledAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScheduledAt, opts...).ToFunc()
 }
 
 // ByFinishedAt orders the results by the finished_at field.

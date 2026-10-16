@@ -91,6 +91,26 @@ func (_u *TaskRunUpdate) SetNillableStartedAt(v *time.Time) *TaskRunUpdate {
 	return _u
 }
 
+// SetScheduledAt sets the "scheduled_at" field.
+func (_u *TaskRunUpdate) SetScheduledAt(v time.Time) *TaskRunUpdate {
+	_u.mutation.SetScheduledAt(v)
+	return _u
+}
+
+// SetNillableScheduledAt sets the "scheduled_at" field if the given value is not nil.
+func (_u *TaskRunUpdate) SetNillableScheduledAt(v *time.Time) *TaskRunUpdate {
+	if v != nil {
+		_u.SetScheduledAt(*v)
+	}
+	return _u
+}
+
+// ClearScheduledAt clears the value of the "scheduled_at" field.
+func (_u *TaskRunUpdate) ClearScheduledAt() *TaskRunUpdate {
+	_u.mutation.ClearScheduledAt()
+	return _u
+}
+
 // SetFinishedAt sets the "finished_at" field.
 func (_u *TaskRunUpdate) SetFinishedAt(v time.Time) *TaskRunUpdate {
 	_u.mutation.SetFinishedAt(v)
@@ -201,6 +221,12 @@ func (_u *TaskRunUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.StartedAt(); ok {
 		_spec.SetField(taskrun.FieldStartedAt, field.TypeTime, value)
 	}
+	if value, ok := _u.mutation.ScheduledAt(); ok {
+		_spec.SetField(taskrun.FieldScheduledAt, field.TypeTime, value)
+	}
+	if _u.mutation.ScheduledAtCleared() {
+		_spec.ClearField(taskrun.FieldScheduledAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.FinishedAt(); ok {
 		_spec.SetField(taskrun.FieldFinishedAt, field.TypeTime, value)
 	}
@@ -295,6 +321,26 @@ func (_u *TaskRunUpdateOne) SetNillableStartedAt(v *time.Time) *TaskRunUpdateOne
 	if v != nil {
 		_u.SetStartedAt(*v)
 	}
+	return _u
+}
+
+// SetScheduledAt sets the "scheduled_at" field.
+func (_u *TaskRunUpdateOne) SetScheduledAt(v time.Time) *TaskRunUpdateOne {
+	_u.mutation.SetScheduledAt(v)
+	return _u
+}
+
+// SetNillableScheduledAt sets the "scheduled_at" field if the given value is not nil.
+func (_u *TaskRunUpdateOne) SetNillableScheduledAt(v *time.Time) *TaskRunUpdateOne {
+	if v != nil {
+		_u.SetScheduledAt(*v)
+	}
+	return _u
+}
+
+// ClearScheduledAt clears the value of the "scheduled_at" field.
+func (_u *TaskRunUpdateOne) ClearScheduledAt() *TaskRunUpdateOne {
+	_u.mutation.ClearScheduledAt()
 	return _u
 }
 
@@ -437,6 +483,12 @@ func (_u *TaskRunUpdateOne) sqlSave(ctx context.Context) (_node *TaskRun, err er
 	}
 	if value, ok := _u.mutation.StartedAt(); ok {
 		_spec.SetField(taskrun.FieldStartedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.ScheduledAt(); ok {
+		_spec.SetField(taskrun.FieldScheduledAt, field.TypeTime, value)
+	}
+	if _u.mutation.ScheduledAtCleared() {
+		_spec.ClearField(taskrun.FieldScheduledAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.FinishedAt(); ok {
 		_spec.SetField(taskrun.FieldFinishedAt, field.TypeTime, value)

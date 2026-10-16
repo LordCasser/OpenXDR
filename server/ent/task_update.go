@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"openxdr/server/ent/predicate"
 	"openxdr/server/ent/task"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -24,6 +25,20 @@ type TaskUpdate struct {
 // Where appends a list predicates to the TaskUpdate builder.
 func (_u *TaskUpdate) Where(ps ...predicate.Task) *TaskUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_u *TaskUpdate) SetCreatedAt(v time.Time) *TaskUpdate {
+	_u.mutation.SetCreatedAt(v)
+	return _u
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableCreatedAt(v *time.Time) *TaskUpdate {
+	if v != nil {
+		_u.SetCreatedAt(*v)
+	}
 	return _u
 }
 
@@ -221,6 +236,9 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.CreatedAt(); ok {
+		_spec.SetField(task.FieldCreatedAt, field.TypeTime, value)
+	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(task.FieldName, field.TypeString, value)
 	}
@@ -275,6 +293,20 @@ type TaskUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *TaskMutation
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_u *TaskUpdateOne) SetCreatedAt(v time.Time) *TaskUpdateOne {
+	_u.mutation.SetCreatedAt(v)
+	return _u
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableCreatedAt(v *time.Time) *TaskUpdateOne {
+	if v != nil {
+		_u.SetCreatedAt(*v)
+	}
+	return _u
 }
 
 // SetName sets the "name" field.
@@ -500,6 +532,9 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CreatedAt(); ok {
+		_spec.SetField(task.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(task.FieldName, field.TypeString, value)

@@ -3,6 +3,8 @@
 package task
 
 import (
+	"time"
+
 	"entgo.io/ent/dialect/sql"
 )
 
@@ -11,6 +13,8 @@ const (
 	Label = "task"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldCreatedAt holds the string denoting the created_at field in the database.
+	FieldCreatedAt = "created_at"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
 	// FieldSchedule holds the string denoting the schedule field in the database.
@@ -38,6 +42,7 @@ const (
 // Columns holds all SQL columns for task fields.
 var Columns = []string{
 	FieldID,
+	FieldCreatedAt,
 	FieldName,
 	FieldSchedule,
 	FieldCustomSchedule,
@@ -61,6 +66,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
+	DefaultCreatedAt func() time.Time
 	// DefaultEnabled holds the default value on creation for the "enabled" field.
 	DefaultEnabled bool
 	// DefaultModel holds the default value on creation for the "model" field.
@@ -81,6 +88,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCreatedAt orders the results by the created_at field.
+func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
 // ByName orders the results by the name field.

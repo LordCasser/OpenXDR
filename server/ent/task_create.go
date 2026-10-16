@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"openxdr/server/ent/task"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -17,6 +18,20 @@ type TaskCreate struct {
 	config
 	mutation *TaskMutation
 	hooks    []Hook
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_c *TaskCreate) SetCreatedAt(v time.Time) *TaskCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableCreatedAt(v *time.Time) *TaskCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
 }
 
 // SetName sets the "name" field.
@@ -176,6 +191,10 @@ func (_c *TaskCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *TaskCreate) defaults() {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := task.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
+	}
 	if _, ok := _c.mutation.Enabled(); !ok {
 		v := task.DefaultEnabled
 		_c.mutation.SetEnabled(v)
@@ -265,6 +284,10 @@ func (_c *TaskCreate) createSpec() (*Task, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CreatedAt(); ok {
+		_spec.SetField(task.FieldCreatedAt, field.TypeTime, value)
+		_node.CreatedAt = value
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(task.FieldName, field.TypeString, value)

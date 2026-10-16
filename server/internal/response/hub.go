@@ -115,7 +115,7 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 		SetNillableIncidentID(req.IncidentID).
 		SetNillableProcessGUID(req.ProcessGUID).
 		SetNillableCmd(req.Cmd).
-		SetTimeoutMs(req.TimeoutMS)
+		SetTimeoutMs(req.TimeoutMS).SetPid(req.PID).SetAllowEndpoints(req.AllowEndpoints)
 	cmd, err := create.Save(ctx)
 	if err != nil {
 		return nil, err
@@ -137,7 +137,11 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 		if req.Kind == "exec" {
 			status = "unknown"
 		}
-		return h.finish(ctx, cmd.ID, status, err.Error())
+		out, finishErr := h.finish(ctx, cmd.ID, status, err.Error())
+		if finishErr != nil && status == "unknown" {
+			return cmd, fmt.Errorf("%w：命令 %s 可能已投递，状态回写失败，禁止自动重试: %v", ErrDeliveryUnknown, cmd.ID, finishErr)
+		}
+		return out, finishErr
 	}
 	return h.mark(ctx, cmd.ID, "sent")
 }
@@ -248,10 +252,12 @@ func (h *Hub) finishUpdate(id uuid.UUID, status, detail string) *ent.CommandUpda
 // ToProto 把库里的指令还原成下发消息，用于断线重连后补发。
 func (h *Hub) ToProto(cmd *ent.Command) *pb.Command {
 	out := &pb.Command{
-		Id:        cmd.ID.String(),
-		Kind:      kindToProto(cmd.Kind),
-		DryRun:    cmd.DryRun,
-		TimeoutMs: cmd.TimeoutMs,
+		Id:             cmd.ID.String(),
+		Kind:           kindToProto(cmd.Kind),
+		DryRun:         cmd.DryRun,
+		TimeoutMs:      cmd.TimeoutMs,
+		Pid:            cmd.Pid,
+		AllowEndpoints: append([]string(nil), cmd.AllowEndpoints...),
 	}
 	if cmd.Cmd != nil {
 		out.Cmd = *cmd.Cmd

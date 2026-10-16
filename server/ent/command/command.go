@@ -29,6 +29,10 @@ const (
 	FieldIncidentID = "incident_id"
 	// FieldProcessGUID holds the string denoting the process_guid field in the database.
 	FieldProcessGUID = "process_guid"
+	// FieldPid holds the string denoting the pid field in the database.
+	FieldPid = "pid"
+	// FieldAllowEndpoints holds the string denoting the allow_endpoints field in the database.
+	FieldAllowEndpoints = "allow_endpoints"
 	// FieldIssuedBy holds the string denoting the issued_by field in the database.
 	FieldIssuedBy = "issued_by"
 	// FieldDetail holds the string denoting the detail field in the database.
@@ -70,6 +74,8 @@ var Columns = []string{
 	FieldAssetID,
 	FieldIncidentID,
 	FieldProcessGUID,
+	FieldPid,
+	FieldAllowEndpoints,
 	FieldIssuedBy,
 	FieldDetail,
 	FieldCmd,
@@ -98,6 +104,8 @@ var (
 	DefaultStatus string
 	// DefaultDryRun holds the default value on creation for the "dry_run" field.
 	DefaultDryRun bool
+	// DefaultPid holds the default value on creation for the "pid" field.
+	DefaultPid uint32
 	// DefaultIssuedBy holds the default value on creation for the "issued_by" field.
 	DefaultIssuedBy string
 	// DefaultTimeoutMs holds the default value on creation for the "timeout_ms" field.
@@ -149,6 +157,11 @@ func ByIncidentID(opts ...sql.OrderTermOption) OrderOption {
 // ByProcessGUID orders the results by the process_guid field.
 func ByProcessGUID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProcessGUID, opts...).ToFunc()
+}
+
+// ByPid orders the results by the pid field.
+func ByPid(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPid, opts...).ToFunc()
 }
 
 // ByIssuedBy orders the results by the issued_by field.

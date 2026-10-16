@@ -235,7 +235,14 @@ RESPONSE_ENABLED=true ISOLATION_ALLOW=<server>:8081 docker compose up -d
 ```
 
 每条指令连同下发者、演练与否、执行结果一并落库，可在事件详情页查看。
-隔离在 Linux 用 nftables 独立表实现（不触碰主机原有规则），Windows 用防火墙规则。
+隔离在 Linux 用 nftables 独立表实现（不触碰主机原有规则），Windows 使用独立 WFP 子层：管理端点许可优先于本子层的默认阻断，规则以事务原子更新并持久化。
+Windows 放行地址必须为数字 IP 或 IP:端口（IPv6 为 `[地址]:端口`），最多 128 项；
+解除隔离同时清理旧版 `OpenXDR-Isolation-*` 规则。部署前需在有本地控制台的 Windows 测试机
+验证隔离、管理通道重连、解除隔离及 Agent 重启后的行为。
+
+结束进程必须携带采集事件中的 `processGuid` 和 `pid`，Agent 同时校验 GUID 与创建时间，
+通过 Linux pidfd（需内核支持）或 Windows 进程句柄执行，身份不明时拒绝，绝不退回裸 PID。
+指令通道独立断开时会每 5 秒重连；补发保留 PID 和隔离放行地址，EXEC 仍不自动重放。
 
 ## ATT&CK 覆盖
 

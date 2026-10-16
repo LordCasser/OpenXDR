@@ -27,6 +27,8 @@ func (Command) Fields() []ent.Field {
 		field.UUID("asset_id", uuid.UUID{}),
 		field.UUID("incident_id", uuid.UUID{}).Optional().Nillable(),
 		field.UUID("process_guid", uuid.UUID{}).Optional().Nillable(),
+		field.Uint32("pid").Default(0),
+		field.JSON("allow_endpoints", []string{}).Optional(),
 		field.String("issued_by").Default("api"),
 		field.String("detail").Optional().Nillable(),
 		// 以下仅 exec 使用：下发的命令行与 agent 回传的执行输出

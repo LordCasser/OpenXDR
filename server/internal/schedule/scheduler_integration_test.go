@@ -62,6 +62,10 @@ func TestSchedulerTick(t *testing.T) {
 		start: time.Now().Add(-10 * time.Minute),
 	}
 
+	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
+		t.Fatal(err)
+	}
+	client.Task.UpdateOneID("t").SetCreatedAt(s.start).ExecX(ctx)
 	if err := s.tick(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +156,7 @@ func TestSchedulerBoundsActiveGroups(t *testing.T) {
 		g := db.Group.Create().SetName(name).SaveX(ctx)
 		db.Asset.Create().SetHostname(name).SetGroupID(g.ID).SaveX(ctx)
 	}
-	task := db.Task.Create().SetID("bounded").SetName("巡检").SetSchedule("* * * * *").SetPrompt("检查").SaveX(ctx)
+	task := db.Task.Create().SetID("bounded").SetCreatedAt(time.Now().Add(-time.Minute)).SetName("巡检").SetSchedule("* * * * *").SetPrompt("检查").SaveX(ctx)
 	runner := &blockedRunner{make(chan struct{}, 6), make(chan struct{})}
 	s := &Scheduler{DB: db, Runner: runner, Timeout: time.Minute}
 	done := make(chan struct{})
