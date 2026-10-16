@@ -33,7 +33,9 @@
   与后台任务租约，跨节点响应指令走 NATS request/reply；
   HTTP REST（:8080，会话 cookie 认证）与 gRPC（:8081，agent/sensor 接入 + 控制信道）。
   启动时自动建表（`client.Schema.Create`），无手动迁移。
-- **web/**（React 19 + TypeScript + Vite）：管理控制台。nginx 容器部署，端口 5173→80。
+- **web/**（React 19 + TypeScript + Vite，antd 6 + react-router + TanStack Query）：管理控制台，
+  AI 助手为主入口，按路由懒加载页面。nginx 容器部署，端口 5173→80；本地开发 8080 被占时用
+  `OPENXDR_API=http://localhost:<端口> npm run dev` 指定后端。
 - **pages/**（React + Vite + Tailwind）：项目主页，仅由 `.github/workflows/pages.yml`
   部署到 GitHub Pages，与产品代码无关，改产品时不要动它。主页中英文自动切换约定见
   `pages/README.md`；改可见文案或无障碍文案时必须同时维护两种语言。

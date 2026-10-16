@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
+      // 本机 8080 被占时可用 OPENXDR_API=http://localhost:18080 npm run dev
+      '/api': process.env.OPENXDR_API ?? 'http://localhost:8080',
     },
   },
 })

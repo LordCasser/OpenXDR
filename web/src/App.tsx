@@ -1,303 +1,86 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
-import {
-  Unauthorized, downloadReport, fetchAssets, fetchGroups, fetchIncident, fetchIncidents, fetchMe, logout,
-  setIncidentStatus,
-  type Asset, type GroupRow, type IncidentDetail, type IncidentSummary, type Me,
-} from './api'
-import { AssetList } from './AssetList'
-import { AttackMatrixView } from './AttackMatrixView'
-import { AuditLogView } from './AuditLogView'
-import { ChatView } from './ChatView'
-import { DashboardView } from './DashboardView'
-import { EventSearchView } from './EventSearchView'
-import { GroupManagement } from './GroupManagement'
-import { HuntView } from './HuntView'
-import { IncidentGraphView } from './IncidentGraphView'
-import { IntelList } from './IntelList'
-import { LoginPage } from './LoginPage'
-import { ResponsePanel } from './ResponsePanel'
-import { RulesView } from './RulesView'
-import { SuppressDialog } from './SuppressDialog'
-import { SuppressionList } from './SuppressionList'
-import { UserManagement } from './UserManagement'
-import { VerdictCard } from './VerdictCard'
-import { useI18n, type MsgKey } from './i18n'
+import { Button, Result, Spin } from 'antd'
+import type { ComponentType, ReactNode } from 'react'
+import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useSearchParams } from 'react-router'
+import { Layout } from './app/Layout'
+import { SessionProvider, useMe, useSession } from './app/session'
+import { useI18n } from './i18n'
+import { LoginPage } from './pages/LoginPage'
 
-const STATUS_KEY: Record<string, MsgKey> = {
-  open: 'statusOpen',
-  triaged: 'statusTriaged',
-  closed: 'statusClosed',
-  false_positive: 'statusFalsePositive',
+// Webhook 里的老链接是 /?incident= 与 /?session=，进来后转到对应页面
+function Home() {
+  const [params] = useSearchParams()
+  const incident = params.get('incident')
+  const session = params.get('session')
+  if (incident) return <Navigate to={`/incidents/${incident}`} replace />
+  if (session) return <Navigate to={`/chat/${session}`} replace />
+  return <Navigate to="/chat" replace />
 }
 
-const fmt = (iso: string) => new Date(iso).toLocaleString()
+function NotFound() {
+  const { t } = useI18n()
+  const navigate = useNavigate()
+  return (
+    <Result
+      status="404"
+      title="404"
+      subTitle={t('notFound')}
+      extra={<Button type="primary" onClick={() => navigate('/chat')}>{t('backHome')}</Button>}
+    />
+  )
+}
+
+// 管理页：后端同样拦着，这里只是别让人点进一个满屏 403 的页面
+function AdminOnly({ children }: { children: ReactNode }) {
+  const { t } = useI18n()
+  const { isAdmin } = useSession()
+  return isAdmin ? children : <Result status="403" title="403" subTitle={t('adminOnly')} />
+}
+
+// 页面按路由懒加载：首屏只带外壳与登录页，其余页面进入时再取
+type Pages = Record<string, ComponentType>
+const page = (load: () => Promise<Pages>, name: string, admin = false) => ({
+  lazy: async () => {
+    const C = (await load())[name]
+    return { Component: admin ? () => <AdminOnly><C /></AdminOnly> : C }
+  },
+})
+
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <Layout />,
+    children: [
+      { index: true, element: <Home /> },
+      { path: 'chat', ...page(() => import('./pages/ChatPage'), 'ChatPage') },
+      { path: 'chat/:sessionId', ...page(() => import('./pages/ChatPage'), 'ChatPage') },
+      { path: 'overview', ...page(() => import('./pages/OverviewPage'), 'OverviewPage') },
+      { path: 'incidents', ...page(() => import('./pages/IncidentsPage'), 'IncidentsPage') },
+      { path: 'incidents/:id', ...page(() => import('./pages/IncidentDetailPage'), 'IncidentDetailPage') },
+      { path: 'events', ...page(() => import('./pages/EventsPage'), 'EventsPage') },
+      { path: 'hunt', ...page(() => import('./pages/HuntPage'), 'HuntPage', true) },
+      { path: 'assets', ...page(() => import('./pages/AssetsPage'), 'AssetsPage') },
+      { path: 'reports', ...page(() => import('./pages/ReportsPage'), 'ReportsPage') },
+      { path: 'tasks', ...page(() => import('./pages/TasksPage'), 'TasksPage') },
+      { path: 'approvals', ...page(() => import('./pages/ApprovalsPage'), 'ApprovalsPage') },
+      { path: 'rules', ...page(() => import('./pages/RulesPage'), 'RulesPage') },
+      { path: 'attack', ...page(() => import('./pages/AttackPage'), 'AttackPage') },
+      { path: 'suppressions', ...page(() => import('./pages/SuppressionsPage'), 'SuppressionsPage') },
+      { path: 'intel', ...page(() => import('./pages/IntelPage'), 'IntelPage') },
+      { path: 'users', ...page(() => import('./pages/UsersPage'), 'UsersPage', true) },
+      { path: 'groups', ...page(() => import('./pages/GroupsPage'), 'GroupsPage', true) },
+      { path: 'audit', ...page(() => import('./pages/AuditPage'), 'AuditPage', true) },
+      { path: '*', element: <NotFound /> },
+    ],
+  },
+])
 
 export default function App() {
-  const { t, locale, setLocale } = useI18n()
-  // undefined = 会话状态未知（首屏探测中），null = 未登录
-  const [me, setMe] = useState<Me | null | undefined>(undefined)
-  const [incidents, setIncidents] = useState<IncidentSummary[]>([])
-  // webhook 通知里的链接带 ?incident=<id>，进来直接定位到事件
-  const [selectedId, setSelectedId] = useState<string | null>(
-    () => new URLSearchParams(location.search).get('incident'),
-  )
-  // 对话是主入口；带 ?incident= 的通知链接直接进专家模式
-  const [expert, setExpert] = useState(() => selectedId !== null)
-  const [detail, setDetail] = useState<IncidentDetail | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  // 标记误报后弹出抑制对话框，把分析师的判断反馈回检测链路
-  const [suppressing, setSuppressing] = useState(false)
-  const [showSuppressions, setShowSuppressions] = useState(false)
-  const [showIntel, setShowIntel] = useState(false)
-  const [showDashboard, setShowDashboard] = useState(false)
-  const [showEventSearch, setShowEventSearch] = useState(false)
-  const [showRules, setShowRules] = useState(false)
-  const [showHunt, setShowHunt] = useState(false)
-  const [showAttack, setShowAttack] = useState(false)
-  const [showAssets, setShowAssets] = useState(false)
-  const [showUsers, setShowUsers] = useState(false)
-  const [showAudit, setShowAudit] = useState(false)
-  const [showGroups, setShowGroups] = useState(false)
-  const [statusFilter, setStatusFilter] = useState('')
-  const [expandedAlert, setExpandedAlert] = useState<string | null>(null)
-  // 处置类操作还要看主机所在组的组内角色，与后端的两道检查一致
-  const [groups, setGroups] = useState<GroupRow[]>([])
-  const [assets, setAssets] = useState<Asset[]>([])
-
-  useEffect(() => {
-    if (!me || !expert) return
-    fetchGroups().then(setGroups).catch(() => {})
-    fetchAssets().then(setAssets).catch(() => {})
-  }, [me, expert])
-
-  useEffect(() => {
-    fetchMe().then(setMe).catch(() => setMe(null))
-  }, [])
-
-  const refresh = useCallback(async () => {
-    try {
-      setIncidents(await fetchIncidents(statusFilter || undefined))
-      setError(null)
-    } catch (e) {
-      if (e instanceof Unauthorized) {
-        setMe(null)
-        return
-      }
-      setError(t('connectError', { e: String(e) }))
-    }
-  }, [statusFilter, t])
-
-  useEffect(() => {
-    if (!me || !expert) return
-    refresh()
-    const timer = setInterval(refresh, 10_000)
-    return () => clearInterval(timer)
-  }, [refresh, me, expert])
-
-  useEffect(() => {
-    setExpandedAlert(null)
-    if (!selectedId) { setDetail(null); return }
-    let stale = false
-    fetchIncident(selectedId).then(d => { if (!stale) setDetail(d) }).catch(() => {})
-    return () => { stale = true }
-  }, [selectedId, incidents])
-
-  const changeStatus = async (status: string) => {
-    if (!detail) return
-    await setIncidentStatus(detail.id, status)
-    await refresh()
-    setDetail(await fetchIncident(detail.id))
-    if (status === 'false_positive') setSuppressing(true)
-  }
-
-  const doLogout = async () => {
-    await logout()
-    setMe(null)
-  }
-
-  if (me === undefined) return null
-  if (me === null) return <LoginPage onLogin={setMe} />
-  if (!expert) {
-    return (
-      <ChatView
-        me={me}
-        initialSession={new URLSearchParams(location.search).get('session')}
-        onExpert={() => setExpert(true)}
-        onLogout={doLogout}
-      />
-    )
-  }
-
-  // canWrite 管全局配置（抑制、情报、规则）；canAct 管落到具体主机上的处置
-  const canWrite = me.role !== 'viewer'
-  const isAdmin = me.role === 'admin'
-  const assetGroup = assets.find(a => a.id === detail?.assetId)?.groupId
-  const groupRole = groups.find(g => g.id === assetGroup)?.role
-  const canAct = isAdmin || (canWrite && (groupRole === 'admin' || groupRole === 'analyst'))
-  const sevLabel = (n: number) => (n >= 1 && n <= 5 ? t(`sev${n}` as MsgKey) : String(n))
-
+  const { data: me, isPending } = useMe()
+  if (isPending) return <Spin fullscreen />
+  if (!me) return <LoginPage />
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <header>
-          <h1>OpenXDR</h1>
-          <div className="header-actions">
-            <button className="link" onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')}>
-              {locale === 'zh' ? 'EN' : '中文'}
-            </button>
-            <span className="muted">{me.username}</span>
-            <button className="link" onClick={doLogout}>{t('logout')}</button>
-          </div>
-        </header>
-        <div className="header-actions subnav">
-          <button className="link" onClick={() => setExpert(false)}>{t('chat')}</button>
-          <span className="muted">{t('events', { n: incidents.length })}</span>
-          <button className="link" onClick={() => setShowDashboard(true)}>{t('dashboard')}</button>
-          <button className="link" onClick={() => setShowEventSearch(true)}>{t('eventSearch')}</button>
-          {/* 狩猎读全量数据，无法按组裁剪，后端只开放给 admin */}
-          {isAdmin && (
-            <button className="link" onClick={() => setShowHunt(true)}>{t('hunt')}</button>
-          )}
-          <button className="link" onClick={() => setShowAssets(true)}>{t('assets')}</button>
-          <button className="link" onClick={() => setShowSuppressions(true)}>{t('suppressions')}</button>
-          <button className="link" onClick={() => setShowIntel(true)}>{t('intel')}</button>
-          <button className="link" onClick={() => setShowRules(true)}>{t('rules')}</button>
-          <button className="link" onClick={() => setShowAttack(true)}>{t('attackMatrix')}</button>
-          {isAdmin && (
-            <>
-              <button className="link" onClick={() => setShowUsers(true)}>{t('users')}</button>
-              <button className="link" onClick={() => setShowGroups(true)}>{t('groups')}</button>
-              <button className="link" onClick={() => setShowAudit(true)}>{t('audit')}</button>
-            </>
-          )}
-        </div>
-        <div className="filter-tabs">
-          {[['', 'all'] as const, ...Object.entries(STATUS_KEY)].map(([value, key]) => (
-            <button
-              key={value}
-              className={`filter-tab ${value === statusFilter ? 'active' : ''}`}
-              onClick={() => setStatusFilter(value)}
-            >
-              {t(key as MsgKey)}
-            </button>
-          ))}
-        </div>
-        {error && <div className="error">{error}</div>}
-        {incidents.map(inc => (
-          <button
-            key={inc.id}
-            className={`incident-item ${inc.id === selectedId ? 'selected' : ''}`}
-            onClick={() => setSelectedId(inc.id)}
-          >
-            <div className="incident-title">
-              {inc.severity > 0 && <span className={`sev-${inc.severity}`}>●&nbsp;</span>}
-              {inc.title ?? inc.id}
-            </div>
-            <div className="incident-meta">
-              <span className={`status status-${inc.status}`}>
-                {STATUS_KEY[inc.status] ? t(STATUS_KEY[inc.status]) : inc.status}
-              </span>
-              {inc.aiVerdict?.verdict && <span className={`dot dot-${inc.aiVerdict.verdict}`} />}
-              <span className="muted">{t('alertCountAt', { n: inc.alertCount, time: fmt(inc.createdAt) })}</span>
-            </div>
-          </button>
-        ))}
-        {incidents.length === 0 && !error && <div className="muted empty">{t('noIncidents')}</div>}
-      </aside>
-
-      <main className="main">
-        {!detail ? (
-          <div className="muted empty">{t('pickIncident')}</div>
-        ) : (
-          <>
-            <div className="detail-head">
-              <h2>{detail.title ?? detail.id}</h2>
-              <div className="actions">
-                <span className={`status status-${detail.status}`}>
-                  {STATUS_KEY[detail.status] ? t(STATUS_KEY[detail.status]) : detail.status}
-                </span>
-                {/* 只读角色也能导报告：写汇报不是处置动作 */}
-                <button onClick={() => downloadReport(detail.id, detail.title)}>
-                  {t('exportReport')}
-                </button>
-                {canAct && (
-                  <>
-                    <button onClick={() => changeStatus('closed')}>{t('close')}</button>
-                    <button onClick={() => changeStatus('false_positive')}>{t('markFp')}</button>
-                    {(detail.status === 'closed' || detail.status === 'false_positive') && (
-                      <button onClick={() => changeStatus('open')}>{t('reopen')}</button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            <VerdictCard verdict={detail.aiVerdict} />
-
-            <h3>{t('responseTitle')}</h3>
-            <ResponsePanel incidentId={detail.id} assetId={detail.assetId} canAct={canAct} />
-
-            <h3>{t('graphTitle')}</h3>
-            <IncidentGraphView graph={detail.graph} />
-
-            <h3>{t('alertsTitle', { n: detail.alerts.length })}</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>{t('thFirst')}</th><th>{t('thLast')}</th><th>{t('thRule')}</th>
-                  <th>{t('thSeverity')}</th><th>{t('thCount')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.alerts.map(a => (
-                  <Fragment key={a.id}>
-                    <tr
-                      className="alert-row"
-                      onClick={() => setExpandedAlert(expandedAlert === a.id ? null : a.id)}
-                    >
-                      <td>{fmt(a.ts)}</td>
-                      <td>{a.lastTs ? fmt(a.lastTs) : '-'}</td>
-                      <td title={a.ruleId}>{a.ruleTitle ?? a.ruleId}</td>
-                      <td><span className={`sev sev-${a.severity}`}>{sevLabel(a.severity)}</span></td>
-                      <td>{a.count}</td>
-                    </tr>
-                    {expandedAlert === a.id && (
-                      <tr>
-                        <td colSpan={5}>
-                          <pre className="event-json">
-                            {a.event ? JSON.stringify(a.event, null, 2) : t('noRawEvent')}
-                          </pre>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-      </main>
-
-      {suppressing && detail && (
-        <SuppressDialog
-          alerts={detail.alerts}
-          assetId={detail.assetId}
-          onClose={() => setSuppressing(false)}
-        />
-      )}
-      {showSuppressions && (
-        <SuppressionList canAct={canWrite} onClose={() => setShowSuppressions(false)} />
-      )}
-      {showDashboard && <DashboardView onClose={() => setShowDashboard(false)} />}
-      {showEventSearch && <EventSearchView onClose={() => setShowEventSearch(false)} />}
-      {showRules && <RulesView onClose={() => setShowRules(false)} />}
-      {showHunt && <HuntView onClose={() => setShowHunt(false)} />}
-      {showAttack && <AttackMatrixView onClose={() => setShowAttack(false)} />}
-      {showIntel && <IntelList canAct={canWrite} onClose={() => setShowIntel(false)} />}
-      {showAssets && <AssetList onClose={() => setShowAssets(false)} />}
-      {showUsers && <UserManagement self={me.username} onClose={() => setShowUsers(false)} />}
-      {showAudit && <AuditLogView onClose={() => setShowAudit(false)} />}
-      {showGroups && <GroupManagement onClose={() => setShowGroups(false)} />}
-    </div>
+    <SessionProvider me={me}>
+      <RouterProvider router={router} />
+    </SessionProvider>
   )
 }
