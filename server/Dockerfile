@@ -9,9 +9,18 @@ RUN go mod download
 COPY server/ ./
 RUN CGO_ENABLED=0 go build -o /openxdr-server .
 
+# Pi 运行时：server 为每个会话拉起的 Node 子进程。npm ci 会先清掉拷进来的 node_modules
+FROM node:22-alpine AS pi-runtime
+WORKDIR /pi-runtime
+COPY server/pi-runtime/ ./
+RUN npm ci --omit=dev --ignore-scripts
+
 FROM alpine:3.22
-RUN adduser -D -u 10001 openxdr
+# node 二进制依赖 libstdc++
+RUN apk add --no-cache libstdc++ && adduser -D -u 10001 openxdr
 COPY --from=build /openxdr-server /usr/local/bin/openxdr-server
+COPY --from=pi-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=pi-runtime /pi-runtime /app/pi-runtime
 USER openxdr
 EXPOSE 8080 8081
 ENTRYPOINT ["openxdr-server"]

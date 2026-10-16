@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// AgentSession is the predicate function for agentsession builders.
+type AgentSession func(*sql.Selector)
+
 // Alert is the predicate function for alert builders.
 type Alert func(*sql.Selector)
 
@@ -38,6 +41,9 @@ type ProcessBaseline func(*sql.Selector)
 
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)
+
+// SessionMessage is the predicate function for sessionmessage builders.
+type SessionMessage func(*sql.Selector)
 
 // Suppression is the predicate function for suppression builders.
 type Suppression func(*sql.Selector)

@@ -8,6 +8,18 @@ import (
 	"openxdr/server/ent"
 )
 
+// The AgentSessionFunc type is an adapter to allow the use of ordinary
+// function as AgentSession mutator.
+type AgentSessionFunc func(context.Context, *ent.AgentSessionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AgentSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AgentSessionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AgentSessionMutation", m)
+}
+
 // The AlertFunc type is an adapter to allow the use of ordinary
 // function as Alert mutator.
 type AlertFunc func(context.Context, *ent.AlertMutation) (ent.Value, error)
@@ -138,6 +150,18 @@ func (f SessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionMutation", m)
+}
+
+// The SessionMessageFunc type is an adapter to allow the use of ordinary
+// function as SessionMessage mutator.
+type SessionMessageFunc func(context.Context, *ent.SessionMessageMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SessionMessageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SessionMessageMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionMessageMutation", m)
 }
 
 // The SuppressionFunc type is an adapter to allow the use of ordinary

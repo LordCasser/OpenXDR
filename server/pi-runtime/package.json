@@ -1,0 +1,11 @@
+{
+  "name": "openxdr-pi-runtime",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.19.0" },
+  "scripts": { "test": "node --test runner.test.mjs" },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.84.4",
+    "@earendil-works/pi-ai": "0.84.4"
+  }
+}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"openxdr/server/ent/agentsession"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/auditlog"
@@ -17,6 +18,7 @@ import (
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/session"
+	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/user"
 	"reflect"
@@ -85,6 +87,7 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			agentsession.Table:    agentsession.ValidColumn,
 			alert.Table:           alert.ValidColumn,
 			asset.Table:           asset.ValidColumn,
 			auditlog.Table:        auditlog.ValidColumn,
@@ -96,6 +99,7 @@ func checkColumn(t, c string) error {
 			intel.Table:           intel.ValidColumn,
 			processbaseline.Table: processbaseline.ValidColumn,
 			session.Table:         session.ValidColumn,
+			sessionmessage.Table:  sessionmessage.ValidColumn,
 			suppression.Table:     suppression.ValidColumn,
 			user.Table:            user.ValidColumn,
 		})

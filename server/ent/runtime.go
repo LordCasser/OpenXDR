@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"openxdr/server/ent/agentsession"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/auditlog"
@@ -15,6 +16,7 @@ import (
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/schema"
 	"openxdr/server/ent/session"
+	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/user"
 	"time"
@@ -26,6 +28,20 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	agentsessionFields := schema.AgentSession{}.Fields()
+	_ = agentsessionFields
+	// agentsessionDescCreatedAt is the schema descriptor for created_at field.
+	agentsessionDescCreatedAt := agentsessionFields[1].Descriptor()
+	// agentsession.DefaultCreatedAt holds the default value on creation for the created_at field.
+	agentsession.DefaultCreatedAt = agentsessionDescCreatedAt.Default.(func() time.Time)
+	// agentsessionDescStatus is the schema descriptor for status field.
+	agentsessionDescStatus := agentsessionFields[7].Descriptor()
+	// agentsession.DefaultStatus holds the default value on creation for the status field.
+	agentsession.DefaultStatus = agentsessionDescStatus.Default.(string)
+	// agentsessionDescID is the schema descriptor for id field.
+	agentsessionDescID := agentsessionFields[0].Descriptor()
+	// agentsession.DefaultID holds the default value on creation for the id field.
+	agentsession.DefaultID = agentsessionDescID.Default.(func() uuid.UUID)
 	alertFields := schema.Alert{}.Fields()
 	_ = alertFields
 	// alertDescCount is the schema descriptor for count field.
@@ -164,6 +180,16 @@ func init() {
 	sessionDescID := sessionFields[0].Descriptor()
 	// session.DefaultID holds the default value on creation for the id field.
 	session.DefaultID = sessionDescID.Default.(func() uuid.UUID)
+	sessionmessageFields := schema.SessionMessage{}.Fields()
+	_ = sessionmessageFields
+	// sessionmessageDescCreatedAt is the schema descriptor for created_at field.
+	sessionmessageDescCreatedAt := sessionmessageFields[1].Descriptor()
+	// sessionmessage.DefaultCreatedAt holds the default value on creation for the created_at field.
+	sessionmessage.DefaultCreatedAt = sessionmessageDescCreatedAt.Default.(func() time.Time)
+	// sessionmessageDescID is the schema descriptor for id field.
+	sessionmessageDescID := sessionmessageFields[0].Descriptor()
+	// sessionmessage.DefaultID holds the default value on creation for the id field.
+	sessionmessage.DefaultID = sessionmessageDescID.Default.(func() uuid.UUID)
 	suppressionFields := schema.Suppression{}.Fields()
 	_ = suppressionFields
 	// suppressionDescCreatedAt is the schema descriptor for created_at field.

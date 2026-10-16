@@ -12,6 +12,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// AgentSession is the client for interacting with the AgentSession builders.
+	AgentSession *AgentSessionClient
 	// Alert is the client for interacting with the Alert builders.
 	Alert *AlertClient
 	// Asset is the client for interacting with the Asset builders.
@@ -34,6 +36,8 @@ type Tx struct {
 	ProcessBaseline *ProcessBaselineClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
+	// SessionMessage is the client for interacting with the SessionMessage builders.
+	SessionMessage *SessionMessageClient
 	// Suppression is the client for interacting with the Suppression builders.
 	Suppression *SuppressionClient
 	// User is the client for interacting with the User builders.
@@ -169,6 +173,7 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.AgentSession = NewAgentSessionClient(tx.config)
 	tx.Alert = NewAlertClient(tx.config)
 	tx.Asset = NewAssetClient(tx.config)
 	tx.AuditLog = NewAuditLogClient(tx.config)
@@ -180,6 +185,7 @@ func (tx *Tx) init() {
 	tx.Intel = NewIntelClient(tx.config)
 	tx.ProcessBaseline = NewProcessBaselineClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
+	tx.SessionMessage = NewSessionMessageClient(tx.config)
 	tx.Suppression = NewSuppressionClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
@@ -191,7 +197,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: Alert.QueryXXX(), the query will be executed
+// applies a query, for example: AgentSession.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

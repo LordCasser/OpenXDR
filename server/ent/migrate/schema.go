@@ -8,6 +8,37 @@ import (
 )
 
 var (
+	// AgentSessionsColumns holds the columns for the "agent_sessions" table.
+	AgentSessionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "kind", Type: field.TypeString},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "initiator", Type: field.TypeString},
+		{Name: "model", Type: field.TypeString},
+		{Name: "title", Type: field.TypeString, Nullable: true},
+		{Name: "status", Type: field.TypeString, Default: "running"},
+		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AgentSessionsTable holds the schema information for the "agent_sessions" table.
+	AgentSessionsTable = &schema.Table{
+		Name:       "agent_sessions",
+		Columns:    AgentSessionsColumns,
+		PrimaryKey: []*schema.Column{AgentSessionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "agentsession_group_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AgentSessionsColumns[3], AgentSessionsColumns[1]},
+			},
+			{
+				Name:    "agentsession_initiator",
+				Unique:  false,
+				Columns: []*schema.Column{AgentSessionsColumns[4]},
+			},
+		},
+	}
 	// AlertsColumns holds the columns for the "alerts" table.
 	AlertsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -314,6 +345,28 @@ var (
 			},
 		},
 	}
+	// SessionMessagesColumns holds the columns for the "session_messages" table.
+	SessionMessagesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "session_id", Type: field.TypeUUID},
+		{Name: "seq", Type: field.TypeInt},
+		{Name: "role", Type: field.TypeString},
+		{Name: "content", Type: field.TypeJSON},
+	}
+	// SessionMessagesTable holds the schema information for the "session_messages" table.
+	SessionMessagesTable = &schema.Table{
+		Name:       "session_messages",
+		Columns:    SessionMessagesColumns,
+		PrimaryKey: []*schema.Column{SessionMessagesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sessionmessage_session_id_seq",
+				Unique:  true,
+				Columns: []*schema.Column{SessionMessagesColumns[2], SessionMessagesColumns[3]},
+			},
+		},
+	}
 	// SuppressionsColumns holds the columns for the "suppressions" table.
 	SuppressionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -355,6 +408,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AgentSessionsTable,
 		AlertsTable,
 		AssetsTable,
 		AuditLogsTable,
@@ -366,6 +420,7 @@ var (
 		IntelsTable,
 		ProcessBaselinesTable,
 		SessionsTable,
+		SessionMessagesTable,
 		SuppressionsTable,
 		UsersTable,
 	}
