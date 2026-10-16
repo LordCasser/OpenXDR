@@ -132,7 +132,7 @@ pub fn spawn(agent_id: String, cfg: Config) -> mpsc::Receiver<AgentEvent> {
         }
     }
 
-    // 登录事件：wtmp/btmp 增量读，认证可见性不依赖 syslog 配置
+    // 登录事件：wtmp/btmp 增量读 + journald sshd，认证可见性不依赖 syslog 配置
     #[cfg(target_os = "linux")]
     if cfg.collect_auth {
         authwatch::spawn(agent_id_auth, sink_auth);

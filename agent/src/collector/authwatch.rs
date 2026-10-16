@@ -1,10 +1,19 @@
-//! 登录事件采集（Linux）：增量读 wtmp（成功登录）与 btmp（失败登录）。
+//! 登录事件采集（Linux）：增量读 wtmp（成功登录）与 btmp（失败登录），
+//! 另跟 journald 里的 sshd 日志。
 //!
 //! 账号是第二攻击面。syslog 转发只有部分环境配了，agent 直接读登录记录
 //! 让认证可见性不依赖外部配置。从文件末尾开始增量读——存量历史不是事件。
+//!
+//! wtmp 只记分配了 tty 的会话，`ssh host cmd` 这种不开 pty 的远程执行根本
+//! 不落 wtmp，而它恰恰是拿到密钥后最常见的用法；Debian 13 又把 wtmp 换成了
+//! wtmpdb。所以 SSH 以 sshd 自己的日志为准：journal 可读时，wtmp/btmp 里带
+//! 远端地址的记录交给 journal，避免同一次登录报两遍；journal 不可用时照旧。
 
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::pb::AgentEvent;
@@ -32,6 +41,7 @@ struct Tail {
 }
 
 fn run(agent_id: &str, sink: &EventSink) {
+    let journal = spawn_sshd_journal(agent_id.to_string(), sink.clone());
     let mut tails = [
         Tail {
             path: "/var/log/wtmp",
@@ -52,13 +62,99 @@ fn run(agent_id: &str, sink: &EventSink) {
     loop {
         std::thread::sleep(POLL_INTERVAL);
         for t in &mut tails {
+            let ssh_via_journal = journal.load(Ordering::Relaxed);
             for rec in read_new(t) {
+                if ssh_via_journal && !rec.host.is_empty() {
+                    continue;
+                }
                 if !sink.send(auth_event(agent_id, &rec, t.failure)) {
                     return;
                 }
             }
         }
     }
+}
+
+/// 跟 journald 的 sshd 日志。返回的标志在 journalctl 存活期间为 true，
+/// 它退出（没有 systemd、无权读 journal）后 wtmp/btmp 接回远程登录。
+fn spawn_sshd_journal(agent_id: String, sink: EventSink) -> Arc<AtomicBool> {
+    let alive = Arc::new(AtomicBool::new(false));
+    // OpenSSH 9.8 起认证日志出自 sshd-session 进程
+    let child = Command::new("journalctl")
+        .args([
+            "-f",
+            "-n",
+            "0",
+            "-o",
+            "cat",
+            "-t",
+            "sshd",
+            "-t",
+            "sshd-session",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn();
+    let mut child = match child {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("登录采集: journalctl 不可用（{e}），SSH 登录只看 wtmp/btmp");
+            return alive;
+        }
+    };
+    let Some(out) = child.stdout.take() else {
+        return alive;
+    };
+    alive.store(true, Ordering::Relaxed);
+    eprintln!("登录采集: wtmp/btmp + journald sshd");
+
+    let flag = alive.clone();
+    std::thread::spawn(move || {
+        for line in BufReader::new(out).lines() {
+            let Ok(line) = line else { break };
+            let Some((rec, failure)) = parse_sshd(&line) else {
+                continue;
+            };
+            if !sink.send(auth_event(&agent_id, &rec, failure)) {
+                break;
+            }
+        }
+        flag.store(false, Ordering::Relaxed);
+        let _ = child.kill();
+        let _ = child.wait();
+        eprintln!("登录采集: journalctl 已退出，SSH 登录回落 wtmp/btmp");
+    });
+    alive
+}
+
+/// 解析 sshd 认证日志，返回 (记录, 是否失败)。
+///
+/// 无效用户只认 `Invalid user`：随后的 `Failed ... for invalid user` 是同一次尝试。
+fn parse_sshd(msg: &str) -> Option<(LoginRecord, bool)> {
+    if let Some(rest) = msg.strip_prefix("Accepted ") {
+        return Some((sshd_record(rest.split_once(" for ")?.1)?, false));
+    }
+    if let Some(rest) = msg.strip_prefix("Invalid user ") {
+        return Some((sshd_record(rest)?, true));
+    }
+    let rest = msg.strip_prefix("Failed ")?.split_once(" for ")?.1;
+    if rest.starts_with("invalid user ") {
+        return None;
+    }
+    Some((sshd_record(rest)?, true))
+}
+
+/// `<user> from <ip> port <n> ...`。用户名由对端控制，从右边切才不会被
+/// 伪造的 " from 1.2.3.4" 骗走来源地址。
+fn sshd_record(s: &str) -> Option<LoginRecord> {
+    let (user, rest) = s.rsplit_once(" from ")?;
+    let (host, _) = rest.split_once(" port ")?;
+    Some(LoginRecord {
+        user: user.to_string(),
+        host: host.to_string(),
+        line: "sshd".to_string(),
+    })
 }
 
 struct LoginRecord {
@@ -155,6 +251,42 @@ mod tests {
         rec[44..44 + user.len()].copy_from_slice(user.as_bytes());
         rec[76..76 + host.len()].copy_from_slice(host.as_bytes());
         rec
+    }
+
+    #[test]
+    fn parses_sshd_messages() {
+        let (r, failed) = parse_sshd(
+            "Accepted publickey for root from 10.1.1.35 port 51234 ssh2: ED25519 SHA256:abc",
+        )
+        .expect("应解析成功登录");
+        assert!(!failed);
+        assert_eq!((r.user.as_str(), r.host.as_str()), ("root", "10.1.1.35"));
+
+        let (r, failed) = parse_sshd("Failed password for alice from 1.2.3.4 port 22 ssh2")
+            .expect("应解析失败登录");
+        assert!(failed);
+        assert_eq!((r.user.as_str(), r.host.as_str()), ("alice", "1.2.3.4"));
+
+        let (r, failed) =
+            parse_sshd("Invalid user admin from 5.6.7.8 port 4444").expect("应解析无效用户");
+        assert!(failed);
+        assert_eq!((r.user.as_str(), r.host.as_str()), ("admin", "5.6.7.8"));
+
+        assert!(
+            parse_sshd("Failed password for invalid user admin from 5.6.7.8 port 4444 ssh2")
+                .is_none(),
+            "无效用户已由 Invalid user 计过"
+        );
+        assert!(parse_sshd("pam_unix(sshd:session): session opened for user root").is_none());
+        assert!(parse_sshd("Connection closed by 10.1.1.35 port 51234").is_none());
+    }
+
+    #[test]
+    fn sshd_user_cannot_spoof_source() {
+        let (r, _) =
+            parse_sshd("Invalid user x from 6.6.6.6 port 1 from 1.2.3.4 port 5").expect("应解析");
+        assert_eq!(r.host, "1.2.3.4");
+        assert_eq!(r.user, "x from 6.6.6.6 port 1");
     }
 
     #[test]
