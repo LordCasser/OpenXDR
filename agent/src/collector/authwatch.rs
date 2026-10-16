@@ -11,7 +11,7 @@
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -41,7 +41,7 @@ struct Tail {
 }
 
 fn run(agent_id: &str, sink: &EventSink) {
-    let journal = spawn_sshd_journal(agent_id.to_string(), sink.clone());
+    let (mut child, journal) = spawn_sshd_journal(agent_id.to_string(), sink.clone());
     let mut tails = [
         Tail {
             path: "/var/log/wtmp",
@@ -59,7 +59,8 @@ fn run(agent_id: &str, sink: &EventSink) {
         t.offset = std::fs::metadata(t.path).map(|m| m.len()).unwrap_or(0);
     }
 
-    loop {
+    // 重连后旧的上报通道关闭，这一轮采集必须跟着退出，连同拉起的 journalctl，不能等下一条登录才发现
+    'poll: while !sink.is_closed() {
         std::thread::sleep(POLL_INTERVAL);
         for t in &mut tails {
             let ssh_via_journal = journal.load(Ordering::Relaxed);
@@ -68,16 +69,20 @@ fn run(agent_id: &str, sink: &EventSink) {
                     continue;
                 }
                 if !sink.send(auth_event(agent_id, &rec, t.failure)) {
-                    return;
+                    break 'poll;
                 }
             }
         }
     }
+    if let Some(c) = child.as_mut() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
 }
 
-/// 跟 journald 的 sshd 日志。返回的标志在 journalctl 存活期间为 true，
-/// 它退出（没有 systemd、无权读 journal）后 wtmp/btmp 接回远程登录。
-fn spawn_sshd_journal(agent_id: String, sink: EventSink) -> Arc<AtomicBool> {
+/// 跟 journald 的 sshd 日志，返回 journalctl 子进程（由调用方回收）与存活标志。
+/// 标志在 journalctl 存活期间为 true，它退出（没有 systemd、无权读 journal）后 wtmp/btmp 接回远程登录。
+fn spawn_sshd_journal(agent_id: String, sink: EventSink) -> (Option<Child>, Arc<AtomicBool>) {
     let alive = Arc::new(AtomicBool::new(false));
     // OpenSSH 9.8 起认证日志出自 sshd-session 进程
     let child = Command::new("journalctl")
@@ -100,11 +105,11 @@ fn spawn_sshd_journal(agent_id: String, sink: EventSink) -> Arc<AtomicBool> {
         Ok(c) => c,
         Err(e) => {
             eprintln!("登录采集: journalctl 不可用（{e}），SSH 登录只看 wtmp/btmp");
-            return alive;
+            return (None, alive);
         }
     };
     let Some(out) = child.stdout.take() else {
-        return alive;
+        return (Some(child), alive);
     };
     alive.store(true, Ordering::Relaxed);
     eprintln!("登录采集: wtmp/btmp + journald sshd");
@@ -121,11 +126,12 @@ fn spawn_sshd_journal(agent_id: String, sink: EventSink) -> Arc<AtomicBool> {
             }
         }
         flag.store(false, Ordering::Relaxed);
-        let _ = child.kill();
-        let _ = child.wait();
-        eprintln!("登录采集: journalctl 已退出，SSH 登录回落 wtmp/btmp");
+        // 上报通道关了是正常收尾，不是降级
+        if !sink.is_closed() {
+            eprintln!("登录采集: journalctl 已退出，SSH 登录回落 wtmp/btmp");
+        }
     });
-    alive
+    (Some(child), alive)
 }
 
 /// 解析 sshd 认证日志，返回 (记录, 是否失败)。

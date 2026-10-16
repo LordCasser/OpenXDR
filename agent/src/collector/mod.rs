@@ -165,6 +165,12 @@ impl EventSink {
             Err(mpsc::error::TrySendError::Closed(_)) => false,
         }
     }
+
+    /// 上报侧已关闭（断线重连后旧的一轮采集）。没有事件可发的采集循环靠它及时退出
+    #[cfg(target_os = "linux")]
+    pub fn is_closed(&self) -> bool {
+        self.tx.is_closed()
+    }
 }
 
 /// OCSF 1007 活动类型：进程启动
