@@ -144,6 +144,7 @@ func TestEnrollModes(t *testing.T) {
 
 	caFile, _ := testCA(t)
 	t.Setenv("TLS_CA_FILE", caFile)
+	t.Setenv("TLS_CA_KEY_FILE", "")
 	s, _ = FromEnv(client, time.Minute)
 	if s.Disabled() == "" {
 		t.Fatal("缺 TLS_CA_KEY_FILE 时不应启用")
@@ -156,5 +157,39 @@ func TestEnrollModes(t *testing.T) {
 	t.Setenv("TLS_CA_KEY_FILE", otherKey)
 	if _, err := FromEnv(client, time.Minute); err == nil {
 		t.Fatal("私钥与证书不匹配应报错")
+	}
+}
+
+// 原 CA 私钥丢了：信任包里放原 CA 与新的接入 CA，签发用接入 CA，下发整个信任包。
+func TestEnrollWithCABundle(t *testing.T) {
+	ctx, client := testdb.New(t)
+	oldCA, _ := testCA(t)
+	newCA, newKey := testCA(t)
+	oldPEM, _ := os.ReadFile(oldCA)
+	newPEM, _ := os.ReadFile(newCA)
+	bundle := filepath.Join(t.TempDir(), "bundle.crt")
+	os.WriteFile(bundle, append(oldPEM, newPEM...), 0o600)
+	t.Setenv("TLS_CA_FILE", bundle)
+	t.Setenv("TLS_CA_KEY_FILE", newKey)
+	t.Setenv("ENROLL_GRPC_URL", "https://xdr:8081")
+	s, err := FromEnv(client, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := client.Group.Create().SetName("g").SaveX(ctx)
+	token, _, _ := s.Issue(ctx, g.ID, "admin", time.Hour)
+	_, grant, err := s.Enroll(ctx, token, Request{Hostname: "h1", CSR: csr(t, "x")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grant.CA != string(append(oldPEM, newPEM...)) {
+		t.Error("应下发整个信任包，agent 才能校验原 CA 签的 server 证书")
+	}
+	block, _ := pem.Decode([]byte(grant.Cert))
+	cert, _ := x509.ParseCertificate(block.Bytes)
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(newPEM)
+	if _, err := cert.Verify(x509.VerifyOptions{Roots: pool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}); err != nil {
+		t.Fatalf("应由接入 CA 签发：%v", err)
 	}
 }

@@ -133,7 +133,9 @@ systemd 服务（Windows 为 SYSTEM 身份的开机计划任务）。主机自�
 server 侧需要三样东西才会开放在线接入（缺哪样控制台会直接说明）：
 
 - `ENROLL_GRPC_URL`：主机上能访问到的 gRPC 地址，如 `https://xdr.internal:8081`
-- 开了 mTLS 时：`TLS_CA_KEY_FILE` 指向 CA 私钥（gencerts 生成的 `ca.key`），用于签发主机证书
+- 开了 mTLS 时：`TLS_CA_KEY_FILE` 指向 CA 私钥（gencerts 生成的 `ca.key`），用于签发主机证书。
+  `TLS_CA_FILE` 可以是多张 CA 的信任包，签发用其中与私钥配对的那张、下发给 agent 的是整个信任包——
+  原 CA 私钥丢失时另起一张接入 CA 追加进信任包即可，已有证书不受影响
 - `AGENT_DIST_DIR`（compose 已挂 `./dist`）里放 agent 安装包：
   `openxdr-agent-linux-amd64`、`openxdr-agent-linux-arm64`、`openxdr-agent-windows-amd64.exe`
 

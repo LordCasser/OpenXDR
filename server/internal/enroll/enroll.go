@@ -9,6 +9,9 @@
 //
 // 启用条件：配了 ENROLL_GRPC_URL（agent 连 server 的地址）；server 开了 mTLS 时还需要
 // TLS_CA_KEY_FILE 用来签发。缺哪样就不启用并说明原因，绝不发一份连不上的配置。
+//
+// TLS_CA_FILE 可以是多张 CA 的信任包：签发用其中与 TLS_CA_KEY_FILE 配对的那张，下发给
+// agent 的是整个信任包。这样原 CA 私钥丢了也能另起一张接入 CA，老证书照常可用。
 package enroll
 
 import (
@@ -58,6 +61,8 @@ type Service struct {
 	// 为空表示 server 未开 mTLS，接入只下发地址
 	CA    *x509.Certificate
 	CAKey crypto.Signer
+	// 下发给 agent 的信任包（TLS_CA_FILE 原文），用来校验 server 证书
+	Bundle []byte
 	// mTLS 已开但缺签发密钥时的原因
 	broken string
 	// 判定"在线"的心跳窗口，与失联通知同一口径
@@ -75,11 +80,11 @@ func FromEnv(db *ent.Client, onlineWindow time.Duration) (*Service, error) {
 		s.broken = "server 已启用 mTLS，但未配置 TLS_CA_KEY_FILE，无法在线签发主机证书"
 		return s, nil
 	}
-	ca, key, err := loadCA(caFile, keyFile)
+	bundle, ca, key, err := loadCA(caFile, keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("加载签发 CA 失败：%w", err)
 	}
-	s.CA, s.CAKey = ca, key
+	s.Bundle, s.CA, s.CAKey = bundle, ca, key
 	return s, nil
 }
 
@@ -172,7 +177,7 @@ func (s *Service) Enroll(ctx context.Context, token string, req Request) (*ent.A
 
 	grant := Grant{Server: s.GRPCURL}
 	if cert != nil {
-		grant.CA = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.CA.Raw}))
+		grant.CA = string(s.Bundle)
 		grant.Cert = string(cert)
 	}
 	return a, grant, nil
@@ -211,26 +216,19 @@ func (s *Service) sign(csrPEM, hostname string) ([]byte, error) {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), nil
 }
 
-func loadCA(certFile, keyFile string) (*x509.Certificate, crypto.Signer, error) {
-	certPEM, err := os.ReadFile(certFile)
+// loadCA 读信任包与签发私钥，返回信任包原文和其中与私钥配对的 CA。
+func loadCA(certFile, keyFile string) ([]byte, *x509.Certificate, crypto.Signer, error) {
+	bundle, err := os.ReadFile(certFile)
 	if err != nil {
-		return nil, nil, err
-	}
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		return nil, nil, errors.New("CA 证书不是 PEM 格式")
-	}
-	ca, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	keyPEM, err := os.ReadFile(keyFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	block, _ = pem.Decode(keyPEM)
+	block, _ := pem.Decode(keyPEM)
 	if block == nil {
-		return nil, nil, errors.New("CA 私钥不是 PEM 格式")
+		return nil, nil, nil, errors.New("CA 私钥不是 PEM 格式")
 	}
 	var key any
 	switch block.Type {
@@ -242,16 +240,26 @@ func loadCA(certFile, keyFile string) (*x509.Certificate, crypto.Signer, error) 
 		key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	signer, ok := key.(crypto.Signer)
 	if !ok {
-		return nil, nil, errors.New("CA 私钥类型不支持签名")
+		return nil, nil, nil, errors.New("CA 私钥类型不支持签名")
 	}
-	if !publicKeysEqual(ca.PublicKey, signer.Public()) {
-		return nil, nil, errors.New("CA 私钥与证书不匹配")
+	for rest := bundle; ; {
+		var b *pem.Block
+		if b, rest = pem.Decode(rest); b == nil {
+			break
+		}
+		if b.Type != "CERTIFICATE" {
+			continue
+		}
+		ca, err := x509.ParseCertificate(b.Bytes)
+		if err == nil && ca.IsCA && publicKeysEqual(ca.PublicKey, signer.Public()) {
+			return bundle, ca, signer, nil
+		}
 	}
-	return ca, signer, nil
+	return nil, nil, nil, errors.New("CA 私钥与信任包里的任何 CA 证书都不匹配")
 }
 
 func publicKeysEqual(a, b any) bool {
