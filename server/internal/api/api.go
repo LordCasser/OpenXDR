@@ -81,7 +81,11 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 	mapGroups(mux, db)
 
 	mux.HandleFunc("GET /api/incidents", func(w http.ResponseWriter, r *http.Request) {
-		q := db.Incident.Query()
+		s, ok := requireScope(w, r, db, "viewer")
+		if !ok {
+			return
+		}
+		q := db.Incident.Query().Where(s.incident()...)
 		if status := r.URL.Query().Get("status"); status != "" {
 			q = q.Where(incident.StatusEQ(status))
 		}
@@ -123,6 +127,9 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "无效的 incident id", http.StatusBadRequest)
+			return
+		}
+		if !incidentVisible(w, r, db, id, "viewer") {
 			return
 		}
 		inc, err := db.Incident.Get(r.Context(), id)
@@ -189,6 +196,9 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 			http.Error(w, "status 必须是 open / closed / false_positive", http.StatusBadRequest)
 			return
 		}
+		if !incidentVisible(w, r, db, id, "analyst") {
+			return
+		}
 		err = db.Incident.UpdateOneID(id).SetStatus(body.Status).Exec(r.Context())
 		if ent.IsNotFound(err) {
 			http.NotFound(w, r)
@@ -203,7 +213,11 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 	})
 
 	mux.HandleFunc("GET /api/assets", func(w http.ResponseWriter, r *http.Request) {
-		assets, err := db.Asset.Query().Order(ent.Asc(entasset.FieldHostname)).All(r.Context())
+		s, ok := requireScope(w, r, db, "viewer")
+		if !ok {
+			return
+		}
+		assets, err := db.Asset.Query().Where(s.asset()...).Order(ent.Asc(entasset.FieldHostname)).All(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

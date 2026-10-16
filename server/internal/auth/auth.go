@@ -44,6 +44,9 @@ func minRole(method, path string) string {
 	switch {
 	case strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/audit"):
 		return "admin"
+	// 狩猎直接读全量数据，没法按组裁剪，只留给 admin
+	case strings.HasPrefix(path, "/api/hunt"):
+		return "admin"
 	// 组的增删、成员与资产归属只有 admin 能改；列表按成员身份过滤，viewer 可读
 	case strings.HasPrefix(path, "/api/groups") && method != http.MethodGet:
 		return "admin"
@@ -75,6 +78,11 @@ func GroupRole(ctx context.Context, db *ent.Client, u *ent.User, groupID uuid.UU
 }
 
 type userKey struct{}
+
+// WithUser 把用户挂进上下文。认证中间件之外，后台身份（定时任务）与测试也走这里。
+func WithUser(ctx context.Context, u *ent.User) context.Context {
+	return context.WithValue(ctx, userKey{}, u)
+}
 
 // From 取当前登录用户，认证中间件保证业务代码里一定拿得到。
 func From(ctx context.Context) *ent.User {
@@ -131,7 +139,7 @@ func Middleware(db *ent.Client, inner http.Handler) http.Handler {
 			http.Error(w, "当前角色无此权限", http.StatusForbidden)
 			return
 		}
-		ctx := context.WithValue(r.Context(), userKey{}, u)
+		ctx := WithUser(r.Context(), u)
 		ctx = audit.WithActor(ctx, u.Username)
 		inner.ServeHTTP(w, r.WithContext(ctx))
 	})

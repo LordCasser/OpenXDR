@@ -15,6 +15,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"openxdr/server/ent"
+	"openxdr/server/internal/auth"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/sigma"
@@ -71,9 +73,18 @@ func seed(t *testing.T) (*httptest.Server, uuid.UUID) {
 		t.Fatal(err)
 	}
 
-	ts := httptest.NewServer(Handler(client, loadRules(t), t.TempDir(), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil, nil))
+	ts := httptest.NewServer(asAdmin(Handler(client, loadRules(t), t.TempDir(), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil, nil)))
 	t.Cleanup(ts.Close)
 	return ts, inc.ID
+}
+
+// asAdmin 测试绕开登录中间件，直接以全局 admin 身份访问。
+func asAdmin(h http.Handler) http.Handler { return as(&ent.User{Username: "admin", Role: "admin"}, h) }
+
+func as(u *ent.User, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r.WithContext(auth.WithUser(r.Context(), u)))
+	})
 }
 
 func get(t *testing.T, ts *httptest.Server, path string) (*http.Response, []byte) {

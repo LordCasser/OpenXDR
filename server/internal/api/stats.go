@@ -40,6 +40,10 @@ type statsResponse struct {
 
 func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 	api.HandleFunc("GET /api/stats", func(w http.ResponseWriter, r *http.Request) {
+		s, ok := requireScope(w, r, db, "viewer")
+		if !ok {
+			return
+		}
 		ctx := r.Context()
 		now := time.Now()
 		since := now.Add(-24 * time.Hour)
@@ -49,7 +53,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 		}
 
 		var err error
-		if out.Events24h, err = db.Event.Query().Where(entevent.TsGTE(since)).Count(ctx); err != nil {
+		if out.Events24h, err = db.Event.Query().Where(entevent.TsGTE(since)).Where(s.event()...).Count(ctx); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -60,6 +64,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 			Count  int    `json:"count"`
 		}
 		if err := db.Incident.Query().
+			Where(s.incident()...).
 			GroupBy(entincident.FieldStatus).
 			Aggregate(ent.Count()).
 			Scan(ctx, &byStatus); err != nil {
@@ -75,6 +80,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 		// 告警是去重后的产物，量级与事件表差着窗口倍数，直接拉没有压力。
 		alerts, err := db.Alert.Query().
 			Where(entalert.TsGTE(since)).
+			Where(s.alert()...).
 			Select(entalert.FieldTs, entalert.FieldCount).
 			All(ctx)
 		if err != nil {
@@ -99,6 +105,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 		}
 		if err := db.Alert.Query().
 			Where(entalert.TsGTE(since)).
+			Where(s.alert()...).
 			GroupBy(entalert.FieldRuleID).
 			Aggregate(ent.Sum(entalert.FieldCount)).
 			Scan(ctx, &top); err != nil {
@@ -118,11 +125,12 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 			out.TopRules = out.TopRules[:5]
 		}
 
-		if out.AssetsTotal, err = db.Asset.Query().Count(ctx); err != nil {
+		if out.AssetsTotal, err = db.Asset.Query().Where(s.asset()...).Count(ctx); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if out.AssetsOnline, err = db.Asset.Query().
+			Where(s.asset()...).
 			Where(entasset.LastSeenGTE(now.Add(-onlineWindow))).
 			Count(ctx); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

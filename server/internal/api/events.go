@@ -32,6 +32,10 @@ type eventRow struct {
 // 一个文件名，不该要求他先知道字段路径。
 func mapEvents(api *http.ServeMux, db *ent.Client) {
 	api.HandleFunc("GET /api/events", func(w http.ResponseWriter, r *http.Request) {
+		s, ok := requireScope(w, r, db, "viewer")
+		if !ok {
+			return
+		}
 		p := r.URL.Query()
 		now := time.Now()
 
@@ -44,7 +48,7 @@ func mapEvents(api *http.ServeMux, db *ent.Client) {
 			to = v
 		}
 
-		preds := []predicate.Event{entevent.TsGTE(from), entevent.TsLTE(to)}
+		preds := append([]predicate.Event{entevent.TsGTE(from), entevent.TsLTE(to)}, s.event()...)
 		if id, err := uuid.Parse(p.Get("assetId")); err == nil {
 			preds = append(preds, entevent.AssetIDEQ(id))
 		}

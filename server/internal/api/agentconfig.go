@@ -29,6 +29,9 @@ func mapAgentConfig(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, "无效的 asset id", http.StatusBadRequest)
 			return
 		}
+		if !assetInScope(w, r, db, id, "viewer") {
+			return
+		}
 		a, err := db.Asset.Get(r.Context(), id)
 		if ent.IsNotFound(err) {
 			http.NotFound(w, r)
@@ -50,6 +53,9 @@ func mapAgentConfig(api *http.ServeMux, db *ent.Client) {
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "无效的 asset id", http.StatusBadRequest)
+			return
+		}
+		if !assetInScope(w, r, db, id, "analyst") {
 			return
 		}
 		// 先解成结构体再存回去：拒绝无法识别的配置，

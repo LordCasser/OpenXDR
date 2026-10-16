@@ -2,7 +2,7 @@
 
 Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cookie
 （`openxdr_session`）。权限约定：**GET = viewer 及以上，写操作 = analyst 及以上，
-`/api/users`、`/api/audit` 与 `/api/groups` 写操作 = admin**。
+`/api/users`、`/api/audit`、`/api/hunt` 与 `/api/groups` 写操作 = admin**。
 
 ## 认证
 
@@ -77,6 +77,12 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 一台主机属于至多一个组；用户在每个组内有各自角色（admin / analyst / viewer），
 全局 admin 天然是所有组的 admin。实现见 `server/internal/api/groups.go`。
+
+**按组裁剪**：非 admin 用户在资产、事件、告警、incident、指令、采集配置、统计与 incident 报告上
+只看得到自己所在组的资产（`server/internal/api/scope.go`）。未分组资产与无归属数据（如 syslog）
+只有全局 admin 可见；incident 的全部告警都落在可见资产上才可见，跨组 incident 只有 admin 能看。
+写操作在全局角色之外，还要求目标资产所在组内角色达到 analyst，否则 403；读不到的资源一律 404。
+狩猎会读全量数据、无法按组裁剪，只开放给 admin。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|

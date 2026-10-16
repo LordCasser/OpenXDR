@@ -69,6 +69,10 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 			http.Error(w, "exec 必须带 cmd", http.StatusBadRequest)
 			return
 		}
+		// 处置要在目标主机所在组里有 analyst
+		if !assetInScope(w, r, db, body.AssetID, "analyst") {
+			return
+		}
 		// 不传就是演练。真执行必须显式写明，绝不默认动手
 		dryRun := true
 		if body.DryRun != nil {
@@ -148,7 +152,11 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 		writeJSON(w, toRow(cmd))
 	})
 	api.HandleFunc("GET /api/commands", func(w http.ResponseWriter, r *http.Request) {
-		q := db.Command.Query()
+		s, ok := requireScope(w, r, db, "viewer")
+		if !ok {
+			return
+		}
+		q := db.Command.Query().Where(s.command()...)
 		if v := r.URL.Query().Get("incidentId"); v != "" {
 			id, err := uuid.Parse(v)
 			if err != nil {

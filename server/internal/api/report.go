@@ -207,6 +207,9 @@ func mapReport(api *http.ServeMux, db *ent.Client, rules *sigma.Engine) {
 			http.Error(w, "无效的 incident id", http.StatusBadRequest)
 			return
 		}
+		if !incidentVisible(w, r, db, id, "viewer") {
+			return
+		}
 		d, err := collectReport(r, db, rules, id)
 		if ent.IsNotFound(err) {
 			http.NotFound(w, r)

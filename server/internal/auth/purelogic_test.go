@@ -26,6 +26,9 @@ func TestMinRoleRouteTable(t *testing.T) {
 		{"POST", "/api/groups", "admin"},
 		{"PUT", "/api/groups/1/members/2", "admin"},
 		{"DELETE", "/api/groups/1/assets/2", "admin"},
+		// 狩猎读全量数据，无法按组裁剪
+		{"POST", "/api/hunt", "admin"},
+		{"POST", "/api/hunt/rule", "admin"},
 	}
 	for _, c := range cases {
 		if got := minRole(c.method, c.path); got != c.want {
