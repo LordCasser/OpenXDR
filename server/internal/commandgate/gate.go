@@ -119,9 +119,12 @@ func (g *Gate) Issue(ctx context.Context, req Request) (out *ent.Command, retErr
 	}
 	// 请求先持久化审计，包括随后因授权、名单或超时被拒绝的请求。
 	detail := fmt.Sprintf("origin=%s group=%s dry_run=%t cmd=%s", req.Origin, req.GroupID, req.Command.DryRun, *req.Command.Cmd)
+	// 审计里写用户名，与其它审计记录一致；查不到用户时留 ID，授权随后会拒绝
 	who := req.UserID.String()
 	if req.System {
 		who = SystemActor
+	} else if u, err := g.DB.User.Get(ctx, req.UserID); err == nil {
+		who = u.Username
 	}
 	if err := g.log(ctx, who, "exec_requested", req.Command.AssetID.String(), detail); err != nil {
 		return nil, err

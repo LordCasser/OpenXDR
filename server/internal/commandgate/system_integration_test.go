@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"openxdr/server/ent/approval"
+	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/commandpolicy"
 )
 
@@ -36,6 +37,10 @@ func TestSystemIdentity(t *testing.T) {
 		}
 	}
 	assertNoCommand(t, f)
+	// 审计记用户名而不是用户 ID，被拒的请求也一样留痕
+	if n := f.db.AuditLog.Query().Where(auditlog.ActionEQ("exec_requested"), auditlog.UsernameEQ("analyst")).CountX(f.ctx); n != 1 {
+		t.Errorf("人工请求应以用户名留痕 1 条，得到 %d", n)
+	}
 
 	ok := sys
 	ok.SessionID = &task.ID
