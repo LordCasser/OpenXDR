@@ -1,0 +1,21 @@
+title: Linux Port Probe via /dev/tcp
+id: 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90
+status: experimental
+description: |
+  用 bash 的 /dev/tcp 伪设备探测端口（如 "echo > /dev/tcp/主机/端口"），常见于运维连通性检查，
+  也是攻击者落地后的内网端口扫描手法。只探测不接 shell 输入输出，接了的归反弹 shell 规则。
+tags:
+  - attack.discovery
+  - attack.t1046
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  devsock:
+    CommandLine|contains:
+      - '/dev/tcp/'
+      - '/dev/udp/'
+  shell_io:
+    CommandLine|re: '(>&|&>|0<)\s*/dev/(tcp|udp)/|/dev/(tcp|udp)/\S+\s+0[<>]&1|<>\s*/dev/(tcp|udp)/.*[0-9]?>&([3-9]|[1-9][0-9]+)'
+  condition: devsock and not shell_io
+level: low
