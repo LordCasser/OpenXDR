@@ -98,3 +98,28 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
   .chat-sessions { width: 100%; max-height: 260px; }
   .chat-main { min-height: 70vh; }
 }
+
+/* 窄屏导航使用抽屉，给内容保留完整宽度。 */
+.app-content { padding: 24px; }
+.brand { text-decoration: none; }
+.brand:focus-visible, .chat-session-item:focus-visible, .chat-welcome [role="button"]:focus-visible { outline: 2px solid var(--ant-color-primary); outline-offset: -2px; }
+.login-mobile-brand { display: none; align-items: center; gap: 12px; margin-bottom: 32px; }
+.chat-session-item { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: transparent; border: 0; border-bottom: 1px solid var(--ant-color-border-secondary); }
+.chat-welcome { box-sizing: border-box; }
+.chat-log, .chat-main, .chat-sessions { min-height: 0; }
+.markdown { min-width: 0; overflow-wrap: anywhere; }
+.markdown-table { max-width: 100%; overflow-x: auto; }
+@media (max-width: 991px) {
+  .app-content { padding: 16px; }
+  .chat-page { height: calc(100dvh - 96px); }
+}
+@media (max-width: 900px) {
+  .login-mobile-brand { display: flex; }
+  .chat-page { height: auto; }
+  .chat-main { height: 75dvh; min-height: 420px; flex: none; }
+  .chat-log { padding: 16px 12px; }
+  .chat-indent { margin-left: 0; max-width: 100%; }
+  .chat-welcome { padding: 24px 16px; overflow-y: auto; }
+  .chat-main .ant-card-head-wrapper { flex-wrap: wrap; gap: 4px; padding: 8px 0; }
+  .chat-main .ant-card-extra { max-width: 100%; overflow-wrap: anywhere; }
+}

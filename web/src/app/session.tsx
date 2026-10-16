@@ -33,6 +33,7 @@ export function SessionProvider({ me, children }: { me: Me; children: ReactNode 
 
   const signOut = async () => {
     await logout()
+    client.removeQueries({ predicate: query => query.queryKey[0] !== 'me' })
     client.setQueryData(['me'], null)
   }
 

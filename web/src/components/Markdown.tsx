@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 export function Markdown({ text }: { text: string }) {
   return (
     <div className="markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ table: props => <div className="markdown-table"><table {...props} /></div> }}>{text}</ReactMarkdown>
     </div>
   )
 }

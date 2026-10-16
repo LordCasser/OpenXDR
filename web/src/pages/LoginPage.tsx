@@ -20,7 +20,9 @@ export function LoginPage() {
     setBusy(true)
     setError(null)
     try {
-      client.setQueryData(['me'], await login(v.username, v.password))
+      const me = await login(v.username, v.password)
+      client.removeQueries({ predicate: query => query.queryKey[0] !== 'me' })
+      client.setQueryData(['me'], me)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -48,14 +50,15 @@ export function LoginPage() {
       </div>
       <div className="login-panel" style={{ background: token.colorBgContainer }}>
         <div className="login-form">
+          <div className="login-mobile-brand"><Logo size={36} /><span className="brand-name">OpenXDR</span></div>
           <Typography.Title level={3} style={{ marginBottom: 4 }}>{t('signInTitle')}</Typography.Title>
           <Typography.Text type="secondary">{t('signInHint')}</Typography.Text>
-          <Form layout="vertical" size="large" onFinish={submit} requiredMark={false} style={{ marginTop: 32 }}>
-            <Form.Item name="username" rules={[{ required: true, message: t('usernameRequired') }]}>
-              <Input prefix={<UserOutlined />} placeholder={t('username')} autoFocus />
+          <Form disabled={busy} layout="vertical" size="large" onFinish={submit} requiredMark={false} style={{ marginTop: 32 }}>
+            <Form.Item label={t('username')} name="username" rules={[{ required: true, message: t('usernameRequired') }]}>
+              <Input prefix={<UserOutlined />} placeholder={t('username')} autoComplete="username" autoFocus />
             </Form.Item>
-            <Form.Item name="password" rules={[{ required: true, message: t('passwordRequired') }]}>
-              <Input.Password prefix={<LockOutlined />} placeholder={t('password')} />
+            <Form.Item label={t('password')} name="password" rules={[{ required: true, message: t('passwordRequired') }]}>
+              <Input.Password prefix={<LockOutlined />} placeholder={t('password')} autoComplete="current-password" />
             </Form.Item>
             {error && <Alert type="error" title={error} showIcon style={{ marginBottom: 16 }} />}
             <Button type="primary" htmlType="submit" block loading={busy}>{t('signIn')}</Button>

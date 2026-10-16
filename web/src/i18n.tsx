@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
 // 全部界面文案。自制轻量字典：英文由 satisfies 约束，缺键编译不过
 const zh = {
@@ -38,6 +38,7 @@ const zh = {
   passwordRequired: '请输入密码',
   signIn: '登录',
   logout: '退出登录',
+  navigation: '导航菜单',
   currentGroup: '当前组',
   noGroups: '没有可用的组',
   noGroupsHint: '你还不属于任何组。请管理员在「系统管理 → 资产组」中把你加入。',
@@ -434,6 +435,7 @@ const zh = {
 export type MsgKey = keyof typeof zh
 
 const en = {
+  navigation: 'Navigation menu',
   all: 'All',
   actions: 'Actions',
   add: 'Add',
@@ -856,6 +858,7 @@ const I18nContext = createContext<{ locale: Locale; setLocale: (l: Locale) => vo
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(() => (localStorage.getItem('locale') === 'en' ? 'en' : 'zh'))
+  useEffect(() => { document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en' }, [locale])
   const set = (l: Locale) => {
     localStorage.setItem('locale', l)
     setLocale(l)

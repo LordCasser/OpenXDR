@@ -31,7 +31,10 @@ function Templates({ onPick }: { onPick: (prompt: string) => void }) {
     <Row gutter={[12, 12]} style={{ maxWidth: 760, width: '100%' }}>
       {TEMPLATES.map(x => (
         <Col key={x.key} xs={24} md={12}>
-          <Card size="small" hoverable onClick={() => onPick(t(x.prompt))} style={{ height: '100%' }}>
+          <Card size="small" hoverable role="button" tabIndex={0} aria-label={t(x.title)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(t(x.prompt)) }
+            }} onClick={() => onPick(t(x.prompt))} style={{ height: '100%' }}>
             <Space align="start">
               <span style={{ color: token.colorPrimary, fontSize: 18 }}>{x.icon}</span>
               <div>
@@ -286,10 +289,13 @@ export function ChatPage() {
             options={[{ value: '', label: t('all') }, { value: 'chat', label: t('chatSession') }, { value: 'task', label: t('taskSession') }]} />
         </div>
         <div style={{ overflow: 'auto', flex: 1 }}>
+          {sessions.isError && <Alert type="error" showIcon title={String(sessions.error)} />}
           {sessions.isPending && <Spin style={{ display: 'block', margin: 24 }} />}
           {sessions.data && shown.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noSessions')} />}
           {shown.map(s => (
-            <div
+            <button
+              type="button"
+              aria-current={s.id === sessionId ? 'page' : undefined}
               key={s.id}
               className="chat-session-item"
               style={s.id === sessionId ? { background: token.controlItemBgActive } : undefined}
@@ -304,7 +310,7 @@ export function ChatPage() {
                 {s.dry_run === false && <Tag color="red">{t('liveRun')}</Tag>}
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(s.created_at)}</Typography.Text>
               </Space>
-            </div>
+            </button>
           ))}
         </div>
       </Card>
@@ -332,7 +338,8 @@ export function ChatPage() {
           <>
             <div className="chat-log">
               {messages.isPending && <Spin />}
-              {!messages.isPending && rows.length === 0 && canSend && (
+              {messages.isError && <Alert type="error" showIcon title={String(messages.error)} />}
+              {messages.isSuccess && rows.length === 0 && canSend && (
                 <Flex vertical align="center" gap={16} className="chat-welcome">
                   <Typography.Text type="secondary">{t('templatesHint')}</Typography.Text>
                   <Templates onPick={p => { setPrompt(p); input.current?.focus() }} />
@@ -349,6 +356,7 @@ export function ChatPage() {
             </div>
             <div className="chat-composer" style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}>
               <Input.TextArea
+                aria-label={t('chatPlaceholder')}
                 ref={r => { input.current = r?.resizableTextArea?.textArea ?? null }}
                 value={prompt}
                 disabled={!canSend}

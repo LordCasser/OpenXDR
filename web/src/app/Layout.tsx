@@ -3,10 +3,10 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Avatar, Badge, Button, Dropdown, Grid, Layout as AntLayout, Menu, Select, Space, Tag, Tooltip, Typography, theme } from 'antd'
+import { Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout as AntLayout, Menu, Select, Space, Tag, Tooltip, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
 import { useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { fetchApprovals } from '../api'
 import { ROLE_KEY } from '../components/format'
 import { useI18n } from '../i18n'
@@ -32,7 +32,7 @@ function ApprovalBell() {
   return (
     <Tooltip title={t('pendingApprovals', { n: pending })}>
       <Badge count={pending} size="small">
-        <Button type="text" icon={<CheckCircleOutlined />} onClick={() => navigate('/approvals')} />
+        <Button type="text" aria-label={t('pendingApprovals', { n: pending })} icon={<CheckCircleOutlined />} onClick={() => navigate('/approvals')} />
       </Badge>
     </Tooltip>
   )
@@ -43,7 +43,8 @@ export function Layout() {
   const { dark, toggle } = useTheme()
   const { me, isAdmin, groups, group, setGroupId, signOut } = useSession()
   const { token } = theme.useToken()
-  const wide = Grid.useBreakpoint().md
+  const wide = !!Grid.useBreakpoint().lg
+  const [menuOpen, setMenuOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('siderCollapsed') === '1')
@@ -55,7 +56,7 @@ export function Layout() {
   const items: Item[] = NAV.filter(visible).flatMap((n): Item[] =>
     !('items' in n)
       ? [toItem(n)]
-      : collapsed
+      : collapsed && wide
         ? [{ type: 'divider' as const, key: n.key }, ...n.items.filter(visible).map(toItem)]
         : [{ type: 'group' as const, key: n.key, label: t(n.key), children: n.items.filter(visible).map(toItem) }],
   )
@@ -68,46 +69,41 @@ export function Layout() {
 
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
-      <AntLayout.Sider
-        theme="light"
-        width={220}
-        collapsed={collapsed}
-        breakpoint="lg"
-        onBreakpoint={setCollapsed}
-        style={{ borderRight: `1px solid ${token.colorBorderSecondary}`, position: 'sticky', top: 0, height: '100vh', overflow: 'auto' }}
-      >
-        <div className="brand" onClick={() => navigate('/chat')}>
-          <Logo />
-          {!collapsed && <span className="brand-name">OpenXDR</span>}
-        </div>
-        <Menu
-          mode="inline"
-          theme="light"
-          selectedKeys={[selected]}
-          items={items}
-          onClick={e => navigate(e.key)}
-          style={{ borderInlineEnd: 'none' }}
-        />
-      </AntLayout.Sider>
-      <AntLayout>
+      {wide ? (
+        <AntLayout.Sider theme="light" width={220} collapsed={collapsed}
+          style={{ borderRight: `1px solid ${token.colorBorderSecondary}`, position: 'sticky', top: 0, height: '100dvh', overflow: 'auto' }}>
+          <Link className="brand" to="/chat" aria-label="OpenXDR">
+            <Logo />{!collapsed && <span className="brand-name">OpenXDR</span>}
+          </Link>
+          <Menu mode="inline" selectedKeys={[selected]} items={items} onClick={e => navigate(e.key)} style={{ borderInlineEnd: 'none' }} />
+        </AntLayout.Sider>
+      ) : (
+        <Drawer title={<Space><Logo /><span>OpenXDR</span></Space>} placement="left" size={280}
+          open={menuOpen} onClose={() => setMenuOpen(false)} styles={{ body: { padding: 0 } }}>
+          <Menu mode="inline" selectedKeys={[selected]} items={items}
+            onClick={e => { navigate(e.key); setMenuOpen(false) }} />
+        </Drawer>
+      )}
+      <AntLayout style={{ minWidth: 0 }}>
         <AntLayout.Header
           style={{
             background: token.colorBgContainer,
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
-            padding: '0 16px',
+            padding: wide ? '0 16px' : '0 8px',
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
+            gap: wide ? 12 : 4,
             position: 'sticky',
             top: 0,
             zIndex: 10,
           }}
         >
-          <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={collapse} />
-          <Space size={4}>
+          <Button type="text" aria-label={t('navigation')} aria-expanded={wide ? !collapsed : menuOpen} icon={collapsed || !wide ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={wide ? collapse : () => setMenuOpen(true)} />
+          <Space size={4} style={{ minWidth: 0, flex: wide ? undefined : 1 }}>
             {wide && <Typography.Text type="secondary">{t('currentGroup')}</Typography.Text>}
             <Select
-              style={{ minWidth: wide ? 160 : 110 }}
+              aria-label={t('currentGroup')}
+              style={{ width: wide ? 180 : 112 }}
               value={group?.id}
               placeholder={t('noGroups')}
               onChange={setGroupId}
@@ -118,25 +114,26 @@ export function Layout() {
           <div style={{ flex: 1 }} />
           <ApprovalBell />
           <Tooltip title={dark ? t('lightMode') : t('darkMode')}>
-            <Button type="text" icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggle} />
+            <Button type="text" aria-label={dark ? t('lightMode') : t('darkMode')} icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggle} />
           </Tooltip>
           <Tooltip title={locale === 'zh' ? 'English' : '中文'}>
-            <Button type="text" icon={<TranslationOutlined />} onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} />
+            <Button type="text" aria-label={locale === 'zh' ? 'English' : '中文'} icon={<TranslationOutlined />} onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} />
           </Tooltip>
           <Dropdown
+            trigger={['click']}
             menu={{
               items: [{ key: 'logout', icon: <LogoutOutlined />, label: t('logout') }],
               onClick: () => signOut(),
             }}
           >
-            <Space style={{ cursor: 'pointer' }}>
+            <Button type="text" aria-label={me.username}>
               <Avatar size="small" icon={<UserOutlined />} style={{ background: token.colorPrimary }} />
               {wide && <span>{me.username}</span>}
               {wide && <Tag variant="filled">{t(ROLE_KEY[me.role])}</Tag>}
-            </Space>
+            </Button>
           </Dropdown>
         </AntLayout.Header>
-        <AntLayout.Content style={{ padding: 24 }}>
+        <AntLayout.Content className="app-content">
           <Outlet />
         </AntLayout.Content>
       </AntLayout>
