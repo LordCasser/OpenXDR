@@ -1,0 +1,21 @@
+groups:
+  - name: openxdr-ha
+    rules:
+      - alert: OpenXDRHostLost
+        expr: up{job="openxdr"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "OpenXDR 节点 {{ $labels.instance }} 不可达"
+      - alert: PatroniMemberLost
+        expr: up{job="patroni"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Patroni 节点 {{ $labels.instance }} 不可达"
+      - alert: PostgreSQLNoPrimary
+        expr: sum(patroni_primary) < 1
+        for: 30s
+        labels: {severity: critical}
+        annotations:
+          summary: "OpenXDR PostgreSQL 集群没有 primary"

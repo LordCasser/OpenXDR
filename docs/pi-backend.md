@@ -97,6 +97,8 @@ EXEC 在重连时不自动补发，避免原命令已执行但回执丢失造成
 业务基表（包括列级授权）的账号。组视图的过滤内容与授权范围仍由数据库管理员负责，运行时不自动创建角色或视图。
 不得填写平台的 `DATABASE_URL`，也不要让不同组共用可读全部组的账号。
 
+建组视图与角色可直接用 `deploy/pi-query/group-views.sql`（psql 变量传组 UUID、schema、角色与密码，可重复执行）：它建 assets / events / alerts / incidents / commands 五个按组固化过滤的视图，incident 与 REST 同口径（全部告警都在本组才可见），角色只读、5 秒超时、最多 5 个连接。
+
 未配置时完全不注册 query，不回退到平台数据库账号。SQL 不能用于写入报告；报告走
 `report({title,markdown})`，平台强制绑定当前组和会话。
 

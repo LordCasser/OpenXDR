@@ -1,0 +1,142 @@
+services:
+  patroni:
+    build:
+      context: ./deploy/ha/patroni
+      args:
+        PATRONI_VERSION: 4.1.4
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      PATRONI_LOG_LEVEL: INFO
+      OPENXDR_PASSWORD: ${OPENXDR_PASSWORD:?OPENXDR_PASSWORD must be set}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?REPLICATION_PASSWORD must be set}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./runtime/patroni.yml:/etc/patroni/patroni.yml:ro
+      - ./deploy/ha/patroni/post-bootstrap.sh:/etc/patroni/post-bootstrap.sh:ro
+      - ./runtime/secrets:/run/secrets:ro
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://127.0.0.1:8008/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  nats:
+    image: nats:2.11-alpine
+    restart: unless-stopped
+    network_mode: host
+    command: [-c, /etc/nats/nats.conf]
+    volumes:
+      - nats-data:/data
+      - ./runtime/nats.conf:/etc/nats/nats.conf:ro
+      - ./runtime/secrets:/run/secrets:ro
+
+  haproxy:
+    image: haproxy:3.2-alpine
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./deploy/ha/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      patroni:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      haproxy:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://openxdr:${OPENXDR_PASSWORD:?OPENXDR_PASSWORD must be set}@127.0.0.1:15432/openxdr?sslmode=disable
+      NATS_URL: nats://127.0.0.1:4222
+      HTTP_ADDR: :18080
+      GRPC_ADDR: :18081
+      SYSLOG_ADDR: :5514
+      QUEUE_SHARDS: ${QUEUE_SHARDS:-32}
+      QUEUE_REPLICAS: 3
+      LOG_FORMAT: json
+      RULES_PATH: /rules
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      RESPONSE_ENABLED: ${RESPONSE_ENABLED:-false}
+      ISOLATION_ALLOW: ${ISOLATION_ALLOW:-10.1.1.199:8081}
+      TLS_CA_FILE: /certs/ca.crt
+      TLS_CERT_FILE: /certs/server.crt
+      TLS_KEY_FILE: /certs/server.key
+      AI_BASE_URL: ${AI_BASE_URL:-http://10.1.1.180:80/v1}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      PI_MODEL: ${PI_MODEL:-}
+      TASKS_PATH: /tasks
+      # Pi query 工具：组 UUID → 组专属只读 DSN 的 JSON，建法见 deploy/pi-query/group-views.sql
+      PI_QUERY_DATABASE_URLS: ${PI_QUERY_DATABASE_URLS:-}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+      WEBHOOK_FORMAT: ${WEBHOOK_FORMAT:-generic}
+    volumes:
+      - ./rules:/rules:ro
+      - ./tasks:/tasks:ro
+      - ./runtime/app-certs:/certs:ro
+
+  keepalived:
+    build: ./deploy/ha/keepalived
+    tmpfs:
+      - /run/keepalived
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_BROADCAST, NET_RAW]
+    depends_on: [haproxy, server]
+    volumes:
+      - ./runtime/keepalived.conf:/etc/keepalived/keepalived.conf:ro
+
+  web:
+    build:
+      context: ./web
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    restart: unless-stopped
+    depends_on: [haproxy]
+    ports:
+      - 5173:80
+    extra_hosts:
+      - server:host-gateway
+
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.17.3
+    restart: unless-stopped
+    network_mode: host
+    depends_on: [nats]
+    command: [-varz, -jsz=all, http://127.0.0.1:8222]
+
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./deploy/ha/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/cluster/openxdr-alerts.yml:/etc/prometheus/openxdr-alerts.yml:ro
+      - ./deploy/ha/openxdr-ha-alerts.yml:/etc/prometheus/openxdr-ha-alerts.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:12.2.1
+    restart: unless-stopped
+    network_mode: host
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
+    volumes:
+      - ./deploy/ha/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/cluster/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  postgres-data:
+  nats-data:
+  prometheus-data:
+  grafana-data:

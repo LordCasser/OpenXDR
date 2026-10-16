@@ -1,0 +1,34 @@
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.7.1
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - etcd
+      - --name=openxdr-witness
+      - --data-dir=/etcd-data
+      - --listen-client-urls=https://0.0.0.0:2379
+      - --advertise-client-urls=https://__WITNESS_HOST__:2379
+      - --client-cert-auth=true
+      - --trusted-ca-file=/run/secrets/ha-ca.crt
+      - --cert-file=/run/secrets/etcd-server.crt
+      - --key-file=/run/secrets/etcd-server.key
+      - --auto-compaction-retention=1
+      - --auto-compaction-mode=periodic
+    volumes:
+      - etcd-data:/etcd-data
+      - ./secrets:/run/secrets:ro
+
+  nats:
+    image: nats:2.11-alpine
+    restart: unless-stopped
+    network_mode: host
+    command: [-c, /etc/nats/nats.conf]
+    volumes:
+      - nats-data:/var/lib/openxdr-nats
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - ./secrets:/opt/openxdr-ha-witness/secrets:ro
+
+volumes:
+  etcd-data:
+  nats-data:

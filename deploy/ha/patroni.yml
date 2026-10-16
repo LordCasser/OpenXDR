@@ -1,0 +1,71 @@
+scope: openxdr
+namespace: /openxdr/
+name: __NODE_NAME__
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: __NODE_IP__:8008
+
+etcd3:
+  hosts:
+    - __DCS_HOST__:2379
+  protocol: https
+  cacert: /run/secrets/ha-ca.crt
+  cert: /run/secrets/etcd-client.crt
+  key: /run/secrets/etcd-client.key
+
+bootstrap:
+  post_bootstrap: /etc/patroni/post-bootstrap.sh
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    synchronous_mode: true
+    synchronous_mode_strict: false
+    synchronous_node_count: 1
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        password_encryption: scram-sha-256
+        wal_level: replica
+        hot_standby: "on"
+        max_wal_senders: 10
+        max_replication_slots: 10
+        wal_keep_size: 512MB
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+  pg_hba:
+    - host replication replicator 10.1.1.197/32 scram-sha-256
+    - host replication replicator 10.1.1.198/32 scram-sha-256
+    - host all all 127.0.0.1/32 scram-sha-256
+    - host all all 10.1.1.197/32 scram-sha-256
+    - host all all 10.1.1.198/32 scram-sha-256
+  users:
+    openxdr:
+      password: __OPENXDR_PASSWORD_YAML__
+      options:
+        - createdb
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: __NODE_IP__:5432
+  data_dir: /var/lib/postgresql/data
+  bin_dir: /usr/local/bin
+  authentication:
+    superuser:
+      username: postgres
+      password: __POSTGRES_PASSWORD_YAML__
+    replication:
+      username: replicator
+      password: __REPLICATION_PASSWORD_YAML__
+  parameters:
+    unix_socket_directories: /var/run/postgresql
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false
