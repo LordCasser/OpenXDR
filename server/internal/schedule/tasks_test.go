@@ -17,6 +17,13 @@ func TestParseSpec(t *testing.T) {
 		t.Errorf("缺省值不符：%+v", s)
 	}
 
+	// 按名字指定时区：北京时间 2 点即 UTC 18 点，不依赖运行环境装没装 tzdata
+	if sched, err := ParseSchedule("CRON_TZ=Asia/Shanghai 0 2 * * *"); err != nil {
+		t.Fatalf("CRON_TZ 应可解析：%v", err)
+	} else if next := sched.Next(time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC)); next.UTC().Hour() != 18 {
+		t.Errorf("北京时间 2 点应为 UTC 18 点，得到 %v", next.UTC())
+	}
+
 	bad := map[string]string{
 		"缺 id":     "schedule: '@daily'\nprompt: x\n",
 		"缺 prompt": "id: t\nschedule: '@daily'\n",

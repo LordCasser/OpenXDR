@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
+	// CRON_TZ= 要按名字加载时区；运行镜像是 alpine，未必带 tzdata，内嵌一份保证可解析
 	"gopkg.in/yaml.v3"
+	_ "time/tzdata"
 
 	"openxdr/server/ent"
 	enttask "openxdr/server/ent/task"

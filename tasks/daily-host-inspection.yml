@@ -1,7 +1,7 @@
 id: daily-host-inspection
 name: 每日主机巡检
-# 五段 cron，按 server 本地时区；需要固定时区时写 "CRON_TZ=Asia/Shanghai 0 2 * * *"
-schedule: "0 2 * * *"
+# 五段 cron；不写 CRON_TZ 时按 server 本地时区（容器里通常是 UTC），这里固定北京时间凌晨 2 点
+schedule: "CRON_TZ=Asia/Shanghai 0 2 * * *"
 # 留空使用平台默认模型
 model: ""
 # "*" 表示每个组各跑一次；也可写组名
