@@ -6,8 +6,10 @@ import {
 import { AssetList } from './AssetList'
 import { AttackMatrixView } from './AttackMatrixView'
 import { AuditLogView } from './AuditLogView'
+import { ChatView } from './ChatView'
 import { DashboardView } from './DashboardView'
 import { EventSearchView } from './EventSearchView'
+import { GroupManagement } from './GroupManagement'
 import { HuntView } from './HuntView'
 import { IncidentGraphView } from './IncidentGraphView'
 import { IntelList } from './IntelList'
@@ -38,6 +40,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(
     () => new URLSearchParams(location.search).get('incident'),
   )
+  // 对话是主入口；带 ?incident= 的通知链接直接进专家模式
+  const [expert, setExpert] = useState(() => selectedId !== null)
   const [detail, setDetail] = useState<IncidentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   // 标记误报后弹出抑制对话框，把分析师的判断反馈回检测链路
@@ -52,6 +56,7 @@ export default function App() {
   const [showAssets, setShowAssets] = useState(false)
   const [showUsers, setShowUsers] = useState(false)
   const [showAudit, setShowAudit] = useState(false)
+  const [showGroups, setShowGroups] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
   const [expandedAlert, setExpandedAlert] = useState<string | null>(null)
 
@@ -73,11 +78,11 @@ export default function App() {
   }, [statusFilter, t])
 
   useEffect(() => {
-    if (!me) return
+    if (!me || !expert) return
     refresh()
     const timer = setInterval(refresh, 10_000)
     return () => clearInterval(timer)
-  }, [refresh, me])
+  }, [refresh, me, expert])
 
   useEffect(() => {
     setExpandedAlert(null)
@@ -102,6 +107,16 @@ export default function App() {
 
   if (me === undefined) return null
   if (me === null) return <LoginPage onLogin={setMe} />
+  if (!expert) {
+    return (
+      <ChatView
+        me={me}
+        initialSession={new URLSearchParams(location.search).get('session')}
+        onExpert={() => setExpert(true)}
+        onLogout={doLogout}
+      />
+    )
+  }
 
   const canWrite = me.role !== 'viewer'
   const isAdmin = me.role === 'admin'
@@ -121,10 +136,12 @@ export default function App() {
           </div>
         </header>
         <div className="header-actions subnav">
+          <button className="link" onClick={() => setExpert(false)}>{t('chat')}</button>
           <span className="muted">{t('events', { n: incidents.length })}</span>
           <button className="link" onClick={() => setShowDashboard(true)}>{t('dashboard')}</button>
           <button className="link" onClick={() => setShowEventSearch(true)}>{t('eventSearch')}</button>
-          {canWrite && (
+          {/* 狩猎读全量数据，无法按组裁剪，后端只开放给 admin */}
+          {isAdmin && (
             <button className="link" onClick={() => setShowHunt(true)}>{t('hunt')}</button>
           )}
           <button className="link" onClick={() => setShowAssets(true)}>{t('assets')}</button>
@@ -135,6 +152,7 @@ export default function App() {
           {isAdmin && (
             <>
               <button className="link" onClick={() => setShowUsers(true)}>{t('users')}</button>
+              <button className="link" onClick={() => setShowGroups(true)}>{t('groups')}</button>
               <button className="link" onClick={() => setShowAudit(true)}>{t('audit')}</button>
             </>
           )}
@@ -265,6 +283,7 @@ export default function App() {
       {showAssets && <AssetList onClose={() => setShowAssets(false)} />}
       {showUsers && <UserManagement self={me.username} onClose={() => setShowUsers(false)} />}
       {showAudit && <AuditLogView onClose={() => setShowAudit(false)} />}
+      {showGroups && <GroupManagement onClose={() => setShowGroups(false)} />}
     </div>
   )
 }

@@ -168,6 +168,7 @@ export interface Asset {
   agentId: string | null
   firstSeen: string
   lastSeen: string
+  groupId: string | null
 }
 
 export const fetchAssets = () => get<Asset[]>('/api/assets')
@@ -353,3 +354,138 @@ export interface AuditRow {
 }
 
 export const fetchAudit = () => get<AuditRow[]>('/api/audit')
+
+// 资产组：组是纳管与授权单位，role 为当前用户在组内的有效角色
+export interface GroupRow {
+  id: string
+  createdAt: string
+  name: string
+  role: 'admin' | 'analyst' | 'viewer'
+  assetCount: number
+}
+
+export interface MemberRow {
+  userId: string
+  username: string
+  role: string
+}
+
+async function send(method: string, url: string, body?: unknown): Promise<Response> {
+  const r = await fetch(url, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  check(r)
+  if (!r.ok) throw new Error(await r.text())
+  return r
+}
+
+export const fetchGroups = () => get<GroupRow[]>('/api/groups')
+export const createGroup = async (name: string): Promise<GroupRow> =>
+  (await send('POST', '/api/groups', { name })).json()
+export const deleteGroup = (id: string) => send('DELETE', `/api/groups/${id}`)
+export const fetchMembers = (groupId: string) => get<MemberRow[]>(`/api/groups/${groupId}/members`)
+export const setMember = (groupId: string, userId: string, role: string) =>
+  send('PUT', `/api/groups/${groupId}/members/${userId}`, { role })
+export const removeMember = (groupId: string, userId: string) =>
+  send('DELETE', `/api/groups/${groupId}/members/${userId}`)
+export const assignAsset = (groupId: string, assetId: string) =>
+  send('PUT', `/api/groups/${groupId}/assets/${assetId}`)
+export const unassignAsset = (groupId: string, assetId: string) =>
+  send('DELETE', `/api/groups/${groupId}/assets/${assetId}`)
+
+// Pi 会话。后端直接返回 ent 实体，字段是 snake_case
+export interface AgentSession {
+  id: string
+  created_at: string
+  kind: 'chat' | 'task'
+  group_id: string
+  initiator: string
+  model: string
+  title?: string
+  status: 'running' | 'idle' | 'succeeded' | 'failed'
+  error?: string
+  dry_run?: boolean
+}
+
+// Pi 原生消息，原样存库、原样回放
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string }
+  | { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> }
+  | { type: 'image' }
+
+export type PiMessage =
+  | { role: 'user'; content: string | ContentPart[] }
+  | { role: 'assistant'; content: ContentPart[]; stopReason?: string; errorMessage?: string }
+  | { role: 'toolResult'; toolCallId: string; toolName: string; content: ContentPart[]; isError: boolean }
+
+export interface SessionMessage {
+  id: string
+  seq: number
+  role: string
+  content: PiMessage
+}
+
+export const fetchAgentSessions = (groupId: string) =>
+  get<AgentSession[]>(`/api/agent-sessions?groupId=${groupId}`)
+
+export const createAgentSession = async (body: {
+  groupId: string
+  title?: string
+  dryRun: boolean
+}): Promise<AgentSession> => (await send('POST', '/api/agent-sessions', body)).json()
+
+export const fetchSessionMessages = (id: string) =>
+  get<SessionMessage[]>(`/api/agent-sessions/${id}/messages`)
+
+// 流式事件：pi 为 runner 原始事件；done / error 才是本轮的终态
+export type ChatEvent =
+  | { event: 'pi'; data: { type: string; event?: PiEvent } }
+  | { event: 'done'; data: { StopReason: string } }
+  | { event: 'error'; data: { error: string } }
+  | { event: 'session' | 'heartbeat'; data: unknown }
+
+export interface PiEvent {
+  type: string
+  message?: PiMessage
+  toolName?: string
+  toolCallId?: string
+}
+
+// POST SSE：EventSource 只支持 GET，只能自己读流按空行切帧
+export async function sendSessionMessage(
+  id: string,
+  prompt: string,
+  onEvent: (e: ChatEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const r = await fetch(`/api/agent-sessions/${id}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+    signal,
+  })
+  check(r)
+  if (!r.ok || !r.body) throw new Error(await r.text())
+  const reader = r.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buf = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) return
+    buf += value
+    let i
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const frame = buf.slice(0, i)
+      buf = buf.slice(i + 2)
+      let event = 'message'
+      let data = ''
+      for (const line of frame.split('\n')) {
+        if (line.startsWith('event: ')) event = line.slice(7)
+        else if (line.startsWith('data: ')) data += line.slice(6)
+      }
+      onEvent({ event, data: data ? JSON.parse(data) : null } as ChatEvent)
+    }
+  }
+}
