@@ -37,6 +37,18 @@ type Command struct {
 	IssuedBy string `json:"issued_by,omitempty"`
 	// Detail holds the value of the "detail" field.
 	Detail *string `json:"detail,omitempty"`
+	// Cmd holds the value of the "cmd" field.
+	Cmd *string `json:"cmd,omitempty"`
+	// TimeoutMs holds the value of the "timeout_ms" field.
+	TimeoutMs uint32 `json:"timeout_ms,omitempty"`
+	// ExitCode holds the value of the "exit_code" field.
+	ExitCode *int32 `json:"exit_code,omitempty"`
+	// Stdout holds the value of the "stdout" field.
+	Stdout *string `json:"stdout,omitempty"`
+	// Stderr holds the value of the "stderr" field.
+	Stderr *string `json:"stderr,omitempty"`
+	// Truncated holds the value of the "truncated" field.
+	Truncated bool `json:"truncated,omitempty"`
 	// CompletedAt holds the value of the "completed_at" field.
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -72,9 +84,11 @@ func (*Command) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case command.FieldIncidentID, command.FieldProcessGUID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case command.FieldDryRun:
+		case command.FieldDryRun, command.FieldTruncated:
 			values[i] = new(sql.NullBool)
-		case command.FieldKind, command.FieldStatus, command.FieldIssuedBy, command.FieldDetail:
+		case command.FieldTimeoutMs, command.FieldExitCode:
+			values[i] = new(sql.NullInt64)
+		case command.FieldKind, command.FieldStatus, command.FieldIssuedBy, command.FieldDetail, command.FieldCmd, command.FieldStdout, command.FieldStderr:
 			values[i] = new(sql.NullString)
 		case command.FieldCreatedAt, command.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -158,6 +172,46 @@ func (_m *Command) assignValues(columns []string, values []any) error {
 				_m.Detail = new(string)
 				*_m.Detail = value.String
 			}
+		case command.FieldCmd:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field cmd", values[i])
+			} else if value.Valid {
+				_m.Cmd = new(string)
+				*_m.Cmd = value.String
+			}
+		case command.FieldTimeoutMs:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field timeout_ms", values[i])
+			} else if value.Valid {
+				_m.TimeoutMs = uint32(value.Int64)
+			}
+		case command.FieldExitCode:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field exit_code", values[i])
+			} else if value.Valid {
+				_m.ExitCode = new(int32)
+				*_m.ExitCode = int32(value.Int64)
+			}
+		case command.FieldStdout:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field stdout", values[i])
+			} else if value.Valid {
+				_m.Stdout = new(string)
+				*_m.Stdout = value.String
+			}
+		case command.FieldStderr:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field stderr", values[i])
+			} else if value.Valid {
+				_m.Stderr = new(string)
+				*_m.Stderr = value.String
+			}
+		case command.FieldTruncated:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field truncated", values[i])
+			} else if value.Valid {
+				_m.Truncated = value.Bool
+			}
 		case command.FieldCompletedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field completed_at", values[i])
@@ -238,6 +292,32 @@ func (_m *Command) String() string {
 		builder.WriteString("detail=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	if v := _m.Cmd; v != nil {
+		builder.WriteString("cmd=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("timeout_ms=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TimeoutMs))
+	builder.WriteString(", ")
+	if v := _m.ExitCode; v != nil {
+		builder.WriteString("exit_code=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.Stdout; v != nil {
+		builder.WriteString("stdout=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Stderr; v != nil {
+		builder.WriteString("stderr=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("truncated=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Truncated))
 	builder.WriteString(", ")
 	if v := _m.CompletedAt; v != nil {
 		builder.WriteString("completed_at=")

@@ -29,6 +29,13 @@ func (Command) Fields() []ent.Field {
 		field.UUID("process_guid", uuid.UUID{}).Optional().Nillable(),
 		field.String("issued_by").Default("api"),
 		field.String("detail").Optional().Nillable(),
+		// 以下仅 exec 使用：下发的命令行与 agent 回传的执行输出
+		field.Text("cmd").Optional().Nillable(),
+		field.Uint32("timeout_ms").Default(0),
+		field.Int32("exit_code").Optional().Nillable(),
+		field.Text("stdout").Optional().Nillable(),
+		field.Text("stderr").Optional().Nillable(),
+		field.Bool("truncated").Default(false),
 		field.Time("completed_at").Optional().Nillable(),
 	}
 }

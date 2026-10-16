@@ -174,6 +174,128 @@ func (_u *CommandUpdate) ClearDetail() *CommandUpdate {
 	return _u
 }
 
+// SetCmd sets the "cmd" field.
+func (_u *CommandUpdate) SetCmd(v string) *CommandUpdate {
+	_u.mutation.SetCmd(v)
+	return _u
+}
+
+// SetNillableCmd sets the "cmd" field if the given value is not nil.
+func (_u *CommandUpdate) SetNillableCmd(v *string) *CommandUpdate {
+	if v != nil {
+		_u.SetCmd(*v)
+	}
+	return _u
+}
+
+// ClearCmd clears the value of the "cmd" field.
+func (_u *CommandUpdate) ClearCmd() *CommandUpdate {
+	_u.mutation.ClearCmd()
+	return _u
+}
+
+// SetTimeoutMs sets the "timeout_ms" field.
+func (_u *CommandUpdate) SetTimeoutMs(v uint32) *CommandUpdate {
+	_u.mutation.ResetTimeoutMs()
+	_u.mutation.SetTimeoutMs(v)
+	return _u
+}
+
+// SetNillableTimeoutMs sets the "timeout_ms" field if the given value is not nil.
+func (_u *CommandUpdate) SetNillableTimeoutMs(v *uint32) *CommandUpdate {
+	if v != nil {
+		_u.SetTimeoutMs(*v)
+	}
+	return _u
+}
+
+// AddTimeoutMs adds value to the "timeout_ms" field.
+func (_u *CommandUpdate) AddTimeoutMs(v int32) *CommandUpdate {
+	_u.mutation.AddTimeoutMs(v)
+	return _u
+}
+
+// SetExitCode sets the "exit_code" field.
+func (_u *CommandUpdate) SetExitCode(v int32) *CommandUpdate {
+	_u.mutation.ResetExitCode()
+	_u.mutation.SetExitCode(v)
+	return _u
+}
+
+// SetNillableExitCode sets the "exit_code" field if the given value is not nil.
+func (_u *CommandUpdate) SetNillableExitCode(v *int32) *CommandUpdate {
+	if v != nil {
+		_u.SetExitCode(*v)
+	}
+	return _u
+}
+
+// AddExitCode adds value to the "exit_code" field.
+func (_u *CommandUpdate) AddExitCode(v int32) *CommandUpdate {
+	_u.mutation.AddExitCode(v)
+	return _u
+}
+
+// ClearExitCode clears the value of the "exit_code" field.
+func (_u *CommandUpdate) ClearExitCode() *CommandUpdate {
+	_u.mutation.ClearExitCode()
+	return _u
+}
+
+// SetStdout sets the "stdout" field.
+func (_u *CommandUpdate) SetStdout(v string) *CommandUpdate {
+	_u.mutation.SetStdout(v)
+	return _u
+}
+
+// SetNillableStdout sets the "stdout" field if the given value is not nil.
+func (_u *CommandUpdate) SetNillableStdout(v *string) *CommandUpdate {
+	if v != nil {
+		_u.SetStdout(*v)
+	}
+	return _u
+}
+
+// ClearStdout clears the value of the "stdout" field.
+func (_u *CommandUpdate) ClearStdout() *CommandUpdate {
+	_u.mutation.ClearStdout()
+	return _u
+}
+
+// SetStderr sets the "stderr" field.
+func (_u *CommandUpdate) SetStderr(v string) *CommandUpdate {
+	_u.mutation.SetStderr(v)
+	return _u
+}
+
+// SetNillableStderr sets the "stderr" field if the given value is not nil.
+func (_u *CommandUpdate) SetNillableStderr(v *string) *CommandUpdate {
+	if v != nil {
+		_u.SetStderr(*v)
+	}
+	return _u
+}
+
+// ClearStderr clears the value of the "stderr" field.
+func (_u *CommandUpdate) ClearStderr() *CommandUpdate {
+	_u.mutation.ClearStderr()
+	return _u
+}
+
+// SetTruncated sets the "truncated" field.
+func (_u *CommandUpdate) SetTruncated(v bool) *CommandUpdate {
+	_u.mutation.SetTruncated(v)
+	return _u
+}
+
+// SetNillableTruncated sets the "truncated" field if the given value is not nil.
+func (_u *CommandUpdate) SetNillableTruncated(v *bool) *CommandUpdate {
+	if v != nil {
+		_u.SetTruncated(*v)
+	}
+	return _u
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (_u *CommandUpdate) SetCompletedAt(v time.Time) *CommandUpdate {
 	_u.mutation.SetCompletedAt(v)
@@ -289,6 +411,42 @@ func (_u *CommandUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DetailCleared() {
 		_spec.ClearField(command.FieldDetail, field.TypeString)
+	}
+	if value, ok := _u.mutation.Cmd(); ok {
+		_spec.SetField(command.FieldCmd, field.TypeString, value)
+	}
+	if _u.mutation.CmdCleared() {
+		_spec.ClearField(command.FieldCmd, field.TypeString)
+	}
+	if value, ok := _u.mutation.TimeoutMs(); ok {
+		_spec.SetField(command.FieldTimeoutMs, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.AddedTimeoutMs(); ok {
+		_spec.AddField(command.FieldTimeoutMs, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.ExitCode(); ok {
+		_spec.SetField(command.FieldExitCode, field.TypeInt32, value)
+	}
+	if value, ok := _u.mutation.AddedExitCode(); ok {
+		_spec.AddField(command.FieldExitCode, field.TypeInt32, value)
+	}
+	if _u.mutation.ExitCodeCleared() {
+		_spec.ClearField(command.FieldExitCode, field.TypeInt32)
+	}
+	if value, ok := _u.mutation.Stdout(); ok {
+		_spec.SetField(command.FieldStdout, field.TypeString, value)
+	}
+	if _u.mutation.StdoutCleared() {
+		_spec.ClearField(command.FieldStdout, field.TypeString)
+	}
+	if value, ok := _u.mutation.Stderr(); ok {
+		_spec.SetField(command.FieldStderr, field.TypeString, value)
+	}
+	if _u.mutation.StderrCleared() {
+		_spec.ClearField(command.FieldStderr, field.TypeString)
+	}
+	if value, ok := _u.mutation.Truncated(); ok {
+		_spec.SetField(command.FieldTruncated, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CompletedAt(); ok {
 		_spec.SetField(command.FieldCompletedAt, field.TypeTime, value)
@@ -489,6 +647,128 @@ func (_u *CommandUpdateOne) ClearDetail() *CommandUpdateOne {
 	return _u
 }
 
+// SetCmd sets the "cmd" field.
+func (_u *CommandUpdateOne) SetCmd(v string) *CommandUpdateOne {
+	_u.mutation.SetCmd(v)
+	return _u
+}
+
+// SetNillableCmd sets the "cmd" field if the given value is not nil.
+func (_u *CommandUpdateOne) SetNillableCmd(v *string) *CommandUpdateOne {
+	if v != nil {
+		_u.SetCmd(*v)
+	}
+	return _u
+}
+
+// ClearCmd clears the value of the "cmd" field.
+func (_u *CommandUpdateOne) ClearCmd() *CommandUpdateOne {
+	_u.mutation.ClearCmd()
+	return _u
+}
+
+// SetTimeoutMs sets the "timeout_ms" field.
+func (_u *CommandUpdateOne) SetTimeoutMs(v uint32) *CommandUpdateOne {
+	_u.mutation.ResetTimeoutMs()
+	_u.mutation.SetTimeoutMs(v)
+	return _u
+}
+
+// SetNillableTimeoutMs sets the "timeout_ms" field if the given value is not nil.
+func (_u *CommandUpdateOne) SetNillableTimeoutMs(v *uint32) *CommandUpdateOne {
+	if v != nil {
+		_u.SetTimeoutMs(*v)
+	}
+	return _u
+}
+
+// AddTimeoutMs adds value to the "timeout_ms" field.
+func (_u *CommandUpdateOne) AddTimeoutMs(v int32) *CommandUpdateOne {
+	_u.mutation.AddTimeoutMs(v)
+	return _u
+}
+
+// SetExitCode sets the "exit_code" field.
+func (_u *CommandUpdateOne) SetExitCode(v int32) *CommandUpdateOne {
+	_u.mutation.ResetExitCode()
+	_u.mutation.SetExitCode(v)
+	return _u
+}
+
+// SetNillableExitCode sets the "exit_code" field if the given value is not nil.
+func (_u *CommandUpdateOne) SetNillableExitCode(v *int32) *CommandUpdateOne {
+	if v != nil {
+		_u.SetExitCode(*v)
+	}
+	return _u
+}
+
+// AddExitCode adds value to the "exit_code" field.
+func (_u *CommandUpdateOne) AddExitCode(v int32) *CommandUpdateOne {
+	_u.mutation.AddExitCode(v)
+	return _u
+}
+
+// ClearExitCode clears the value of the "exit_code" field.
+func (_u *CommandUpdateOne) ClearExitCode() *CommandUpdateOne {
+	_u.mutation.ClearExitCode()
+	return _u
+}
+
+// SetStdout sets the "stdout" field.
+func (_u *CommandUpdateOne) SetStdout(v string) *CommandUpdateOne {
+	_u.mutation.SetStdout(v)
+	return _u
+}
+
+// SetNillableStdout sets the "stdout" field if the given value is not nil.
+func (_u *CommandUpdateOne) SetNillableStdout(v *string) *CommandUpdateOne {
+	if v != nil {
+		_u.SetStdout(*v)
+	}
+	return _u
+}
+
+// ClearStdout clears the value of the "stdout" field.
+func (_u *CommandUpdateOne) ClearStdout() *CommandUpdateOne {
+	_u.mutation.ClearStdout()
+	return _u
+}
+
+// SetStderr sets the "stderr" field.
+func (_u *CommandUpdateOne) SetStderr(v string) *CommandUpdateOne {
+	_u.mutation.SetStderr(v)
+	return _u
+}
+
+// SetNillableStderr sets the "stderr" field if the given value is not nil.
+func (_u *CommandUpdateOne) SetNillableStderr(v *string) *CommandUpdateOne {
+	if v != nil {
+		_u.SetStderr(*v)
+	}
+	return _u
+}
+
+// ClearStderr clears the value of the "stderr" field.
+func (_u *CommandUpdateOne) ClearStderr() *CommandUpdateOne {
+	_u.mutation.ClearStderr()
+	return _u
+}
+
+// SetTruncated sets the "truncated" field.
+func (_u *CommandUpdateOne) SetTruncated(v bool) *CommandUpdateOne {
+	_u.mutation.SetTruncated(v)
+	return _u
+}
+
+// SetNillableTruncated sets the "truncated" field if the given value is not nil.
+func (_u *CommandUpdateOne) SetNillableTruncated(v *bool) *CommandUpdateOne {
+	if v != nil {
+		_u.SetTruncated(*v)
+	}
+	return _u
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (_u *CommandUpdateOne) SetCompletedAt(v time.Time) *CommandUpdateOne {
 	_u.mutation.SetCompletedAt(v)
@@ -634,6 +914,42 @@ func (_u *CommandUpdateOne) sqlSave(ctx context.Context) (_node *Command, err er
 	}
 	if _u.mutation.DetailCleared() {
 		_spec.ClearField(command.FieldDetail, field.TypeString)
+	}
+	if value, ok := _u.mutation.Cmd(); ok {
+		_spec.SetField(command.FieldCmd, field.TypeString, value)
+	}
+	if _u.mutation.CmdCleared() {
+		_spec.ClearField(command.FieldCmd, field.TypeString)
+	}
+	if value, ok := _u.mutation.TimeoutMs(); ok {
+		_spec.SetField(command.FieldTimeoutMs, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.AddedTimeoutMs(); ok {
+		_spec.AddField(command.FieldTimeoutMs, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.ExitCode(); ok {
+		_spec.SetField(command.FieldExitCode, field.TypeInt32, value)
+	}
+	if value, ok := _u.mutation.AddedExitCode(); ok {
+		_spec.AddField(command.FieldExitCode, field.TypeInt32, value)
+	}
+	if _u.mutation.ExitCodeCleared() {
+		_spec.ClearField(command.FieldExitCode, field.TypeInt32)
+	}
+	if value, ok := _u.mutation.Stdout(); ok {
+		_spec.SetField(command.FieldStdout, field.TypeString, value)
+	}
+	if _u.mutation.StdoutCleared() {
+		_spec.ClearField(command.FieldStdout, field.TypeString)
+	}
+	if value, ok := _u.mutation.Stderr(); ok {
+		_spec.SetField(command.FieldStderr, field.TypeString, value)
+	}
+	if _u.mutation.StderrCleared() {
+		_spec.ClearField(command.FieldStderr, field.TypeString)
+	}
+	if value, ok := _u.mutation.Truncated(); ok {
+		_spec.SetField(command.FieldTruncated, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CompletedAt(); ok {
 		_spec.SetField(command.FieldCompletedAt, field.TypeTime, value)

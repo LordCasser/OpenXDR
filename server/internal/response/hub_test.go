@@ -39,6 +39,7 @@ func TestKindToProto(t *testing.T) {
 		{"kill_process", pb.CommandKind_KILL_PROCESS},
 		{"isolate_host", pb.CommandKind_ISOLATE_HOST},
 		{"unisolate_host", pb.CommandKind_UNISOLATE_HOST},
+		{"exec", pb.CommandKind_EXEC},
 		{"未知动作", pb.CommandKind_COMMAND_KIND_UNSPECIFIED}, // 未注册 → zero value
 	}
 	for _, tc := range cases {
@@ -49,10 +50,10 @@ func TestKindToProto(t *testing.T) {
 }
 
 func TestKinds(t *testing.T) {
-	if len(Kinds) != 3 {
-		t.Fatalf("Kinds 应恰好含三种动作，got %d", len(Kinds))
+	if len(Kinds) != 4 {
+		t.Fatalf("Kinds 应恰好含四种动作，got %d", len(Kinds))
 	}
-	for _, kind := range []string{"kill_process", "isolate_host", "unisolate_host"} {
+	for _, kind := range []string{"kill_process", "isolate_host", "unisolate_host", "exec"} {
 		if _, ok := Kinds[kind]; !ok {
 			t.Errorf("Kinds 缺 %q", kind)
 		}

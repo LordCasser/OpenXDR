@@ -2738,6 +2738,14 @@ type CommandMutation struct {
 	process_guid  *uuid.UUID
 	issued_by     *string
 	detail        *string
+	cmd           *string
+	timeout_ms    *uint32
+	addtimeout_ms *int32
+	exit_code     *int32
+	addexit_code  *int32
+	stdout        *string
+	stderr        *string
+	truncated     *bool
 	completed_at  *time.Time
 	clearedFields map[string]struct{}
 	asset         *uuid.UUID
@@ -3214,6 +3222,315 @@ func (m *CommandMutation) ResetDetail() {
 	delete(m.clearedFields, command.FieldDetail)
 }
 
+// SetCmd sets the "cmd" field.
+func (m *CommandMutation) SetCmd(s string) {
+	m.cmd = &s
+}
+
+// Cmd returns the value of the "cmd" field in the mutation.
+func (m *CommandMutation) Cmd() (r string, exists bool) {
+	v := m.cmd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCmd returns the old "cmd" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldCmd(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCmd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCmd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCmd: %w", err)
+	}
+	return oldValue.Cmd, nil
+}
+
+// ClearCmd clears the value of the "cmd" field.
+func (m *CommandMutation) ClearCmd() {
+	m.cmd = nil
+	m.clearedFields[command.FieldCmd] = struct{}{}
+}
+
+// CmdCleared returns if the "cmd" field was cleared in this mutation.
+func (m *CommandMutation) CmdCleared() bool {
+	_, ok := m.clearedFields[command.FieldCmd]
+	return ok
+}
+
+// ResetCmd resets all changes to the "cmd" field.
+func (m *CommandMutation) ResetCmd() {
+	m.cmd = nil
+	delete(m.clearedFields, command.FieldCmd)
+}
+
+// SetTimeoutMs sets the "timeout_ms" field.
+func (m *CommandMutation) SetTimeoutMs(u uint32) {
+	m.timeout_ms = &u
+	m.addtimeout_ms = nil
+}
+
+// TimeoutMs returns the value of the "timeout_ms" field in the mutation.
+func (m *CommandMutation) TimeoutMs() (r uint32, exists bool) {
+	v := m.timeout_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimeoutMs returns the old "timeout_ms" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldTimeoutMs(ctx context.Context) (v uint32, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimeoutMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimeoutMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimeoutMs: %w", err)
+	}
+	return oldValue.TimeoutMs, nil
+}
+
+// AddTimeoutMs adds u to the "timeout_ms" field.
+func (m *CommandMutation) AddTimeoutMs(u int32) {
+	if m.addtimeout_ms != nil {
+		*m.addtimeout_ms += u
+	} else {
+		m.addtimeout_ms = &u
+	}
+}
+
+// AddedTimeoutMs returns the value that was added to the "timeout_ms" field in this mutation.
+func (m *CommandMutation) AddedTimeoutMs() (r int32, exists bool) {
+	v := m.addtimeout_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTimeoutMs resets all changes to the "timeout_ms" field.
+func (m *CommandMutation) ResetTimeoutMs() {
+	m.timeout_ms = nil
+	m.addtimeout_ms = nil
+}
+
+// SetExitCode sets the "exit_code" field.
+func (m *CommandMutation) SetExitCode(i int32) {
+	m.exit_code = &i
+	m.addexit_code = nil
+}
+
+// ExitCode returns the value of the "exit_code" field in the mutation.
+func (m *CommandMutation) ExitCode() (r int32, exists bool) {
+	v := m.exit_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExitCode returns the old "exit_code" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldExitCode(ctx context.Context) (v *int32, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExitCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExitCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExitCode: %w", err)
+	}
+	return oldValue.ExitCode, nil
+}
+
+// AddExitCode adds i to the "exit_code" field.
+func (m *CommandMutation) AddExitCode(i int32) {
+	if m.addexit_code != nil {
+		*m.addexit_code += i
+	} else {
+		m.addexit_code = &i
+	}
+}
+
+// AddedExitCode returns the value that was added to the "exit_code" field in this mutation.
+func (m *CommandMutation) AddedExitCode() (r int32, exists bool) {
+	v := m.addexit_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearExitCode clears the value of the "exit_code" field.
+func (m *CommandMutation) ClearExitCode() {
+	m.exit_code = nil
+	m.addexit_code = nil
+	m.clearedFields[command.FieldExitCode] = struct{}{}
+}
+
+// ExitCodeCleared returns if the "exit_code" field was cleared in this mutation.
+func (m *CommandMutation) ExitCodeCleared() bool {
+	_, ok := m.clearedFields[command.FieldExitCode]
+	return ok
+}
+
+// ResetExitCode resets all changes to the "exit_code" field.
+func (m *CommandMutation) ResetExitCode() {
+	m.exit_code = nil
+	m.addexit_code = nil
+	delete(m.clearedFields, command.FieldExitCode)
+}
+
+// SetStdout sets the "stdout" field.
+func (m *CommandMutation) SetStdout(s string) {
+	m.stdout = &s
+}
+
+// Stdout returns the value of the "stdout" field in the mutation.
+func (m *CommandMutation) Stdout() (r string, exists bool) {
+	v := m.stdout
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStdout returns the old "stdout" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldStdout(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStdout is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStdout requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStdout: %w", err)
+	}
+	return oldValue.Stdout, nil
+}
+
+// ClearStdout clears the value of the "stdout" field.
+func (m *CommandMutation) ClearStdout() {
+	m.stdout = nil
+	m.clearedFields[command.FieldStdout] = struct{}{}
+}
+
+// StdoutCleared returns if the "stdout" field was cleared in this mutation.
+func (m *CommandMutation) StdoutCleared() bool {
+	_, ok := m.clearedFields[command.FieldStdout]
+	return ok
+}
+
+// ResetStdout resets all changes to the "stdout" field.
+func (m *CommandMutation) ResetStdout() {
+	m.stdout = nil
+	delete(m.clearedFields, command.FieldStdout)
+}
+
+// SetStderr sets the "stderr" field.
+func (m *CommandMutation) SetStderr(s string) {
+	m.stderr = &s
+}
+
+// Stderr returns the value of the "stderr" field in the mutation.
+func (m *CommandMutation) Stderr() (r string, exists bool) {
+	v := m.stderr
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStderr returns the old "stderr" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldStderr(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStderr is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStderr requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStderr: %w", err)
+	}
+	return oldValue.Stderr, nil
+}
+
+// ClearStderr clears the value of the "stderr" field.
+func (m *CommandMutation) ClearStderr() {
+	m.stderr = nil
+	m.clearedFields[command.FieldStderr] = struct{}{}
+}
+
+// StderrCleared returns if the "stderr" field was cleared in this mutation.
+func (m *CommandMutation) StderrCleared() bool {
+	_, ok := m.clearedFields[command.FieldStderr]
+	return ok
+}
+
+// ResetStderr resets all changes to the "stderr" field.
+func (m *CommandMutation) ResetStderr() {
+	m.stderr = nil
+	delete(m.clearedFields, command.FieldStderr)
+}
+
+// SetTruncated sets the "truncated" field.
+func (m *CommandMutation) SetTruncated(b bool) {
+	m.truncated = &b
+}
+
+// Truncated returns the value of the "truncated" field in the mutation.
+func (m *CommandMutation) Truncated() (r bool, exists bool) {
+	v := m.truncated
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTruncated returns the old "truncated" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldTruncated(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTruncated is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTruncated requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTruncated: %w", err)
+	}
+	return oldValue.Truncated, nil
+}
+
+// ResetTruncated resets all changes to the "truncated" field.
+func (m *CommandMutation) ResetTruncated() {
+	m.truncated = nil
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (m *CommandMutation) SetCompletedAt(t time.Time) {
 	m.completed_at = &t
@@ -3324,7 +3641,7 @@ func (m *CommandMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CommandMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, command.FieldCreatedAt)
 	}
@@ -3351,6 +3668,24 @@ func (m *CommandMutation) Fields() []string {
 	}
 	if m.detail != nil {
 		fields = append(fields, command.FieldDetail)
+	}
+	if m.cmd != nil {
+		fields = append(fields, command.FieldCmd)
+	}
+	if m.timeout_ms != nil {
+		fields = append(fields, command.FieldTimeoutMs)
+	}
+	if m.exit_code != nil {
+		fields = append(fields, command.FieldExitCode)
+	}
+	if m.stdout != nil {
+		fields = append(fields, command.FieldStdout)
+	}
+	if m.stderr != nil {
+		fields = append(fields, command.FieldStderr)
+	}
+	if m.truncated != nil {
+		fields = append(fields, command.FieldTruncated)
 	}
 	if m.completed_at != nil {
 		fields = append(fields, command.FieldCompletedAt)
@@ -3381,6 +3716,18 @@ func (m *CommandMutation) Field(name string) (ent.Value, bool) {
 		return m.IssuedBy()
 	case command.FieldDetail:
 		return m.Detail()
+	case command.FieldCmd:
+		return m.Cmd()
+	case command.FieldTimeoutMs:
+		return m.TimeoutMs()
+	case command.FieldExitCode:
+		return m.ExitCode()
+	case command.FieldStdout:
+		return m.Stdout()
+	case command.FieldStderr:
+		return m.Stderr()
+	case command.FieldTruncated:
+		return m.Truncated()
 	case command.FieldCompletedAt:
 		return m.CompletedAt()
 	}
@@ -3410,6 +3757,18 @@ func (m *CommandMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldIssuedBy(ctx)
 	case command.FieldDetail:
 		return m.OldDetail(ctx)
+	case command.FieldCmd:
+		return m.OldCmd(ctx)
+	case command.FieldTimeoutMs:
+		return m.OldTimeoutMs(ctx)
+	case command.FieldExitCode:
+		return m.OldExitCode(ctx)
+	case command.FieldStdout:
+		return m.OldStdout(ctx)
+	case command.FieldStderr:
+		return m.OldStderr(ctx)
+	case command.FieldTruncated:
+		return m.OldTruncated(ctx)
 	case command.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
 	}
@@ -3484,6 +3843,48 @@ func (m *CommandMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDetail(v)
 		return nil
+	case command.FieldCmd:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCmd(v)
+		return nil
+	case command.FieldTimeoutMs:
+		v, ok := value.(uint32)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimeoutMs(v)
+		return nil
+	case command.FieldExitCode:
+		v, ok := value.(int32)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExitCode(v)
+		return nil
+	case command.FieldStdout:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStdout(v)
+		return nil
+	case command.FieldStderr:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStderr(v)
+		return nil
+	case command.FieldTruncated:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTruncated(v)
+		return nil
 	case command.FieldCompletedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -3498,13 +3899,26 @@ func (m *CommandMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *CommandMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addtimeout_ms != nil {
+		fields = append(fields, command.FieldTimeoutMs)
+	}
+	if m.addexit_code != nil {
+		fields = append(fields, command.FieldExitCode)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *CommandMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case command.FieldTimeoutMs:
+		return m.AddedTimeoutMs()
+	case command.FieldExitCode:
+		return m.AddedExitCode()
+	}
 	return nil, false
 }
 
@@ -3513,6 +3927,20 @@ func (m *CommandMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *CommandMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case command.FieldTimeoutMs:
+		v, ok := value.(int32)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTimeoutMs(v)
+		return nil
+	case command.FieldExitCode:
+		v, ok := value.(int32)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddExitCode(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Command numeric field %s", name)
 }
@@ -3529,6 +3957,18 @@ func (m *CommandMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(command.FieldDetail) {
 		fields = append(fields, command.FieldDetail)
+	}
+	if m.FieldCleared(command.FieldCmd) {
+		fields = append(fields, command.FieldCmd)
+	}
+	if m.FieldCleared(command.FieldExitCode) {
+		fields = append(fields, command.FieldExitCode)
+	}
+	if m.FieldCleared(command.FieldStdout) {
+		fields = append(fields, command.FieldStdout)
+	}
+	if m.FieldCleared(command.FieldStderr) {
+		fields = append(fields, command.FieldStderr)
 	}
 	if m.FieldCleared(command.FieldCompletedAt) {
 		fields = append(fields, command.FieldCompletedAt)
@@ -3555,6 +3995,18 @@ func (m *CommandMutation) ClearField(name string) error {
 		return nil
 	case command.FieldDetail:
 		m.ClearDetail()
+		return nil
+	case command.FieldCmd:
+		m.ClearCmd()
+		return nil
+	case command.FieldExitCode:
+		m.ClearExitCode()
+		return nil
+	case command.FieldStdout:
+		m.ClearStdout()
+		return nil
+	case command.FieldStderr:
+		m.ClearStderr()
 		return nil
 	case command.FieldCompletedAt:
 		m.ClearCompletedAt()
@@ -3593,6 +4045,24 @@ func (m *CommandMutation) ResetField(name string) error {
 		return nil
 	case command.FieldDetail:
 		m.ResetDetail()
+		return nil
+	case command.FieldCmd:
+		m.ResetCmd()
+		return nil
+	case command.FieldTimeoutMs:
+		m.ResetTimeoutMs()
+		return nil
+	case command.FieldExitCode:
+		m.ResetExitCode()
+		return nil
+	case command.FieldStdout:
+		m.ResetStdout()
+		return nil
+	case command.FieldStderr:
+		m.ResetStderr()
+		return nil
+	case command.FieldTruncated:
+		m.ResetTruncated()
 		return nil
 	case command.FieldCompletedAt:
 		m.ResetCompletedAt()

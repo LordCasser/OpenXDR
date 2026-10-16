@@ -74,12 +74,24 @@ async fn command_loop(mut client: AgentServiceClient<tonic::transport::Channel>,
     };
 
     while let Ok(Some(cmd)) = inbound.message().await {
-        let result = respond::execute(&agent_id, &cmd);
-        println!("执行指令 {}: {}", cmd.id, result.detail);
-        if tx.send(result).await.is_err() {
+        // exec 可能跑很久，并发执行；结束进程与隔离保持顺序，先隔离后解除不能颠倒
+        if cmd.kind() == pb::CommandKind::Exec {
+            tokio::spawn(run_command(agent_id.clone(), cmd, tx.clone()));
+        } else if !run_command(agent_id.clone(), cmd, tx.clone()).await {
             return;
         }
     }
+}
+
+/// 执行一条指令并回执；回执通道已关闭时返回 false。
+async fn run_command(
+    agent_id: String,
+    cmd: pb::Command,
+    tx: tokio::sync::mpsc::Sender<pb::CommandResult>,
+) -> bool {
+    let result = respond::execute(&agent_id, &cmd).await;
+    println!("执行指令 {}: {}", cmd.id, result.detail);
+    tx.send(result).await.is_ok()
 }
 
 /// 本机非回环 IP。server 按这些地址把探针看到的网络流量归属到本资产，

@@ -33,6 +33,18 @@ const (
 	FieldIssuedBy = "issued_by"
 	// FieldDetail holds the string denoting the detail field in the database.
 	FieldDetail = "detail"
+	// FieldCmd holds the string denoting the cmd field in the database.
+	FieldCmd = "cmd"
+	// FieldTimeoutMs holds the string denoting the timeout_ms field in the database.
+	FieldTimeoutMs = "timeout_ms"
+	// FieldExitCode holds the string denoting the exit_code field in the database.
+	FieldExitCode = "exit_code"
+	// FieldStdout holds the string denoting the stdout field in the database.
+	FieldStdout = "stdout"
+	// FieldStderr holds the string denoting the stderr field in the database.
+	FieldStderr = "stderr"
+	// FieldTruncated holds the string denoting the truncated field in the database.
+	FieldTruncated = "truncated"
 	// FieldCompletedAt holds the string denoting the completed_at field in the database.
 	FieldCompletedAt = "completed_at"
 	// EdgeAsset holds the string denoting the asset edge name in mutations.
@@ -60,6 +72,12 @@ var Columns = []string{
 	FieldProcessGUID,
 	FieldIssuedBy,
 	FieldDetail,
+	FieldCmd,
+	FieldTimeoutMs,
+	FieldExitCode,
+	FieldStdout,
+	FieldStderr,
+	FieldTruncated,
 	FieldCompletedAt,
 }
 
@@ -82,6 +100,10 @@ var (
 	DefaultDryRun bool
 	// DefaultIssuedBy holds the default value on creation for the "issued_by" field.
 	DefaultIssuedBy string
+	// DefaultTimeoutMs holds the default value on creation for the "timeout_ms" field.
+	DefaultTimeoutMs uint32
+	// DefaultTruncated holds the default value on creation for the "truncated" field.
+	DefaultTruncated bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -137,6 +159,36 @@ func ByIssuedBy(opts ...sql.OrderTermOption) OrderOption {
 // ByDetail orders the results by the detail field.
 func ByDetail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDetail, opts...).ToFunc()
+}
+
+// ByCmd orders the results by the cmd field.
+func ByCmd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCmd, opts...).ToFunc()
+}
+
+// ByTimeoutMs orders the results by the timeout_ms field.
+func ByTimeoutMs(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTimeoutMs, opts...).ToFunc()
+}
+
+// ByExitCode orders the results by the exit_code field.
+func ByExitCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExitCode, opts...).ToFunc()
+}
+
+// ByStdout orders the results by the stdout field.
+func ByStdout(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStdout, opts...).ToFunc()
+}
+
+// ByStderr orders the results by the stderr field.
+func ByStderr(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStderr, opts...).ToFunc()
+}
+
+// ByTruncated orders the results by the truncated field.
+func ByTruncated(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTruncated, opts...).ToFunc()
 }
 
 // ByCompletedAt orders the results by the completed_at field.

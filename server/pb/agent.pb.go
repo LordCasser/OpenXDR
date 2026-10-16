@@ -31,6 +31,7 @@ const (
 	CommandKind_KILL_PROCESS             CommandKind = 1
 	CommandKind_ISOLATE_HOST             CommandKind = 2
 	CommandKind_UNISOLATE_HOST           CommandKind = 3
+	CommandKind_EXEC                     CommandKind = 4
 )
 
 // Enum value maps for CommandKind.
@@ -40,12 +41,14 @@ var (
 		1: "KILL_PROCESS",
 		2: "ISOLATE_HOST",
 		3: "UNISOLATE_HOST",
+		4: "EXEC",
 	}
 	CommandKind_value = map[string]int32{
 		"COMMAND_KIND_UNSPECIFIED": 0,
 		"KILL_PROCESS":             1,
 		"ISOLATE_HOST":             2,
 		"UNISOLATE_HOST":           3,
+		"EXEC":                     4,
 	}
 )
 
@@ -139,8 +142,11 @@ type Command struct {
 	Pid         uint32 `protobuf:"varint,5,opt,name=pid,proto3" json:"pid,omitempty"`
 	// ISOLATE_HOST 用：隔离期间必须放行的地址，否则 agent 失联后无法解除隔离
 	AllowEndpoints []string `protobuf:"bytes,6,rep,name=allow_endpoints,json=allowEndpoints,proto3" json:"allow_endpoints,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// EXEC 用：Linux 交给 sh -c，Windows 交给 PowerShell；timeout_ms 为 0 时用 agent 默认值
+	Cmd           string `protobuf:"bytes,7,opt,name=cmd,proto3" json:"cmd,omitempty"`
+	TimeoutMs     uint32 `protobuf:"varint,8,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Command) Reset() {
@@ -215,12 +221,31 @@ func (x *Command) GetAllowEndpoints() []string {
 	return nil
 }
 
+func (x *Command) GetCmd() string {
+	if x != nil {
+		return x.Cmd
+	}
+	return ""
+}
+
+func (x *Command) GetTimeoutMs() uint32 {
+	if x != nil {
+		return x.TimeoutMs
+	}
+	return 0
+}
+
 type CommandResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`       // 首条消息用于认领连接，之后每条结果都带上
-	CommandId     string                 `protobuf:"bytes,2,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"` // 空表示这是认领连接的首条消息
-	Status        CommandResult_Status   `protobuf:"varint,3,opt,name=status,proto3,enum=openxdr.agent.v1.CommandResult_Status" json:"status,omitempty"`
-	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"` // 人可读的执行说明或失败原因
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	AgentId   string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`       // 首条消息用于认领连接，之后每条结果都带上
+	CommandId string                 `protobuf:"bytes,2,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"` // 空表示这是认领连接的首条消息
+	Status    CommandResult_Status   `protobuf:"varint,3,opt,name=status,proto3,enum=openxdr.agent.v1.CommandResult_Status" json:"status,omitempty"`
+	Detail    string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"` // 人可读的执行说明或失败原因
+	// 以下仅 EXEC 有意义：输出各自截断到 agent 上限，truncated 标记是否发生截断
+	ExitCode      int32  `protobuf:"varint,5,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	Stdout        string `protobuf:"bytes,6,opt,name=stdout,proto3" json:"stdout,omitempty"`
+	Stderr        string `protobuf:"bytes,7,opt,name=stderr,proto3" json:"stderr,omitempty"`
+	Truncated     bool   `protobuf:"varint,8,opt,name=truncated,proto3" json:"truncated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -281,6 +306,34 @@ func (x *CommandResult) GetDetail() string {
 		return x.Detail
 	}
 	return ""
+}
+
+func (x *CommandResult) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *CommandResult) GetStdout() string {
+	if x != nil {
+		return x.Stdout
+	}
+	return ""
+}
+
+func (x *CommandResult) GetStderr() string {
+	if x != nil {
+		return x.Stderr
+	}
+	return ""
+}
+
+func (x *CommandResult) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
 }
 
 type RegisterRequest struct {
@@ -563,20 +616,27 @@ var File_agent_proto protoreflect.FileDescriptor
 
 const file_agent_proto_rawDesc = "" +
 	"\n" +
-	"\vagent.proto\x12\x10openxdr.agent.v1\"\xc3\x01\n" +
+	"\vagent.proto\x12\x10openxdr.agent.v1\"\xf4\x01\n" +
 	"\aCommand\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.openxdr.agent.v1.CommandKindR\x04kind\x12\x17\n" +
 	"\adry_run\x18\x03 \x01(\bR\x06dryRun\x12!\n" +
 	"\fprocess_guid\x18\x04 \x01(\tR\vprocessGuid\x12\x10\n" +
 	"\x03pid\x18\x05 \x01(\rR\x03pid\x12'\n" +
-	"\x0fallow_endpoints\x18\x06 \x03(\tR\x0eallowEndpoints\"\xef\x01\n" +
+	"\x0fallow_endpoints\x18\x06 \x03(\tR\x0eallowEndpoints\x12\x10\n" +
+	"\x03cmd\x18\a \x01(\tR\x03cmd\x12\x1d\n" +
+	"\n" +
+	"timeout_ms\x18\b \x01(\rR\ttimeoutMs\"\xda\x02\n" +
 	"\rCommandResult\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1d\n" +
 	"\n" +
 	"command_id\x18\x02 \x01(\tR\tcommandId\x12>\n" +
 	"\x06status\x18\x03 \x01(\x0e2&.openxdr.agent.v1.CommandResult.StatusR\x06status\x12\x16\n" +
-	"\x06detail\x18\x04 \x01(\tR\x06detail\"L\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\x12\x1b\n" +
+	"\texit_code\x18\x05 \x01(\x05R\bexitCode\x12\x16\n" +
+	"\x06stdout\x18\x06 \x01(\tR\x06stdout\x12\x16\n" +
+	"\x06stderr\x18\a \x01(\tR\x06stderr\x12\x1c\n" +
+	"\ttruncated\x18\b \x01(\bR\ttruncated\"L\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tSUCCEEDED\x10\x01\x12\n" +
@@ -606,12 +666,13 @@ const file_agent_proto_rawDesc = "" +
 	"\x13parent_process_guid\x18\b \x01(\tR\x11parentProcessGuid\x12%\n" +
 	"\x0edropped_events\x18\t \x01(\x04R\rdroppedEvents\"'\n" +
 	"\tReportAck\x12\x1a\n" +
-	"\breceived\x18\x01 \x01(\x04R\breceived*c\n" +
+	"\breceived\x18\x01 \x01(\x04R\breceived*m\n" +
 	"\vCommandKind\x12\x1c\n" +
 	"\x18COMMAND_KIND_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fKILL_PROCESS\x10\x01\x12\x10\n" +
 	"\fISOLATE_HOST\x10\x02\x12\x12\n" +
-	"\x0eUNISOLATE_HOST\x10\x032\xfa\x01\n" +
+	"\x0eUNISOLATE_HOST\x10\x03\x12\b\n" +
+	"\x04EXEC\x10\x042\xfa\x01\n" +
 	"\fAgentService\x12Q\n" +
 	"\bRegister\x12!.openxdr.agent.v1.RegisterRequest\x1a\".openxdr.agent.v1.RegisterResponse\x12K\n" +
 	"\fReportEvents\x12\x1c.openxdr.agent.v1.AgentEvent\x1a\x1b.openxdr.agent.v1.ReportAck(\x01\x12J\n" +

@@ -76,6 +76,14 @@ func init() {
 	commandDescIssuedBy := commandFields[8].Descriptor()
 	// command.DefaultIssuedBy holds the default value on creation for the issued_by field.
 	command.DefaultIssuedBy = commandDescIssuedBy.Default.(string)
+	// commandDescTimeoutMs is the schema descriptor for timeout_ms field.
+	commandDescTimeoutMs := commandFields[11].Descriptor()
+	// command.DefaultTimeoutMs holds the default value on creation for the timeout_ms field.
+	command.DefaultTimeoutMs = commandDescTimeoutMs.Default.(uint32)
+	// commandDescTruncated is the schema descriptor for truncated field.
+	commandDescTruncated := commandFields[15].Descriptor()
+	// command.DefaultTruncated holds the default value on creation for the truncated field.
+	command.DefaultTruncated = commandDescTruncated.Default.(bool)
 	// commandDescID is the schema descriptor for id field.
 	commandDescID := commandFields[0].Descriptor()
 	// command.DefaultID holds the default value on creation for the id field.

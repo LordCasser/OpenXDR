@@ -132,6 +132,90 @@ func (_c *CommandCreate) SetNillableDetail(v *string) *CommandCreate {
 	return _c
 }
 
+// SetCmd sets the "cmd" field.
+func (_c *CommandCreate) SetCmd(v string) *CommandCreate {
+	_c.mutation.SetCmd(v)
+	return _c
+}
+
+// SetNillableCmd sets the "cmd" field if the given value is not nil.
+func (_c *CommandCreate) SetNillableCmd(v *string) *CommandCreate {
+	if v != nil {
+		_c.SetCmd(*v)
+	}
+	return _c
+}
+
+// SetTimeoutMs sets the "timeout_ms" field.
+func (_c *CommandCreate) SetTimeoutMs(v uint32) *CommandCreate {
+	_c.mutation.SetTimeoutMs(v)
+	return _c
+}
+
+// SetNillableTimeoutMs sets the "timeout_ms" field if the given value is not nil.
+func (_c *CommandCreate) SetNillableTimeoutMs(v *uint32) *CommandCreate {
+	if v != nil {
+		_c.SetTimeoutMs(*v)
+	}
+	return _c
+}
+
+// SetExitCode sets the "exit_code" field.
+func (_c *CommandCreate) SetExitCode(v int32) *CommandCreate {
+	_c.mutation.SetExitCode(v)
+	return _c
+}
+
+// SetNillableExitCode sets the "exit_code" field if the given value is not nil.
+func (_c *CommandCreate) SetNillableExitCode(v *int32) *CommandCreate {
+	if v != nil {
+		_c.SetExitCode(*v)
+	}
+	return _c
+}
+
+// SetStdout sets the "stdout" field.
+func (_c *CommandCreate) SetStdout(v string) *CommandCreate {
+	_c.mutation.SetStdout(v)
+	return _c
+}
+
+// SetNillableStdout sets the "stdout" field if the given value is not nil.
+func (_c *CommandCreate) SetNillableStdout(v *string) *CommandCreate {
+	if v != nil {
+		_c.SetStdout(*v)
+	}
+	return _c
+}
+
+// SetStderr sets the "stderr" field.
+func (_c *CommandCreate) SetStderr(v string) *CommandCreate {
+	_c.mutation.SetStderr(v)
+	return _c
+}
+
+// SetNillableStderr sets the "stderr" field if the given value is not nil.
+func (_c *CommandCreate) SetNillableStderr(v *string) *CommandCreate {
+	if v != nil {
+		_c.SetStderr(*v)
+	}
+	return _c
+}
+
+// SetTruncated sets the "truncated" field.
+func (_c *CommandCreate) SetTruncated(v bool) *CommandCreate {
+	_c.mutation.SetTruncated(v)
+	return _c
+}
+
+// SetNillableTruncated sets the "truncated" field if the given value is not nil.
+func (_c *CommandCreate) SetNillableTruncated(v *bool) *CommandCreate {
+	if v != nil {
+		_c.SetTruncated(*v)
+	}
+	return _c
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (_c *CommandCreate) SetCompletedAt(v time.Time) *CommandCreate {
 	_c.mutation.SetCompletedAt(v)
@@ -216,6 +300,14 @@ func (_c *CommandCreate) defaults() {
 		v := command.DefaultIssuedBy
 		_c.mutation.SetIssuedBy(v)
 	}
+	if _, ok := _c.mutation.TimeoutMs(); !ok {
+		v := command.DefaultTimeoutMs
+		_c.mutation.SetTimeoutMs(v)
+	}
+	if _, ok := _c.mutation.Truncated(); !ok {
+		v := command.DefaultTruncated
+		_c.mutation.SetTruncated(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := command.DefaultID()
 		_c.mutation.SetID(v)
@@ -241,6 +333,12 @@ func (_c *CommandCreate) check() error {
 	}
 	if _, ok := _c.mutation.IssuedBy(); !ok {
 		return &ValidationError{Name: "issued_by", err: errors.New(`ent: missing required field "Command.issued_by"`)}
+	}
+	if _, ok := _c.mutation.TimeoutMs(); !ok {
+		return &ValidationError{Name: "timeout_ms", err: errors.New(`ent: missing required field "Command.timeout_ms"`)}
+	}
+	if _, ok := _c.mutation.Truncated(); !ok {
+		return &ValidationError{Name: "truncated", err: errors.New(`ent: missing required field "Command.truncated"`)}
 	}
 	if len(_c.mutation.AssetIDs()) == 0 {
 		return &ValidationError{Name: "asset", err: errors.New(`ent: missing required edge "Command.asset"`)}
@@ -311,6 +409,30 @@ func (_c *CommandCreate) createSpec() (*Command, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Detail(); ok {
 		_spec.SetField(command.FieldDetail, field.TypeString, value)
 		_node.Detail = &value
+	}
+	if value, ok := _c.mutation.Cmd(); ok {
+		_spec.SetField(command.FieldCmd, field.TypeString, value)
+		_node.Cmd = &value
+	}
+	if value, ok := _c.mutation.TimeoutMs(); ok {
+		_spec.SetField(command.FieldTimeoutMs, field.TypeUint32, value)
+		_node.TimeoutMs = value
+	}
+	if value, ok := _c.mutation.ExitCode(); ok {
+		_spec.SetField(command.FieldExitCode, field.TypeInt32, value)
+		_node.ExitCode = &value
+	}
+	if value, ok := _c.mutation.Stdout(); ok {
+		_spec.SetField(command.FieldStdout, field.TypeString, value)
+		_node.Stdout = &value
+	}
+	if value, ok := _c.mutation.Stderr(); ok {
+		_spec.SetField(command.FieldStderr, field.TypeString, value)
+		_node.Stderr = &value
+	}
+	if value, ok := _c.mutation.Truncated(); ok {
+		_spec.SetField(command.FieldTruncated, field.TypeBool, value)
+		_node.Truncated = value
 	}
 	if value, ok := _c.mutation.CompletedAt(); ok {
 		_spec.SetField(command.FieldCompletedAt, field.TypeTime, value)

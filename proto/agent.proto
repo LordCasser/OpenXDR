@@ -26,6 +26,9 @@ message Command {
   uint32 pid = 5;
   // ISOLATE_HOST 用：隔离期间必须放行的地址，否则 agent 失联后无法解除隔离
   repeated string allow_endpoints = 6;
+  // EXEC 用：Linux 交给 sh -c，Windows 交给 PowerShell；timeout_ms 为 0 时用 agent 默认值
+  string cmd = 7;
+  uint32 timeout_ms = 8;
 }
 
 enum CommandKind {
@@ -33,6 +36,7 @@ enum CommandKind {
   KILL_PROCESS = 1;
   ISOLATE_HOST = 2;
   UNISOLATE_HOST = 3;
+  EXEC = 4;
 }
 
 message CommandResult {
@@ -40,6 +44,11 @@ message CommandResult {
   string command_id = 2;  // 空表示这是认领连接的首条消息
   Status status = 3;
   string detail = 4;      // 人可读的执行说明或失败原因
+  // 以下仅 EXEC 有意义：输出各自截断到 agent 上限，truncated 标记是否发生截断
+  int32 exit_code = 5;
+  string stdout = 6;
+  string stderr = 7;
+  bool truncated = 8;
 
   enum Status {
     STATUS_UNSPECIFIED = 0;

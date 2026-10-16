@@ -101,6 +101,36 @@ func Detail(v string) predicate.Command {
 	return predicate.Command(sql.FieldEQ(FieldDetail, v))
 }
 
+// Cmd applies equality check predicate on the "cmd" field. It's identical to CmdEQ.
+func Cmd(v string) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldCmd, v))
+}
+
+// TimeoutMs applies equality check predicate on the "timeout_ms" field. It's identical to TimeoutMsEQ.
+func TimeoutMs(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldTimeoutMs, v))
+}
+
+// ExitCode applies equality check predicate on the "exit_code" field. It's identical to ExitCodeEQ.
+func ExitCode(v int32) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldExitCode, v))
+}
+
+// Stdout applies equality check predicate on the "stdout" field. It's identical to StdoutEQ.
+func Stdout(v string) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldStdout, v))
+}
+
+// Stderr applies equality check predicate on the "stderr" field. It's identical to StderrEQ.
+func Stderr(v string) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldStderr, v))
+}
+
+// Truncated applies equality check predicate on the "truncated" field. It's identical to TruncatedEQ.
+func Truncated(v bool) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldTruncated, v))
+}
+
 // CompletedAt applies equality check predicate on the "completed_at" field. It's identical to CompletedAtEQ.
 func CompletedAt(v time.Time) predicate.Command {
 	return predicate.Command(sql.FieldEQ(FieldCompletedAt, v))
@@ -544,6 +574,331 @@ func DetailEqualFold(v string) predicate.Command {
 // DetailContainsFold applies the ContainsFold predicate on the "detail" field.
 func DetailContainsFold(v string) predicate.Command {
 	return predicate.Command(sql.FieldContainsFold(FieldDetail, v))
+}
+
+// CmdEQ applies the EQ predicate on the "cmd" field.
+func CmdEQ(v string) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldCmd, v))
+}
+
+// CmdNEQ applies the NEQ predicate on the "cmd" field.
+func CmdNEQ(v string) predicate.Command {
+	return predicate.Command(sql.FieldNEQ(FieldCmd, v))
+}
+
+// CmdIn applies the In predicate on the "cmd" field.
+func CmdIn(vs ...string) predicate.Command {
+	return predicate.Command(sql.FieldIn(FieldCmd, vs...))
+}
+
+// CmdNotIn applies the NotIn predicate on the "cmd" field.
+func CmdNotIn(vs ...string) predicate.Command {
+	return predicate.Command(sql.FieldNotIn(FieldCmd, vs...))
+}
+
+// CmdGT applies the GT predicate on the "cmd" field.
+func CmdGT(v string) predicate.Command {
+	return predicate.Command(sql.FieldGT(FieldCmd, v))
+}
+
+// CmdGTE applies the GTE predicate on the "cmd" field.
+func CmdGTE(v string) predicate.Command {
+	return predicate.Command(sql.FieldGTE(FieldCmd, v))
+}
+
+// CmdLT applies the LT predicate on the "cmd" field.
+func CmdLT(v string) predicate.Command {
+	return predicate.Command(sql.FieldLT(FieldCmd, v))
+}
+
+// CmdLTE applies the LTE predicate on the "cmd" field.
+func CmdLTE(v string) predicate.Command {
+	return predicate.Command(sql.FieldLTE(FieldCmd, v))
+}
+
+// CmdContains applies the Contains predicate on the "cmd" field.
+func CmdContains(v string) predicate.Command {
+	return predicate.Command(sql.FieldContains(FieldCmd, v))
+}
+
+// CmdHasPrefix applies the HasPrefix predicate on the "cmd" field.
+func CmdHasPrefix(v string) predicate.Command {
+	return predicate.Command(sql.FieldHasPrefix(FieldCmd, v))
+}
+
+// CmdHasSuffix applies the HasSuffix predicate on the "cmd" field.
+func CmdHasSuffix(v string) predicate.Command {
+	return predicate.Command(sql.FieldHasSuffix(FieldCmd, v))
+}
+
+// CmdIsNil applies the IsNil predicate on the "cmd" field.
+func CmdIsNil() predicate.Command {
+	return predicate.Command(sql.FieldIsNull(FieldCmd))
+}
+
+// CmdNotNil applies the NotNil predicate on the "cmd" field.
+func CmdNotNil() predicate.Command {
+	return predicate.Command(sql.FieldNotNull(FieldCmd))
+}
+
+// CmdEqualFold applies the EqualFold predicate on the "cmd" field.
+func CmdEqualFold(v string) predicate.Command {
+	return predicate.Command(sql.FieldEqualFold(FieldCmd, v))
+}
+
+// CmdContainsFold applies the ContainsFold predicate on the "cmd" field.
+func CmdContainsFold(v string) predicate.Command {
+	return predicate.Command(sql.FieldContainsFold(FieldCmd, v))
+}
+
+// TimeoutMsEQ applies the EQ predicate on the "timeout_ms" field.
+func TimeoutMsEQ(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldTimeoutMs, v))
+}
+
+// TimeoutMsNEQ applies the NEQ predicate on the "timeout_ms" field.
+func TimeoutMsNEQ(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldNEQ(FieldTimeoutMs, v))
+}
+
+// TimeoutMsIn applies the In predicate on the "timeout_ms" field.
+func TimeoutMsIn(vs ...uint32) predicate.Command {
+	return predicate.Command(sql.FieldIn(FieldTimeoutMs, vs...))
+}
+
+// TimeoutMsNotIn applies the NotIn predicate on the "timeout_ms" field.
+func TimeoutMsNotIn(vs ...uint32) predicate.Command {
+	return predicate.Command(sql.FieldNotIn(FieldTimeoutMs, vs...))
+}
+
+// TimeoutMsGT applies the GT predicate on the "timeout_ms" field.
+func TimeoutMsGT(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldGT(FieldTimeoutMs, v))
+}
+
+// TimeoutMsGTE applies the GTE predicate on the "timeout_ms" field.
+func TimeoutMsGTE(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldGTE(FieldTimeoutMs, v))
+}
+
+// TimeoutMsLT applies the LT predicate on the "timeout_ms" field.
+func TimeoutMsLT(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldLT(FieldTimeoutMs, v))
+}
+
+// TimeoutMsLTE applies the LTE predicate on the "timeout_ms" field.
+func TimeoutMsLTE(v uint32) predicate.Command {
+	return predicate.Command(sql.FieldLTE(FieldTimeoutMs, v))
+}
+
+// ExitCodeEQ applies the EQ predicate on the "exit_code" field.
+func ExitCodeEQ(v int32) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldExitCode, v))
+}
+
+// ExitCodeNEQ applies the NEQ predicate on the "exit_code" field.
+func ExitCodeNEQ(v int32) predicate.Command {
+	return predicate.Command(sql.FieldNEQ(FieldExitCode, v))
+}
+
+// ExitCodeIn applies the In predicate on the "exit_code" field.
+func ExitCodeIn(vs ...int32) predicate.Command {
+	return predicate.Command(sql.FieldIn(FieldExitCode, vs...))
+}
+
+// ExitCodeNotIn applies the NotIn predicate on the "exit_code" field.
+func ExitCodeNotIn(vs ...int32) predicate.Command {
+	return predicate.Command(sql.FieldNotIn(FieldExitCode, vs...))
+}
+
+// ExitCodeGT applies the GT predicate on the "exit_code" field.
+func ExitCodeGT(v int32) predicate.Command {
+	return predicate.Command(sql.FieldGT(FieldExitCode, v))
+}
+
+// ExitCodeGTE applies the GTE predicate on the "exit_code" field.
+func ExitCodeGTE(v int32) predicate.Command {
+	return predicate.Command(sql.FieldGTE(FieldExitCode, v))
+}
+
+// ExitCodeLT applies the LT predicate on the "exit_code" field.
+func ExitCodeLT(v int32) predicate.Command {
+	return predicate.Command(sql.FieldLT(FieldExitCode, v))
+}
+
+// ExitCodeLTE applies the LTE predicate on the "exit_code" field.
+func ExitCodeLTE(v int32) predicate.Command {
+	return predicate.Command(sql.FieldLTE(FieldExitCode, v))
+}
+
+// ExitCodeIsNil applies the IsNil predicate on the "exit_code" field.
+func ExitCodeIsNil() predicate.Command {
+	return predicate.Command(sql.FieldIsNull(FieldExitCode))
+}
+
+// ExitCodeNotNil applies the NotNil predicate on the "exit_code" field.
+func ExitCodeNotNil() predicate.Command {
+	return predicate.Command(sql.FieldNotNull(FieldExitCode))
+}
+
+// StdoutEQ applies the EQ predicate on the "stdout" field.
+func StdoutEQ(v string) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldStdout, v))
+}
+
+// StdoutNEQ applies the NEQ predicate on the "stdout" field.
+func StdoutNEQ(v string) predicate.Command {
+	return predicate.Command(sql.FieldNEQ(FieldStdout, v))
+}
+
+// StdoutIn applies the In predicate on the "stdout" field.
+func StdoutIn(vs ...string) predicate.Command {
+	return predicate.Command(sql.FieldIn(FieldStdout, vs...))
+}
+
+// StdoutNotIn applies the NotIn predicate on the "stdout" field.
+func StdoutNotIn(vs ...string) predicate.Command {
+	return predicate.Command(sql.FieldNotIn(FieldStdout, vs...))
+}
+
+// StdoutGT applies the GT predicate on the "stdout" field.
+func StdoutGT(v string) predicate.Command {
+	return predicate.Command(sql.FieldGT(FieldStdout, v))
+}
+
+// StdoutGTE applies the GTE predicate on the "stdout" field.
+func StdoutGTE(v string) predicate.Command {
+	return predicate.Command(sql.FieldGTE(FieldStdout, v))
+}
+
+// StdoutLT applies the LT predicate on the "stdout" field.
+func StdoutLT(v string) predicate.Command {
+	return predicate.Command(sql.FieldLT(FieldStdout, v))
+}
+
+// StdoutLTE applies the LTE predicate on the "stdout" field.
+func StdoutLTE(v string) predicate.Command {
+	return predicate.Command(sql.FieldLTE(FieldStdout, v))
+}
+
+// StdoutContains applies the Contains predicate on the "stdout" field.
+func StdoutContains(v string) predicate.Command {
+	return predicate.Command(sql.FieldContains(FieldStdout, v))
+}
+
+// StdoutHasPrefix applies the HasPrefix predicate on the "stdout" field.
+func StdoutHasPrefix(v string) predicate.Command {
+	return predicate.Command(sql.FieldHasPrefix(FieldStdout, v))
+}
+
+// StdoutHasSuffix applies the HasSuffix predicate on the "stdout" field.
+func StdoutHasSuffix(v string) predicate.Command {
+	return predicate.Command(sql.FieldHasSuffix(FieldStdout, v))
+}
+
+// StdoutIsNil applies the IsNil predicate on the "stdout" field.
+func StdoutIsNil() predicate.Command {
+	return predicate.Command(sql.FieldIsNull(FieldStdout))
+}
+
+// StdoutNotNil applies the NotNil predicate on the "stdout" field.
+func StdoutNotNil() predicate.Command {
+	return predicate.Command(sql.FieldNotNull(FieldStdout))
+}
+
+// StdoutEqualFold applies the EqualFold predicate on the "stdout" field.
+func StdoutEqualFold(v string) predicate.Command {
+	return predicate.Command(sql.FieldEqualFold(FieldStdout, v))
+}
+
+// StdoutContainsFold applies the ContainsFold predicate on the "stdout" field.
+func StdoutContainsFold(v string) predicate.Command {
+	return predicate.Command(sql.FieldContainsFold(FieldStdout, v))
+}
+
+// StderrEQ applies the EQ predicate on the "stderr" field.
+func StderrEQ(v string) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldStderr, v))
+}
+
+// StderrNEQ applies the NEQ predicate on the "stderr" field.
+func StderrNEQ(v string) predicate.Command {
+	return predicate.Command(sql.FieldNEQ(FieldStderr, v))
+}
+
+// StderrIn applies the In predicate on the "stderr" field.
+func StderrIn(vs ...string) predicate.Command {
+	return predicate.Command(sql.FieldIn(FieldStderr, vs...))
+}
+
+// StderrNotIn applies the NotIn predicate on the "stderr" field.
+func StderrNotIn(vs ...string) predicate.Command {
+	return predicate.Command(sql.FieldNotIn(FieldStderr, vs...))
+}
+
+// StderrGT applies the GT predicate on the "stderr" field.
+func StderrGT(v string) predicate.Command {
+	return predicate.Command(sql.FieldGT(FieldStderr, v))
+}
+
+// StderrGTE applies the GTE predicate on the "stderr" field.
+func StderrGTE(v string) predicate.Command {
+	return predicate.Command(sql.FieldGTE(FieldStderr, v))
+}
+
+// StderrLT applies the LT predicate on the "stderr" field.
+func StderrLT(v string) predicate.Command {
+	return predicate.Command(sql.FieldLT(FieldStderr, v))
+}
+
+// StderrLTE applies the LTE predicate on the "stderr" field.
+func StderrLTE(v string) predicate.Command {
+	return predicate.Command(sql.FieldLTE(FieldStderr, v))
+}
+
+// StderrContains applies the Contains predicate on the "stderr" field.
+func StderrContains(v string) predicate.Command {
+	return predicate.Command(sql.FieldContains(FieldStderr, v))
+}
+
+// StderrHasPrefix applies the HasPrefix predicate on the "stderr" field.
+func StderrHasPrefix(v string) predicate.Command {
+	return predicate.Command(sql.FieldHasPrefix(FieldStderr, v))
+}
+
+// StderrHasSuffix applies the HasSuffix predicate on the "stderr" field.
+func StderrHasSuffix(v string) predicate.Command {
+	return predicate.Command(sql.FieldHasSuffix(FieldStderr, v))
+}
+
+// StderrIsNil applies the IsNil predicate on the "stderr" field.
+func StderrIsNil() predicate.Command {
+	return predicate.Command(sql.FieldIsNull(FieldStderr))
+}
+
+// StderrNotNil applies the NotNil predicate on the "stderr" field.
+func StderrNotNil() predicate.Command {
+	return predicate.Command(sql.FieldNotNull(FieldStderr))
+}
+
+// StderrEqualFold applies the EqualFold predicate on the "stderr" field.
+func StderrEqualFold(v string) predicate.Command {
+	return predicate.Command(sql.FieldEqualFold(FieldStderr, v))
+}
+
+// StderrContainsFold applies the ContainsFold predicate on the "stderr" field.
+func StderrContainsFold(v string) predicate.Command {
+	return predicate.Command(sql.FieldContainsFold(FieldStderr, v))
+}
+
+// TruncatedEQ applies the EQ predicate on the "truncated" field.
+func TruncatedEQ(v bool) predicate.Command {
+	return predicate.Command(sql.FieldEQ(FieldTruncated, v))
+}
+
+// TruncatedNEQ applies the NEQ predicate on the "truncated" field.
+func TruncatedNEQ(v bool) predicate.Command {
+	return predicate.Command(sql.FieldNEQ(FieldTruncated, v))
 }
 
 // CompletedAtEQ applies the EQ predicate on the "completed_at" field.

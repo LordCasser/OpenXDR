@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/internal/testdb"
+	"openxdr/server/pb"
 )
 
 // Issue 三道闸门：能力未启用、资产无 agent、agent 未连接——三种都不得真执行。
@@ -57,5 +58,55 @@ func TestIssueGateways(t *testing.T) {
 	}
 	if !stored.DryRun {
 		t.Error("默认 dry-run，不允许裸执行")
+	}
+}
+
+// exec 全链路：下发带命令行、补发不丢命令行、回执落输出；非 exec 回执不写输出字段。
+func TestExecRoundTrip(t *testing.T) {
+	ctx, client := testdb.New(t)
+
+	agentID := uuid.New()
+	asset, err := client.Asset.Create().SetHostname("web-01").SetAgentID(agentID).Save(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := NewHub(client, true)
+	ch := hub.Attach(agentID)
+
+	line := "uname -a"
+	cmd, err := hub.Issue(ctx, Request{AssetID: asset.ID, Kind: "exec", Cmd: &line, TimeoutMS: 5000, IssuedBy: "admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := <-ch
+	if sent.Kind != pb.CommandKind_EXEC || sent.Cmd != line || sent.TimeoutMs != 5000 {
+		t.Fatalf("下发内容不符: %+v", sent)
+	}
+	if replay := hub.ToProto(cmd); replay.Cmd != line || replay.TimeoutMs != 5000 {
+		t.Fatalf("补发丢了命令行: %+v", replay)
+	}
+
+	hub.Complete(ctx, &pb.CommandResult{
+		AgentId: agentID.String(), CommandId: cmd.ID.String(),
+		Status: pb.CommandResult_SUCCEEDED, Detail: "退出码 2",
+		ExitCode: 2, Stdout: "Linux", Stderr: "warn", Truncated: true,
+	})
+	got, err := client.Command.Get(ctx, cmd.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "succeeded" || got.ExitCode == nil || *got.ExitCode != 2 ||
+		*got.Stdout != "Linux" || *got.Stderr != "warn" || !got.Truncated {
+		t.Fatalf("exec 结果未完整回写: %+v", got)
+	}
+
+	kill, err := hub.Issue(ctx, Request{AssetID: asset.ID, Kind: "kill_process", DryRun: true, PID: 1, IssuedBy: "admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-ch
+	hub.Complete(ctx, &pb.CommandResult{CommandId: kill.ID.String(), Status: pb.CommandResult_SUCCEEDED, Detail: "dry-run"})
+	if got, _ := client.Command.Get(ctx, kill.ID); got.ExitCode != nil {
+		t.Errorf("非 exec 指令不应写退出码: %v", *got.ExitCode)
 	}
 }

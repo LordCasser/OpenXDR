@@ -24,6 +24,11 @@ type commandRow struct {
 	IssuedBy    string     `json:"issuedBy"`
 	Detail      *string    `json:"detail"`
 	CompletedAt *time.Time `json:"completedAt"`
+	Cmd         *string    `json:"cmd,omitempty"`
+	ExitCode    *int32     `json:"exitCode,omitempty"`
+	Stdout      *string    `json:"stdout,omitempty"`
+	Stderr      *string    `json:"stderr,omitempty"`
+	Truncated   bool       `json:"truncated,omitempty"`
 }
 
 func toRow(c *ent.Command) commandRow {
@@ -31,6 +36,7 @@ func toRow(c *ent.Command) commandRow {
 		ID: c.ID, CreatedAt: c.CreatedAt, Kind: c.Kind, Status: c.Status,
 		DryRun: c.DryRun, AssetID: c.AssetID, IncidentID: c.IncidentID,
 		IssuedBy: c.IssuedBy, Detail: c.Detail, CompletedAt: c.CompletedAt,
+		Cmd: c.Cmd, ExitCode: c.ExitCode, Stdout: c.Stdout, Stderr: c.Stderr, Truncated: c.Truncated,
 	}
 }
 
@@ -42,6 +48,8 @@ type issueBody struct {
 	IncidentID  *uuid.UUID `json:"incidentId"`
 	ProcessGUID *uuid.UUID `json:"processGuid"`
 	PID         uint32     `json:"pid"`
+	Cmd         string     `json:"cmd"`
+	TimeoutMS   uint32     `json:"timeoutMs"`
 }
 
 func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndpoints []string) {
@@ -52,7 +60,11 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 			return
 		}
 		if _, ok := response.Kinds[body.Kind]; !ok {
-			http.Error(w, "kind 必须是 kill_process / isolate_host / unisolate_host", http.StatusBadRequest)
+			http.Error(w, "kind 必须是 kill_process / isolate_host / unisolate_host / exec", http.StatusBadRequest)
+			return
+		}
+		if body.Kind == "exec" && body.Cmd == "" {
+			http.Error(w, "exec 必须带 cmd", http.StatusBadRequest)
 			return
 		}
 		// 不传就是演练。真执行必须显式写明，绝不默认动手
@@ -69,6 +81,10 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 			ProcessGUID: body.ProcessGUID,
 			PID:         body.PID,
 			IssuedBy:    audit.Actor(r.Context()),
+			TimeoutMS:   body.TimeoutMS,
+		}
+		if body.Kind == "exec" {
+			req.Cmd = &body.Cmd
 		}
 		// 隔离必须放行 server 自身，否则 agent 失联后再也解除不了
 		if body.Kind == "isolate_host" {
@@ -84,7 +100,11 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 		if dryRun {
 			mode = "dry-run"
 		}
-		audit.Log(r.Context(), db, r, "command_issued", cmd.ID.String(), body.Kind+" ("+mode+")")
+		detail := body.Kind + " (" + mode + ")"
+		if body.Kind == "exec" {
+			detail += ": " + body.Cmd
+		}
+		audit.Log(r.Context(), db, r, "command_issued", cmd.ID.String(), detail)
 		w.WriteHeader(http.StatusAccepted)
 		writeJSON(w, toRow(cmd))
 	})

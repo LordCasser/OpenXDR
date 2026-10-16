@@ -113,7 +113,9 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 		SetAssetID(a.ID).
 		SetIssuedBy(req.IssuedBy).
 		SetNillableIncidentID(req.IncidentID).
-		SetNillableProcessGUID(req.ProcessGUID)
+		SetNillableProcessGUID(req.ProcessGUID).
+		SetNillableCmd(req.Cmd).
+		SetTimeoutMs(req.TimeoutMS)
 	cmd, err := create.Save(ctx)
 	if err != nil {
 		return nil, err
@@ -150,6 +152,9 @@ type Request struct {
 	IssuedBy    string
 	// 隔离时必须放行的地址，务必包含 server 自身，否则解除隔离的指令再也送不进去
 	AllowEndpoints []string
+	// exec 用：命令行与超时（0 交给 agent 默认值）
+	Cmd       *string
+	TimeoutMS uint32
 }
 
 func (r Request) toProto(id uuid.UUID) *pb.Command {
@@ -159,6 +164,10 @@ func (r Request) toProto(id uuid.UUID) *pb.Command {
 		DryRun:         r.DryRun,
 		Pid:            r.PID,
 		AllowEndpoints: r.AllowEndpoints,
+		TimeoutMs:      r.TimeoutMS,
+	}
+	if r.Cmd != nil {
+		cmd.Cmd = *r.Cmd
 	}
 	if r.ProcessGUID != nil {
 		cmd.ProcessGuid = r.ProcessGUID.String()
@@ -171,6 +180,7 @@ var Kinds = map[string]pb.CommandKind{
 	"kill_process":   pb.CommandKind_KILL_PROCESS,
 	"isolate_host":   pb.CommandKind_ISOLATE_HOST,
 	"unisolate_host": pb.CommandKind_UNISOLATE_HOST,
+	"exec":           pb.CommandKind_EXEC,
 }
 
 func kindToProto(kind string) pb.CommandKind {
@@ -194,19 +204,26 @@ func (h *Hub) mark(ctx context.Context, id uuid.UUID, status string) (*ent.Comma
 }
 
 func (h *Hub) finish(ctx context.Context, id uuid.UUID, status, detail string) (*ent.Command, error) {
+	return h.finishUpdate(id, status, detail).Save(ctx)
+}
+
+func (h *Hub) finishUpdate(id uuid.UUID, status, detail string) *ent.CommandUpdateOne {
 	return h.DB.Command.UpdateOneID(id).
 		SetStatus(status).
 		SetDetail(detail).
-		SetCompletedAt(time.Now()).
-		Save(ctx)
+		SetCompletedAt(time.Now())
 }
 
 // ToProto 把库里的指令还原成下发消息，用于断线重连后补发。
 func (h *Hub) ToProto(cmd *ent.Command) *pb.Command {
 	out := &pb.Command{
-		Id:     cmd.ID.String(),
-		Kind:   kindToProto(cmd.Kind),
-		DryRun: cmd.DryRun,
+		Id:        cmd.ID.String(),
+		Kind:      kindToProto(cmd.Kind),
+		DryRun:    cmd.DryRun,
+		TimeoutMs: cmd.TimeoutMs,
+	}
+	if cmd.Cmd != nil {
+		out.Cmd = *cmd.Cmd
 	}
 	if cmd.ProcessGUID != nil {
 		out.ProcessGuid = cmd.ProcessGUID.String()
@@ -225,7 +242,11 @@ func (h *Hub) Complete(ctx context.Context, res *pb.CommandResult) {
 		return
 	}
 	status := resultStatus(res.Status)
-	if _, err := h.finish(ctx, id, status, res.Detail); err != nil {
+	upd := h.finishUpdate(id, status, res.Detail)
+	if kind, err := h.DB.Command.Query().Where(entcommand.IDEQ(id)).Select(entcommand.FieldKind).String(ctx); err == nil && kind == "exec" {
+		upd.SetExitCode(res.ExitCode).SetStdout(res.Stdout).SetStderr(res.Stderr).SetTruncated(res.Truncated)
+	}
+	if _, err := upd.Save(ctx); err != nil {
 		slog.Warn("回写指令结果失败", "command", id, "err", err)
 	} else {
 		slog.Info("指令执行完毕", "command", id, "status", status, "detail", res.Detail)
