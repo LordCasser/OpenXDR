@@ -430,3 +430,15 @@ h3 { font-size: 14px; color: var(--muted); margin: 24px 0 8px; }
 .status-session-running { color: var(--accent); border-color: var(--accent); }
 .status-session-failed { color: var(--red); border-color: var(--red); }
 .selected-row td { background: var(--bg-soft); }
+.badge-count {
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font-size: 11px;
+}
+.approval-card pre { margin: 0 0 8px; white-space: pre-wrap; word-break: break-all; }
+.approval-card .actions { margin-top: 8px; }
+.status-session-succeeded { color: var(--green); border-color: var(--green); }
+.modal h4 { margin: 14px 0 4px; font-size: 13px; }

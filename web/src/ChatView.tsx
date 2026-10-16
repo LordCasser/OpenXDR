@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ApprovalsView } from './ApprovalsView'
+import { ReportsView } from './ReportsView'
+import { TasksView } from './TasksView'
 import {
-  createAgentSession, fetchAgentSessions, fetchGroups, fetchSessionMessages, sendSessionMessage,
+  createAgentSession, fetchAgentSessions, fetchApprovals, fetchGroups, fetchSessionMessages, sendSessionMessage,
   type AgentSession, type ContentPart, type GroupRow, type Me, type PiMessage,
 } from './api'
 import { useI18n, type MsgKey } from './i18n'
@@ -71,6 +74,8 @@ export function ChatView({ me, initialSession, onExpert, onLogout }: {
   const [busy, setBusy] = useState(false)
   const [liveRun, setLiveRun] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [modal, setModal] = useState<'approvals' | 'reports' | 'tasks' | null>(null)
+  const [pendingCount, setPendingCount] = useState(0)
   const abort = useRef<AbortController | null>(null)
   // 流结束时用户可能已切到别的会话，别把旧会话的历史刷进当前视图
   const current = useRef(sessionId)
@@ -120,6 +125,25 @@ export function ChatView({ me, initialSession, onExpert, onLogout }: {
 
   const group = groups.find(g => g.id === groupId)
   const session = sessions.find(s => s.id === sessionId)
+  const isGroupAdmin = group?.role === 'admin'
+
+  // 组 admin 才能审批；待审批数挂在入口上，Pi 正阻塞等着人
+  useEffect(() => {
+    setPendingCount(0)
+    if (!groupId || !isGroupAdmin) return
+    const poll = () => fetchApprovals(groupId)
+      .then(a => setPendingCount(a.filter(x => x.status === 'pending').length))
+      .catch(() => {})
+    poll()
+    const timer = setInterval(poll, 10_000)
+    return () => clearInterval(timer)
+  }, [groupId, isGroupAdmin])
+
+  const openSession = (gid: string, sid: string) => {
+    setModal(null)
+    setGroupId(gid)
+    setSessionId(sid)
+  }
   const canChat = group?.role === 'admin' || group?.role === 'analyst'
   const canSend = !!session && canChat && session.initiator === me.username &&
     session.status === 'idle' && !busy
@@ -181,6 +205,13 @@ export function ChatView({ me, initialSession, onExpert, onLogout }: {
         </header>
         <div className="header-actions subnav">
           <button className="link" onClick={onExpert}>{t('expertMode')}</button>
+          {isGroupAdmin && (
+            <button className="link" onClick={() => setModal('approvals')}>
+              {t('approvals')}{pendingCount > 0 && <span className="badge-count">{pendingCount}</span>}
+            </button>
+          )}
+          {group && <button className="link" onClick={() => setModal('reports')}>{t('reports')}</button>}
+          <button className="link" onClick={() => setModal('tasks')}>{t('tasks')}</button>
         </div>
         <div className="field chat-controls">
           <select value={groupId ?? ''} onChange={e => { setGroupId(e.target.value); setSessionId(null) }}>
@@ -251,6 +282,26 @@ export function ChatView({ me, initialSession, onExpert, onLogout }: {
           </>
         )}
       </main>
+
+      {modal === 'approvals' && group && (
+        <ApprovalsView
+          groupId={group.id}
+          groupName={group.name}
+          onOpenSession={id => openSession(group.id, id)}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal === 'reports' && group && (
+        <ReportsView
+          groupId={group.id}
+          groupName={group.name}
+          onOpenSession={id => openSession(group.id, id)}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal === 'tasks' && (
+        <TasksView isAdmin={me.role === 'admin'} groups={groups} onOpenSession={openSession} onClose={() => setModal(null)} />
+      )}
     </div>
   )
 }

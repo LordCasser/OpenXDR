@@ -489,3 +489,96 @@ export async function sendSessionMessage(
     }
   }
 }
+
+// 审批与命令名单（组 admin）。实体字段 snake_case
+export interface Approval {
+  id: string
+  created_at: string
+  group_id: string
+  session_id?: string
+  asset_id: string
+  requested_by: string
+  origin: 'ai' | 'human'
+  cmd: string
+  timeout_ms: number
+  dry_run: boolean
+  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled' | 'consumed'
+  expires_at: string
+  decided_by?: string
+  decided_at?: string
+}
+
+export interface CommandPolicy {
+  id: string
+  created_at: string
+  group_id: string
+  origin: 'ai' | 'human'
+  mode: 'allow' | 'deny'
+  pattern: string
+}
+
+export const fetchApprovals = (groupId: string) => get<Approval[]>(`/api/approvals?groupId=${groupId}`)
+export const decideApproval = (id: string, approve: boolean) =>
+  send('POST', `/api/approvals/${id}/decision`, { approve })
+export const fetchPolicies = (groupId: string) =>
+  get<CommandPolicy[]>(`/api/command-policies?groupId=${groupId}`)
+export const createPolicy = (groupId: string, origin: 'ai' | 'human', pattern: string) =>
+  send('POST', '/api/command-policies', { groupId, origin, pattern })
+export const deletePolicy = (id: string) => send('DELETE', `/api/command-policies/${id}`)
+
+// Pi 报告：库里只有 Markdown，HTML / PDF 由后端按需渲染
+export interface AgentReport {
+  id: string
+  created_at: string
+  session_id: string
+  group_id: string
+  title: string
+  markdown: string
+}
+
+export const fetchAgentReports = (groupId: string) =>
+  get<AgentReport[]>(`/api/agent-reports?groupId=${groupId}`)
+export const reportHtmlUrl = (id: string) => `/api/agent-reports/${id}/html`
+
+// 走 fetch 而不是直接跳转：没装 Chromium 时后端回 503，要能在界面上报错
+export async function downloadAgentPdf(r: AgentReport): Promise<void> {
+  const resp = await fetch(`/api/agent-reports/${r.id}/pdf`)
+  check(resp)
+  if (!resp.ok) throw new Error(await resp.text())
+  const url = URL.createObjectURL(await resp.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${r.title.replace(/[/\\?%*:|"<>]/g, '-')}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// 预设任务：定义在仓库 YAML，界面只能启停与改周期（admin）
+export interface TaskRow {
+  id: string
+  name: string
+  schedule: string
+  customSchedule: string | null
+  enabled: boolean
+  model: string
+  targetGroup: string
+  prompt: string
+}
+
+export interface TaskRunRow {
+  id: string
+  taskId: string
+  groupId: string
+  sessionId: string | null
+  startedAt: string
+  finishedAt: string | null
+  status: 'running' | 'succeeded' | 'failed'
+  error: string | null
+}
+
+export const fetchTasks = () => get<TaskRow[]>('/api/tasks')
+export const updateTask = async (
+  id: string,
+  body: { enabled?: boolean; customSchedule?: string },
+): Promise<TaskRow> => (await send('PATCH', `/api/tasks/${id}`, body)).json()
+export const fetchTaskRuns = (id: string) => get<TaskRunRow[]>(`/api/tasks/${id}/runs`)
