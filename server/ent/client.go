@@ -28,6 +28,8 @@ import (
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/suppression"
+	"openxdr/server/ent/task"
+	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
 
 	"entgo.io/ent"
@@ -76,6 +78,10 @@ type Client struct {
 	SessionMessage *SessionMessageClient
 	// Suppression is the client for interacting with the Suppression builders.
 	Suppression *SuppressionClient
+	// Task is the client for interacting with the Task builders.
+	Task *TaskClient
+	// TaskRun is the client for interacting with the TaskRun builders.
+	TaskRun *TaskRunClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 }
@@ -106,6 +112,8 @@ func (c *Client) init() {
 	c.Session = NewSessionClient(c.config)
 	c.SessionMessage = NewSessionMessageClient(c.config)
 	c.Suppression = NewSuppressionClient(c.config)
+	c.Task = NewTaskClient(c.config)
+	c.TaskRun = NewTaskRunClient(c.config)
 	c.User = NewUserClient(c.config)
 }
 
@@ -216,6 +224,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Session:         NewSessionClient(cfg),
 		SessionMessage:  NewSessionMessageClient(cfg),
 		Suppression:     NewSuppressionClient(cfg),
+		Task:            NewTaskClient(cfg),
+		TaskRun:         NewTaskRunClient(cfg),
 		User:            NewUserClient(cfg),
 	}, nil
 }
@@ -253,6 +263,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Session:         NewSessionClient(cfg),
 		SessionMessage:  NewSessionMessageClient(cfg),
 		Suppression:     NewSuppressionClient(cfg),
+		Task:            NewTaskClient(cfg),
+		TaskRun:         NewTaskRunClient(cfg),
 		User:            NewUserClient(cfg),
 	}, nil
 }
@@ -286,7 +298,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
 		c.CommandPolicy, c.Event, c.Group, c.GroupMember, c.Incident, c.Intel,
 		c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Suppression,
-		c.User,
+		c.Task, c.TaskRun, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -299,7 +311,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
 		c.CommandPolicy, c.Event, c.Group, c.GroupMember, c.Incident, c.Intel,
 		c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Suppression,
-		c.User,
+		c.Task, c.TaskRun, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -342,6 +354,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SessionMessage.mutate(ctx, m)
 	case *SuppressionMutation:
 		return c.Suppression.mutate(ctx, m)
+	case *TaskMutation:
+		return c.Task.mutate(ctx, m)
+	case *TaskRunMutation:
+		return c.TaskRun.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	default:
@@ -2770,6 +2786,272 @@ func (c *SuppressionClient) mutate(ctx context.Context, m *SuppressionMutation) 
 	}
 }
 
+// TaskClient is a client for the Task schema.
+type TaskClient struct {
+	config
+}
+
+// NewTaskClient returns a client for the Task from the given config.
+func NewTaskClient(c config) *TaskClient {
+	return &TaskClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `task.Hooks(f(g(h())))`.
+func (c *TaskClient) Use(hooks ...Hook) {
+	c.hooks.Task = append(c.hooks.Task, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `task.Intercept(f(g(h())))`.
+func (c *TaskClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Task = append(c.inters.Task, interceptors...)
+}
+
+// Create returns a builder for creating a Task entity.
+func (c *TaskClient) Create() *TaskCreate {
+	mutation := newTaskMutation(c.config, OpCreate)
+	return &TaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Task entities.
+func (c *TaskClient) CreateBulk(builders ...*TaskCreate) *TaskCreateBulk {
+	return &TaskCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TaskClient) MapCreateBulk(slice any, setFunc func(*TaskCreate, int)) *TaskCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TaskCreateBulk{err: fmt.Errorf("calling to TaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TaskCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TaskCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Task.
+func (c *TaskClient) Update() *TaskUpdate {
+	mutation := newTaskMutation(c.config, OpUpdate)
+	return &TaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TaskClient) UpdateOne(_m *Task) *TaskUpdateOne {
+	mutation := newTaskMutation(c.config, OpUpdateOne, withTask(_m))
+	return &TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TaskClient) UpdateOneID(id string) *TaskUpdateOne {
+	mutation := newTaskMutation(c.config, OpUpdateOne, withTaskID(id))
+	return &TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Task.
+func (c *TaskClient) Delete() *TaskDelete {
+	mutation := newTaskMutation(c.config, OpDelete)
+	return &TaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TaskClient) DeleteOne(_m *Task) *TaskDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TaskClient) DeleteOneID(id string) *TaskDeleteOne {
+	builder := c.Delete().Where(task.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TaskDeleteOne{builder}
+}
+
+// Query returns a query builder for Task.
+func (c *TaskClient) Query() *TaskQuery {
+	return &TaskQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTask},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Task entity by its id.
+func (c *TaskClient) Get(ctx context.Context, id string) (*Task, error) {
+	return c.Query().Where(task.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TaskClient) GetX(ctx context.Context, id string) *Task {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TaskClient) Hooks() []Hook {
+	return c.hooks.Task
+}
+
+// Interceptors returns the client interceptors.
+func (c *TaskClient) Interceptors() []Interceptor {
+	return c.inters.Task
+}
+
+func (c *TaskClient) mutate(ctx context.Context, m *TaskMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Task mutation op: %q", m.Op())
+	}
+}
+
+// TaskRunClient is a client for the TaskRun schema.
+type TaskRunClient struct {
+	config
+}
+
+// NewTaskRunClient returns a client for the TaskRun from the given config.
+func NewTaskRunClient(c config) *TaskRunClient {
+	return &TaskRunClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `taskrun.Hooks(f(g(h())))`.
+func (c *TaskRunClient) Use(hooks ...Hook) {
+	c.hooks.TaskRun = append(c.hooks.TaskRun, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `taskrun.Intercept(f(g(h())))`.
+func (c *TaskRunClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TaskRun = append(c.inters.TaskRun, interceptors...)
+}
+
+// Create returns a builder for creating a TaskRun entity.
+func (c *TaskRunClient) Create() *TaskRunCreate {
+	mutation := newTaskRunMutation(c.config, OpCreate)
+	return &TaskRunCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TaskRun entities.
+func (c *TaskRunClient) CreateBulk(builders ...*TaskRunCreate) *TaskRunCreateBulk {
+	return &TaskRunCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TaskRunClient) MapCreateBulk(slice any, setFunc func(*TaskRunCreate, int)) *TaskRunCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TaskRunCreateBulk{err: fmt.Errorf("calling to TaskRunClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TaskRunCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TaskRunCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TaskRun.
+func (c *TaskRunClient) Update() *TaskRunUpdate {
+	mutation := newTaskRunMutation(c.config, OpUpdate)
+	return &TaskRunUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TaskRunClient) UpdateOne(_m *TaskRun) *TaskRunUpdateOne {
+	mutation := newTaskRunMutation(c.config, OpUpdateOne, withTaskRun(_m))
+	return &TaskRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TaskRunClient) UpdateOneID(id uuid.UUID) *TaskRunUpdateOne {
+	mutation := newTaskRunMutation(c.config, OpUpdateOne, withTaskRunID(id))
+	return &TaskRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TaskRun.
+func (c *TaskRunClient) Delete() *TaskRunDelete {
+	mutation := newTaskRunMutation(c.config, OpDelete)
+	return &TaskRunDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TaskRunClient) DeleteOne(_m *TaskRun) *TaskRunDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TaskRunClient) DeleteOneID(id uuid.UUID) *TaskRunDeleteOne {
+	builder := c.Delete().Where(taskrun.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TaskRunDeleteOne{builder}
+}
+
+// Query returns a query builder for TaskRun.
+func (c *TaskRunClient) Query() *TaskRunQuery {
+	return &TaskRunQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTaskRun},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TaskRun entity by its id.
+func (c *TaskRunClient) Get(ctx context.Context, id uuid.UUID) (*TaskRun, error) {
+	return c.Query().Where(taskrun.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TaskRunClient) GetX(ctx context.Context, id uuid.UUID) *TaskRun {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TaskRunClient) Hooks() []Hook {
+	return c.hooks.TaskRun
+}
+
+// Interceptors returns the client interceptors.
+func (c *TaskRunClient) Interceptors() []Interceptor {
+	return c.inters.TaskRun
+}
+
+func (c *TaskRunClient) mutate(ctx context.Context, m *TaskRunMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TaskRunCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TaskRunUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TaskRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TaskRunDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TaskRun mutation op: %q", m.Op())
+	}
+}
+
 // UserClient is a client for the User schema.
 type UserClient struct {
 	config
@@ -2908,11 +3190,11 @@ type (
 	hooks struct {
 		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy, Event,
 		Group, GroupMember, Incident, Intel, ProcessBaseline, Report, Session,
-		SessionMessage, Suppression, User []ent.Hook
+		SessionMessage, Suppression, Task, TaskRun, User []ent.Hook
 	}
 	inters struct {
 		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy, Event,
 		Group, GroupMember, Incident, Intel, ProcessBaseline, Report, Session,
-		SessionMessage, Suppression, User []ent.Interceptor
+		SessionMessage, Suppression, Task, TaskRun, User []ent.Interceptor
 	}
 )

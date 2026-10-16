@@ -21,6 +21,8 @@ import (
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/suppression"
+	"openxdr/server/ent/task"
+	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
 	"time"
 
@@ -257,6 +259,42 @@ func init() {
 	suppressionDescID := suppressionFields[0].Descriptor()
 	// suppression.DefaultID holds the default value on creation for the id field.
 	suppression.DefaultID = suppressionDescID.Default.(func() uuid.UUID)
+	taskFields := schema.Task{}.Fields()
+	_ = taskFields
+	// taskDescEnabled is the schema descriptor for enabled field.
+	taskDescEnabled := taskFields[4].Descriptor()
+	// task.DefaultEnabled holds the default value on creation for the enabled field.
+	task.DefaultEnabled = taskDescEnabled.Default.(bool)
+	// taskDescModel is the schema descriptor for model field.
+	taskDescModel := taskFields[5].Descriptor()
+	// task.DefaultModel holds the default value on creation for the model field.
+	task.DefaultModel = taskDescModel.Default.(string)
+	// taskDescTargetGroup is the schema descriptor for target_group field.
+	taskDescTargetGroup := taskFields[6].Descriptor()
+	// task.DefaultTargetGroup holds the default value on creation for the target_group field.
+	task.DefaultTargetGroup = taskDescTargetGroup.Default.(string)
+	// taskDescApprovalTimeoutSeconds is the schema descriptor for approval_timeout_seconds field.
+	taskDescApprovalTimeoutSeconds := taskFields[7].Descriptor()
+	// task.DefaultApprovalTimeoutSeconds holds the default value on creation for the approval_timeout_seconds field.
+	task.DefaultApprovalTimeoutSeconds = taskDescApprovalTimeoutSeconds.Default.(int64)
+	// taskDescRemoved is the schema descriptor for removed field.
+	taskDescRemoved := taskFields[9].Descriptor()
+	// task.DefaultRemoved holds the default value on creation for the removed field.
+	task.DefaultRemoved = taskDescRemoved.Default.(bool)
+	taskrunFields := schema.TaskRun{}.Fields()
+	_ = taskrunFields
+	// taskrunDescStartedAt is the schema descriptor for started_at field.
+	taskrunDescStartedAt := taskrunFields[4].Descriptor()
+	// taskrun.DefaultStartedAt holds the default value on creation for the started_at field.
+	taskrun.DefaultStartedAt = taskrunDescStartedAt.Default.(func() time.Time)
+	// taskrunDescStatus is the schema descriptor for status field.
+	taskrunDescStatus := taskrunFields[6].Descriptor()
+	// taskrun.DefaultStatus holds the default value on creation for the status field.
+	taskrun.DefaultStatus = taskrunDescStatus.Default.(string)
+	// taskrunDescID is the schema descriptor for id field.
+	taskrunDescID := taskrunFields[0].Descriptor()
+	// taskrun.DefaultID holds the default value on creation for the id field.
+	taskrun.DefaultID = taskrunDescID.Default.(func() uuid.UUID)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescCreatedAt is the schema descriptor for created_at field.

@@ -46,6 +46,10 @@ type Tx struct {
 	SessionMessage *SessionMessageClient
 	// Suppression is the client for interacting with the Suppression builders.
 	Suppression *SuppressionClient
+	// Task is the client for interacting with the Task builders.
+	Task *TaskClient
+	// TaskRun is the client for interacting with the TaskRun builders.
+	TaskRun *TaskRunClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 
@@ -196,6 +200,8 @@ func (tx *Tx) init() {
 	tx.Session = NewSessionClient(tx.config)
 	tx.SessionMessage = NewSessionMessageClient(tx.config)
 	tx.Suppression = NewSuppressionClient(tx.config)
+	tx.Task = NewTaskClient(tx.config)
+	tx.TaskRun = NewTaskRunClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
 

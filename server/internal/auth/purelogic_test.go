@@ -29,6 +29,9 @@ func TestMinRoleRouteTable(t *testing.T) {
 		// 狩猎读全量数据，无法按组裁剪
 		{"POST", "/api/hunt", "admin"},
 		{"POST", "/api/hunt/rule", "admin"},
+		// 任务：读开放，改只有 admin
+		{"GET", "/api/tasks", "viewer"},
+		{"PATCH", "/api/tasks/daily", "admin"},
 	}
 	for _, c := range cases {
 		if got := minRole(c.method, c.path); got != c.want {

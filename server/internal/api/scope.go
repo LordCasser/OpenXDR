@@ -23,6 +23,7 @@ import (
 // 各 Where 谓词返回切片，admin 时为空，直接展开进查询。
 type scope struct {
 	all    bool
+	groups []uuid.UUID
 	assets []uuid.UUID
 }
 
@@ -42,7 +43,7 @@ func scopeOf(ctx context.Context, db *ent.Client, min string) (scope, error) {
 		}
 	}
 	ids, err := db.Asset.Query().Where(entasset.GroupIDIn(groups...)).IDs(ctx)
-	return scope{assets: ids}, err
+	return scope{groups: groups, assets: ids}, err
 }
 
 // requireScope 取作用域，失败时已写好 500。

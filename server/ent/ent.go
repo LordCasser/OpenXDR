@@ -23,6 +23,8 @@ import (
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/suppression"
+	"openxdr/server/ent/task"
+	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
 	"reflect"
 	"sync"
@@ -107,6 +109,8 @@ func checkColumn(t, c string) error {
 			session.Table:         session.ValidColumn,
 			sessionmessage.Table:  sessionmessage.ValidColumn,
 			suppression.Table:     suppression.ValidColumn,
+			task.Table:            task.ValidColumn,
+			taskrun.Table:         taskrun.ValidColumn,
 			user.Table:            user.ValidColumn,
 		})
 	})

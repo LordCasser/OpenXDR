@@ -47,6 +47,9 @@ func minRole(method, path string) string {
 	// 狩猎直接读全量数据，没法按组裁剪，只留给 admin
 	case strings.HasPrefix(path, "/api/hunt"):
 		return "admin"
+	// 预设任务跨组运行，启停与改周期只有 admin 能动
+	case strings.HasPrefix(path, "/api/tasks") && method != http.MethodGet:
+		return "admin"
 	// 组的增删、成员与资产归属只有 admin 能改；列表按成员身份过滤，viewer 可读
 	case strings.HasPrefix(path, "/api/groups") && method != http.MethodGet:
 		return "admin"

@@ -1,0 +1,60 @@
+package schedule
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestParseSpec(t *testing.T) {
+	s, err := parseSpec([]byte("id: t1\nschedule: '*/5 * * * *'\nprompt: 看看\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Name != "t1" || s.Targets.Group != "*" || s.approvalTimeout != 10*time.Minute {
+		t.Errorf("缺省值不符：%+v", s)
+	}
+
+	bad := map[string]string{
+		"缺 id":     "schedule: '@daily'\nprompt: x\n",
+		"缺 prompt": "id: t\nschedule: '@daily'\n",
+		"坏 cron":   "id: t\nschedule: '61 * * * *'\nprompt: x\n",
+		"坏超时":      "id: t\nschedule: '@daily'\nprompt: x\napproval_timeout: soon\n",
+		"拼错字段":     "id: t\nschedule: '@daily'\nprompt: x\nshedule: '@hourly'\n",
+	}
+	for name, y := range bad {
+		if _, err := parseSpec([]byte(y)); err == nil {
+			t.Errorf("%s 应被拒绝", name)
+		}
+	}
+}
+
+// 仓库自带任务必须全部可加载
+func TestBundledTasks(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "tasks")
+	files, _ := filepath.Glob(filepath.Join(dir, "*.yml"))
+	if len(files) == 0 {
+		t.Fatal("tasks/ 下没有任务")
+	}
+	if specs := LoadDir(dir); len(specs) != len(files) {
+		t.Errorf("加载 %d 个，文件 %d 个", len(specs), len(files))
+	}
+}
+
+func TestLoadDirSkipsBadAndDuplicate(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("a.yml", "id: a\nschedule: '@daily'\nprompt: x\n")
+	write("b.yml", "id: a\nschedule: '@hourly'\nprompt: y\n")
+	write("c.yaml", "id: c\nschedule: nope\nprompt: z\n")
+	specs := LoadDir(dir)
+	if len(specs) != 1 || specs[0].ID != "a" || !strings.Contains(specs[0].Schedule, "daily") {
+		t.Errorf("应只留下 a.yml：%+v", specs)
+	}
+}

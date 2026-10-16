@@ -209,31 +209,60 @@ func text(m Message) string {
 	return b.String()
 }
 
-// payload 按目标平台包装消息体。未知格式按 generic 处理。
-func payload(format string, m Message) []byte {
-	var v any
+// payload 按目标平台包装消息体：IM 发纯文本，generic 原样发结构体。未知格式按 generic 处理。
+func payload(format string, generic any, text string) []byte {
+	v := generic
 	switch format {
 	case "dingtalk":
-		v = map[string]any{"msgtype": "text", "text": map[string]string{"content": text(m)}}
+		v = map[string]any{"msgtype": "text", "text": map[string]string{"content": text}}
 	case "feishu":
-		v = map[string]any{"msg_type": "text", "content": map[string]string{"text": text(m)}}
+		v = map[string]any{"msg_type": "text", "content": map[string]string{"text": text}}
 	case "wecom":
-		v = map[string]any{"msgtype": "text", "text": map[string]string{"content": text(m)}}
-	default:
-		v = m
+		v = map[string]any{"msgtype": "text", "text": map[string]string{"content": text}}
 	}
 	b, _ := json.Marshal(v)
 	return b
 }
 
 func (n *Notifier) post(ctx context.Context, m Message) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.URL,
-		bytes.NewReader(payload(n.Format, m)))
+	return send(ctx, n.Client, n.URL, payload(n.Format, m, text(m)))
+}
+
+// Text 非 incident 的通知：任务报告、任务失败等。也是 generic 格式的推送体。
+type Text struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	Link  string `json:"link,omitempty"`
+}
+
+// Webhook 推送任意文本，与 incident 通知共用目标与格式。URL 为空时 Send 什么都不做。
+type Webhook struct {
+	URL    string
+	Format string
+	Client *http.Client
+}
+
+func (h *Webhook) Send(ctx context.Context, t Text) error {
+	if h.URL == "" {
+		return nil
+	}
+	if h.Client == nil {
+		h.Client = &http.Client{Timeout: 10 * time.Second}
+	}
+	body := "【OpenXDR】" + t.Title + "\n" + t.Body
+	if t.Link != "" {
+		body += "\n" + t.Link
+	}
+	return send(ctx, h.Client, h.URL, payload(h.Format, t, body))
+}
+
+func send(ctx context.Context, client *http.Client, url string, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := n.Client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

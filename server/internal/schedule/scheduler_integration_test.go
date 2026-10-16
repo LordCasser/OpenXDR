@@ -1,0 +1,118 @@
+//go:build integration
+
+package schedule
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"openxdr/server/ent/taskrun"
+	"openxdr/server/internal/testdb"
+)
+
+type fakeRunner struct {
+	mu   sync.Mutex
+	jobs []Job
+	fail string // 该组的会话返回失败
+}
+
+func (f *fakeRunner) RunTask(_ context.Context, job Job) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.jobs = append(f.jobs, job)
+	if job.Session.GroupID.String() == f.fail {
+		return errors.New("输出被截断")
+	}
+	return nil
+}
+
+func TestSchedulerTick(t *testing.T) {
+	ctx, client := testdb.New(t)
+	gA := client.Group.Create().SetName("A").SaveX(ctx)
+	gB := client.Group.Create().SetName("B").SaveX(ctx)
+	client.Group.Create().SetName("empty").SaveX(ctx)
+	client.Asset.Create().SetHostname("a1").SetGroupID(gA.ID).SaveX(ctx)
+	client.Asset.Create().SetHostname("b1").SetGroupID(gB.ID).SaveX(ctx)
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "t.yml"), []byte(
+		"id: t\nname: 巡检\nschedule: '*/5 * * * *'\napproval_timeout: 2m\nprompt: 看看\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{fail: gB.ID.String()}
+	var notes []string
+	s := &Scheduler{
+		DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute,
+		Notify: func(_ context.Context, title, _ string) error { notes = append(notes, title); return nil },
+		start:  time.Now().Add(-10 * time.Minute),
+	}
+
+	if err := s.tick(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s.wg.Wait()
+	if len(runner.jobs) != 2 {
+		t.Fatalf("应对两个非空组各跑一次，得到 %d", len(runner.jobs))
+	}
+	for _, j := range runner.jobs {
+		if j.Session.Kind != "task" || j.Session.Initiator != Initiator || j.Session.Model != "m" ||
+			j.Prompt != "看看" || j.ApprovalTimeout != 2*time.Minute {
+			t.Errorf("任务会话参数不符：%+v %+v", j, j.Session)
+		}
+	}
+	runs := client.TaskRun.Query().AllX(ctx)
+	status := map[string]string{}
+	for _, r := range runs {
+		status[r.GroupID.String()] = r.Status
+	}
+	if status[gA.ID.String()] != "succeeded" || status[gB.ID.String()] != "failed" {
+		t.Errorf("运行终态不符：%v", status)
+	}
+	if len(notes) != 1 {
+		t.Errorf("失败应外发一次通知，得到 %v", notes)
+	}
+
+	// 刚跑过，同一时刻不会再触发
+	if err := s.tick(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s.wg.Wait()
+	if len(runner.jobs) != 2 {
+		t.Errorf("未到下个周期不应再跑，累计 %d", len(runner.jobs))
+	}
+
+	// 下个周期：A 上一轮仍在跑则跳过，只跑 B
+	client.TaskRun.Update().Where(taskrun.GroupIDEQ(gA.ID)).SetStatus("running").ExecX(ctx)
+	if err := s.tick(ctx, time.Now().Add(6*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	s.wg.Wait()
+	if len(runner.jobs) != 3 || runner.jobs[2].Session.GroupID != gB.ID {
+		t.Errorf("A 在跑应只补 B，累计 %d", len(runner.jobs))
+	}
+
+	// 界面停用后不再调度；YAML 删除后标记 removed
+	client.Task.UpdateOneID("t").SetEnabled(false).ExecX(ctx)
+	if err := s.tick(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	s.wg.Wait()
+	if len(runner.jobs) != 3 {
+		t.Errorf("停用后不应再跑，累计 %d", len(runner.jobs))
+	}
+	if client.Task.GetX(ctx, "t").Enabled {
+		t.Error("同步不应覆盖界面的启停")
+	}
+	_ = os.Remove(filepath.Join(dir, "t.yml"))
+	if err := s.tick(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if task := client.Task.GetX(ctx, "t"); !task.Removed {
+		t.Error("YAML 删除后应标记 removed")
+	}
+}

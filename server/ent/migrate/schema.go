@@ -477,6 +477,54 @@ var (
 			},
 		},
 	}
+	// TasksColumns holds the columns for the "tasks" table.
+	TasksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "name", Type: field.TypeString},
+		{Name: "schedule", Type: field.TypeString},
+		{Name: "custom_schedule", Type: field.TypeString, Nullable: true},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "model", Type: field.TypeString, Default: ""},
+		{Name: "target_group", Type: field.TypeString, Default: "*"},
+		{Name: "approval_timeout_seconds", Type: field.TypeInt64, Default: 600},
+		{Name: "prompt", Type: field.TypeString, Size: 2147483647},
+		{Name: "removed", Type: field.TypeBool, Default: false},
+	}
+	// TasksTable holds the schema information for the "tasks" table.
+	TasksTable = &schema.Table{
+		Name:       "tasks",
+		Columns:    TasksColumns,
+		PrimaryKey: []*schema.Column{TasksColumns[0]},
+	}
+	// TaskRunsColumns holds the columns for the "task_runs" table.
+	TaskRunsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "task_id", Type: field.TypeString},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "status", Type: field.TypeString, Default: "running"},
+		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
+	}
+	// TaskRunsTable holds the schema information for the "task_runs" table.
+	TaskRunsTable = &schema.Table{
+		Name:       "task_runs",
+		Columns:    TaskRunsColumns,
+		PrimaryKey: []*schema.Column{TaskRunsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "taskrun_task_id_started_at",
+				Unique:  false,
+				Columns: []*schema.Column{TaskRunsColumns[1], TaskRunsColumns[4]},
+			},
+			{
+				Name:    "taskrun_status",
+				Unique:  false,
+				Columns: []*schema.Column{TaskRunsColumns[6]},
+			},
+		},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -510,6 +558,8 @@ var (
 		SessionsTable,
 		SessionMessagesTable,
 		SuppressionsTable,
+		TasksTable,
+		TaskRunsTable,
 		UsersTable,
 	}
 )

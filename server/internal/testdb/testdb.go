@@ -66,6 +66,8 @@ func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 		func(ctx context.Context) (int, error) { return c.Intel.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Suppression.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.ProcessBaseline.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.TaskRun.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.Task.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.GroupMember.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Group.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.SessionMessage.Delete().Exec(ctx) },

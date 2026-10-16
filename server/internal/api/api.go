@@ -79,6 +79,7 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 	mapAgentConfig(mux, db)
 	mapUsers(mux, db)
 	mapGroups(mux, db)
+	mapTasks(mux, db)
 
 	mux.HandleFunc("GET /api/incidents", func(w http.ResponseWriter, r *http.Request) {
 		s, ok := requireScope(w, r, db, "viewer")

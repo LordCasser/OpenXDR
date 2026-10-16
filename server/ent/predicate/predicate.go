@@ -57,5 +57,11 @@ type SessionMessage func(*sql.Selector)
 // Suppression is the predicate function for suppression builders.
 type Suppression func(*sql.Selector)
 
+// Task is the predicate function for task builders.
+type Task func(*sql.Selector)
+
+// TaskRun is the predicate function for taskrun builders.
+type TaskRun func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

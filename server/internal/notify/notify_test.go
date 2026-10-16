@@ -1,7 +1,11 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -77,12 +81,39 @@ func TestPayloadFormats(t *testing.T) {
 		{"unknown", `"alertCount":1`},
 	}
 	for _, c := range cases {
-		b := payload(c.format, m)
+		b := payload(c.format, m, text(m))
 		if !json.Valid(b) {
 			t.Errorf("%s: 不是合法 JSON", c.format)
 		}
 		if !strings.Contains(string(b), c.want) {
 			t.Errorf("%s: 缺少 %s：%s", c.format, c.want, b)
 		}
+	}
+}
+
+func TestWebhookSendText(t *testing.T) {
+	var got []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, _ = io.ReadAll(r.Body)
+	}))
+	defer srv.Close()
+
+	h := &Webhook{URL: srv.URL, Format: "dingtalk"}
+	if err := h.Send(context.Background(), Text{Title: "每日巡检", Body: "3 台主机正常", Link: "http://x/r/1"}); err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		Text struct{ Content string } `json:"text"`
+	}
+	if err := json.Unmarshal(got, &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Text.Content != "【OpenXDR】每日巡检\n3 台主机正常\nhttp://x/r/1" {
+		t.Errorf("正文不符：%q", v.Text.Content)
+	}
+
+	// 未配置 URL：静默不发，也不报错
+	if err := (&Webhook{}).Send(context.Background(), Text{Title: "x"}); err != nil {
+		t.Errorf("未配置时不应报错：%v", err)
 	}
 }
