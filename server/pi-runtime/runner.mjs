@@ -57,7 +57,13 @@ export async function run(request, send, callTool, signal) {
       })),
     },
     toolExecution: 'sequential',
-    streamFn: (model, context, options) => models.streamSimple(model, context, { ...options, maxTokens }),
+    // GLM 的本地兼容端点不会从 SDK thinkingLevel 推断模板开关。
+    streamFn: (model, context, options) => models.streamSimple(model, context, {
+      ...options, maxTokens,
+      ...(/(^|\/)glm[-_.]/i.test(request.model) ? {
+        samplingParams: { ...options?.samplingParams, chat_template_kwargs: { enable_thinking: false } },
+      } : {}),
+    }),
     shouldStopAfterTurn: ({ message }) => {
       turns++;
       limited = turns >= maxTurns && message.content.some(part => part.type === 'toolCall');

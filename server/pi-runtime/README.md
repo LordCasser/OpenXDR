@@ -3,7 +3,7 @@
 使用锁定为 **0.84.4** 的 `@earendil-works/pi-agent-core` 与 `pi-ai`。
 这是 SDK runner，**不是 Pi CLI 的 RPC 模式，也不是 CLI extension**。
 推理循环、工具参数校验与消息格式由 Pi 原生 SDK 提供；JSONL 是本项目与 Go 的桥接协议。
-当前支持 OpenAI-compatible Chat Completions 文本模型，不启用 thinking。
+当前支持 OpenAI-compatible Chat Completions 文本模型，不启用 thinking。GLM 模型额外发送 `chat_template_kwargs.enable_thinking=false`，避免本地服务默认开启思考后耗尽输出额度。
 
 ## 安装与验证
 

@@ -51,7 +51,7 @@ func query(ctx context.Context, dsn, statement string) (string, error) {
 	}
 	// 子查询限制只允许一条可查询语句；权限仍以数据库角色/授权视图为边界。
 	// 在数据库端拦截大行，避免 Scan 后才限额导致服务器先接收任意大的字段。
-	rows, err := tx.QueryContext(ctx, `SELECT CASE WHEN octet_length(row_to_json(xdr_result)::text) <= 65536
+	rows, err := tx.QueryContext(ctx, `SELECT CASE WHEN octet_length(row_to_json(xdr_result)::text) <= 8192
  THEN row_to_json(xdr_result)::text ELSE NULL END FROM (
 `+statement+`
 ) AS xdr_result LIMIT 201`)
@@ -85,8 +85,11 @@ func query(ctx context.Context, dsn, statement string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if len(encoded) > 65536 {
+		if len(encoded) > 8192 {
 			result.Rows = result.Rows[:len(result.Rows)-1]
+			if len(result.Rows) == 0 {
+				result.Columns = []string{}
+			}
 			result.Truncated = true
 			break
 		}

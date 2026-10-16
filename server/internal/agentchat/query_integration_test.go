@@ -56,12 +56,12 @@ func TestQueryDedicatedGroupView(t *testing.T) {
 	if err = json.Unmarshal([]byte(result), &truncated); err != nil || !truncated.Truncated {
 		t.Fatalf("截断未标注: %v", err)
 	}
-	for _, statement := range []string{`SELECT repeat('中',1000000) AS payload`, `SELECT repeat('x',40000) AS payload FROM generate_series(1,3)`} {
+	for _, statement := range []string{`SELECT repeat('中',1000000) AS payload`, `SELECT repeat('中',3000) AS payload`, `SELECT repeat('x',40000) AS payload FROM generate_series(1,3)`} {
 		result, err = query(ctx, dsn, statement)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(result) > 65536 {
+		if len(result) > 8192 {
 			t.Fatalf("结果超过字节限制: %d", len(result))
 		}
 		if err = json.Unmarshal([]byte(result), &truncated); err != nil || !truncated.Truncated {

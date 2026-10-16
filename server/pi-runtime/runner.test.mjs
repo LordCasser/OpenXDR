@@ -36,6 +36,7 @@ test('真实 SDK + JSONL 子进程完成工具往返与最终回答', { timeout:
   const apiBase = await mockModel(t, (body, res) => {
     calls++;
     assert.equal(body.model, 'test');
+    assert.equal(body.chat_template_kwargs, undefined);
     assert.deepEqual(body.tools.map(item => item.function.name), ['query']);
     if (calls === 1) completion(res, toolDelta, 'tool_calls');
     else {
@@ -108,4 +109,19 @@ test('父进程关闭输入时终止待完成的模型请求', { timeout: 5000 }
   child.stdin.end();
   assert.equal(await exited, 1);
   assert.ok(output.split('\n').filter(Boolean).map(line => JSON.parse(line)).some(event => event.type === 'error'));
+});
+
+test('GLM 本地端点显式关闭模板 thinking，保留工具调用', async t => {
+  let calls = 0;
+  const apiBase = await mockModel(t, (body, res) => {
+    calls++;
+    assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
+    assert.equal(body.max_completion_tokens ?? body.max_tokens, 8192);
+    completion(res, calls === 1 ? toolDelta : { role: 'assistant', content: '已查询' }, calls === 1 ? 'tool_calls' : 'stop');
+  });
+  const events = [];
+  await run({ type: 'run', api_base: apiBase, model: 'GLM-5.3-Flash', prompt: '测试', tools: [tool] },
+    event => events.push(event), async () => ({ success: true, output: '1' }));
+  assert.equal(calls, 2);
+  assert.equal(events.at(-1).stop_reason, 'stop');
 });
