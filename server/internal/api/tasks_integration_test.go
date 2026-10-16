@@ -54,6 +54,27 @@ func TestAPITasks(t *testing.T) {
 		t.Errorf("空串应恢复 YAML 周期")
 	}
 
+	client.Task.Create().SetID("only-a").SetName("A任务").SetSchedule("0 2 * * *").SetTargetGroup("A").SetPrompt("A指令").SaveX(ctx)
+	client.Task.Create().SetID("only-b").SetName("B任务").SetSchedule("0 2 * * *").SetTargetGroup("B").SetPrompt("B秘密指令").SaveX(ctx)
+	_, definitions := get(t, viewer, "/api/tasks")
+	var tasks []taskRow
+	if err := json.Unmarshal(definitions, &tasks); err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 2 || strings.Contains(string(definitions), "B秘密指令") {
+		t.Fatalf("任务定义越组: %s", definitions)
+	}
+	nobody := client.User.Create().SetUsername("nobody").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
+	empty := httptest.NewServer(as(nobody, h))
+	defer empty.Close()
+	_, definitions = get(t, empty, "/api/tasks")
+	if string(definitions) != "[]\n" {
+		t.Fatalf("无组用户不应读取任务: %s", definitions)
+	}
+	_, definitions = get(t, admin, "/api/tasks")
+	if err := json.Unmarshal(definitions, &tasks); err != nil || len(tasks) != 3 {
+		t.Fatalf("管理员应看到全部任务: %s", definitions)
+	}
 	_, body := get(t, viewer, "/api/tasks/daily/runs")
 	var runs []taskRunRow
 	if err := json.Unmarshal(body, &runs); err != nil {

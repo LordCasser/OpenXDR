@@ -32,6 +32,8 @@ func (AgentSession) Fields() []ent.Field {
 		field.String("status").Default("running"),
 		field.Text("error").Optional().Nillable(),
 		field.Time("finished_at").Optional().Nillable(),
+		// 固定执行期限加清理宽限；过期后只标失败，不重放命令。
+		field.Time("run_expires_at").Optional().Nillable(),
 	}
 }
 
@@ -39,6 +41,7 @@ func (AgentSession) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("group_id", "created_at"),
 		index.Fields("initiator"),
+		index.Fields("status", "run_expires_at"),
 	}
 }
 

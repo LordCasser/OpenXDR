@@ -128,3 +128,58 @@ func TestSchedulerTick(t *testing.T) {
 		t.Error("YAML 删除后应标记 removed")
 	}
 }
+
+type blockedRunner struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (r *blockedRunner) RunTask(ctx context.Context, _ Job) error {
+	r.started <- struct{}{}
+	select {
+	case <-r.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestSchedulerBoundsActiveGroups(t *testing.T) {
+	ctx, db := testdb.New(t)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	for _, name := range []string{"a", "b", "c", "d", "e", "f"} {
+		g := db.Group.Create().SetName(name).SaveX(ctx)
+		db.Asset.Create().SetHostname(name).SetGroupID(g.ID).SaveX(ctx)
+	}
+	task := db.Task.Create().SetID("bounded").SetName("巡检").SetSchedule("* * * * *").SetPrompt("检查").SaveX(ctx)
+	runner := &blockedRunner{make(chan struct{}, 6), make(chan struct{})}
+	s := &Scheduler{DB: db, Runner: runner, Timeout: time.Minute}
+	done := make(chan struct{})
+	go func() { defer close(done); s.fire(ctx, task) }()
+	for range 4 {
+		select {
+		case <-runner.started:
+		case <-ctx.Done():
+			t.Fatal("未启动四个任务")
+		}
+	}
+	if n := db.TaskRun.Query().CountX(ctx); n != 4 {
+		t.Fatalf("等待的组不应提前建运行记录，得到 %d", n)
+	}
+	select {
+	case <-runner.started:
+		t.Fatal("超过四个并行任务")
+	default:
+	}
+	close(runner.release)
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("调度未完成")
+	}
+	s.wg.Wait()
+	if n := db.TaskRun.Query().CountX(ctx); n != 6 {
+		t.Fatalf("等待目标丢失，得到 %d", n)
+	}
+}

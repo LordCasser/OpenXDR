@@ -52,16 +52,12 @@ type Scheduler struct {
 
 	start time.Time
 	wg    sync.WaitGroup
+	slots chan struct{}
 }
 
-// Run 集群单活。接管时先把遗留的 running 记为失败：上一个调度节点已经没了，结果未知，不重放。
+// Run 集群单活；遗留会话由执行期限清理器处理，接管时不修改其他节点的活跃运行。
 func (s *Scheduler) Run(ctx context.Context) {
 	s.start = time.Now()
-	if err := s.DB.TaskRun.Update().Where(taskrun.StatusEQ("running")).
-		SetStatus("failed").SetError("调度节点中断，结果未知").SetFinishedAt(s.start).
-		Exec(ctx); err != nil {
-		slog.Error("清理遗留任务运行失败", "err", err)
-	}
 	ticker := time.NewTicker(s.Interval)
 	defer ticker.Stop()
 	defer s.wg.Wait()
@@ -123,6 +119,9 @@ func (s *Scheduler) due(ctx context.Context, t *ent.Task, now time.Time) (bool, 
 
 // fire 每个目标组一个会话。空组不跑；上一轮还在跑的组跳过本轮，不叠加。
 func (s *Scheduler) fire(ctx context.Context, t *ent.Task) {
+	if s.slots == nil {
+		s.slots = make(chan struct{}, 4)
+	}
 	q := s.DB.Group.Query()
 	if t.TargetGroup != "*" {
 		q = q.Where(entgroup.NameEQ(t.TargetGroup))
@@ -153,14 +152,21 @@ func (s *Scheduler) fire(ctx context.Context, t *ent.Task) {
 			}
 			continue
 		}
+		select {
+		case s.slots <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
 		run, session, err := s.begin(ctx, t, g, model)
 		if err != nil {
+			<-s.slots
 			slog.Error("创建任务运行失败", "task", t.ID, "group", g.Name, "err", err)
 			continue
 		}
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer func() { <-s.slots }()
 			s.execute(ctx, t, g, run, session)
 		}()
 	}
@@ -173,7 +179,7 @@ func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model 
 	}
 	session, err := tx.AgentSession.Create().
 		SetKind("task").SetGroupID(g.ID).SetInitiator(Initiator).SetModel(model).
-		SetTitle(t.Name).SetDryRun(t.DryRun).
+		SetTitle(t.Name).SetDryRun(t.DryRun).SetRunExpiresAt(time.Now().Add(s.runTimeout() + time.Minute)).
 		Save(ctx)
 	if err != nil {
 		_ = tx.Rollback()
@@ -190,7 +196,7 @@ func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model 
 }
 
 func (s *Scheduler) execute(ctx context.Context, t *ent.Task, g *ent.Group, run *ent.TaskRun, session *ent.AgentSession) {
-	runCtx, cancel := context.WithTimeout(ctx, s.Timeout)
+	runCtx, cancel := context.WithTimeout(ctx, s.runTimeout())
 	defer cancel()
 	slog.Info("任务开始", "task", t.ID, "group", g.Name, "session", session.ID)
 	err := s.Runner.RunTask(runCtx, Job{
@@ -202,12 +208,13 @@ func (s *Scheduler) execute(ctx context.Context, t *ent.Task, g *ent.Group, run 
 	// 节点失去租约时 ctx 已取消，终态仍要落库
 	done, cancelDone := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancelDone()
-	update := s.DB.TaskRun.UpdateOneID(run.ID).SetFinishedAt(time.Now()).SetStatus("succeeded")
+	update := s.DB.TaskRun.UpdateOneID(run.ID).Where(taskrun.StatusEQ("running")).SetFinishedAt(time.Now()).SetStatus("succeeded")
 	if err != nil {
 		update.SetStatus("failed").SetError(err.Error())
 	}
 	if uerr := update.Exec(done); uerr != nil {
 		slog.Error("保存任务运行终态失败", "run", run.ID, "err", uerr)
+		return
 	}
 	if err == nil {
 		slog.Info("任务完成", "task", t.ID, "group", g.Name)
@@ -256,4 +263,11 @@ func excerpt(s string, n int) string {
 		return string(r)
 	}
 	return string(r[:n]) + "…"
+}
+
+func (s *Scheduler) runTimeout() time.Duration {
+	if s.Timeout > 0 {
+		return s.Timeout
+	}
+	return 30 * time.Minute
 }

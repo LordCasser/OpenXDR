@@ -14,14 +14,21 @@ import (
 	"path/filepath"
 	"time"
 
+	"openxdr/server/internal/worklimit"
+
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 )
 
 var md = goldmark.New(goldmark.WithExtensions(extension.GFM))
 
+// CSP 同时用于独立文件和 HTTP 页面，禁止报告加载外部资源。
+const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
+
+var pdfSlots = worklimit.New(2, 8)
+
 var page = template.Must(template.New("report").Parse(`<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>{{.Title}}</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="` + CSP + `"><title>{{.Title}}</title>
 <style>
 body{font-family:"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif;max-width:960px;margin:2em auto;padding:0 1em;color:#1f2328;line-height:1.6}
 h1,h2,h3{border-bottom:1px solid #d0d7de;padding-bottom:.3em}
@@ -59,12 +66,17 @@ var Chromium = "chromium"
 var ErrNoChromium = errors.New("未找到 Chromium，PDF 渲染不可用")
 
 // PDF 用 headless Chromium 打印 HTML。
-// 网络全部禁掉：报告是自包含页面，不该有任何外部请求。
+// 页面 CSP 禁止外部资源；代理与 DNS 阻断作为额外防线。
 func PDF(ctx context.Context, html []byte) ([]byte, error) {
 	bin, err := exec.LookPath(Chromium)
 	if err != nil {
 		return nil, ErrNoChromium
 	}
+	release, err := pdfSlots.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	dir, err := os.MkdirTemp("", "openxdr-report-")
 	if err != nil {
 		return nil, err
@@ -80,8 +92,10 @@ func PDF(ctx context.Context, html []byte) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, bin,
 		"--headless", "--no-sandbox", "--disable-gpu", "--no-pdf-header-footer",
 		"--user-data-dir="+filepath.Join(dir, "profile"),
-		// 只允许解析到本地，挡掉报告里任何外链请求
+		// IP 地址不经过 DNS；同时禁用直连及隐式 loopback 代理绕过。
 		"--host-resolver-rules=MAP * ~NOTFOUND",
+		"--proxy-server=http://127.0.0.1:0", "--proxy-bypass-list=<-loopback>",
+		"--disable-background-networking",
 		"--print-to-pdf="+out, "file://"+in)
 	if msg, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("chromium 渲染失败: %w: %s", err, tail(msg))

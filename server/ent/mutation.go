@@ -70,23 +70,24 @@ const (
 // AgentSessionMutation represents an operation that mutates the AgentSession nodes in the graph.
 type AgentSessionMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *uuid.UUID
-	created_at    *time.Time
-	kind          *string
-	group_id      *uuid.UUID
-	initiator     *string
-	model         *string
-	dry_run       *bool
-	title         *string
-	status        *string
-	error         *string
-	finished_at   *time.Time
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*AgentSession, error)
-	predicates    []predicate.AgentSession
+	op             Op
+	typ            string
+	id             *uuid.UUID
+	created_at     *time.Time
+	kind           *string
+	group_id       *uuid.UUID
+	initiator      *string
+	model          *string
+	dry_run        *bool
+	title          *string
+	status         *string
+	error          *string
+	finished_at    *time.Time
+	run_expires_at *time.Time
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*AgentSession, error)
+	predicates     []predicate.AgentSession
 }
 
 var _ ent.Mutation = (*AgentSessionMutation)(nil)
@@ -592,6 +593,55 @@ func (m *AgentSessionMutation) ResetFinishedAt() {
 	delete(m.clearedFields, agentsession.FieldFinishedAt)
 }
 
+// SetRunExpiresAt sets the "run_expires_at" field.
+func (m *AgentSessionMutation) SetRunExpiresAt(t time.Time) {
+	m.run_expires_at = &t
+}
+
+// RunExpiresAt returns the value of the "run_expires_at" field in the mutation.
+func (m *AgentSessionMutation) RunExpiresAt() (r time.Time, exists bool) {
+	v := m.run_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunExpiresAt returns the old "run_expires_at" field's value of the AgentSession entity.
+// If the AgentSession object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AgentSessionMutation) OldRunExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunExpiresAt: %w", err)
+	}
+	return oldValue.RunExpiresAt, nil
+}
+
+// ClearRunExpiresAt clears the value of the "run_expires_at" field.
+func (m *AgentSessionMutation) ClearRunExpiresAt() {
+	m.run_expires_at = nil
+	m.clearedFields[agentsession.FieldRunExpiresAt] = struct{}{}
+}
+
+// RunExpiresAtCleared returns if the "run_expires_at" field was cleared in this mutation.
+func (m *AgentSessionMutation) RunExpiresAtCleared() bool {
+	_, ok := m.clearedFields[agentsession.FieldRunExpiresAt]
+	return ok
+}
+
+// ResetRunExpiresAt resets all changes to the "run_expires_at" field.
+func (m *AgentSessionMutation) ResetRunExpiresAt() {
+	m.run_expires_at = nil
+	delete(m.clearedFields, agentsession.FieldRunExpiresAt)
+}
+
 // Where appends a list predicates to the AgentSessionMutation builder.
 func (m *AgentSessionMutation) Where(ps ...predicate.AgentSession) {
 	m.predicates = append(m.predicates, ps...)
@@ -626,7 +676,7 @@ func (m *AgentSessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AgentSessionMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, agentsession.FieldCreatedAt)
 	}
@@ -657,6 +707,9 @@ func (m *AgentSessionMutation) Fields() []string {
 	if m.finished_at != nil {
 		fields = append(fields, agentsession.FieldFinishedAt)
 	}
+	if m.run_expires_at != nil {
+		fields = append(fields, agentsession.FieldRunExpiresAt)
+	}
 	return fields
 }
 
@@ -685,6 +738,8 @@ func (m *AgentSessionMutation) Field(name string) (ent.Value, bool) {
 		return m.Error()
 	case agentsession.FieldFinishedAt:
 		return m.FinishedAt()
+	case agentsession.FieldRunExpiresAt:
+		return m.RunExpiresAt()
 	}
 	return nil, false
 }
@@ -714,6 +769,8 @@ func (m *AgentSessionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldError(ctx)
 	case agentsession.FieldFinishedAt:
 		return m.OldFinishedAt(ctx)
+	case agentsession.FieldRunExpiresAt:
+		return m.OldRunExpiresAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown AgentSession field %s", name)
 }
@@ -793,6 +850,13 @@ func (m *AgentSessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetFinishedAt(v)
 		return nil
+	case agentsession.FieldRunExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunExpiresAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AgentSession field %s", name)
 }
@@ -832,6 +896,9 @@ func (m *AgentSessionMutation) ClearedFields() []string {
 	if m.FieldCleared(agentsession.FieldFinishedAt) {
 		fields = append(fields, agentsession.FieldFinishedAt)
 	}
+	if m.FieldCleared(agentsession.FieldRunExpiresAt) {
+		fields = append(fields, agentsession.FieldRunExpiresAt)
+	}
 	return fields
 }
 
@@ -854,6 +921,9 @@ func (m *AgentSessionMutation) ClearField(name string) error {
 		return nil
 	case agentsession.FieldFinishedAt:
 		m.ClearFinishedAt()
+		return nil
+	case agentsession.FieldRunExpiresAt:
+		m.ClearRunExpiresAt()
 		return nil
 	}
 	return fmt.Errorf("unknown AgentSession nullable field %s", name)
@@ -892,6 +962,9 @@ func (m *AgentSessionMutation) ResetField(name string) error {
 		return nil
 	case agentsession.FieldFinishedAt:
 		m.ResetFinishedAt()
+		return nil
+	case agentsession.FieldRunExpiresAt:
+		m.ResetRunExpiresAt()
 		return nil
 	}
 	return fmt.Errorf("unknown AgentSession field %s", name)

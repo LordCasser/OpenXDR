@@ -105,6 +105,11 @@ func FinishedAt(v time.Time) predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldEQ(FieldFinishedAt, v))
 }
 
+// RunExpiresAt applies equality check predicate on the "run_expires_at" field. It's identical to RunExpiresAtEQ.
+func RunExpiresAt(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldEQ(FieldRunExpiresAt, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldEQ(FieldCreatedAt, v))
@@ -653,6 +658,56 @@ func FinishedAtIsNil() predicate.AgentSession {
 // FinishedAtNotNil applies the NotNil predicate on the "finished_at" field.
 func FinishedAtNotNil() predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldNotNull(FieldFinishedAt))
+}
+
+// RunExpiresAtEQ applies the EQ predicate on the "run_expires_at" field.
+func RunExpiresAtEQ(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldEQ(FieldRunExpiresAt, v))
+}
+
+// RunExpiresAtNEQ applies the NEQ predicate on the "run_expires_at" field.
+func RunExpiresAtNEQ(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldNEQ(FieldRunExpiresAt, v))
+}
+
+// RunExpiresAtIn applies the In predicate on the "run_expires_at" field.
+func RunExpiresAtIn(vs ...time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldIn(FieldRunExpiresAt, vs...))
+}
+
+// RunExpiresAtNotIn applies the NotIn predicate on the "run_expires_at" field.
+func RunExpiresAtNotIn(vs ...time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldNotIn(FieldRunExpiresAt, vs...))
+}
+
+// RunExpiresAtGT applies the GT predicate on the "run_expires_at" field.
+func RunExpiresAtGT(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldGT(FieldRunExpiresAt, v))
+}
+
+// RunExpiresAtGTE applies the GTE predicate on the "run_expires_at" field.
+func RunExpiresAtGTE(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldGTE(FieldRunExpiresAt, v))
+}
+
+// RunExpiresAtLT applies the LT predicate on the "run_expires_at" field.
+func RunExpiresAtLT(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldLT(FieldRunExpiresAt, v))
+}
+
+// RunExpiresAtLTE applies the LTE predicate on the "run_expires_at" field.
+func RunExpiresAtLTE(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldLTE(FieldRunExpiresAt, v))
+}
+
+// RunExpiresAtIsNil applies the IsNil predicate on the "run_expires_at" field.
+func RunExpiresAtIsNil() predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldIsNull(FieldRunExpiresAt))
+}
+
+// RunExpiresAtNotNil applies the NotNil predicate on the "run_expires_at" field.
+func RunExpiresAtNotNil() predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldNotNull(FieldRunExpiresAt))
 }
 
 // And groups predicates with the AND operator between them.

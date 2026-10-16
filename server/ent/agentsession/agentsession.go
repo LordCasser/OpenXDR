@@ -34,6 +34,8 @@ const (
 	FieldError = "error"
 	// FieldFinishedAt holds the string denoting the finished_at field in the database.
 	FieldFinishedAt = "finished_at"
+	// FieldRunExpiresAt holds the string denoting the run_expires_at field in the database.
+	FieldRunExpiresAt = "run_expires_at"
 	// Table holds the table name of the agentsession in the database.
 	Table = "agent_sessions"
 )
@@ -51,6 +53,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldError,
 	FieldFinishedAt,
+	FieldRunExpiresAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -130,4 +133,9 @@ func ByError(opts ...sql.OrderTermOption) OrderOption {
 // ByFinishedAt orders the results by the finished_at field.
 func ByFinishedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFinishedAt, opts...).ToFunc()
+}
+
+// ByRunExpiresAt orders the results by the run_expires_at field.
+func ByRunExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRunExpiresAt, opts...).ToFunc()
 }

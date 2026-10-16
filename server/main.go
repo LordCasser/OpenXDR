@@ -249,9 +249,10 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	chat := &agentchat.Service{DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second},
+	chat := &agentchat.Service{Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second},
 		Runtime: piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second},
 		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), QueryURLs: queryURLs}
+	go chat.Recover(ctx)
 	// 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
 	report.Chromium = getenv("CHROMIUM_PATH", "chromium")
 	webhook := &notify.Webhook{URL: os.Getenv("WEBHOOK_URL"), Format: getenv("WEBHOOK_FORMAT", "generic")}

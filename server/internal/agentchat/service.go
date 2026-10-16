@@ -30,6 +30,7 @@ type Service struct {
 	APIBase, APIKey, Model string
 	// 每组使用独立的只读数据库身份；不配置则不注册 SQL 工具。
 	QueryURLs map[uuid.UUID]string
+	Timeout   time.Duration
 }
 
 func (s *Service) allowed(ctx context.Context, id uuid.UUID, u *ent.User) (*ent.AgentSession, error) {
@@ -52,17 +53,30 @@ func (s *Service) allowed(ctx context.Context, id uuid.UUID, u *ent.User) (*ent.
 
 // Chat 由请求上下文控制生命周期；客户端断开后中止推理和审批等待。
 func (s *Service) Chat(ctx context.Context, id uuid.UUID, u *ent.User, prompt string, emit piruntime.Observer) (result *piruntime.Result, retErr error) {
+	ctx, cancel := context.WithTimeout(ctx, s.timeout())
+	defer cancel()
 	session, err := s.allowed(ctx, id, u)
 	if err != nil {
 		return nil, err
 	}
-	n, err := s.DB.AgentSession.Update().Where(agentsession.IDEQ(id), agentsession.StatusEQ("idle")).SetStatus("running").ClearError().ClearFinishedAt().Save(ctx)
+	n, err := s.DB.AgentSession.Update().Where(agentsession.IDEQ(id), agentsession.StatusEQ("idle")).SetStatus("running").SetRunExpiresAt(expiry(ctx)).ClearError().ClearFinishedAt().Save(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if n != 1 {
 		return nil, errors.New("会话正在运行或已失败，请新建会话")
 	}
+	defer func() {
+		finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		update := s.DB.AgentSession.UpdateOneID(id).Where(agentsession.StatusEQ("running")).ClearRunExpiresAt().SetStatus("idle").SetFinishedAt(time.Now())
+		if retErr != nil {
+			update.SetStatus("failed").SetError(retErr.Error())
+		}
+		if err := update.Exec(finish); err != nil {
+			retErr = fmt.Errorf("保存会话终态失败: %w", err)
+		}
+	}()
 	// 没起标题的会话用第一句提问当标题，列表里才分得清
 	if session.Title == nil || *session.Title == "" {
 		title := []rune(strings.TrimSpace(prompt))
@@ -73,17 +87,6 @@ func (s *Service) Chat(ctx context.Context, id uuid.UUID, u *ent.User, prompt st
 			return nil, err
 		}
 	}
-	defer func() {
-		finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-		defer cancel()
-		update := s.DB.AgentSession.UpdateOneID(id).SetStatus("idle").SetFinishedAt(time.Now())
-		if retErr != nil {
-			update.SetStatus("failed").SetError(retErr.Error())
-		}
-		if err := update.Exec(finish); err != nil {
-			retErr = fmt.Errorf("保存会话终态失败: %w", err)
-		}
-	}()
 	history, err := s.DB.SessionMessage.Query().Where(sessionmessage.SessionIDEQ(id)).Order(ent.Asc(sessionmessage.FieldSeq)).Limit(1001).All(ctx)
 	if err != nil {
 		return nil, err

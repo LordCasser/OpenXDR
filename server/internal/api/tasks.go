@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/group"
 	enttask "openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/internal/audit"
@@ -39,7 +40,27 @@ type taskRunRow struct {
 // mapTasks 预设任务：定义来自仓库 YAML，界面只能启停与改周期。
 func mapTasks(api *http.ServeMux, db *ent.Client) {
 	api.HandleFunc("GET /api/tasks", func(w http.ResponseWriter, r *http.Request) {
-		tasks, err := db.Task.Query().Where(enttask.Removed(false)).Order(ent.Asc(enttask.FieldID)).All(r.Context())
+		scope, ok := requireScope(w, r, db, "viewer")
+		if !ok {
+			return
+		}
+		q := db.Task.Query().Where(enttask.Removed(false))
+		if !scope.all {
+			groups, err := db.Group.Query().Where(group.IDIn(scope.groups...)).All(r.Context())
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			names := make([]string, 0, len(groups)+1)
+			if len(groups) > 0 {
+				names = append(names, "*")
+			}
+			for _, g := range groups {
+				names = append(names, g.Name)
+			}
+			q = q.Where(enttask.TargetGroupIn(names...))
+		}
+		tasks, err := q.Order(ent.Asc(enttask.FieldID)).All(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

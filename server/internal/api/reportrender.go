@@ -10,7 +10,7 @@ import (
 )
 
 // 报告正文出自模型：页面不许跑脚本、不许外链，只留内联样式
-const reportCSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox"
+const reportCSP = report.CSP + "; sandbox"
 
 // mapReportRender Pi 报告按需渲染成 HTML / PDF，权限与 GET /api/agent-reports/{id} 一致。
 func mapReportRender(api *http.ServeMux, db *ent.Client) {

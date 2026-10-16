@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"openxdr/server/ent/agentsession"
 	"openxdr/server/ent/report"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/schedule"
@@ -18,6 +19,8 @@ var _ schedule.Runner = (*Service)(nil)
 // 这里只认 kind=task、initiator=system 且仍在 running 的会话。
 // 截断、轮数耗尽或没交报告都算失败：巡检不完整不能当成"一切正常"。
 func (s *Service) RunTask(ctx context.Context, job schedule.Job) (retErr error) {
+	ctx, cancel := context.WithTimeout(ctx, s.timeout())
+	defer cancel()
 	session := job.Session
 	if session.Kind != "task" || session.Initiator != commandgate.SystemActor || session.Status != "running" {
 		return errors.New("不是待运行的任务会话")
@@ -25,7 +28,7 @@ func (s *Service) RunTask(ctx context.Context, job schedule.Job) (retErr error) 
 	defer func() {
 		finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
-		update := s.DB.AgentSession.UpdateOneID(session.ID).SetStatus("succeeded").SetFinishedAt(time.Now())
+		update := s.DB.AgentSession.UpdateOneID(session.ID).Where(agentsession.StatusEQ("running")).ClearRunExpiresAt().SetStatus("succeeded").SetFinishedAt(time.Now())
 		if retErr != nil {
 			update.SetStatus("failed").SetError(retErr.Error())
 		}
@@ -33,6 +36,9 @@ func (s *Service) RunTask(ctx context.Context, job schedule.Job) (retErr error) 
 			retErr = fmt.Errorf("保存会话终态失败: %w", err)
 		}
 	}()
+	if err := s.DB.AgentSession.UpdateOneID(session.ID).Where(agentsession.StatusEQ("running")).SetRunExpiresAt(expiry(ctx)).Exec(ctx); err != nil {
+		return err
+	}
 	request, err := s.request(ctx, session, job.Prompt, nil)
 	if err != nil {
 		return err

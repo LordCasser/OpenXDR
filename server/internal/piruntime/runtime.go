@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"openxdr/server/internal/worklimit"
 	"os/exec"
 	"strings"
 	"time"
@@ -58,6 +59,8 @@ type Result struct {
 type Handler func(ctx context.Context, name string, args json.RawMessage) (string, error)
 type Observer func(ctx context.Context, event Event) error
 
+var runtimeSlots = worklimit.New(4, 32)
+
 type Runtime struct {
 	Node    string
 	Runner  string
@@ -84,6 +87,11 @@ func (r Runtime) Run(ctx context.Context, request Request, handle Handler, obser
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	release, err := runtimeSlots.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	node := r.Node
 	if node == "" {
 		node = "node"

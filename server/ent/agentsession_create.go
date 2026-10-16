@@ -129,6 +129,20 @@ func (_c *AgentSessionCreate) SetNillableFinishedAt(v *time.Time) *AgentSessionC
 	return _c
 }
 
+// SetRunExpiresAt sets the "run_expires_at" field.
+func (_c *AgentSessionCreate) SetRunExpiresAt(v time.Time) *AgentSessionCreate {
+	_c.mutation.SetRunExpiresAt(v)
+	return _c
+}
+
+// SetNillableRunExpiresAt sets the "run_expires_at" field if the given value is not nil.
+func (_c *AgentSessionCreate) SetNillableRunExpiresAt(v *time.Time) *AgentSessionCreate {
+	if v != nil {
+		_c.SetRunExpiresAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AgentSessionCreate) SetID(v uuid.UUID) *AgentSessionCreate {
 	_c.mutation.SetID(v)
@@ -293,6 +307,10 @@ func (_c *AgentSessionCreate) createSpec() (*AgentSession, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.FinishedAt(); ok {
 		_spec.SetField(agentsession.FieldFinishedAt, field.TypeTime, value)
 		_node.FinishedAt = &value
+	}
+	if value, ok := _c.mutation.RunExpiresAt(); ok {
+		_spec.SetField(agentsession.FieldRunExpiresAt, field.TypeTime, value)
+		_node.RunExpiresAt = &value
 	}
 	return _node, _spec
 }

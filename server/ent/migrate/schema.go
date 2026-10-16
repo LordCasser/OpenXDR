@@ -21,6 +21,7 @@ var (
 		{Name: "status", Type: field.TypeString, Default: "running"},
 		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "run_expires_at", Type: field.TypeTime, Nullable: true},
 	}
 	// AgentSessionsTable holds the schema information for the "agent_sessions" table.
 	AgentSessionsTable = &schema.Table{
@@ -37,6 +38,11 @@ var (
 				Name:    "agentsession_initiator",
 				Unique:  false,
 				Columns: []*schema.Column{AgentSessionsColumns[4]},
+			},
+			{
+				Name:    "agentsession_status_run_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{AgentSessionsColumns[8], AgentSessionsColumns[11]},
 			},
 		},
 	}

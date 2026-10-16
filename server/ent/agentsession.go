@@ -37,7 +37,9 @@ type AgentSession struct {
 	// Error holds the value of the "error" field.
 	Error *string `json:"error,omitempty"`
 	// FinishedAt holds the value of the "finished_at" field.
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	// RunExpiresAt holds the value of the "run_expires_at" field.
+	RunExpiresAt *time.Time `json:"run_expires_at,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -50,7 +52,7 @@ func (*AgentSession) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case agentsession.FieldKind, agentsession.FieldInitiator, agentsession.FieldModel, agentsession.FieldTitle, agentsession.FieldStatus, agentsession.FieldError:
 			values[i] = new(sql.NullString)
-		case agentsession.FieldCreatedAt, agentsession.FieldFinishedAt:
+		case agentsession.FieldCreatedAt, agentsession.FieldFinishedAt, agentsession.FieldRunExpiresAt:
 			values[i] = new(sql.NullTime)
 		case agentsession.FieldID, agentsession.FieldGroupID:
 			values[i] = new(uuid.UUID)
@@ -138,6 +140,13 @@ func (_m *AgentSession) assignValues(columns []string, values []any) error {
 				_m.FinishedAt = new(time.Time)
 				*_m.FinishedAt = value.Time
 			}
+		case agentsession.FieldRunExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field run_expires_at", values[i])
+			} else if value.Valid {
+				_m.RunExpiresAt = new(time.Time)
+				*_m.RunExpiresAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -207,6 +216,11 @@ func (_m *AgentSession) String() string {
 	builder.WriteString(", ")
 	if v := _m.FinishedAt; v != nil {
 		builder.WriteString("finished_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.RunExpiresAt; v != nil {
+		builder.WriteString("run_expires_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')

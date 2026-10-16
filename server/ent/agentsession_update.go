@@ -187,6 +187,26 @@ func (_u *AgentSessionUpdate) ClearFinishedAt() *AgentSessionUpdate {
 	return _u
 }
 
+// SetRunExpiresAt sets the "run_expires_at" field.
+func (_u *AgentSessionUpdate) SetRunExpiresAt(v time.Time) *AgentSessionUpdate {
+	_u.mutation.SetRunExpiresAt(v)
+	return _u
+}
+
+// SetNillableRunExpiresAt sets the "run_expires_at" field if the given value is not nil.
+func (_u *AgentSessionUpdate) SetNillableRunExpiresAt(v *time.Time) *AgentSessionUpdate {
+	if v != nil {
+		_u.SetRunExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearRunExpiresAt clears the value of the "run_expires_at" field.
+func (_u *AgentSessionUpdate) ClearRunExpiresAt() *AgentSessionUpdate {
+	_u.mutation.ClearRunExpiresAt()
+	return _u
+}
+
 // Mutation returns the AgentSessionMutation object of the builder.
 func (_u *AgentSessionUpdate) Mutation() *AgentSessionMutation {
 	return _u.mutation
@@ -266,6 +286,12 @@ func (_u *AgentSessionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.FinishedAtCleared() {
 		_spec.ClearField(agentsession.FieldFinishedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.RunExpiresAt(); ok {
+		_spec.SetField(agentsession.FieldRunExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.RunExpiresAtCleared() {
+		_spec.ClearField(agentsession.FieldRunExpiresAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -445,6 +471,26 @@ func (_u *AgentSessionUpdateOne) ClearFinishedAt() *AgentSessionUpdateOne {
 	return _u
 }
 
+// SetRunExpiresAt sets the "run_expires_at" field.
+func (_u *AgentSessionUpdateOne) SetRunExpiresAt(v time.Time) *AgentSessionUpdateOne {
+	_u.mutation.SetRunExpiresAt(v)
+	return _u
+}
+
+// SetNillableRunExpiresAt sets the "run_expires_at" field if the given value is not nil.
+func (_u *AgentSessionUpdateOne) SetNillableRunExpiresAt(v *time.Time) *AgentSessionUpdateOne {
+	if v != nil {
+		_u.SetRunExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearRunExpiresAt clears the value of the "run_expires_at" field.
+func (_u *AgentSessionUpdateOne) ClearRunExpiresAt() *AgentSessionUpdateOne {
+	_u.mutation.ClearRunExpiresAt()
+	return _u
+}
+
 // Mutation returns the AgentSessionMutation object of the builder.
 func (_u *AgentSessionUpdateOne) Mutation() *AgentSessionMutation {
 	return _u.mutation
@@ -554,6 +600,12 @@ func (_u *AgentSessionUpdateOne) sqlSave(ctx context.Context) (_node *AgentSessi
 	}
 	if _u.mutation.FinishedAtCleared() {
 		_spec.ClearField(agentsession.FieldFinishedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.RunExpiresAt(); ok {
+		_spec.SetField(agentsession.FieldRunExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.RunExpiresAtCleared() {
+		_spec.ClearField(agentsession.FieldRunExpiresAt, field.TypeTime)
 	}
 	_node = &AgentSession{config: _u.config}
 	_spec.Assign = _node.assignValues
