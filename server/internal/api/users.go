@@ -15,6 +15,7 @@ import (
 	entuser "openxdr/server/ent/user"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
+	"openxdr/server/internal/commandgate"
 )
 
 type userRow struct {
@@ -49,6 +50,11 @@ func mapUsers(api *http.ServeMux, db *ent.Client) {
 		if json.NewDecoder(r.Body).Decode(&body) != nil ||
 			body.Username == "" || len(body.Password) < 8 || !auth.ValidRole(body.Role) {
 			http.Error(w, "username 必填，密码至少 8 位，role 必须是 admin / analyst / viewer", http.StatusBadRequest)
+			return
+		}
+		// 系统身份不是用户，同名账号会让人分不清审计里是谁动的手
+		if body.Username == commandgate.SystemActor {
+			http.Error(w, "用户名 "+commandgate.SystemActor+" 保留给定时任务", http.StatusBadRequest)
 			return
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)

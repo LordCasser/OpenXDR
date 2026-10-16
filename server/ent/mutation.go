@@ -13219,6 +13219,7 @@ type TaskMutation struct {
 	target_group                *string
 	approval_timeout_seconds    *int64
 	addapproval_timeout_seconds *int64
+	dry_run                     *bool
 	prompt                      *string
 	removed                     *bool
 	clearedFields               map[string]struct{}
@@ -13616,6 +13617,42 @@ func (m *TaskMutation) ResetApprovalTimeoutSeconds() {
 	m.addapproval_timeout_seconds = nil
 }
 
+// SetDryRun sets the "dry_run" field.
+func (m *TaskMutation) SetDryRun(b bool) {
+	m.dry_run = &b
+}
+
+// DryRun returns the value of the "dry_run" field in the mutation.
+func (m *TaskMutation) DryRun() (r bool, exists bool) {
+	v := m.dry_run
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDryRun returns the old "dry_run" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldDryRun(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDryRun is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDryRun requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDryRun: %w", err)
+	}
+	return oldValue.DryRun, nil
+}
+
+// ResetDryRun resets all changes to the "dry_run" field.
+func (m *TaskMutation) ResetDryRun() {
+	m.dry_run = nil
+}
+
 // SetPrompt sets the "prompt" field.
 func (m *TaskMutation) SetPrompt(s string) {
 	m.prompt = &s
@@ -13722,7 +13759,7 @@ func (m *TaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaskMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.name != nil {
 		fields = append(fields, task.FieldName)
 	}
@@ -13743,6 +13780,9 @@ func (m *TaskMutation) Fields() []string {
 	}
 	if m.approval_timeout_seconds != nil {
 		fields = append(fields, task.FieldApprovalTimeoutSeconds)
+	}
+	if m.dry_run != nil {
+		fields = append(fields, task.FieldDryRun)
 	}
 	if m.prompt != nil {
 		fields = append(fields, task.FieldPrompt)
@@ -13772,6 +13812,8 @@ func (m *TaskMutation) Field(name string) (ent.Value, bool) {
 		return m.TargetGroup()
 	case task.FieldApprovalTimeoutSeconds:
 		return m.ApprovalTimeoutSeconds()
+	case task.FieldDryRun:
+		return m.DryRun()
 	case task.FieldPrompt:
 		return m.Prompt()
 	case task.FieldRemoved:
@@ -13799,6 +13841,8 @@ func (m *TaskMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldTargetGroup(ctx)
 	case task.FieldApprovalTimeoutSeconds:
 		return m.OldApprovalTimeoutSeconds(ctx)
+	case task.FieldDryRun:
+		return m.OldDryRun(ctx)
 	case task.FieldPrompt:
 		return m.OldPrompt(ctx)
 	case task.FieldRemoved:
@@ -13860,6 +13904,13 @@ func (m *TaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetApprovalTimeoutSeconds(v)
+		return nil
+	case task.FieldDryRun:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDryRun(v)
 		return nil
 	case task.FieldPrompt:
 		v, ok := value.(string)
@@ -13968,6 +14019,9 @@ func (m *TaskMutation) ResetField(name string) error {
 		return nil
 	case task.FieldApprovalTimeoutSeconds:
 		m.ResetApprovalTimeoutSeconds()
+		return nil
+	case task.FieldDryRun:
+		m.ResetDryRun()
 		return nil
 	case task.FieldPrompt:
 		m.ResetPrompt()

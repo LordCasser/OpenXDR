@@ -138,6 +138,20 @@ func (_u *TaskUpdate) AddApprovalTimeoutSeconds(v int64) *TaskUpdate {
 	return _u
 }
 
+// SetDryRun sets the "dry_run" field.
+func (_u *TaskUpdate) SetDryRun(v bool) *TaskUpdate {
+	_u.mutation.SetDryRun(v)
+	return _u
+}
+
+// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableDryRun(v *bool) *TaskUpdate {
+	if v != nil {
+		_u.SetDryRun(*v)
+	}
+	return _u
+}
+
 // SetPrompt sets the "prompt" field.
 func (_u *TaskUpdate) SetPrompt(v string) *TaskUpdate {
 	_u.mutation.SetPrompt(v)
@@ -233,6 +247,9 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedApprovalTimeoutSeconds(); ok {
 		_spec.AddField(task.FieldApprovalTimeoutSeconds, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.DryRun(); ok {
+		_spec.SetField(task.FieldDryRun, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Prompt(); ok {
 		_spec.SetField(task.FieldPrompt, field.TypeString, value)
@@ -371,6 +388,20 @@ func (_u *TaskUpdateOne) AddApprovalTimeoutSeconds(v int64) *TaskUpdateOne {
 	return _u
 }
 
+// SetDryRun sets the "dry_run" field.
+func (_u *TaskUpdateOne) SetDryRun(v bool) *TaskUpdateOne {
+	_u.mutation.SetDryRun(v)
+	return _u
+}
+
+// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableDryRun(v *bool) *TaskUpdateOne {
+	if v != nil {
+		_u.SetDryRun(*v)
+	}
+	return _u
+}
+
 // SetPrompt sets the "prompt" field.
 func (_u *TaskUpdateOne) SetPrompt(v string) *TaskUpdateOne {
 	_u.mutation.SetPrompt(v)
@@ -496,6 +527,9 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 	}
 	if value, ok := _u.mutation.AddedApprovalTimeoutSeconds(); ok {
 		_spec.AddField(task.FieldApprovalTimeoutSeconds, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.DryRun(); ok {
+		_spec.SetField(task.FieldDryRun, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Prompt(); ok {
 		_spec.SetField(task.FieldPrompt, field.TypeString, value)

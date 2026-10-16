@@ -7,18 +7,21 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"openxdr/server/ent"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/internal/testdb"
 )
 
 type fakeRunner struct {
 	mu   sync.Mutex
+	db   *ent.Client
 	jobs []Job
-	fail string // 该组的会话返回失败
+	fail string // 该组的会话返回失败，其余组交一份报告
 }
 
 func (f *fakeRunner) RunTask(_ context.Context, job Job) error {
@@ -28,7 +31,8 @@ func (f *fakeRunner) RunTask(_ context.Context, job Job) error {
 	if job.Session.GroupID.String() == f.fail {
 		return errors.New("输出被截断")
 	}
-	return nil
+	return f.db.Report.Create().SetSessionID(job.Session.ID).SetGroupID(job.Session.GroupID).
+		SetTitle("日报").SetMarkdown("# 一切正常").Exec(context.Background())
 }
 
 func TestSchedulerTick(t *testing.T) {
@@ -44,12 +48,18 @@ func TestSchedulerTick(t *testing.T) {
 		"id: t\nname: 巡检\nschedule: '*/5 * * * *'\napproval_timeout: 2m\nprompt: 看看\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runner := &fakeRunner{fail: gB.ID.String()}
-	var notes []string
+	runner := &fakeRunner{db: client, fail: gB.ID.String()}
+	var mu sync.Mutex
+	notes := map[string]string{}
 	s := &Scheduler{
-		DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute,
-		Notify: func(_ context.Context, title, _ string) error { notes = append(notes, title); return nil },
-		start:  time.Now().Add(-10 * time.Minute),
+		DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute, LinkBase: "http://x",
+		Notify: func(_ context.Context, title, text string) error {
+			mu.Lock()
+			defer mu.Unlock()
+			notes[title] = text
+			return nil
+		},
+		start: time.Now().Add(-10 * time.Minute),
 	}
 
 	if err := s.tick(ctx, time.Now()); err != nil {
@@ -61,7 +71,7 @@ func TestSchedulerTick(t *testing.T) {
 	}
 	for _, j := range runner.jobs {
 		if j.Session.Kind != "task" || j.Session.Initiator != Initiator || j.Session.Model != "m" ||
-			j.Prompt != "看看" || j.ApprovalTimeout != 2*time.Minute {
+			j.Prompt != "看看" || j.ApprovalTimeout != 2*time.Minute || !j.Session.DryRun {
 			t.Errorf("任务会话参数不符：%+v %+v", j, j.Session)
 		}
 	}
@@ -73,8 +83,10 @@ func TestSchedulerTick(t *testing.T) {
 	if status[gA.ID.String()] != "succeeded" || status[gB.ID.String()] != "failed" {
 		t.Errorf("运行终态不符：%v", status)
 	}
-	if len(notes) != 1 {
-		t.Errorf("失败应外发一次通知，得到 %v", notes)
+	// A 推报告（带摘要与链接），B 推失败
+	if len(notes) != 2 || !strings.Contains(notes["日报"], "一切正常") ||
+		!strings.Contains(notes["日报"], "http://x/api/agent-reports/") || notes["任务失败：巡检"] == "" {
+		t.Errorf("通知不符：%v", notes)
 	}
 
 	// 刚跑过，同一时刻不会再触发

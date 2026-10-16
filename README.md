@@ -316,6 +316,9 @@ server 全部通过环境变量配置，均有默认值：
 | `LOG_LEVEL` | `info` | debug / info / warn / error |
 | `RULES_PATH` | `../rules` | Sigma 规则目录 |
 | `RULES_RELOAD_SECONDS` | `30` | 规则目录变更检测周期，变更自动热重载；0 关闭 |
+| `TASKS_PATH` | `../tasks` | 预设任务 YAML 目录；需配置 `PI_MODEL` 才调度，见 [Pi 后端](docs/pi-backend.md#预设任务) |
+| `SCHEDULE_INTERVAL_SECONDS` | `30` | 任务到期检查与 YAML 重载周期 |
+| `CHROMIUM_PATH` | `chromium` | 报告 PDF 渲染用的 headless Chromium，server 镜像已内置 |
 | `HTTP_ADDR` / `GRPC_ADDR` | `:8080` / `:8081` | 监听地址 |
 | `ALERT_DEDUP_WINDOW_MINUTES` | `5` | 告警去重窗口 |
 | `CORRELATE_WINDOW_MINUTES` | `30` | 关联时间窗 |

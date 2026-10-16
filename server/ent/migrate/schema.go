@@ -487,6 +487,7 @@ var (
 		{Name: "model", Type: field.TypeString, Default: ""},
 		{Name: "target_group", Type: field.TypeString, Default: "*"},
 		{Name: "approval_timeout_seconds", Type: field.TypeInt64, Default: 600},
+		{Name: "dry_run", Type: field.TypeBool, Default: true},
 		{Name: "prompt", Type: field.TypeString, Size: 2147483647},
 		{Name: "removed", Type: field.TypeBool, Default: false},
 	}

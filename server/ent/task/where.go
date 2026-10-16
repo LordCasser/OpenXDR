@@ -98,6 +98,11 @@ func ApprovalTimeoutSeconds(v int64) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldApprovalTimeoutSeconds, v))
 }
 
+// DryRun applies equality check predicate on the "dry_run" field. It's identical to DryRunEQ.
+func DryRun(v bool) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDryRun, v))
+}
+
 // Prompt applies equality check predicate on the "prompt" field. It's identical to PromptEQ.
 func Prompt(v string) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldPrompt, v))
@@ -491,6 +496,16 @@ func ApprovalTimeoutSecondsLT(v int64) predicate.Task {
 // ApprovalTimeoutSecondsLTE applies the LTE predicate on the "approval_timeout_seconds" field.
 func ApprovalTimeoutSecondsLTE(v int64) predicate.Task {
 	return predicate.Task(sql.FieldLTE(FieldApprovalTimeoutSeconds, v))
+}
+
+// DryRunEQ applies the EQ predicate on the "dry_run" field.
+func DryRunEQ(v bool) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldDryRun, v))
+}
+
+// DryRunNEQ applies the NEQ predicate on the "dry_run" field.
+func DryRunNEQ(v bool) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldDryRun, v))
 }
 
 // PromptEQ applies the EQ predicate on the "prompt" field.

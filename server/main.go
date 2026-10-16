@@ -36,7 +36,9 @@ import (
 	"openxdr/server/internal/janitor"
 	"openxdr/server/internal/notify"
 	"openxdr/server/internal/piruntime"
+	"openxdr/server/internal/report"
 	"openxdr/server/internal/response"
+	"openxdr/server/internal/schedule"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
 	"openxdr/server/internal/syslog"
@@ -250,6 +252,25 @@ func main() {
 	chat := &agentchat.Service{DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second},
 		Runtime: piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second},
 		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), QueryURLs: queryURLs}
+	// 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
+	report.Chromium = getenv("CHROMIUM_PATH", "chromium")
+	webhook := &notify.Webhook{URL: os.Getenv("WEBHOOK_URL"), Format: getenv("WEBHOOK_FORMAT", "generic")}
+	scheduler := &schedule.Scheduler{
+		DB: client, Runner: chat,
+		Dir:          getenv("TASKS_PATH", "../tasks"),
+		Interval:     time.Duration(getenvInt("SCHEDULE_INTERVAL_SECONDS", 30)) * time.Second,
+		DefaultModel: chat.Model,
+		Notify: func(ctx context.Context, title, text string) error {
+			return webhook.Send(ctx, notify.Text{Title: title, Body: text})
+		},
+		LinkBase: os.Getenv("WEBHOOK_LINK_BASE"),
+		Timeout:  time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second,
+	}
+	if chat.Model != "" {
+		go cluster.RunLeader(ctx, db, "schedule", scheduler.Run)
+	} else {
+		slog.Warn("预设任务未启用：未配置 PI_MODEL")
+	}
 	app := auth.Middleware(client, api.Handler(client, rules, rulesPath, hub, suppressions, intelStore, triageEngine, allowlist, chat))
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", telemetry.Handler(registry))

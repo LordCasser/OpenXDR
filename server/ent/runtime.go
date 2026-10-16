@@ -277,8 +277,12 @@ func init() {
 	taskDescApprovalTimeoutSeconds := taskFields[7].Descriptor()
 	// task.DefaultApprovalTimeoutSeconds holds the default value on creation for the approval_timeout_seconds field.
 	task.DefaultApprovalTimeoutSeconds = taskDescApprovalTimeoutSeconds.Default.(int64)
+	// taskDescDryRun is the schema descriptor for dry_run field.
+	taskDescDryRun := taskFields[8].Descriptor()
+	// task.DefaultDryRun holds the default value on creation for the dry_run field.
+	task.DefaultDryRun = taskDescDryRun.Default.(bool)
 	// taskDescRemoved is the schema descriptor for removed field.
-	taskDescRemoved := taskFields[9].Descriptor()
+	taskDescRemoved := taskFields[10].Descriptor()
 	// task.DefaultRemoved holds the default value on creation for the removed field.
 	task.DefaultRemoved = taskDescRemoved.Default.(bool)
 	taskrunFields := schema.TaskRun{}.Fields()

@@ -21,6 +21,7 @@ x-server: &server
     QUEUE_REPLICAS: 3
     LOG_FORMAT: json
     RULES_PATH: /rules
+    TASKS_PATH: /tasks
     ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
     RESPONSE_ENABLED: ${RESPONSE_ENABLED:-false}
     TLS_CA_FILE: ${TLS_CA_FILE:-}
@@ -29,11 +30,13 @@ x-server: &server
     AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434/v1}
     AI_MODEL: ${AI_MODEL:-}
     AI_API_KEY: ${AI_API_KEY:-}
+    PI_MODEL: ${PI_MODEL:-}
     WEBHOOK_URL: ${WEBHOOK_URL:-}
     WEBHOOK_FORMAT: ${WEBHOOK_FORMAT:-generic}
     SYSLOG_ADDR: ""
   volumes:
     - ./rules:/rules:ro
+    - ./tasks:/tasks:ro
     - ./certs:/certs:ro
   extra_hosts:
     - host.docker.internal:host-gateway

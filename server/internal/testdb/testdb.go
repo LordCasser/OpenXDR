@@ -47,6 +47,8 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 	t.Helper()
 	dels := []func(context.Context) (int, error){
+		func(ctx context.Context) (int, error) { return c.TaskRun.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.Task.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Approval.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.CommandPolicy.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Report.Delete().Exec(ctx) },
@@ -66,12 +68,6 @@ func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 		func(ctx context.Context) (int, error) { return c.Intel.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Suppression.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.ProcessBaseline.Delete().Exec(ctx) },
-		func(ctx context.Context) (int, error) { return c.TaskRun.Delete().Exec(ctx) },
-		func(ctx context.Context) (int, error) { return c.Task.Delete().Exec(ctx) },
-		func(ctx context.Context) (int, error) { return c.GroupMember.Delete().Exec(ctx) },
-		func(ctx context.Context) (int, error) { return c.Group.Delete().Exec(ctx) },
-		func(ctx context.Context) (int, error) { return c.SessionMessage.Delete().Exec(ctx) },
-		func(ctx context.Context) (int, error) { return c.AgentSession.Delete().Exec(ctx) },
 	}
 	for i, del := range dels {
 		if _, err := del(ctx); err != nil {

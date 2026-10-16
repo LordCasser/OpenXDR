@@ -100,6 +100,41 @@ EXEC 在重连时不自动补发，避免原命令已执行但回执丢失造成
 未配置时完全不注册 query，不回退到平台数据库账号。SQL 不能用于写入报告；报告走
 `report({title,markdown})`，平台强制绑定当前组和会话。
 
+## 预设任务
+
+实现：`server/internal/schedule`（加载、同步、调度）、`agentchat/task.go`（任务会话）、
+`api/tasks.go`、`api/reportrender.go`。任务定义在仓库 `tasks/*.yml`，与 `rules/` 同构管理：
+
+```yaml
+id: daily-host-inspection      # 必填，库中主键
+name: 每日主机巡检
+schedule: "0 2 * * *"          # 五段 cron，支持 @daily 与 CRON_TZ= 前缀
+model: ""                      # 空用 PI_MODEL
+targets: { group: "*" }        # "*" 每组各跑一次，或写组名
+approval_timeout: 10m          # 名单外命令的审批等待，超时按拒绝
+dry_run: false                 # 不写默认 true（演练）
+prompt: |
+  ……
+```
+
+- 未知字段、坏 cron、重复 id 的文件整份跳过并记日志；YAML 删除的任务标记 removed，保留历史。
+- 调度器集群单活，每 `SCHEDULE_INTERVAL_SECONDS` 重载 YAML 并检查到期；从上次运行起算下一个触发点，
+  停机或停用期间错过的周期只补跑一次。空组不跑；同组上一轮未结束则跳过本轮。
+  接管时遗留的 running 记为失败，不重放。
+- 任务会话 `kind=task`、`initiator=system`。**系统身份不是用户**：审批闸门对它不查用户与组内角色，
+  但要求会话是本组任务会话，资产作用域、名单（按 AI 来源走白名单）、审批、`RESPONSE_ENABLED`
+  与 dry-run 照常生效；审批人看到的发起人为 `system`。用户名 `system` 保留，不能创建。
+- 截断、轮数耗尽或会话结束时没有提交报告，一律记为失败。失败与报告都经 `WEBHOOK_URL` 外发
+  （报告附摘要与 HTML 链接，链接前缀取 `WEBHOOK_LINK_BASE`）；推送失败只记日志，不重试。
+
+| 接口 | 权限 | 说明 |
+|---|---|---|
+| `GET /api/tasks` | viewer | 任务列表 |
+| `PATCH /api/tasks/{id}` | admin | `{enabled?, customSchedule?}`；`customSchedule` 传空串恢复 YAML 周期 |
+| `GET /api/tasks/{id}/runs` | viewer | 最近 100 次运行，按组裁剪 |
+| `GET /api/agent-reports/{id}/html` | 组 viewer | goldmark 渲染，原始 HTML 与危险链接被丢弃，带 CSP |
+| `GET /api/agent-reports/{id}/pdf` | 组 viewer | headless Chromium 打印，禁外网；找不到 Chromium 返回 503 |
+
 ## 验证与后续
 
 - `server/pi-runtime`: `npm ci --ignore-scripts && npm test`。
@@ -107,5 +142,5 @@ EXEC 在重连时不自动补发，避免原命令已执行但回执丢失造成
 - 集成测试：`INTEGRATION_DATABASE_URL=测试库 go test -tags integration -p 1 ./...`。
   必须使用可清空的独立测试库。
 - 第 5 步可按上述接口制作会话、审批和报告页面。
-- 第 6 步仍需调度器、任务加载、HTML/PDF 渲染与 Webhook。此处仅保存 Markdown。
+- 第 6 步见上文「预设任务」。前端尚无任务、审批与报告页面。
 - 本次验证使用 mock 模型与模拟 agent 通道，尚未进行真实模型/受管主机验收。

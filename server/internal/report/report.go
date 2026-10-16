@@ -52,13 +52,16 @@ func HTML(title, markdown string, createdAt time.Time) ([]byte, error) {
 	return out.Bytes(), err
 }
 
+// Chromium 可执行文件名或路径，main 按 CHROMIUM_PATH 设置。
+var Chromium = "chromium"
+
 // ErrNoChromium 未找到 Chromium，PDF 不可用。
 var ErrNoChromium = errors.New("未找到 Chromium，PDF 渲染不可用")
 
-// PDF 用 headless Chromium 打印 HTML。chromium 为可执行文件名或路径。
+// PDF 用 headless Chromium 打印 HTML。
 // 网络全部禁掉：报告是自包含页面，不该有任何外部请求。
-func PDF(ctx context.Context, chromium string, html []byte) ([]byte, error) {
-	bin, err := exec.LookPath(chromium)
+func PDF(ctx context.Context, html []byte) ([]byte, error) {
+	bin, err := exec.LookPath(Chromium)
 	if err != nil {
 		return nil, ErrNoChromium
 	}

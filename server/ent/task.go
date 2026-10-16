@@ -30,6 +30,8 @@ type Task struct {
 	TargetGroup string `json:"target_group,omitempty"`
 	// ApprovalTimeoutSeconds holds the value of the "approval_timeout_seconds" field.
 	ApprovalTimeoutSeconds int64 `json:"approval_timeout_seconds,omitempty"`
+	// DryRun holds the value of the "dry_run" field.
+	DryRun bool `json:"dry_run,omitempty"`
 	// Prompt holds the value of the "prompt" field.
 	Prompt string `json:"prompt,omitempty"`
 	// Removed holds the value of the "removed" field.
@@ -42,7 +44,7 @@ func (*Task) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case task.FieldEnabled, task.FieldRemoved:
+		case task.FieldEnabled, task.FieldDryRun, task.FieldRemoved:
 			values[i] = new(sql.NullBool)
 		case task.FieldApprovalTimeoutSeconds:
 			values[i] = new(sql.NullInt64)
@@ -111,6 +113,12 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field approval_timeout_seconds", values[i])
 			} else if value.Valid {
 				_m.ApprovalTimeoutSeconds = value.Int64
+			}
+		case task.FieldDryRun:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field dry_run", values[i])
+			} else if value.Valid {
+				_m.DryRun = value.Bool
 			}
 		case task.FieldPrompt:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -182,6 +190,9 @@ func (_m *Task) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("approval_timeout_seconds=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ApprovalTimeoutSeconds))
+	builder.WriteString(", ")
+	builder.WriteString("dry_run=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DryRun))
 	builder.WriteString(", ")
 	builder.WriteString("prompt=")
 	builder.WriteString(_m.Prompt)

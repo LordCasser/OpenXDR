@@ -37,10 +37,13 @@ services:
       QUEUE_SHARDS: ${QUEUE_SHARDS:-32}
       QUEUE_REPLICAS: 1
       RULES_PATH: /rules
+      TASKS_PATH: /tasks
       # AI 研判：留空则不启用。接本地 Ollama 时用 host.docker.internal
       AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434/v1}
       AI_MODEL: ${AI_MODEL:-}
       AI_API_KEY: ${AI_API_KEY:-}
+      # Pi 对话与预设任务：留空则不启用，与模型端点共用 AI_BASE_URL / AI_API_KEY
+      PI_MODEL: ${PI_MODEL:-}
       # 首次启动的 admin 密码；不设则随机生成并打印在 server 日志里
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # 告警通知：留空不推送。格式 generic / dingtalk / feishu / wecom
@@ -67,6 +70,7 @@ services:
       TLS_KEY_FILE: ${TLS_KEY_FILE:-}
     volumes:
       - ./rules:/rules:ro
+      - ./tasks:/tasks:ro
       - ./certs:/certs:ro
     ports:
       - "8080:8080"   # REST API

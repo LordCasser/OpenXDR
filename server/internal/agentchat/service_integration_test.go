@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"openxdr/server/ent"
+	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/piruntime"
 	"openxdr/server/internal/testdb"
 	"strings"
@@ -108,7 +109,7 @@ func TestSessionGroupScope(t *testing.T) {
 	if _, err := service.Chat(ctx, session.ID, user, "检查", nil); err == nil {
 		t.Fatal("非成员不得执行")
 	}
-	if _, err := service.tool(ctx, &ent.AgentSession{GroupID: uuid.New()}, user, "query", json.RawMessage(`{"sql":"select 1"}`)); err == nil {
+	if _, err := service.tool(ctx, &ent.AgentSession{GroupID: uuid.New()}, commandgate.Request{UserID: user.ID}, "query", json.RawMessage(`{"sql":"select 1"}`)); err == nil {
 		t.Fatal("无 DSN 必须拒绝")
 	}
 }

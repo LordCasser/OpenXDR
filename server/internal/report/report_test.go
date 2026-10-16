@@ -27,7 +27,10 @@ func TestHTMLEscapesUntrustedMarkdown(t *testing.T) {
 }
 
 func TestPDFWithoutChromium(t *testing.T) {
-	_, err := PDF(context.Background(), "openxdr-no-such-chromium", []byte("<p>x</p>"))
+	old := Chromium
+	Chromium = "openxdr-no-such-chromium"
+	defer func() { Chromium = old }()
+	_, err := PDF(context.Background(), []byte("<p>x</p>"))
 	if !errors.Is(err, ErrNoChromium) {
 		t.Fatalf("缺 Chromium 应报 ErrNoChromium，得到 %v", err)
 	}

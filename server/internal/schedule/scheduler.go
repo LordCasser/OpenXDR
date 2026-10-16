@@ -4,18 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"openxdr/server/ent"
 	entasset "openxdr/server/ent/asset"
 	entgroup "openxdr/server/ent/group"
+	"openxdr/server/ent/report"
 	enttask "openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/internal/commandgate"
 )
 
-// Initiator 定时任务会话的发起人。
-const Initiator = "system"
+// Initiator 定时任务会话的发起人，即审批闸门的系统身份。
+const Initiator = commandgate.SystemActor
 
 // Job 一次任务运行：会话已建好（kind=task、initiator=system、绑定组与模型）。
 type Job struct {
@@ -170,7 +173,7 @@ func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model 
 	}
 	session, err := tx.AgentSession.Create().
 		SetKind("task").SetGroupID(g.ID).SetInitiator(Initiator).SetModel(model).
-		SetTitle(t.Name).
+		SetTitle(t.Name).SetDryRun(t.DryRun).
 		Save(ctx)
 	if err != nil {
 		_ = tx.Rollback()
@@ -208,6 +211,7 @@ func (s *Scheduler) execute(ctx context.Context, t *ent.Task, g *ent.Group, run 
 	}
 	if err == nil {
 		slog.Info("任务完成", "task", t.ID, "group", g.Name)
+		s.pushReports(done, g, session)
 		return
 	}
 	slog.Error("任务失败", "task", t.ID, "group", g.Name, "err", err)
@@ -221,4 +225,35 @@ func (s *Scheduler) execute(ctx context.Context, t *ent.Task, g *ent.Group, run 
 			slog.Error("任务失败通知发送失败", "run", run.ID, "err", nerr)
 		}
 	}
+}
+
+// pushReports 把会话提交的报告推出去：标题、摘要与控制台里的 HTML 链接。
+// 推送失败只记日志，报告本身已在库里。
+func (s *Scheduler) pushReports(ctx context.Context, g *ent.Group, session *ent.AgentSession) {
+	if s.Notify == nil {
+		return
+	}
+	reports, err := s.DB.Report.Query().Where(report.SessionIDEQ(session.ID)).Order(ent.Asc(report.FieldCreatedAt)).All(ctx)
+	if err != nil {
+		slog.Error("查询任务报告失败", "session", session.ID, "err", err)
+		return
+	}
+	for _, r := range reports {
+		text := fmt.Sprintf("组「%s」\n%s", g.Name, excerpt(r.Markdown, 300))
+		if s.LinkBase != "" {
+			text += "\n" + s.LinkBase + "/api/agent-reports/" + r.ID.String() + "/html"
+		}
+		if err := s.Notify(ctx, r.Title, text); err != nil {
+			slog.Error("报告推送失败", "report", r.ID, "err", err)
+		}
+	}
+}
+
+// excerpt 按字符截断，IM 消息里放全文没人看
+func excerpt(s string, n int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= n {
+		return string(r)
+	}
+	return string(r[:n]) + "…"
 }

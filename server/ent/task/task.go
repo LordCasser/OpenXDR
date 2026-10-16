@@ -25,6 +25,8 @@ const (
 	FieldTargetGroup = "target_group"
 	// FieldApprovalTimeoutSeconds holds the string denoting the approval_timeout_seconds field in the database.
 	FieldApprovalTimeoutSeconds = "approval_timeout_seconds"
+	// FieldDryRun holds the string denoting the dry_run field in the database.
+	FieldDryRun = "dry_run"
 	// FieldPrompt holds the string denoting the prompt field in the database.
 	FieldPrompt = "prompt"
 	// FieldRemoved holds the string denoting the removed field in the database.
@@ -43,6 +45,7 @@ var Columns = []string{
 	FieldModel,
 	FieldTargetGroup,
 	FieldApprovalTimeoutSeconds,
+	FieldDryRun,
 	FieldPrompt,
 	FieldRemoved,
 }
@@ -66,6 +69,8 @@ var (
 	DefaultTargetGroup string
 	// DefaultApprovalTimeoutSeconds holds the default value on creation for the "approval_timeout_seconds" field.
 	DefaultApprovalTimeoutSeconds int64
+	// DefaultDryRun holds the default value on creation for the "dry_run" field.
+	DefaultDryRun bool
 	// DefaultRemoved holds the default value on creation for the "removed" field.
 	DefaultRemoved bool
 )
@@ -111,6 +116,11 @@ func ByTargetGroup(opts ...sql.OrderTermOption) OrderOption {
 // ByApprovalTimeoutSeconds orders the results by the approval_timeout_seconds field.
 func ByApprovalTimeoutSeconds(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApprovalTimeoutSeconds, opts...).ToFunc()
+}
+
+// ByDryRun orders the results by the dry_run field.
+func ByDryRun(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDryRun, opts...).ToFunc()
 }
 
 // ByPrompt orders the results by the prompt field.

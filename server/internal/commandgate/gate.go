@@ -23,12 +23,19 @@ type Gate struct {
 	ApprovalTimeout time.Duration
 }
 type Request struct {
-	UserID    uuid.UUID
+	UserID uuid.UUID
+	// 定时任务的系统身份：不对应任何用户，UserID 忽略
+	System    bool
 	GroupID   uuid.UUID
 	SessionID *uuid.UUID
 	Origin    string
 	Command   response.Request
+	// 非零时覆盖 Gate.ApprovalTimeout，定时任务按任务配置
+	ApprovalTimeout time.Duration
 }
+
+// SystemActor 系统身份的发起人名，也是定时任务会话的 initiator。用户名不允许取这个值。
+const SystemActor = "system"
 
 // Match 使用完整字符串正则，避免无意放行前后拼接的命令。
 func Match(pattern, cmd string) (bool, error) {
@@ -42,25 +49,35 @@ func Match(pattern, cmd string) (bool, error) {
 	return re.MatchString(cmd), nil
 }
 
-func (g *Gate) authorize(ctx context.Context, req Request) (*ent.User, error) {
-	u, err := g.DB.User.Get(ctx, req.UserID)
-	if err != nil {
-		return nil, errors.New("发起人不存在")
-	}
-	if !auth.Allowed(auth.GroupRole(ctx, g.DB, u, req.GroupID), "analyst") {
-		return nil, errors.New("无组内执行权限")
+// authorize 返回发起人名。系统身份没有用户与组内角色可查，
+// 只能在 kind=task、initiator=system 的任务会话里对本组资产执行。
+func (g *Gate) authorize(ctx context.Context, req Request) (string, error) {
+	actor := SystemActor
+	if req.System {
+		if req.SessionID == nil {
+			return "", errors.New("系统身份必须绑定任务会话")
+		}
+	} else {
+		u, err := g.DB.User.Get(ctx, req.UserID)
+		if err != nil {
+			return "", errors.New("发起人不存在")
+		}
+		if !auth.Allowed(auth.GroupRole(ctx, g.DB, u, req.GroupID), "analyst") {
+			return "", errors.New("无组内执行权限")
+		}
+		actor = u.Username
 	}
 	a, err := g.DB.Asset.Get(ctx, req.Command.AssetID)
 	if err != nil || a.GroupID == nil || *a.GroupID != req.GroupID {
-		return nil, errors.New("资产不属于当前组")
+		return "", errors.New("资产不属于当前组")
 	}
 	if req.SessionID != nil {
 		s, err := g.DB.AgentSession.Get(ctx, *req.SessionID)
-		if err != nil || s.GroupID != req.GroupID || s.Initiator != u.Username {
-			return nil, errors.New("会话身份不匹配")
+		if err != nil || s.GroupID != req.GroupID || s.Initiator != actor || req.System != (s.Kind == "task") {
+			return "", errors.New("会话身份不匹配")
 		}
 	}
-	return u, nil
+	return actor, nil
 }
 
 func (g *Gate) needsApproval(ctx context.Context, req Request) (bool, error) {
@@ -102,7 +119,11 @@ func (g *Gate) Issue(ctx context.Context, req Request) (out *ent.Command, retErr
 	}
 	// 请求先持久化审计，包括随后因授权、名单或超时被拒绝的请求。
 	detail := fmt.Sprintf("origin=%s group=%s dry_run=%t cmd=%s", req.Origin, req.GroupID, req.Command.DryRun, *req.Command.Cmd)
-	if err := g.log(ctx, req.UserID.String(), "exec_requested", req.Command.AssetID.String(), detail); err != nil {
+	who := req.UserID.String()
+	if req.System {
+		who = SystemActor
+	}
+	if err := g.log(ctx, who, "exec_requested", req.Command.AssetID.String(), detail); err != nil {
 		return nil, err
 	}
 	defer func() {
@@ -120,11 +141,11 @@ func (g *Gate) Issue(ctx context.Context, req Request) (out *ent.Command, retErr
 		if errors.Is(retErr, response.ErrDeliveryUnknown) || (out != nil && out.Status == "unknown") {
 			status = "exec_unknown"
 		}
-		if err := g.log(logCtx, req.UserID.String(), status, req.Command.AssetID.String(), result); err != nil && retErr == nil {
+		if err := g.log(logCtx, who, status, req.Command.AssetID.String(), result); err != nil && retErr == nil {
 			retErr = fmt.Errorf("命令可能已下发，审计回写失败，禁止自动重试: %w", err)
 		}
 	}()
-	u, err := g.authorize(ctx, req)
+	actor, err := g.authorize(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -136,16 +157,16 @@ func (g *Gate) Issue(ctx context.Context, req Request) (out *ent.Command, retErr
 		return nil, err
 	}
 	if required {
-		if err := g.await(ctx, req, u.Username); err != nil {
+		if err := g.await(ctx, req, actor); err != nil {
 			return nil, err
 		}
 	}
 	// 等待期间主机归组或成员权限可能改变，审批不能越过此检查。
-	u, err = g.authorize(ctx, req)
+	actor, err = g.authorize(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	req.Command.IssuedBy = u.Username
+	req.Command.IssuedBy = actor
 	return g.Hub.Issue(ctx, req.Command)
 }
 
@@ -155,6 +176,9 @@ func (g *Gate) log(ctx context.Context, actor, action, target, detail string) er
 
 func (g *Gate) await(ctx context.Context, req Request, username string) error {
 	ttl := g.ApprovalTimeout
+	if req.ApprovalTimeout > 0 {
+		ttl = req.ApprovalTimeout
+	}
 	if ttl <= 0 {
 		ttl = 10 * time.Minute
 	}
