@@ -117,7 +117,7 @@ func main() {
 	hub := response.NewHub(client, os.Getenv("RESPONSE_ENABLED") == "true")
 	allowlist := isolationAllowlist()
 
-	// 研判引擎同时是狩猎的执行者：共用同一套调查工具与模型配置
+	// 研判引擎：AI 带只读调查工具逐个研判 incident
 	triageEngine := &triage.Engine{
 		DB:    client,
 		Rules: rules,
@@ -312,7 +312,7 @@ func main() {
 	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
 	routes.Handle("/api/enroll-tokens", enrollTokens)
 	routes.Handle("/api/enroll-tokens/", enrollTokens)
-	routes.Handle("/", api.Handler(client, rules, rulesPath, hub, suppressions, intelStore, triageEngine, allowlist, chat))
+	routes.Handle("/", api.Handler(client, rules, hub, suppressions, intelStore, allowlist, chat))
 	app := auth.Middleware(client, routes)
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", telemetry.Handler(registry))

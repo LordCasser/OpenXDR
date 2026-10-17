@@ -26,7 +26,7 @@ func TestAPITasks(t *testing.T) {
 	alice := client.User.Create().SetUsername("alice").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
 	client.GroupMember.Create().SetGroupID(gA.ID).SetUserID(alice.ID).SetRole("viewer").SaveX(ctx)
 
-	h := Handler(client, loadRules(t), t.TempDir(), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil, nil)
+	h := Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
 	admin := httptest.NewServer(asAdmin(h))
 	t.Cleanup(admin.Close)
 	viewer := httptest.NewServer(as(alice, h))

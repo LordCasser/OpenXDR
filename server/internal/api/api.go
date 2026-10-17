@@ -55,9 +55,8 @@ type incidentDetail struct {
 	Alerts  []alertRow `json:"alerts"`
 }
 
-func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, h hunter, selfEndpoints []string, chats ...*agentchat.Service) http.Handler {
+func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, selfEndpoints []string, chats ...*agentchat.Service) http.Handler {
 	mux := http.NewServeMux()
-	mapHunt(mux, db, h)
 	gate := &commandgate.Gate{DB: db, Hub: hub}
 	var chat *agentchat.Service
 	if len(chats) > 0 {
@@ -73,7 +72,7 @@ func Handler(db *ent.Client, rules *sigma.Engine, rulesDir string, hub *response
 	mapIntel(mux, db, intelStore)
 	mapStats(mux, db, rules)
 	mapEvents(mux, db)
-	mapRules(mux, rules, db, rulesDir)
+	mapRules(mux, rules)
 	mapAttack(mux, rules)
 	mapReport(mux, db, rules)
 	mapAgentConfig(mux, db)

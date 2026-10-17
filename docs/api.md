@@ -2,7 +2,7 @@
 
 Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cookie
 （`openxdr_session`）。权限约定：**GET = viewer 及以上，写操作 = analyst 及以上，
-`/api/users`、`/api/audit`、`/api/hunt` 与 `/api/groups` 写操作 = admin**。
+`/api/users`、`/api/audit`、`/api/settings` 与 `/api/groups` 写操作 = admin**。
 
 ## 认证
 
@@ -24,7 +24,6 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | GET | `/api/stats` | 概览：24h 降噪漏斗、告警趋势、按级别的告警分布（`alertsBySeverity`）、Top 规则、资产在线率 |
 | GET | `/api/rules` | 引擎当前加载的规则（热重载后即时反映），含数据源覆盖标记与 ATT&CK 标签 |
 | GET | `/api/attack` | ATT&CK 覆盖矩阵：按杀伤链顺序的战术列与技术格，含未打标签、无数据源的规则数 |
-| POST | `/api/hunt` | 自然语言狩猎：`{"question"}` → `{answer, steps}`。模型用只读调查工具查证后作答，`steps` 是调用过的工具与参数，供复核。未配置 `AI_MODEL` 返回 503 |
 
 `GET /api/events` 参数：`from`/`to`（RFC3339，默认近 24h）、`assetId`、
 `classUid`（1001 文件 / 1007 进程 / 3002 认证 / 4001 网络 / 4003 DNS /
@@ -85,7 +84,6 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 只看得到自己所在组的资产（`server/internal/api/scope.go`）。未分组资产与无归属数据（如 syslog）
 只有全局 admin 可见；incident 的全部告警都落在可见资产上才可见，跨组 incident 只有 admin 能看。
 写操作在全局角色之外，还要求目标资产所在组内角色达到 analyst，否则 403；读不到的资源一律 404。
-狩猎会读全量数据、无法按组裁剪，只开放给 admin。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|

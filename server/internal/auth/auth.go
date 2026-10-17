@@ -44,9 +44,6 @@ func minRole(method, path string) string {
 	switch {
 	case strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/audit"), strings.HasPrefix(path, "/api/settings"):
 		return "admin"
-	// 狩猎直接读全量数据，没法按组裁剪，只留给 admin
-	case strings.HasPrefix(path, "/api/hunt"):
-		return "admin"
 	// 预设任务跨组运行，启停与改周期只有 admin 能动
 	case strings.HasPrefix(path, "/api/tasks") && method != http.MethodGet:
 		return "admin"

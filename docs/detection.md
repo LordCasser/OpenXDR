@@ -206,8 +206,7 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 
 - 周期轮询 `AI_INTERVAL_SECONDS` 默认 30s，每批最多 5 个 open incident
   （`engine.go:63-72`）
-- **主动调查式**：模型可调用三个有边界的调查工具（与狩猎共用，
-  `tools.go:21-39`）：
+- **主动调查式**：模型可调用三个有边界的调查工具（`tools.go:21-39`）：
   | 工具 | 参数边界 |
   |---|---|
   | `query_events(keyword, hours)` | raw 全文 ILIKE，关键词转义 `% _ \`；hours 默认 24、超界回落；返回最近 15 条 |
@@ -226,17 +225,6 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
   triaged（`engine.go:20-32,85-90,146-159`）
 - **模型输出视为不可信输入**：刻意不做 NL2SQL——工具参数空间受限且已
   转义，模型越不出边界
-
-### 对话式狩猎与狩猎存规则
-
-- `POST /api/hunt` 与研判共用 `toolLoop` 和同一工具集，仅 system prompt
-  不同（`hunt.go:16-28`）
-- **狩猎存为规则**两段式：`POST /api/hunt/rule` 让 LLM 起草 Sigma YAML，
-  经 `sigma.Compile` 校验、错误回喂重试最多 3 次，**只起草不落盘**
-  （`draftrule.go:30-58`）；分析师审阅后 `POST /api/rules` 落盘——再过
-  一次 Compile、ID 查重、文件名清洗防路径穿越，写成 `hunt_<id>.yml`，
-  热重载生效。**落盘前强制过引擎编译器，AI 不能直接改检测面**
-  （`api/rules.go:59-95`）
 
 ### LLM 客户端
 
@@ -332,8 +320,8 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
   | 其余写操作（POST/PUT/DELETE） | analyst |
 - **审计**字段：username/remote_addr/action/target/detail；写失败只记日志
   不阻断（`audit/audit.go:39-53`）。action 全清单：`login / login_failed /
-  login_throttled / logout / incident_status / command_issued / hunt /
-  rule_create / suppression_created / suppression_deleted / intel_created /
+  login_throttled / logout / incident_status / command_issued /
+  suppression_created / suppression_deleted / intel_created /
   intel_imported / intel_deleted / agent_config_set / user_created /
   user_deleted / password_reset / auto_response / auto_response_skipped /
   auto_response_failed`
@@ -364,7 +352,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 | `RETENTION_DAYS` | `30`（0 不清） | 原始事件保留期 |
 | `RETENTION_INTERVAL_MINUTES` | `60` | 清理周期 |
 | `SYSLOG_ADDR` | 空（不启用） | syslog UDP+TCP 监听 |
-| `AI_MODEL` | 空（不启用） | 研判/狩猎模型名 |
+| `AI_MODEL` | 空（不启用） | 研判模型名 |
 | `AI_BASE_URL` | `http://localhost:11434/v1` | OpenAI 兼容端点 |
 | `AI_API_KEY` | 空 | Bearer key |
 | `AI_TIMEOUT_SECONDS` | `120` | LLM 超时 |

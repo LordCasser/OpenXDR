@@ -534,8 +534,8 @@ func compileFile(path string) (*Rule, error) {
 	return Compile(data)
 }
 
-// Compile 编译一条规则文本。狩猎产出的规则草稿在落盘前必须过同一编译器——
-// 能通过 Compile 的规则才保证热重载后真的会生效。
+// Compile 编译一条规则文本。规则目录里的文件逐个过这里，
+// 编译不过的规则拒绝加载，不会出现"看起来在跑"的规则。
 func Compile(data []byte) (*Rule, error) {
 	var doc map[string]any
 	if err := yaml.Unmarshal(data, &doc); err != nil {

@@ -30,9 +30,6 @@ func TestMinRoleRouteTable(t *testing.T) {
 		{"POST", "/api/groups", "admin"},
 		{"PUT", "/api/groups/1/members/2", "admin"},
 		{"DELETE", "/api/groups/1/assets/2", "admin"},
-		// 狩猎读全量数据，无法按组裁剪
-		{"POST", "/api/hunt", "admin"},
-		{"POST", "/api/hunt/rule", "admin"},
 		// 任务：读开放，改只有 admin
 		{"GET", "/api/tasks", "viewer"},
 		{"PATCH", "/api/tasks/daily", "admin"},

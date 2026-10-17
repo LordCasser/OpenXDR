@@ -1,5 +1,5 @@
 import {
-  AimOutlined, AlertOutlined, AuditOutlined, BugOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined,
+  AlertOutlined, AuditOutlined, BugOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined,
   DashboardOutlined, FileSearchOutlined, FileTextOutlined, RobotOutlined, SafetyOutlined, SearchOutlined, SettingOutlined, StopOutlined,
   TeamOutlined, UserOutlined,
 } from '@ant-design/icons'
@@ -28,7 +28,6 @@ export const NAV: (NavItem | NavGroup)[] = [
     items: [
       { path: '/incidents', key: 'navIncidents', icon: <AlertOutlined /> },
       { path: '/events', key: 'navEvents', icon: <SearchOutlined /> },
-      { path: '/hunt', key: 'navHunt', icon: <AimOutlined />, admin: true },
     ],
   },
   { path: '/assets', key: 'navAssets', icon: <CloudServerOutlined /> },

@@ -102,7 +102,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `dedup` / `suppress`：告警去重与误报抑制
 - `correlate`：按实体把告警关联成 incident 事件图
 - `ueba`：首次出现检测（先学习后告警）
-- `triage`：保留旧 AI 研判引擎与对话式狩猎
+- `triage`：旧 AI 研判引擎（带只读调查工具逐个研判 incident）
 - `piruntime` / `agentchat`：Pi 子进程、会话消息、exec/query/report 与 POST SSE
 - `commandgate`：人工与 AI exec 的组权限、命令名单、阻塞审批与审计
 - `schedule` / `report`：`tasks/*.yml` 预设任务按组定时拉起 Pi 会话（系统身份），报告 HTML/PDF 渲染

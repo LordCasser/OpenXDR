@@ -99,30 +99,21 @@ func (e *Engine) batch(ctx context.Context) error {
 // 工具调用轮数上限：防模型在调查里打转。用尽后强制收结论。
 const maxToolTurns = 6
 
-// Step 一次工具调用的记录。调查过程要能给人看——
-// 无从复核的 AI 结论在安全场景里没有价值。
-type Step struct {
-	Tool string `json:"tool"`
-	Args string `json:"args"`
-}
-
-// toolLoop 带工具的对话循环，研判与狩猎共用。模型不调用工具时第一轮
+// toolLoop 带工具的研判循环。模型不调用工具时第一轮
 // 就返回答案，不支持工具的模型也走同一条路径，天然退化为单轮问答。
-func (e *Engine) toolLoop(ctx context.Context, msgs []Message, nudge string) (string, []Step, error) {
-	var steps []Step
+func (e *Engine) toolLoop(ctx context.Context, msgs []Message, nudge string) (string, error) {
 	for turn := 0; turn < maxToolTurns; turn++ {
 		msg, err := e.LLM.Chat(ctx, msgs, investigationTools)
 		if err != nil {
-			return "", steps, err
+			return "", err
 		}
 		if len(msg.ToolCalls) == 0 {
-			return msg.Content, steps, nil
+			return msg.Content, nil
 		}
 		msgs = append(msgs, msg)
 		for _, tc := range msg.ToolCalls {
 			result := e.execTool(ctx, tc.Function.Name, tc.Function.Arguments)
 			slog.Info("调查", "tool", tc.Function.Name, "args", tc.Function.Arguments)
-			steps = append(steps, Step{Tool: tc.Function.Name, Args: tc.Function.Arguments})
 			msgs = append(msgs, Message{Role: "tool", ToolCallID: tc.ID, Content: result})
 		}
 	}
@@ -130,13 +121,13 @@ func (e *Engine) toolLoop(ctx context.Context, msgs []Message, nudge string) (st
 	msgs = append(msgs, Message{Role: "user", Content: nudge})
 	msg, err := e.LLM.Chat(ctx, msgs, nil)
 	if err != nil {
-		return "", steps, err
+		return "", err
 	}
-	return msg.Content, steps, nil
+	return msg.Content, nil
 }
 
 func (e *Engine) investigate(ctx context.Context, incidentContext string) (string, error) {
-	answer, _, err := e.toolLoop(ctx, []Message{
+	answer, err := e.toolLoop(ctx, []Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: incidentContext},
 	}, "调查轮数已用尽，基于以上全部信息立即输出最终 JSON 结论。")

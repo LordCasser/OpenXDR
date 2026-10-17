@@ -254,31 +254,6 @@ export interface AttackCoverage {
 
 export const fetchAttack = () => get<AttackCoverage>('/api/attack')
 
-export interface HuntStep {
-  tool: string
-  args: string
-}
-
-export async function hunt(question: string): Promise<{ answer: string; steps: HuntStep[] | null }> {
-  const r = await post('/api/hunt', { question })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
-}
-
-// 狩猎结论 → Sigma 规则草稿（只起草，不落盘）
-export async function draftRule(question: string, answer: string): Promise<{ yaml: string }> {
-  const r = await post('/api/hunt/rule', { question, answer })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
-}
-
-// 保存规则到检测面，热重载后生效
-export async function saveRule(yaml: string): Promise<{ id: string; title: string }> {
-  const r = await post('/api/rules', { yaml })
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
-}
-
 export interface RuleRow {
   id: string
   title: string

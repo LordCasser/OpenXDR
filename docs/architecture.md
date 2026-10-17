@@ -104,8 +104,7 @@ incident 的 status/graph 随关联与研判演进。janitor 只删无告警引�
 
 **AI 只动手边界内的工具。** LLM 只能调用参数空间受限且已转义的调查工具，
 刻意不做 NL2SQL；研判最多 6 轮，模型不支持 tool calling 时自动退化单轮；
-模型输出视为不可信输入。狩猎产出的规则必须过引擎编译器才能落盘，
-AI 不能直接改检测面。详见 [detection.md](detection.md)。
+模型输出视为不可信输入，AI 不能改检测面——规则只来自规则目录。详见 [detection.md](detection.md)。
 
 **危险能力默认关闭且多道闸门。** 响应处置（结束进程/主机隔离）有
 `RESPONSE_ENABLED`、dry-run 默认、`ISOLATION_ALLOW` 隔离自保三道闸门；
@@ -137,7 +136,7 @@ AI 不能直接改检测面。详见 [detection.md](detection.md)。
 | `server/internal/suppress` | 误报抑制 |
 | `server/internal/correlate` | 告警→incident 归并与实体图 |
 | `server/internal/ueba` | 新进程首次出现检测（先学习后告警） |
-| `server/internal/triage` | LLM 研判 + 对话式狩猎 + 狩猎存规则 |
+| `server/internal/triage` | LLM 研判（带只读调查工具） |
 | `server/internal/notify` | webhook 通知 |
 | `server/internal/response` | 响应处置指令下发（结束进程/主机隔离）与自动响应 |
 | `server/internal/janitor` | 数据保留与过期清理 |
