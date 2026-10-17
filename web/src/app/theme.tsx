@@ -29,6 +29,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             borderRadius: 8,
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Inter, sans-serif',
             colorBgLayout: dark ? '#0b1220' : '#f3f5f9',
+            // 暗色下卡片与弹层取同一族蓝灰，不用默认的中性灰，免得和深蓝底色打架
+            ...(dark && { colorBgContainer: '#121b2c', colorBgElevated: '#18233a', colorFillQuaternary: 'rgba(148,163,184,.06)' }),
             colorBorderSecondary: dark ? '#1f2a3d' : '#e8ecf2',
           },
           components: {

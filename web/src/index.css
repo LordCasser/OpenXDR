@@ -94,6 +94,16 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .mini-row { padding: 6px 0; border-bottom: 1px solid var(--ant-color-border-secondary); }
 .mini-row:last-child { border-bottom: none; }
 
+/* 研判结论：顶部结论条 + 处置建议编号清单 */
+.verdict-band { padding: 18px 24px; border-left: 4px solid; border-radius: 8px 8px 0 0; }
+.action-list { margin: 0; padding: 0; list-style: none; counter-reset: act; }
+.action-list li { counter-increment: act; position: relative; padding: 0 0 12px 34px; line-height: 1.7; }
+.action-list li::before {
+  content: counter(act); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;
+  font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+  color: var(--ant-color-primary); background: var(--ant-color-primary-bg);
+}
+
 /* 降噪漏斗与待处理清单 */
 .funnel { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; }
 .funnel-stage { min-width: 0; padding: 18px 20px; border-radius: 10px; }

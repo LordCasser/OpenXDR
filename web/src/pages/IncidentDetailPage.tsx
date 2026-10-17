@@ -53,7 +53,7 @@ export function IncidentDetailPage() {
   return (
     <Page
       crumb={inc.title ?? inc.id}
-      title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} />{inc.title ?? inc.id}</Space>}
+      title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} /><SeverityTag value={inc.severity} />{inc.title ?? inc.id}<IncidentStatusTag value={inc.status} /></Space>}
       extra={
         <>
           {/* 只读角色也能导报告：写汇报不是处置动作 */}
