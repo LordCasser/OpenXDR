@@ -19,23 +19,23 @@ export interface NavGroup {
   admin?: boolean
 }
 
-// 菜单即信息架构：日常只用到的五项平铺，其余收进默认折叠的「更多」，想看能看；面包屑也从这里推
+// 菜单即信息架构：对话是主入口，原有能力按运营动线归组；面包屑也从这里推
 export const NAV: (NavItem | NavGroup)[] = [
   { path: '/chat', key: 'navChat', icon: <RobotOutlined /> },
   { path: '/overview', key: 'navOverview', icon: <DashboardOutlined /> },
-  { path: '/incidents', key: 'navIncidents', icon: <AlertOutlined /> },
-  { path: '/assets', key: 'navAssets', icon: <CloudServerOutlined /> },
-  { path: '/reports', key: 'navReports', icon: <FileTextOutlined /> },
   {
     key: 'navGroupOps',
     items: [
+      { path: '/incidents', key: 'navIncidents', icon: <AlertOutlined /> },
       { path: '/events', key: 'navEvents', icon: <SearchOutlined /> },
       { path: '/hunt', key: 'navHunt', icon: <AimOutlined />, admin: true },
     ],
   },
+  { path: '/assets', key: 'navAssets', icon: <CloudServerOutlined /> },
   {
     key: 'navGroupAuto',
     items: [
+      { path: '/reports', key: 'navReports', icon: <FileTextOutlined /> },
       { path: '/tasks', key: 'navTasks', icon: <ClockCircleOutlined /> },
       { path: '/approvals', key: 'navApprovals', icon: <CheckCircleOutlined /> },
     ],

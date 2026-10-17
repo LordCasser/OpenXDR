@@ -431,7 +431,6 @@ const zh = {
   zoomOut: '缩小',
   zoomFit: '适应画布',
   // 纳管：入口一条命令，出口一条消息
-  navMore: '更多',
   navSettings: '系统设置',
   silent: '已失联',
   silentSince: '{time} 起失联，已通知',
@@ -895,7 +894,6 @@ const en = {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   zoomFit: 'Fit',
-  navMore: 'More',
   navSettings: 'Settings',
   silent: 'Lost',
   silentSince: 'Lost since {time}, notified',
