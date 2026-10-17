@@ -13,6 +13,7 @@ import (
 	"openxdr/server/internal/testdb"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeRunner struct {
@@ -22,6 +23,33 @@ type fakeRunner struct {
 func (f fakeRunner) Run(ctx context.Context, r piruntime.Request, h piruntime.Handler, o piruntime.Observer) (*piruntime.Result, error) {
 	return f.run(ctx, r, h, o)
 }
+
+type titles map[string]string
+
+func (t titles) TitleOf(id string) string { return t[id] }
+
+// 规则名只给本组近期命中过的，其他组的规则不漏进提示。
+func TestRequestRuleTitles(t *testing.T) {
+	ctx, db := testdb.New(t)
+	group := db.Group.Create().SetName("g").SaveX(ctx)
+	other := db.Group.Create().SetName("other").SaveX(ctx)
+	mine := db.Asset.Create().SetHostname("h").SetGroupID(group.ID).SaveX(ctx)
+	theirs := db.Asset.Create().SetHostname("x").SetGroupID(other.ID).SaveX(ctx)
+	now := time.Now()
+	db.Alert.Create().SetTs(now).SetRuleID("r-mine").SetSeverity(3).SetAssetID(mine.ID).SaveX(ctx)
+	db.Alert.Create().SetTs(now.Add(-30 * 24 * time.Hour)).SetLastTs(now.Add(-30 * 24 * time.Hour)).SetRuleID("r-old").SetSeverity(3).SetAssetID(mine.ID).SaveX(ctx)
+	db.Alert.Create().SetTs(now).SetRuleID("r-theirs").SetSeverity(3).SetAssetID(theirs.ID).SaveX(ctx)
+	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator("a").SetModel("test").SetStatus("idle").SetTitle("").SaveX(ctx)
+	service := &Service{DB: db, Rules: titles{"r-mine": "本组规则", "r-old": "过期规则", "r-theirs": "他组规则"}}
+	r, err := service.request(ctx, session, "检查", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.SystemPrompt, `"r-mine":"本组规则"`) || strings.Contains(r.SystemPrompt, "过期规则") || strings.Contains(r.SystemPrompt, "他组规则") {
+		t.Fatalf("规则名范围不对：%s", r.SystemPrompt)
+	}
+}
+
 func TestSessionHistoryAndReports(t *testing.T) {
 	ctx, db := testdb.New(t)
 	group := db.Group.Create().SetName("g").SaveX(ctx)

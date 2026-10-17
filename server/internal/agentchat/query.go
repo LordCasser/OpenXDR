@@ -5,8 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // query 的 DSN 必须属于仅能读取当前组视图的专用登录角色，绝不复用平台连接。
@@ -44,7 +47,7 @@ func query(ctx context.Context, dsn, statement string) (string, error) {
 	// 先让 PostgreSQL 单独解析原始语句（不执行），避免闭合括号/注释逃出限额包装。
 	prepared, err := tx.PrepareContext(ctx, statement)
 	if err != nil {
-		return "", errors.New("只读 SQL 必须是独立的合法语句")
+		return "", sqlError("只读 SQL 必须是独立的合法语句", err)
 	}
 	if err := prepared.Close(); err != nil {
 		return "", errors.New("关闭查询预解析失败")
@@ -56,7 +59,7 @@ func query(ctx context.Context, dsn, statement string) (string, error) {
 `+statement+`
 ) AS xdr_result LIMIT 201`)
 	if err != nil {
-		return "", errors.New("只读 SQL 查询失败，请检查语法与视图权限")
+		return "", sqlError("只读 SQL 查询失败，请检查语法与视图权限", err)
 	}
 	defer rows.Close()
 	result := queryResult{Columns: []string{}, Rows: [][]json.RawMessage{}}
@@ -98,6 +101,16 @@ func query(ctx context.Context, dsn, statement string) (string, error) {
 		return "", errors.New("只读查询中断")
 	}
 	return marshal(result)
+}
+
+// sqlError 带上 PostgreSQL 的报错原文，模型才知道是哪个列或语法错了；
+// 只取 Message，不带 Position/Where——第二次执行包了一层限额外壳，位置对不上原语句。
+func sqlError(prefix string, err error) error {
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) {
+		return fmt.Errorf("%s：%s", prefix, pg.Message)
+	}
+	return errors.New(prefix)
 }
 
 type queryResult struct {

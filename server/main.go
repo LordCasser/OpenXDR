@@ -275,7 +275,7 @@ func main() {
 	// 组查询身份：手工配置的优先，其余由平台账号自动开通（需 CREATEROLE）
 	queryRoles := &queryrole.Provisioner{DB: db, Client: client, BaseDSN: dsn, Static: queryURLs}
 	go queryRoles.Reconcile(ctx)
-	chat := &agentchat.Service{Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second},
+	chat := &agentchat.Service{Rules: rules, Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second},
 		Runtime: piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second},
 		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), Query: queryRoles}
 	go chat.Recover(ctx)
