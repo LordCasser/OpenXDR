@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -21,6 +22,8 @@ type Gate struct {
 	DB              *ent.Client
 	Hub             *response.Hub
 	ApprovalTimeout time.Duration
+	// Notify 新审批创建时推给组管理员，nil 表示不外发；签名同 schedule.Notifier
+	Notify func(ctx context.Context, title, text, path string) error
 }
 type Request struct {
 	UserID uuid.UUID
@@ -37,42 +40,17 @@ type Request struct {
 // SystemActor 系统身份的发起人名，也是定时任务会话的 initiator。用户名不允许取这个值。
 const SystemActor = "system"
 
-// Match 使用完整字符串正则，避免无意放行前后拼接的命令。
-func Match(pattern, cmd string) (bool, error) {
+// Search 在整条命令里非锚定搜索：名单都是高风险名单，命令里任何一段命中都算，
+// 拼在 `x && rm -rf /` 后面也躲不过。
+func Search(pattern, cmd string) (bool, error) {
 	if len(pattern) == 0 || len(pattern) > 4096 {
 		return false, errors.New("pattern 长度须为 1–4096")
 	}
-	re, err := regexp.Compile(`\A(?:` + pattern + `)\z`)
+	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return false, err
 	}
 	return re.MatchString(cmd), nil
-}
-
-// systemDirs 命令名在这几个目录间可互换：都归 root 所有、都在 agent 的 PATH 里，
-// 写 df、/bin/df 还是 /usr/bin/df 跑的是同一个程序。
-var systemDirs = []string{"/usr/bin/", "/bin/", "/usr/sbin/", "/sbin/"}
-
-// spellings 同一条命令的等价写法：裸命令名加各系统目录下的绝对路径，只改第一个词。
-// 名单写哪种都能命中，不用先上主机查路径；deny 名单同理，换个写法也躲不过。
-// 第一个词是其他路径（./x、/opt/x）时只认原样。
-func spellings(cmd string) []string {
-	bare := cmd
-	for _, dir := range systemDirs {
-		if rest, ok := strings.CutPrefix(cmd, dir); ok {
-			bare = rest
-			break
-		}
-	}
-	name, _, _ := strings.Cut(bare, " ")
-	if name == "" || strings.Contains(name, "/") {
-		return []string{cmd}
-	}
-	out := []string{bare}
-	for _, dir := range systemDirs {
-		out = append(out, dir+bare)
-	}
-	return out
 }
 
 // authorize 返回发起人名。系统身份没有用户与组内角色可查，
@@ -106,32 +84,25 @@ func (g *Gate) authorize(ctx context.Context, req Request) (string, error) {
 	return actor, nil
 }
 
+// needsApproval 人工与 AI 同一套语义：命中本组该来源任一高风险名单就等审批，否则直接执行。
 func (g *Gate) needsApproval(ctx context.Context, req Request) (bool, error) {
 	policies, err := g.DB.CommandPolicy.Query().Where(commandpolicy.GroupIDEQ(req.GroupID), commandpolicy.OriginEQ(commandpolicy.Origin(req.Origin))).All(ctx)
 	if err != nil {
 		return false, err
 	}
-	matched := false
 	for _, policy := range policies {
-		expected := commandpolicy.ModeAllow
-		if req.Origin == "human" {
-			expected = commandpolicy.ModeDeny
+		if policy.Mode != commandpolicy.ModeDeny {
+			return false, errors.New("名单模式无效：只支持 deny")
 		}
-		if policy.Mode != expected {
-			return false, errors.New("名单模式与来源不一致")
+		ok, err := Search(policy.Pattern, *req.Command.Cmd)
+		if err != nil {
+			return false, fmt.Errorf("名单无效: %w", err)
 		}
-		for _, cmd := range spellings(*req.Command.Cmd) {
-			ok, err := Match(policy.Pattern, cmd)
-			if err != nil {
-				return false, fmt.Errorf("名单无效: %w", err)
-			}
-			matched = matched || ok
+		if ok {
+			return true, nil
 		}
 	}
-	if req.Origin == "ai" {
-		return !matched, nil
-	}
-	return matched, nil
+	return false, nil
 }
 
 // Issue 的 origin 由平台入口固定，不能从客户端或模型参数读取。
@@ -223,6 +194,7 @@ func (g *Gate) await(ctx context.Context, req Request, username string) error {
 	if err != nil {
 		return err
 	}
+	g.notify(ctx, req, username)
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
@@ -241,11 +213,7 @@ func (g *Gate) await(ctx context.Context, req Request, username string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
-			if req.System {
-				// 无人值守的任务里没人批，再换别的名单外命令只会把运行时长耗光
-				return errors.New("审批超时，命令未执行。定时任务无人值守，名单外命令不会被批准：后续只用免审批名单，未覆盖的检查项在报告里注明未验证")
-			}
-			return errors.New("审批超时，命令未执行")
+			return pending(req)
 		case <-ticker.C:
 			current, err := g.DB.Approval.Get(ctx, a.ID)
 			if err != nil {
@@ -263,10 +231,54 @@ func (g *Gate) await(ctx context.Context, req Request, username string) error {
 				}
 				return nil
 			case approval.StatusPending:
+			case approval.StatusExpired:
+				return pending(req)
+			case approval.StatusRejected:
+				if req.Origin == "ai" {
+					return errors.New("管理员没有批准执行这条命令，不要换写法重复同一操作")
+				}
+				return errors.New("审批未通过，命令未执行")
 			default:
 				return errors.New("审批未通过，命令未执行")
 			}
 		}
+	}
+}
+
+// pending 等待到期时的说法。给模型的不能说成拒绝：它会把"被拒"当成障碍去改写命令绕过，
+// 实际只是管理员还没处理，让它先做别的，最后把待批准的操作交代清楚。
+func pending(req Request) error {
+	if req.Origin != "ai" {
+		return errors.New("审批超时，命令未执行")
+	}
+	return errors.New("这条命令仍在等待组管理员批准（已通知），暂未执行：可以先继续做不依赖它的工作，结束时在回复或报告里注明哪些操作在等待批准")
+}
+
+// notify 把新审批推给组管理员；推送失败只记日志，不影响等待。
+func (g *Gate) notify(ctx context.Context, req Request, username string) {
+	if g.Notify == nil {
+		return
+	}
+	group, host := req.GroupID.String(), req.Command.AssetID.String()
+	if grp, err := g.DB.Group.Get(ctx, req.GroupID); err == nil {
+		group = grp.Name
+	}
+	if a, err := g.DB.Asset.Get(ctx, req.Command.AssetID); err == nil {
+		host = a.Hostname
+	}
+	cmd := []rune(*req.Command.Cmd)
+	if len(cmd) > 300 {
+		cmd = append(cmd[:300], []rune("…")...)
+	}
+	title := "待批准：人工请求执行高风险命令"
+	if req.Origin == "ai" {
+		title = "待批准：AI 请求执行高风险命令"
+	}
+	text := fmt.Sprintf("组：%s\n主机：%s\n发起：%s\n命令：%s", group, host, username, string(cmd))
+	sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := g.Notify(sendCtx, title, text, "/approvals"); err != nil {
+		slog.Error("审批通知发送失败", "group", req.GroupID, "err", err)
 	}
 }
 

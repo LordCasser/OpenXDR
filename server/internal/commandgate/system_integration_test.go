@@ -9,14 +9,12 @@ import (
 
 	"openxdr/server/ent/approval"
 	"openxdr/server/ent/auditlog"
-	"openxdr/server/ent/commandpolicy"
 )
 
 // 系统身份只能在本组的任务会话里用；人不能冒用任务会话，系统也不能借用对话会话。
 func TestSystemIdentity(t *testing.T) {
 	f := setup(t)
 	g := f.req.GroupID
-	f.db.CommandPolicy.Create().SetGroupID(g).SetOrigin(commandpolicy.OriginAi).SetMode(commandpolicy.ModeAllow).SetPattern("whoami").SaveX(f.ctx)
 	task := f.db.AgentSession.Create().SetKind("task").SetGroupID(g).SetInitiator(SystemActor).SetModel("m").SaveX(f.ctx)
 	chat := f.db.AgentSession.Create().SetKind("chat").SetGroupID(g).SetInitiator("analyst").SetModel("m").SaveX(f.ctx)
 
@@ -44,6 +42,8 @@ func TestSystemIdentity(t *testing.T) {
 
 	ok := sys
 	ok.SessionID = &task.ID
+	direct := "uptime"
+	ok.Command.Cmd = &direct
 	cmd, err := f.gate.Issue(f.ctx, ok)
 	if err != nil {
 		t.Fatal(err)
@@ -53,13 +53,12 @@ func TestSystemIdentity(t *testing.T) {
 	}
 	<-f.ch
 
-	// 名单外命令按任务自己的审批超时等待，超时即拒绝
-	other := "id"
-	ok.Command.Cmd = &other
+	// 命中高风险名单按任务自己的审批超时等待，超时不执行
+	ok.Command.Cmd = f.req.Command.Cmd
 	ok.ApprovalTimeout = 80 * time.Millisecond
 	start := time.Now()
 	_, err = f.gate.Issue(f.ctx, ok)
-	if err == nil || !strings.Contains(err.Error(), "审批超时") {
+	if err == nil || !strings.Contains(err.Error(), "等待组管理员批准") {
 		t.Fatalf("应审批超时，得到 %v", err)
 	}
 	if time.Since(start) > time.Second {

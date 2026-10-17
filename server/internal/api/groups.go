@@ -87,7 +87,7 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 			http.Error(w, "name 必填", http.StatusBadRequest)
 			return
 		}
-		// 新组自带只读巡检名单，建好就能巡检，不用先去配名单
+		// 新组自带 AI 高风险命令名单，建好就有基本防护，不用先去配名单
 		var g *ent.Group
 		err := withTx(r, db, func(tx *ent.Tx) error {
 			var err error
@@ -104,7 +104,7 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		audit.Log(r.Context(), db, r, "group_created", g.ID.String(), fmt.Sprintf("%s（默认只读名单 %d 条）", g.Name, len(commandgate.DefaultAIAllow)))
+		audit.Log(r.Context(), db, r, "group_created", g.ID.String(), fmt.Sprintf("%s（默认高风险名单 %d 条）", g.Name, len(commandgate.DefaultAIDeny)))
 		// 查询身份开通失败不影响建组：没权限时退回手工开通，其余错误下次启动补齐
 		if queries != nil {
 			if err := queries.Ensure(r.Context(), g.ID); err != nil && !errors.Is(err, queryrole.ErrNotAllowed) {

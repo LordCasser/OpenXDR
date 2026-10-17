@@ -102,7 +102,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | PUT | `/api/groups/{id}/assets/{assetId}` | 资产归入该组，离开原组（admin） |
 | DELETE | `/api/groups/{id}/assets/{assetId}` | 资产移出该组；不在此组返回 409（admin） |
 
-建组自带只读巡检名单并自动开通组查询身份；删组一并回收（见 `docs/pi-backend.md`）。
+建组自带 AI 高风险命令名单并自动开通组查询身份；删组一并回收（见 `docs/pi-backend.md`）。
 
 ## 主机接入
 

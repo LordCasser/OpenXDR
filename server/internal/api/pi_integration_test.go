@@ -84,7 +84,7 @@ func TestPiGroupAPI(t *testing.T) {
 		}
 	}
 	w = request("POST", "/api/command-policies", `{"groupId":"`+group.ID.String()+`","origin":"ai","pattern":"whoami"}`)
-	if w.Code != 201 {
+	if w.Code != 201 || !strings.Contains(w.Body.String(), `"mode":"deny"`) {
 		t.Fatalf("创建名单: %d %s", w.Code, w.Body.String())
 	}
 	w = request("POST", "/api/agent-sessions/"+session.ID.String()+"/messages", `{"prompt":"检查"}`)
