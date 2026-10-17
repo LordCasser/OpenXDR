@@ -227,7 +227,7 @@ func (s *Scheduler) rerun(ctx context.Context, t *ent.Task, g *ent.Group, run *e
 func (s *Scheduler) newSession(ctx context.Context, tx *ent.Tx, t *ent.Task, g *ent.Group, model string) (*ent.AgentSession, error) {
 	return tx.AgentSession.Create().
 		SetKind("task").SetGroupID(g.ID).SetInitiator(Initiator).SetModel(model).
-		SetTitle(t.Name).SetDryRun(t.DryRun).SetRunExpiresAt(time.Now().Add(s.runTimeout() + time.Minute)).
+		SetTitle(t.Name).SetRunExpiresAt(time.Now().Add(s.runTimeout() + time.Minute)).
 		Save(ctx)
 }
 

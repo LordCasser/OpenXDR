@@ -71,11 +71,6 @@ func Status(v string) predicate.Command {
 	return predicate.Command(sql.FieldEQ(FieldStatus, v))
 }
 
-// DryRun applies equality check predicate on the "dry_run" field. It's identical to DryRunEQ.
-func DryRun(v bool) predicate.Command {
-	return predicate.Command(sql.FieldEQ(FieldDryRun, v))
-}
-
 // AssetID applies equality check predicate on the "asset_id" field. It's identical to AssetIDEQ.
 func AssetID(v uuid.UUID) predicate.Command {
 	return predicate.Command(sql.FieldEQ(FieldAssetID, v))
@@ -309,16 +304,6 @@ func StatusEqualFold(v string) predicate.Command {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Command {
 	return predicate.Command(sql.FieldContainsFold(FieldStatus, v))
-}
-
-// DryRunEQ applies the EQ predicate on the "dry_run" field.
-func DryRunEQ(v bool) predicate.Command {
-	return predicate.Command(sql.FieldEQ(FieldDryRun, v))
-}
-
-// DryRunNEQ applies the NEQ predicate on the "dry_run" field.
-func DryRunNEQ(v bool) predicate.Command {
-	return predicate.Command(sql.FieldNEQ(FieldDryRun, v))
 }
 
 // AssetIDEQ applies the EQ predicate on the "asset_id" field.

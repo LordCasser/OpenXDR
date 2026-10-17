@@ -85,20 +85,6 @@ func (_c *ApprovalCreate) SetTimeoutMs(v uint32) *ApprovalCreate {
 	return _c
 }
 
-// SetDryRun sets the "dry_run" field.
-func (_c *ApprovalCreate) SetDryRun(v bool) *ApprovalCreate {
-	_c.mutation.SetDryRun(v)
-	return _c
-}
-
-// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
-func (_c *ApprovalCreate) SetNillableDryRun(v *bool) *ApprovalCreate {
-	if v != nil {
-		_c.SetDryRun(*v)
-	}
-	return _c
-}
-
 // SetStatus sets the "status" field.
 func (_c *ApprovalCreate) SetStatus(v approval.Status) *ApprovalCreate {
 	_c.mutation.SetStatus(v)
@@ -200,10 +186,6 @@ func (_c *ApprovalCreate) defaults() {
 		v := approval.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.DryRun(); !ok {
-		v := approval.DefaultDryRun
-		_c.mutation.SetDryRun(v)
-	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := approval.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -241,9 +223,6 @@ func (_c *ApprovalCreate) check() error {
 	}
 	if _, ok := _c.mutation.TimeoutMs(); !ok {
 		return &ValidationError{Name: "timeout_ms", err: errors.New(`ent: missing required field "Approval.timeout_ms"`)}
-	}
-	if _, ok := _c.mutation.DryRun(); !ok {
-		return &ValidationError{Name: "dry_run", err: errors.New(`ent: missing required field "Approval.dry_run"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Approval.status"`)}
@@ -322,10 +301,6 @@ func (_c *ApprovalCreate) createSpec() (*Approval, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TimeoutMs(); ok {
 		_spec.SetField(approval.FieldTimeoutMs, field.TypeUint32, value)
 		_node.TimeoutMs = value
-	}
-	if value, ok := _c.mutation.DryRun(); ok {
-		_spec.SetField(approval.FieldDryRun, field.TypeBool, value)
-		_node.DryRun = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(approval.FieldStatus, field.TypeEnum, value)

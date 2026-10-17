@@ -42,9 +42,10 @@ CREATE OR REPLACE VIEW :"schema".incidents WITH (security_barrier) AS
         AND (a.asset_id IS NULL OR a.asset_id NOT IN
              (SELECT id FROM public.assets WHERE group_id = :'group_id')));
 
--- 处置与命令记录：只含本组资产
-CREATE OR REPLACE VIEW :"schema".commands WITH (security_barrier) AS
-  SELECT id, created_at, completed_at, kind, status, dry_run, asset_id, incident_id,
+-- 处置与命令记录：只含本组资产。旧版视图带已删除的 dry_run 列，CREATE OR REPLACE 删不掉列，先整个删掉重建
+DROP VIEW IF EXISTS :"schema".commands;
+CREATE VIEW :"schema".commands WITH (security_barrier) AS
+  SELECT id, created_at, completed_at, kind, status, asset_id, incident_id,
          issued_by, detail, cmd, exit_code, stdout, stderr, truncated
   FROM public.commands
   WHERE asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id');

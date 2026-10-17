@@ -29,7 +29,6 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 		var body struct {
 			GroupID uuid.UUID `json:"groupId"`
 			Title   string    `json:"title"`
-			DryRun  *bool     `json:"dryRun"`
 		}
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body) != nil || len(body.Title) > 200 {
 			http.Error(w, "请求无效", 400)
@@ -38,11 +37,7 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 		if !requireGroup(w, r, db, body.GroupID, "analyst") {
 			return
 		}
-		dryRun := true
-		if body.DryRun != nil {
-			dryRun = *body.DryRun
-		}
-		session, err := db.AgentSession.Create().SetKind("chat").SetGroupID(body.GroupID).SetInitiator(auth.From(r.Context()).Username).SetModel(service.Model).SetTitle(body.Title).SetDryRun(dryRun).SetStatus("idle").Save(r.Context())
+		session, err := db.AgentSession.Create().SetKind("chat").SetGroupID(body.GroupID).SetInitiator(auth.From(r.Context()).Username).SetModel(service.Model).SetTitle(body.Title).SetStatus("idle").Save(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return

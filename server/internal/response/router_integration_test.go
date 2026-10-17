@@ -38,12 +38,12 @@ func TestNATSRouterCrossNode(t *testing.T) {
 	if !b.Online(ctx, agentID) {
 		t.Fatal("另一节点应看到 agent 在线")
 	}
-	if err := b.Deliver(ctx, agentID, &pb.Command{Id: uuid.NewString(), DryRun: true}); err != nil {
+	if err := b.Deliver(ctx, agentID, &pb.Command{Id: uuid.NewString(), Cmd: "whoami"}); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case cmd := <-delivered:
-		if !cmd.DryRun {
+		if cmd.Cmd != "whoami" {
 			t.Fatal("指令内容未保留")
 		}
 	case <-ctx.Done():

@@ -26,7 +26,6 @@ func (AgentSession) Fields() []ent.Field {
 		// 发起人用户名；定时任务为 system
 		field.String("initiator"),
 		field.String("model"),
-		field.Bool("dry_run").Default(true),
 		field.String("title").Optional().Nillable(),
 		// running / idle（对话等待下一轮）/ succeeded / failed
 		field.String("status").Default("running"),

@@ -1,8 +1,7 @@
 // Package response 响应指令的下发与审计。
 //
-// 这是系统里唯一能对被监控主机造成实际影响的部分，三道闸门都在这里：
-//   - 全局开关 RESPONSE_ENABLED，默认关闭
-//   - 指令默认 dry_run，要真执行必须显式声明
+// 这是系统里唯一能对被监控主机造成实际影响的部分，闸门都在这里：
+//   - 全局开关 RESPONSE_ENABLED，默认关闭；指令一律真执行，没有演练
 //   - 每条指令连同下发者与执行结果落库，可追溯
 package response
 
@@ -109,7 +108,6 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 
 	create := h.DB.Command.Create().
 		SetKind(req.Kind).
-		SetDryRun(req.DryRun).
 		SetAssetID(a.ID).
 		SetIssuedBy(req.IssuedBy).
 		SetNillableIncidentID(req.IncidentID).
@@ -165,7 +163,6 @@ func (h *Hub) enqueue(agentID uuid.UUID, expected chan *pb.Command, cmd *pb.Comm
 type Request struct {
 	AssetID     uuid.UUID
 	Kind        string
-	DryRun      bool
 	IncidentID  *uuid.UUID
 	ProcessGUID *uuid.UUID
 	PID         uint32
@@ -181,7 +178,6 @@ func (r Request) toProto(id uuid.UUID) *pb.Command {
 	cmd := &pb.Command{
 		Id:             id.String(),
 		Kind:           kindToProto(r.Kind),
-		DryRun:         r.DryRun,
 		Pid:            r.PID,
 		AllowEndpoints: r.AllowEndpoints,
 		TimeoutMs:      r.TimeoutMS,
@@ -254,7 +250,6 @@ func (h *Hub) ToProto(cmd *ent.Command) *pb.Command {
 	out := &pb.Command{
 		Id:             cmd.ID.String(),
 		Kind:           kindToProto(cmd.Kind),
-		DryRun:         cmd.DryRun,
 		TimeoutMs:      cmd.TimeoutMs,
 		Pid:            cmd.Pid,
 		AllowEndpoints: append([]string(nil), cmd.AllowEndpoints...),

@@ -16,7 +16,6 @@ var (
 		{Name: "group_id", Type: field.TypeUUID},
 		{Name: "initiator", Type: field.TypeString},
 		{Name: "model", Type: field.TypeString},
-		{Name: "dry_run", Type: field.TypeBool, Default: true},
 		{Name: "title", Type: field.TypeString, Nullable: true},
 		{Name: "status", Type: field.TypeString, Default: "running"},
 		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -42,7 +41,7 @@ var (
 			{
 				Name:    "agentsession_status_run_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{AgentSessionsColumns[8], AgentSessionsColumns[11]},
+				Columns: []*schema.Column{AgentSessionsColumns[7], AgentSessionsColumns[10]},
 			},
 		},
 	}
@@ -107,7 +106,6 @@ var (
 		{Name: "origin", Type: field.TypeEnum, Enums: []string{"ai", "human"}},
 		{Name: "cmd", Type: field.TypeString, Size: 2147483647},
 		{Name: "timeout_ms", Type: field.TypeUint32},
-		{Name: "dry_run", Type: field.TypeBool, Default: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "approved", "rejected", "expired", "cancelled", "consumed"}, Default: "pending"},
 		{Name: "expires_at", Type: field.TypeTime},
 		{Name: "decided_by", Type: field.TypeString, Nullable: true},
@@ -122,12 +120,12 @@ var (
 			{
 				Name:    "approval_group_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalsColumns[2], ApprovalsColumns[10]},
+				Columns: []*schema.Column{ApprovalsColumns[2], ApprovalsColumns[9]},
 			},
 			{
 				Name:    "approval_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{ApprovalsColumns[11]},
+				Columns: []*schema.Column{ApprovalsColumns[10]},
 			},
 		},
 	}
@@ -180,7 +178,6 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "kind", Type: field.TypeString},
 		{Name: "status", Type: field.TypeString, Default: "pending"},
-		{Name: "dry_run", Type: field.TypeBool, Default: true},
 		{Name: "incident_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "process_guid", Type: field.TypeUUID, Nullable: true},
 		{Name: "pid", Type: field.TypeUint32, Default: 0},
@@ -204,7 +201,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "commands_assets_commands",
-				Columns:    []*schema.Column{CommandsColumns[18]},
+				Columns:    []*schema.Column{CommandsColumns[17]},
 				RefColumns: []*schema.Column{AssetsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -213,7 +210,7 @@ var (
 			{
 				Name:    "command_asset_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{CommandsColumns[18], CommandsColumns[3]},
+				Columns: []*schema.Column{CommandsColumns[17], CommandsColumns[3]},
 			},
 			{
 				Name:    "command_created_at",
@@ -600,7 +597,6 @@ var (
 		{Name: "model", Type: field.TypeString, Default: ""},
 		{Name: "target_group", Type: field.TypeString, Default: "*"},
 		{Name: "approval_timeout_seconds", Type: field.TypeInt64, Default: 600},
-		{Name: "dry_run", Type: field.TypeBool, Default: true},
 		{Name: "prompt", Type: field.TypeString, Size: 2147483647},
 		{Name: "removed", Type: field.TypeBool, Default: false},
 		{Name: "run_requested_at", Type: field.TypeTime, Nullable: true},

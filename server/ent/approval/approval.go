@@ -31,8 +31,6 @@ const (
 	FieldCmd = "cmd"
 	// FieldTimeoutMs holds the string denoting the timeout_ms field in the database.
 	FieldTimeoutMs = "timeout_ms"
-	// FieldDryRun holds the string denoting the dry_run field in the database.
-	FieldDryRun = "dry_run"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
@@ -56,7 +54,6 @@ var Columns = []string{
 	FieldOrigin,
 	FieldCmd,
 	FieldTimeoutMs,
-	FieldDryRun,
 	FieldStatus,
 	FieldExpiresAt,
 	FieldDecidedBy,
@@ -76,8 +73,6 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
-	// DefaultDryRun holds the default value on creation for the "dry_run" field.
-	DefaultDryRun bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -181,11 +176,6 @@ func ByCmd(opts ...sql.OrderTermOption) OrderOption {
 // ByTimeoutMs orders the results by the timeout_ms field.
 func ByTimeoutMs(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTimeoutMs, opts...).ToFunc()
-}
-
-// ByDryRun orders the results by the dry_run field.
-func ByDryRun(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDryRun, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

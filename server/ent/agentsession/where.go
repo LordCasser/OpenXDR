@@ -80,11 +80,6 @@ func Model(v string) predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldEQ(FieldModel, v))
 }
 
-// DryRun applies equality check predicate on the "dry_run" field. It's identical to DryRunEQ.
-func DryRun(v bool) predicate.AgentSession {
-	return predicate.AgentSession(sql.FieldEQ(FieldDryRun, v))
-}
-
 // Title applies equality check predicate on the "title" field. It's identical to TitleEQ.
 func Title(v string) predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldEQ(FieldTitle, v))
@@ -383,16 +378,6 @@ func ModelEqualFold(v string) predicate.AgentSession {
 // ModelContainsFold applies the ContainsFold predicate on the "model" field.
 func ModelContainsFold(v string) predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldContainsFold(FieldModel, v))
-}
-
-// DryRunEQ applies the EQ predicate on the "dry_run" field.
-func DryRunEQ(v bool) predicate.AgentSession {
-	return predicate.AgentSession(sql.FieldEQ(FieldDryRun, v))
-}
-
-// DryRunNEQ applies the NEQ predicate on the "dry_run" field.
-func DryRunNEQ(v bool) predicate.AgentSession {
-	return predicate.AgentSession(sql.FieldNEQ(FieldDryRun, v))
 }
 
 // TitleEQ applies the EQ predicate on the "title" field.

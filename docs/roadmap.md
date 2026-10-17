@@ -82,8 +82,8 @@ agent 断线重连本就会重新注册，因此不需要热更新通道也不�
 外连基线偏离仍不做：信噪比不够，等首次出现在真实环境里证明自己再说。
 
 **10. ~~自动响应~~ ✅ 已完成。** 研判钩子：verdict 为 malicious 且置信度
-达标（默认 90）→ 对 incident 涉事资产下发隔离。四道保险：显式开启
-（`AUTO_RESPONSE_ENABLED`）、默认 dry-run（真执行要 `AUTO_RESPONSE_LIVE`）、
+达标（默认 90）→ 对 incident 涉事资产下发隔离。保险：显式开启
+（`AUTO_RESPONSE_ENABLED`，仍受 `RESPONSE_ENABLED` 约束，隔离真执行）、
 主机白名单（`AUTO_RESPONSE_EXEMPT`）、每次决策含跳过都进审计。
 同一 incident 同一资产只动一次，重开重判不重复隔离。
 

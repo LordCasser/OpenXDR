@@ -30,9 +30,7 @@ type Spec struct {
 		Group string `yaml:"group"`
 	} `yaml:"targets"`
 	ApprovalTimeout string `yaml:"approval_timeout"`
-	// 不写就是演练，与平台其它处置入口一致
-	DryRun *bool  `yaml:"dry_run"`
-	Prompt string `yaml:"prompt"`
+	Prompt          string `yaml:"prompt"`
 
 	approvalTimeout time.Duration
 }
@@ -58,10 +56,6 @@ func parseSpec(data []byte) (Spec, error) {
 	}
 	if s.Name == "" {
 		s.Name = s.ID
-	}
-	if s.DryRun == nil {
-		s.DryRun = new(bool)
-		*s.DryRun = true
 	}
 	if s.Targets.Group == "" {
 		s.Targets.Group = "*"
@@ -112,13 +106,13 @@ func Sync(ctx context.Context, db *ent.Client, specs []Spec) error {
 		err := db.Task.UpdateOneID(s.ID).
 			SetName(s.Name).SetSchedule(s.Schedule).SetModel(s.Model).
 			SetTargetGroup(s.Targets.Group).SetPrompt(s.Prompt).
-			SetApprovalTimeoutSeconds(timeout).SetDryRun(*s.DryRun).SetRemoved(false).
+			SetApprovalTimeoutSeconds(timeout).SetRemoved(false).
 			Exec(ctx)
 		if ent.IsNotFound(err) {
 			err = db.Task.Create().
 				SetID(s.ID).SetName(s.Name).SetSchedule(s.Schedule).SetModel(s.Model).
 				SetTargetGroup(s.Targets.Group).SetPrompt(s.Prompt).
-				SetApprovalTimeoutSeconds(timeout).SetDryRun(*s.DryRun).
+				SetApprovalTimeoutSeconds(timeout).
 				Exec(ctx)
 		}
 		if err != nil {

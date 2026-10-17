@@ -138,12 +138,11 @@ func main() {
 		),
 		Interval: time.Duration(getenvInt("AI_INTERVAL_SECONDS", 30)) * time.Second,
 	}
-	// 自动响应：显式开启才挂钩子，默认 dry-run，白名单主机绝不自动隔离
+	// 自动响应：显式开启才挂钩子，隔离真执行（仍受 RESPONSE_ENABLED 约束），白名单主机绝不自动隔离
 	if os.Getenv("AUTO_RESPONSE_ENABLED") == "true" {
 		triageEngine.OnVerdict = (&response.Auto{
 			Hub:            hub,
 			MinConfidence:  getenvInt("AUTO_RESPONSE_MIN_CONFIDENCE", 90),
-			Live:           os.Getenv("AUTO_RESPONSE_LIVE") == "true",
 			Exempt:         hostSet(os.Getenv("AUTO_RESPONSE_EXEMPT")),
 			AllowEndpoints: allowlist,
 		}).React
@@ -279,7 +278,12 @@ func main() {
 	}
 	// 组查询身份：手工配置的优先，其余由平台账号自动开通（需 CREATEROLE）
 	queryRoles := &queryrole.Provisioner{DB: db, Client: client, BaseDSN: dsn, Static: queryURLs}
-	go queryRoles.Reconcile(ctx)
+	go func() {
+		queryRoles.Reconcile(ctx)
+		if err := queryrole.DropDryRun(ctx, db); err != nil {
+			slog.Error("删除遗留 dry_run 列失败，多半是仍有视图引用 commands.dry_run：手工开通的组视图需按新版 deploy/pi-query/group-views.sql 重建，其他手工视图需去掉该列，然后重启 server；在此之前该列只是不再被读取", "err", err)
+		}
+	}()
 	chat := &agentchat.Service{Rules: rules, Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second},
 		Runtime: piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second},
 		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), Query: queryRoles}

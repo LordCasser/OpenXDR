@@ -21,8 +21,6 @@ const (
 	FieldKind = "kind"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldDryRun holds the string denoting the dry_run field in the database.
-	FieldDryRun = "dry_run"
 	// FieldAssetID holds the string denoting the asset_id field in the database.
 	FieldAssetID = "asset_id"
 	// FieldIncidentID holds the string denoting the incident_id field in the database.
@@ -70,7 +68,6 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldKind,
 	FieldStatus,
-	FieldDryRun,
 	FieldAssetID,
 	FieldIncidentID,
 	FieldProcessGUID,
@@ -102,8 +99,6 @@ var (
 	DefaultCreatedAt func() time.Time
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
-	// DefaultDryRun holds the default value on creation for the "dry_run" field.
-	DefaultDryRun bool
 	// DefaultPid holds the default value on creation for the "pid" field.
 	DefaultPid uint32
 	// DefaultIssuedBy holds the default value on creation for the "issued_by" field.
@@ -137,11 +132,6 @@ func ByKind(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByDryRun orders the results by the dry_run field.
-func ByDryRun(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDryRun, opts...).ToFunc()
 }
 
 // ByAssetID orders the results by the asset_id field.

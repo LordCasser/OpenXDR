@@ -25,7 +25,7 @@ func TestRenderReportFull(t *testing.T) {
 		}},
 		Commands: []reportCommand{{
 			CreatedAt: last, Kind: "isolate", Status: "succeeded",
-			DryRun: false, IssuedBy: "kei", Detail: "已隔离",
+			IssuedBy: "kei", Detail: "已隔离",
 		}},
 	}
 	d.HasVerdict = true
@@ -49,7 +49,7 @@ func TestRenderReportFull(t *testing.T) {
 		"08-08 14:30:00 ~ 14:32:00", // 去重窗口跨度
 		"Linux Reverse Shell Indicators",
 		"另有 7 条告警",
-		"| isolate | 真实执行 | succeeded | kei |",
+		"| isolate | succeeded | kei |",
 		"- 隔离主机",
 	} {
 		if !strings.Contains(out, want) {

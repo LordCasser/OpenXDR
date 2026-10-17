@@ -40,7 +40,7 @@ func malicious(confidence int) json.RawMessage {
 	return v
 }
 
-// 高置信度 malicious → 对涉事资产下发 dry-run 隔离；重复触发不再下发。
+// 高置信度 malicious → 对涉事资产下发隔离；重复触发不再下发。
 func TestAutoIsolate(t *testing.T) {
 	ctx, client := testdb.New(t)
 	incID, assetID := seedIncident(t, ctx, client, "victim")
@@ -58,9 +58,6 @@ func TestAutoIsolate(t *testing.T) {
 	cmd := cmds[0]
 	if cmd.Kind != "isolate_host" || cmd.AssetID != assetID || cmd.IssuedBy != "auto" {
 		t.Errorf("指令内容不对: %+v", cmd)
-	}
-	if !cmd.DryRun {
-		t.Error("未配置 Live 时必须 dry-run")
 	}
 	// agent 未连接指令通道 → 状态 failed，但决策已留痕
 	if cmd.Status != "failed" {

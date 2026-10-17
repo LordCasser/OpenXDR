@@ -72,15 +72,15 @@ func TestToRow(t *testing.T) {
 	now := time.Now()
 	c := &ent.Command{
 		ID: id, CreatedAt: now, Kind: "isolate_host", Status: "succeeded",
-		DryRun: true, AssetID: uuid.New(), IncidentID: &inc,
+		AssetID: uuid.New(), IncidentID: &inc,
 		IssuedBy: "kei", Detail: &detail, CompletedAt: &now,
 	}
 	r := toRow(c)
 	if r.ID != id || r.Kind != "isolate_host" || r.Status != "succeeded" {
 		t.Errorf("基础字段映射错误: %+v", r)
 	}
-	if !r.DryRun || r.IssuedBy != "kei" {
-		t.Errorf("dry-run/issuer 映射错误: %+v", r)
+	if r.IssuedBy != "kei" {
+		t.Errorf("issuer 映射错误: %+v", r)
 	}
 	if r.IncidentID != &inc || r.Detail != &detail || r.CompletedAt != &now {
 		t.Errorf("指针字段映射错误: %+v", r)

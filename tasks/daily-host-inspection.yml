@@ -8,9 +8,8 @@ model: ""
 targets: { group: "*" }
 # 名单外命令的审批等待上限，超时按拒绝处理。夜里无人值守，等久了只会耗光 30 分钟运行时长
 approval_timeout: 2m
-# 不写默认演练。巡检要拿到真实输出所以显式关掉；命令仍须过组内 AI 白名单或人工审批，
-# 且 RESPONSE_ENABLED=true 时才会下发。建议先把只读命令（df、ss、last 等）加进白名单
-dry_run: false
+# 命令一律真执行：仍须过组内 AI 白名单或人工审批，且 RESPONSE_ENABLED=true 时才会下发。
+# 建议先把只读命令（df、ss、last 等）加进白名单
 prompt: |
   对本组每台主机做一次运维与安全巡检，覆盖：
   1. 运维：磁盘与 inode 使用率、内存与负载、异常退出或频繁重启的服务、时间同步。

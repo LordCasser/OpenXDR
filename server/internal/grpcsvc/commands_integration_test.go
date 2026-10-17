@@ -71,7 +71,6 @@ func TestAgentCommandsReplayAndComplete(t *testing.T) {
 	// 直接落一条 sent 指令，模拟“早已推给 agent 但连接断了”的状态。
 	cmd, err := client.Command.Create().
 		SetKind("isolate_host").
-		SetDryRun(true).
 		SetAssetID(asset.ID).
 		SetStatus("sent").
 		SetIssuedBy("admin").

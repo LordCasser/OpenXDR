@@ -32,8 +32,6 @@ func (Task) Fields() []ent.Field {
 		// 组选择器："*" 表示每个组各跑一次，否则为组名
 		field.String("target_group").Default("*"),
 		field.Int64("approval_timeout_seconds").Default(600),
-		// 默认演练；YAML 显式写 dry_run: false 才真执行，仍受名单、审批与 RESPONSE_ENABLED 约束
-		field.Bool("dry_run").Default(true),
 		field.Text("prompt"),
 		// YAML 里已删掉的任务不再调度，但保留历史
 		field.Bool("removed").Default(false),

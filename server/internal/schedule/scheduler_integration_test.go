@@ -83,7 +83,7 @@ func TestSchedulerTick(t *testing.T) {
 	}
 	for _, j := range runner.jobs {
 		if j.Session.Kind != "task" || j.Session.Initiator != Initiator || j.Session.Model != "m" ||
-			j.Prompt != "看看" || j.ApprovalTimeout != 2*time.Minute || !j.Session.DryRun {
+			j.Prompt != "看看" || j.ApprovalTimeout != 2*time.Minute {
 			t.Errorf("任务会话参数不符：%+v %+v", j, j.Session)
 		}
 	}

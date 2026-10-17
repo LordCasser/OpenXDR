@@ -26,8 +26,6 @@ type Command struct {
 	Kind string `json:"kind,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
-	// DryRun holds the value of the "dry_run" field.
-	DryRun bool `json:"dry_run,omitempty"`
 	// AssetID holds the value of the "asset_id" field.
 	AssetID uuid.UUID `json:"asset_id,omitempty"`
 	// IncidentID holds the value of the "incident_id" field.
@@ -91,7 +89,7 @@ func (*Command) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case command.FieldAllowEndpoints:
 			values[i] = new([]byte)
-		case command.FieldDryRun, command.FieldTruncated:
+		case command.FieldTruncated:
 			values[i] = new(sql.NullBool)
 		case command.FieldPid, command.FieldTimeoutMs, command.FieldExitCode:
 			values[i] = new(sql.NullInt64)
@@ -139,12 +137,6 @@ func (_m *Command) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
-			}
-		case command.FieldDryRun:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field dry_run", values[i])
-			} else if value.Valid {
-				_m.DryRun = value.Bool
 			}
 		case command.FieldAssetID:
 			if value, ok := values[i].(*uuid.UUID); !ok {
@@ -289,9 +281,6 @@ func (_m *Command) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
-	builder.WriteString(", ")
-	builder.WriteString("dry_run=")
-	builder.WriteString(fmt.Sprintf("%v", _m.DryRun))
 	builder.WriteString(", ")
 	builder.WriteString("asset_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AssetID))

@@ -56,20 +56,6 @@ func (_c *CommandCreate) SetNillableStatus(v *string) *CommandCreate {
 	return _c
 }
 
-// SetDryRun sets the "dry_run" field.
-func (_c *CommandCreate) SetDryRun(v bool) *CommandCreate {
-	_c.mutation.SetDryRun(v)
-	return _c
-}
-
-// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
-func (_c *CommandCreate) SetNillableDryRun(v *bool) *CommandCreate {
-	if v != nil {
-		_c.SetDryRun(*v)
-	}
-	return _c
-}
-
 // SetAssetID sets the "asset_id" field.
 func (_c *CommandCreate) SetAssetID(v uuid.UUID) *CommandCreate {
 	_c.mutation.SetAssetID(v)
@@ -312,10 +298,6 @@ func (_c *CommandCreate) defaults() {
 		v := command.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
-	if _, ok := _c.mutation.DryRun(); !ok {
-		v := command.DefaultDryRun
-		_c.mutation.SetDryRun(v)
-	}
 	if _, ok := _c.mutation.Pid(); !ok {
 		v := command.DefaultPid
 		_c.mutation.SetPid(v)
@@ -348,9 +330,6 @@ func (_c *CommandCreate) check() error {
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Command.status"`)}
-	}
-	if _, ok := _c.mutation.DryRun(); !ok {
-		return &ValidationError{Name: "dry_run", err: errors.New(`ent: missing required field "Command.dry_run"`)}
 	}
 	if _, ok := _c.mutation.AssetID(); !ok {
 		return &ValidationError{Name: "asset_id", err: errors.New(`ent: missing required field "Command.asset_id"`)}
@@ -416,10 +395,6 @@ func (_c *CommandCreate) createSpec() (*Command, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(command.FieldStatus, field.TypeString, value)
 		_node.Status = value
-	}
-	if value, ok := _c.mutation.DryRun(); ok {
-		_spec.SetField(command.FieldDryRun, field.TypeBool, value)
-		_node.DryRun = value
 	}
 	if value, ok := _c.mutation.IncidentID(); ok {
 		_spec.SetField(command.FieldIncidentID, field.TypeUUID, value)
