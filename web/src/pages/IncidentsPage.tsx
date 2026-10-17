@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
-import { Badge, Segmented, Table, Tooltip } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { App, Badge, Button, Segmented, Space, Table, Tooltip, Typography } from 'antd'
+import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { fetchIncidents, type IncidentSummary } from '../api'
+import { fetchIncidents, setIncidentStatus, type IncidentSummary } from '../api'
+import { useSession } from '../app/session'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, fmtTime, incidentStatusKey } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
 import { useI18n, type MsgKey } from '../i18n'
@@ -23,9 +25,37 @@ export function IncidentsPage() {
     refetchInterval: 10_000,
   })
 
+  const { message } = App.useApp()
+  const client = useQueryClient()
+  const { canWrite } = useSession()
+  const [selected, setSelected] = useState<string[]>([])
+  const open = (data ?? []).filter(r => r.status !== 'closed' && r.status !== 'false_positive')
+
+  // 逐条走单个接口：组内权限与审计照旧，没权限的那几条单独报出来
+  const batch = async (next: string) => {
+    const results = await Promise.allSettled(selected.map(id => setIncidentStatus(id, next)))
+    const failed = results.filter(r => r.status === 'rejected')
+    if (failed.length) message.error(t('batchFailed', { n: failed.length, err: String((failed[0] as PromiseRejectedResult).reason) }))
+    if (failed.length < results.length) message.success(t('batchDone', { n: results.length - failed.length }))
+    setSelected([])
+    client.invalidateQueries({ queryKey: ['incidents'] })
+  }
+
   return (
     <Page title={t('navIncidents')} subtitle={t('incidentsSubtitle')}>
       <FilterCard
+        extra={canWrite && (
+          <Space>
+            <Button size="small" onClick={() => setSelected(open.filter(r => r.aiVerdict?.verdict === 'benign').map(r => r.id))}>{t('selectBenign')}</Button>
+            {selected.length > 0 && (
+              <>
+                <Typography.Text type="secondary">{t('batchSelected', { n: selected.length })}</Typography.Text>
+                <Button size="small" onClick={() => batch('closed')}>{t('close')}</Button>
+                <Button size="small" danger onClick={() => batch('false_positive')}>{t('markFp')}</Button>
+              </>
+            )}
+          </Space>
+        )}
         filters={
           <Segmented
             value={status}
@@ -39,6 +69,11 @@ export function IncidentsPage() {
           loading={isPending}
           dataSource={data ?? []}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
+          rowSelection={canWrite ? {
+            selectedRowKeys: selected,
+            onChange: keys => setSelected(keys as string[]),
+            getCheckboxProps: r => ({ disabled: r.status === 'closed' || r.status === 'false_positive' }),
+          } : undefined}
           columns={[
             { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} />, sorter: (a, b) => a.severity - b.severity },
             { title: t('thTitle'), dataIndex: 'title', render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
