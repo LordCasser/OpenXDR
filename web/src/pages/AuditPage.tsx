@@ -32,6 +32,7 @@ const ACTION: Record<string, { key: MsgKey; color?: string }> = {
   asset_ungrouped: { key: 'actAssetUngrouped' },
   task_updated: { key: 'actTaskUpdated' },
   task_run_requested: { key: 'actTaskRunRequested' },
+  finding_status: { key: 'actFindingStatus' },
   hunt: { key: 'actHunt' },
   notify_settings_updated: { key: 'actNotifySettings', color: 'cyan' },
   enroll_token_created: { key: 'actEnrollTokenCreated', color: 'geekblue' },

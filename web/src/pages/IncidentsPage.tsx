@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { fetchIncidents, setIncidentStatus, type IncidentSummary } from '../api'
 import { useSession } from '../app/session'
+import { ResolveModal } from '../components/ResolveModal'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, fmtTime, incidentStatusKey } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
 import { useI18n, type MsgKey } from '../i18n'
@@ -29,15 +30,17 @@ export function IncidentsPage() {
   const client = useQueryClient()
   const { canWrite } = useSession()
   const [selected, setSelected] = useState<string[]>([])
+  const [resolving, setResolving] = useState<'closed' | 'false_positive' | null>(null)
   const open = (data ?? []).filter(r => r.status !== 'closed' && r.status !== 'false_positive')
 
   // 逐条走单个接口：组内权限与审计照旧，没权限的那几条单独报出来
-  const batch = async (next: string) => {
-    const results = await Promise.allSettled(selected.map(id => setIncidentStatus(id, next)))
+  const batch = async (next: string, note: string) => {
+    const results = await Promise.allSettled(selected.map(id => setIncidentStatus(id, next, note)))
     const failed = results.filter(r => r.status === 'rejected')
     if (failed.length) message.error(t('batchFailed', { n: failed.length, err: String((failed[0] as PromiseRejectedResult).reason) }))
     if (failed.length < results.length) message.success(t('batchDone', { n: results.length - failed.length }))
     setSelected([])
+    setResolving(null)
     client.invalidateQueries({ queryKey: ['incidents'] })
   }
 
@@ -50,8 +53,8 @@ export function IncidentsPage() {
             {selected.length > 0 && (
               <>
                 <Typography.Text type="secondary">{t('batchSelected', { n: selected.length })}</Typography.Text>
-                <Button size="small" onClick={() => batch('closed')}>{t('close')}</Button>
-                <Button size="small" danger onClick={() => batch('false_positive')}>{t('markFp')}</Button>
+                <Button size="small" onClick={() => setResolving('closed')}>{t('close')}</Button>
+                <Button size="small" danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>
               </>
             )}
           </Space>
@@ -95,6 +98,13 @@ export function IncidentsPage() {
           ]}
         />
       </FilterCard>
+      <ResolveModal
+        open={!!resolving}
+        title={`${t(resolving === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')} · ${t('batchSelected', { n: selected.length })}`}
+        hint={t('resolveHint')}
+        onCancel={() => setResolving(null)}
+        onSubmit={note => batch(resolving!, note)}
+      />
     </Page>
   )
 }

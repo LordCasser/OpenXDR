@@ -34,6 +34,10 @@ export interface IncidentSummary {
   aiVerdict: Verdict | null
   alertCount: number
   severity: number
+  // 结案：谁、何时、为什么
+  resolution: string | null
+  resolvedBy: string | null
+  resolvedAt: string | null
 }
 
 export interface AlertRow {
@@ -105,10 +109,34 @@ export const fetchIncidents = (status?: string, assetId?: string) => {
 
 export const fetchIncident = (id: string) => get<IncidentDetail>(`/api/incidents/${id}`)
 
-export async function setIncidentStatus(id: string, status: string): Promise<void> {
-  const r = await post(`/api/incidents/${id}/status`, { status })
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+// 结案（closed / false_positive）必须带结论备注，改回 open 不用
+export async function setIncidentStatus(id: string, status: string, note?: string): Promise<void> {
+  const r = await post(`/api/incidents/${id}/status`, { status, note })
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
 }
+
+// 运维待办：巡检 AI 登记与复查；人标已处理或忽略（须写原因，忽略原因会告诉 AI）
+export interface FindingRow {
+  id: string
+  groupId: string
+  assetId: string
+  hostname: string
+  key: string
+  title: string
+  detail: string
+  severity: 'info' | 'low' | 'medium' | 'high'
+  status: 'open' | 'resolved' | 'ignored'
+  firstSeen: string
+  lastSeen: string
+  sessionId: string | null
+  resolvedAt: string | null
+  resolvedBy: string | null
+  note: string | null
+}
+
+export const fetchFindings = (status?: string) => get<FindingRow[]>(`/api/findings${status ? `?status=${status}` : ''}`)
+export const setFindingStatus = (id: string, status: string, note?: string) =>
+  send('POST', `/api/findings/${id}/status`, { status, note })
 
 // 报告是文件下载：拿到 blob 后用临时链接触发浏览器保存
 export async function downloadReport(id: string, title: string | null): Promise<void> {

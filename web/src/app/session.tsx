@@ -62,9 +62,16 @@ export function useSession(): Session {
 
 // 处置类操作：全局角色过了 analyst，且在组内也是 analyst 以上（后端两道检查）
 export function useCanActIn(groupId: string | null | undefined) {
+  return useCanAct()(groupId)
+}
+
+// 同上，列表里每行组不同时用
+export function useCanAct() {
   const { isAdmin, canWrite, groups } = useSession()
-  const role = groups.find(g => g.id === groupId)?.role
-  return isAdmin || (canWrite && (role === 'admin' || role === 'analyst'))
+  return (groupId: string | null | undefined) => {
+    const role = groups.find(g => g.id === groupId)?.role
+    return isAdmin || (canWrite && (role === 'admin' || role === 'analyst'))
+  }
 }
 
 export const useMe = () =>

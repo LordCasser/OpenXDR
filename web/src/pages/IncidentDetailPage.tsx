@@ -9,6 +9,7 @@ import { HostLink } from '../components/HostLink'
 import { IncidentGraph } from '../components/IncidentGraph'
 import { Page } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
+import { ResolveModal } from '../components/ResolveModal'
 import { SuppressModal } from '../components/SuppressModal'
 import { VerdictCard } from '../components/VerdictCard'
 import { IncidentStatusTag, SeverityTag, fmtTime } from '../components/format'
@@ -22,6 +23,7 @@ export function IncidentDetailPage() {
   const { message } = App.useApp()
   const { groups } = useSession()
   const [suppressing, setSuppressing] = useState(false)
+  const [resolving, setResolving] = useState<'closed' | 'false_positive' | null>(null)
   const { data: inc, isPending, error } = useQuery({ queryKey: ['incident', id], queryFn: () => fetchIncident(id!), refetchInterval: 15_000 })
   const { data: assets = [] } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
   const asset = assets.find(a => a.id === inc?.assetId)
@@ -32,9 +34,10 @@ export function IncidentDetailPage() {
     return <Result status="404" title={t('incidentNotFound')} extra={<Button onClick={() => navigate('/incidents')}>{t('backToList')}</Button>} />
   }
 
-  const changeStatus = async (status: string) => {
+  const changeStatus = async (status: string, note?: string) => {
     try {
-      await setIncidentStatus(inc.id, status)
+      await setIncidentStatus(inc.id, status, note)
+      setResolving(null)
       await client.invalidateQueries({ queryKey: ['incident', id] })
       client.invalidateQueries({ queryKey: ['incidents'] })
       if (status === 'false_positive') setSuppressing(true)
@@ -52,8 +55,8 @@ export function IncidentDetailPage() {
         <>
           {/* 只读角色也能导报告：写汇报不是处置动作 */}
           <Button icon={<DownloadOutlined />} onClick={() => downloadReport(inc.id, inc.title).catch(e => message.error(String(e)))}>{t('exportReport')}</Button>
-          {canAct && !done && <Button onClick={() => changeStatus('closed')}>{t('close')}</Button>}
-          {canAct && !done && <Button danger onClick={() => changeStatus('false_positive')}>{t('markFp')}</Button>}
+          {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('close')}</Button>}
+          {canAct && !done && <Button danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>}
           {canAct && done && <Button onClick={() => changeStatus('open')}>{t('reopen')}</Button>}
         </>
       }
@@ -92,12 +95,21 @@ export function IncidentDetailPage() {
                 <Descriptions.Item label={t('thAlerts')}>{inc.alerts.length}</Descriptions.Item>
                 <Descriptions.Item label={t('thHostname')}><HostLink id={inc.assetId} /></Descriptions.Item>
                 <Descriptions.Item label={t('group')}>{groups.find(g => g.id === asset?.groupId)?.name ?? '-'}</Descriptions.Item>
+                {inc.resolvedAt && <Descriptions.Item label={t('resolution')}>{inc.resolution}</Descriptions.Item>}
+                {inc.resolvedAt && <Descriptions.Item label={t('resolvedBy')}>{inc.resolvedBy} · {fmtTime(inc.resolvedAt)}</Descriptions.Item>}
               </Descriptions>
             </Card>
             <ResponsePanel incidentId={inc.id} assetId={inc.assetId} canAct={canAct} />
           </Space>
         </Col>
       </Row>
+      <ResolveModal
+        open={!!resolving}
+        title={t(resolving === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')}
+        hint={t('resolveHint')}
+        onCancel={() => setResolving(null)}
+        onSubmit={note => changeStatus(resolving!, note)}
+      />
       <SuppressModal open={suppressing} alerts={inc.alerts} assetId={inc.assetId} onClose={() => setSuppressing(false)} />
     </Page>
   )

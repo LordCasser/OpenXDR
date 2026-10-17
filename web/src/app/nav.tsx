@@ -1,7 +1,7 @@
 import {
   AlertOutlined, AuditOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined,
   DashboardOutlined, FileSearchOutlined, FileTextOutlined, RobotOutlined, SafetyOutlined, SearchOutlined, SettingOutlined, StopOutlined,
-  TeamOutlined, UserOutlined,
+  TeamOutlined, ToolOutlined, UserOutlined,
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import type { MsgKey } from '../i18n'
@@ -27,6 +27,7 @@ export const NAV: (NavItem | NavGroup)[] = [
     key: 'navGroupOps',
     items: [
       { path: '/incidents', key: 'navIncidents', icon: <AlertOutlined /> },
+      { path: '/findings', key: 'navFindings', icon: <ToolOutlined /> },
       { path: '/events', key: 'navEvents', icon: <SearchOutlined /> },
     ],
   },
