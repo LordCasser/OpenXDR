@@ -45,6 +45,8 @@ type Asset struct {
 	Cloud json.RawMessage `json:"cloud,omitempty"`
 	// InventoryAt holds the value of the "inventory_at" field.
 	InventoryAt *time.Time `json:"inventory_at,omitempty"`
+	// ServiceNotes holds the value of the "service_notes" field.
+	ServiceNotes json.RawMessage `json:"service_notes,omitempty"`
 	// ZoneID holds the value of the "zone_id" field.
 	ZoneID *uuid.UUID `json:"zone_id,omitempty"`
 	// Role holds the value of the "role" field.
@@ -118,7 +120,7 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case asset.FieldAgentID, asset.FieldGroupID, asset.FieldZoneID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case asset.FieldIPAddrs, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldRelationNotes, asset.FieldLockedFields:
+		case asset.FieldIPAddrs, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldServiceNotes, asset.FieldRelationNotes, asset.FieldLockedFields:
 			values[i] = new([]byte)
 		case asset.FieldCriticality:
 			values[i] = new(sql.NullInt64)
@@ -240,6 +242,14 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.InventoryAt = new(time.Time)
 				*_m.InventoryAt = value.Time
+			}
+		case asset.FieldServiceNotes:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field service_notes", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ServiceNotes); err != nil {
+					return fmt.Errorf("unmarshal field service_notes: %w", err)
+				}
 			}
 		case asset.FieldZoneID:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
@@ -414,6 +424,9 @@ func (_m *Asset) String() string {
 		builder.WriteString("inventory_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("service_notes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ServiceNotes))
 	builder.WriteString(", ")
 	if v := _m.ZoneID; v != nil {
 		builder.WriteString("zone_id=")

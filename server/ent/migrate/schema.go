@@ -147,6 +147,7 @@ var (
 		{Name: "listening", Type: field.TypeJSON, Nullable: true},
 		{Name: "cloud", Type: field.TypeJSON, Nullable: true},
 		{Name: "inventory_at", Type: field.TypeTime, Nullable: true},
+		{Name: "service_notes", Type: field.TypeJSON, Nullable: true},
 		{Name: "zone_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "role", Type: field.TypeString, Nullable: true},
 		{Name: "summary", Type: field.TypeString, Nullable: true, Size: 2147483647},

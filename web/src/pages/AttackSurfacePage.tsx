@@ -1,14 +1,16 @@
-import { ApartmentOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { ApartmentOutlined, DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Col, Drawer, Empty, Flex, Form, Input, Modal, Popconfirm, Row, Select, Skeleton, Space, Table, Tag, Tooltip, Typography, theme,
+  Alert, App, Button, Card, Col, Descriptions, Drawer, Empty, Flex, Form, Input, Modal, Popconfirm, Row, Segmented, Select, Skeleton, Space, Switch, Table, Tag, Tooltip, Typography, theme,
 } from 'antd'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
-  createZone, deleteZone, fetchAttackSurface, fetchZones, updateZone, type BlindSpot, type ExposedService, type ZoneKind, type ZoneRow,
+  createZone, deleteZone, fetchAttackSurface, fetchZones, saveServiceNote, updateZone, type BlindSpot, type ExposedService, type ServiceNote, type ZoneKind, type ZoneRow,
 } from '../api'
-import { useSession } from '../app/session'
+import { useCanAct, useSession } from '../app/session'
+import { useCanChat, useHandoff } from '../components/Handoff'
+import { SurfaceGraph } from '../components/SurfaceGraph'
 import { CritTag, ExposureTag, ZoneTag, useZoneColor } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
@@ -36,9 +38,14 @@ export function AttackSurfacePage() {
   const { token } = theme.useToken()
   const { group, isAdmin } = useSession()
   const [zonesOpen, setZonesOpen] = useState(false)
+  const [view, setView] = useState<'graph' | 'list'>('graph')
+  const [hideLow, setHideLow] = useState(true)
+  const [picked, setPicked] = useState<ExposedService | null>(null)
   const query = useQuery({ queryKey: ['attackSurface', group?.id], queryFn: () => fetchAttackSurface(group!.id), enabled: !!group })
   const s = query.data
   const isGroupAdmin = isAdmin || group?.role === 'admin'
+  // 刷新后抽屉里显示最新数据（调查或标注会改它）
+  const current = picked && s?.exposures.find(e => e.assetId === picked.assetId && e.proto === picked.proto && e.port === picked.port)
 
   return (
     <Page title={t('navAttackSurface')} subtitle={t('surfaceSubtitle')}
@@ -55,8 +62,14 @@ export function AttackSurfacePage() {
           {!!s?.summary.noInventory.length && (
             <Alert type="info" showIcon title={t('surfNoInventory', { n: s.summary.noInventory.length, hosts: s.summary.noInventory.slice(0, 8).join('、') })} />
           )}
-          <Card title={t('exposuresTitle')} extra={<Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('portGuessHint')}</Typography.Text>} styles={{ body: { padding: 0 } }}>
-            <Table<ExposedService> rowKey={e => `${e.assetId}/${e.proto}/${e.port}`} loading={query.isPending} dataSource={s?.exposures ?? []}
+          <Card title={t('exposuresTitle')} styles={{ body: { padding: 0 } }}
+            extra={<Space wrap>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{view === 'graph' ? t('surfaceGraphHint') : t('portGuessHint')}</Typography.Text>
+              {view === 'graph' && <Space size={6}><Switch size="small" checked={hideLow} onChange={setHideLow} aria-label={t('hideLowRisk')} />{t('hideLowRisk')}</Space>}
+              <Segmented size="small" value={view} onChange={v => setView(v as 'graph' | 'list')}
+                options={[{ value: 'graph', label: t('viewGraph') }, { value: 'list', label: t('viewList') }]} />
+            </Space>}>
+            {view === 'graph' ? (s ? <SurfaceGraph surface={s} hideLow={hideLow} onPick={setPicked} /> : <Skeleton active style={{ padding: 24 }} />) : <Table<ExposedService> rowKey={e => `${e.assetId}/${e.proto}/${e.port}`} loading={query.isPending} dataSource={s?.exposures ?? []}
               scroll={{ x: 1100 }} pagination={{ pageSize: 20, hideOnSinglePage: true }}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               columns={[
@@ -65,7 +78,8 @@ export function AttackSurfacePage() {
                 { title: t('thService'), width: 260, render: (_, e) => (
                   <Space size={4} wrap>
                     <span className="mono">{e.proto}/{e.port}</span>
-                    <Typography.Text type="secondary">{e.service.name || t('serviceUnknown')}</Typography.Text>
+                    <Typography.Text type={e.service.name ? 'secondary' : 'warning'}>{e.service.name || t('serviceUnknown')}</Typography.Text>
+                    {e.note && <NoteTag note={e.note} />}
                     <Tag color={RISK[e.service.risk].color}>{t(RISK[e.service.risk].key)}</Tag>
                   </Space>
                 ) },
@@ -79,7 +93,8 @@ export function AttackSurfacePage() {
                     <span>{(e.peers ?? []).slice(0, 3).join(', ')}{e.peerCount > 3 && ` +${e.peerCount - 3}`}</span>
                   </Tooltip>
                 ) },
-              ]} />
+                { title: t('actions'), width: 90, fixed: 'right', render: (_, e) => <Button type="link" size="small" onClick={() => setPicked(e)}>{t('serviceDetail')}</Button> },
+              ]} />}
           </Card>
           <Card title={t('blindTitle')} styles={{ body: { padding: 0 } }}>
             <Table<BlindSpot> rowKey="ip" loading={query.isPending} dataSource={s?.blind ?? []} pagination={{ pageSize: 10, hideOnSinglePage: true }}
@@ -97,7 +112,90 @@ export function AttackSurfacePage() {
         </Flex>
       )}
       {group && <ZonesDrawer open={zonesOpen} groupId={group.id} canEdit={isGroupAdmin} onClose={() => setZonesOpen(false)} />}
+      {group && <ServiceDrawer service={current ?? null} groupId={group.id} onClose={() => setPicked(null)} />}
     </Page>
+  )
+}
+
+const SOURCE: Record<ServiceNote['source'], MsgKey> = { ai: 'noteSourceAi', investigation: 'noteSourceInvestigation', human: 'noteSourceHuman' }
+
+function NoteTag({ note }: { note: ServiceNote }) {
+  const { t } = useI18n()
+  return <Tooltip title={note.note}><Tag color={note.source === 'ai' ? 'purple' : 'cyan'}>{t(SOURCE[note.source])}</Tag></Tooltip>
+}
+
+// 服务详情：事实、说明的来源，以及「调查」（交给 AI 上机查）与「标注服务」（人工定名，优先级最高）
+function ServiceDrawer({ service: e, groupId, onClose }: { service: ExposedService | null; groupId: string; onClose: () => void }) {
+  const { t } = useI18n()
+  const { message } = App.useApp()
+  const client = useQueryClient()
+  const canChat = useCanChat()(groupId)
+  const canAct = useCanAct()(groupId)
+  const handoff = useHandoff()
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [form] = Form.useForm()
+  if (!e) return <Drawer open={false} />
+  const port = `${e.proto}/${e.port}`
+  const level = t(({ internet: 'exposureInternet', dmz: 'exposureDmz', internal: 'exposureInternal' } as const)[e.level])
+
+  const investigate = () => handoff.start(groupId, [], t('investigateServiceTitle', { host: e.hostname, port }), t('investigateServicePrompt', {
+    host: e.hostname, id: e.assetId, port, addrs: e.addrs.join(', '), process: e.process || '-', level, peers: (e.peers ?? []).join(', ') || '-',
+  }))
+  const save = async (body: { name: string; note?: string; risk?: string }) => {
+    setBusy(true)
+    try {
+      await saveServiceNote(e.assetId, { port, ...body })
+      await client.invalidateQueries({ queryKey: ['attackSurface'] })
+      client.invalidateQueries({ queryKey: ['assetProfile', e.assetId] })
+      setEditing(false)
+    } catch (err) {
+      message.error(errText(err, t))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Drawer open size={460} title={<Space><span>{e.hostname}</span><span className="mono">{port}</span></Space>} onClose={onClose}
+      extra={<Space>
+        {canChat && <Button type="primary" icon={<SearchOutlined />} loading={handoff.busy} onClick={investigate}>{t('investigate')}</Button>}
+        {canAct && <Button onClick={() => setEditing(true)}>{t('editService')}</Button>}
+      </Space>}>
+      <Descriptions column={1} size="small" styles={{ label: { width: 96 } }}>
+        <Descriptions.Item label={t('thService')}>
+          <Space size={4} wrap>
+            <Typography.Text strong type={e.service.name ? undefined : 'warning'}>{e.service.name || t('serviceUnknown')}</Typography.Text>
+            {e.note && <NoteTag note={e.note} />}
+            <Tag color={RISK[e.service.risk].color}>{t(RISK[e.service.risk].key)}</Tag>
+            {!e.note?.risk && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('riskByPort')}</Typography.Text>}
+          </Space>
+          {e.note && <div><Typography.Text type="secondary" style={{ fontSize: 12 }}>{[t(SOURCE[e.note.source]), e.note.source === 'human' ? e.note.by : null, fmtTime(e.note.at)].filter(Boolean).join(' · ')}</Typography.Text></div>}
+        </Descriptions.Item>
+        {e.note?.note && <Descriptions.Item label={t('serviceNoteLabel')}>{e.note.note}</Descriptions.Item>}
+        <Descriptions.Item label={t('listenProcess')}>{e.process || '-'}</Descriptions.Item>
+        <Descriptions.Item label={t('thBind')}><span className="mono">{e.addrs.join(', ')}</span></Descriptions.Item>
+        <Descriptions.Item label={t('thLevel')}><Space size={4}><ExposureTag level={e.level} />{e.fromPublic && <Tag color="volcano">{t('fromPublicTag')}</Tag>}</Space></Descriptions.Item>
+        <Descriptions.Item label={t('zoneLabel')}><ZoneTag zone={e.zone} /></Descriptions.Item>
+        <Descriptions.Item label={t('criticality')}><CritTag value={e.criticality} /></Descriptions.Item>
+        <Descriptions.Item label={t('thScore')}>{e.score}</Descriptions.Item>
+        <Descriptions.Item label={t('thPeers')}>{e.peers?.length ? e.peers.map(p => <Tag key={p} className="mono">{p}</Tag>) : <Typography.Text type="secondary">{t('noPaths')}</Typography.Text>}</Descriptions.Item>
+      </Descriptions>
+      <Modal open={editing} title={t('editService')} confirmLoading={busy} destroyOnHidden onCancel={() => { if (!busy) setEditing(false) }} onOk={() => form.submit()}
+        footer={(_, { OkBtn, CancelBtn }) => <Space>
+          {e.note?.source === 'human' && <Button danger disabled={busy} onClick={() => save({ name: '' })}>{t('clearServiceNote')}</Button>}
+          <CancelBtn /><OkBtn />
+        </Space>}
+        afterOpenChange={o => o && form.setFieldsValue({ name: e.service.name, note: e.note?.note ?? '', risk: e.note?.risk ?? '' })}>
+        <Form form={form} layout="vertical" disabled={busy} onFinish={v => save({ name: v.name.trim(), note: v.note, risk: v.risk || undefined })}>
+          <Form.Item name="name" label={t('serviceName')} rules={[{ required: true, whitespace: true, max: 32 }]}><Input /></Form.Item>
+          <Form.Item name="risk" label={t('serviceRisk')}>
+            <Select options={[{ value: '', label: t('riskByPort') }, ...(['high', 'medium', 'low'] as const).map(r => ({ value: r, label: t(RISK[r].key) }))]} />
+          </Form.Item>
+          <Form.Item name="note" label={t('serviceNoteLabel')} rules={[{ max: 300 }]}><Input.TextArea rows={3} /></Form.Item>
+        </Form>
+      </Modal>
+    </Drawer>
   )
 }
 

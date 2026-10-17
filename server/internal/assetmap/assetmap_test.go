@@ -117,12 +117,12 @@ func TestConnOf(t *testing.T) {
 }
 
 func TestParseAnnotation(t *testing.T) {
-	ann, err := parseAnnotation("好的：\n{\"role\":\"PostgreSQL 数据库\",\"summary\":\"业务库\",\"criticality\":5,\"reason\":\"被多台依赖\",\"relations\":[{\"peer\":\"web-01\",\"note\":\"读写业务库\"},{\"peer\":\"编造的\",\"note\":\"x\"}]}", []string{"web-01"})
-	if err != nil || ann.Criticality != 5 || ann.Relations["web-01"] != "读写业务库" || len(ann.Relations) != 1 {
+	ann, err := parseAnnotation("好的：\n{\"role\":\"PostgreSQL 数据库\",\"summary\":\"业务库\",\"criticality\":5,\"reason\":\"被多台依赖\",\"relations\":[{\"peer\":\"web-01\",\"note\":\"读写业务库\"},{\"peer\":\"编造的\",\"note\":\"x\"}],\"services\":[{\"port\":\"udp/5405\",\"name\":\"Corosync\"},{\"port\":\"tcp/9999\",\"name\":\"编造\"}]}", []string{"web-01"}, []string{"udp/5405"})
+	if err != nil || ann.Criticality != 5 || ann.Relations["web-01"] != "读写业务库" || len(ann.Relations) != 1 || len(ann.Services) != 1 || ann.Services["udp/5405"].Source != "ai" {
 		t.Fatalf("%+v %v", ann, err)
 	}
 	for _, bad := range []string{"没有 JSON", `{"role":"x","criticality":9}`, `{"role":"","criticality":3}`} {
-		if _, err := parseAnnotation(bad, nil); err == nil {
+		if _, err := parseAnnotation(bad, nil, nil); err == nil {
 			t.Errorf("应拒绝: %s", bad)
 		}
 	}
@@ -151,7 +151,8 @@ func testGroup(t *testing.T) *Group {
 		Listening:     json.RawMessage(`[{"proto":"tcp","addr":"0.0.0.0","port":443,"process":"nginx"},{"proto":"tcp","addr":"::","port":443,"process":"nginx"},{"proto":"tcp","addr":"127.0.0.1","port":6379}]`),
 		RelationNotes: map[string]string{"db-01": "读写业务库"}}
 	db := &ent.Asset{ID: uuid.New(), Hostname: "db-01", GroupID: &gid, IPAddrs: []string{"10.0.0.2"}, LastSeen: now, InventoryAt: &now, Criticality: &crit,
-		Listening: json.RawMessage(`[{"proto":"tcp","addr":"0.0.0.0","port":5432,"process":"postgres"}]`)}
+		Listening:    json.RawMessage(`[{"proto":"tcp","addr":"0.0.0.0","port":5432,"process":"postgres"},{"proto":"udp","addr":"10.0.0.2","port":5405,"process":"corosync"}]`),
+		ServiceNotes: json.RawMessage(`{"udp/5405":{"name":"Corosync 集群通信","risk":"low","source":"investigation"}}`)}
 	old := &ent.Asset{ID: uuid.New(), Hostname: "old-01", GroupID: &gid, IPAddrs: []string{"10.0.0.3"}, LastSeen: now}
 	other := uuid.New()
 	elsewhere := &ent.Asset{ID: uuid.New(), Hostname: "secret", GroupID: &other, IPAddrs: []string{"10.0.9.9"}, LastSeen: now}
@@ -201,7 +202,7 @@ func TestGraph(t *testing.T) {
 
 func TestSurface(t *testing.T) {
 	s := testGroup(t).Surface()
-	if len(s.Exposures) != 2 {
+	if len(s.Exposures) != 3 {
 		t.Fatalf("回环监听不算暴露面，双栈合成一条: %+v", s.Exposures)
 	}
 	if got := s.Exposures[0].Addrs; len(got) != 2 {
@@ -223,5 +224,47 @@ func TestSurface(t *testing.T) {
 	}
 	if len(s.Summary.NoInventory) != 1 || s.Summary.NoInventory[0] != "old-01" {
 		t.Fatalf("没上报清单的资产要点名: %+v", s.Summary.NoInventory)
+	}
+}
+
+func TestSurfaceNotesAndPaths(t *testing.T) {
+	g := testGroup(t)
+	s := g.Surface()
+	var corosync *ExposedService
+	for i, e := range s.Exposures {
+		if e.Port == 5405 {
+			corosync = &s.Exposures[i]
+		}
+	}
+	if corosync == nil || corosync.Service.Name != "Corosync 集群通信" || corosync.Service.Risk != "low" || corosync.Note.Source != "investigation" {
+		t.Fatalf("服务说明应覆盖端口推测: %+v", corosync)
+	}
+	web, db := g.Assets[0], g.Assets[1]
+	want := map[string]bool{"internet>" + web.ID.String() + ">tcp/443": false, web.ID.String() + ">" + db.ID.String() + ">tcp/5432": false}
+	for _, p := range s.Paths {
+		k := p.From + ">" + p.AssetID.String() + ">" + p.Service
+		if _, ok := want[k]; ok {
+			want[k] = true
+		}
+	}
+	for k, ok := range want {
+		if !ok {
+			t.Errorf("缺少访问路径 %s: %+v", k, s.Paths)
+		}
+	}
+	kinds := map[string]string{}
+	for _, p := range s.Peers {
+		kinds[p.ID] = p.Kind
+	}
+	if kinds["internet"] != "internet" || kinds[web.ID.String()] != "asset" {
+		t.Fatalf("访问方: %+v", s.Peers)
+	}
+}
+
+func TestServicePort(t *testing.T) {
+	for in, want := range map[string]string{"udp/5405": "udp/5405", "udp/5405 corosync /usr/sbin/corosync": "udp/5405", "9100/tcp": "tcp/9100", " tcp/22 ": "tcp/22"} {
+		if got := servicePort(in); got != want {
+			t.Errorf("%q → %q, want %q", in, got, want)
+		}
 	}
 }

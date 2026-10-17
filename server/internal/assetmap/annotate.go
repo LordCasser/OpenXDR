@@ -45,6 +45,9 @@ type Facts struct {
 	Exposure  string   `json:"exposure"`
 	Cloud     *Cloud   `json:"cloud,omitempty"`
 	Listening []string `json:"listening"`
+	// 端口表认不出、也还没有调查或人工结论的对外监听，请模型凭进程名与路径命名
+	UnknownServices []string `json:"unknownServices,omitempty"`
+	unknownKeys     []string
 	// 本机主动连接的内网对端（主机名或 IP:端口 ← 进程）
 	Outbound []string `json:"outbound"`
 	// 连到本机的对端（主机名或 IP → 端口）
@@ -58,7 +61,7 @@ type Facts struct {
 
 func (f Facts) fingerprint() string {
 	h := sha256.New()
-	_ = json.NewEncoder(h).Encode([]any{f.Hostname, f.OS, f.Zone.Kind, f.Zone.Name, f.Exposure, f.Cloud, f.Listening, f.Outbound, f.Inbound})
+	_ = json.NewEncoder(h).Encode([]any{f.Hostname, f.OS, f.Zone.Kind, f.Zone.Name, f.Exposure, f.Cloud, f.Listening, f.Outbound, f.Inbound, f.UnknownServices})
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -159,6 +162,15 @@ func FactsOf(ctx context.Context, db *ent.Client, w *World, a *ent.Asset) (Facts
 		}
 		f.Listening = append(f.Listening, strings.TrimSpace(s))
 	}
+	notes := NotesOf(a)
+	for _, l := range listenersOf(a) {
+		key := serviceKey(l.Proto, l.Port)
+		if l.Loopback() || ServiceOf(l.Proto, l.Port).Name != "" || slices.Contains(f.unknownKeys, key) || sourceRank[notes[key].Source] > sourceRank["ai"] {
+			continue
+		}
+		f.unknownKeys = append(f.unknownKeys, key)
+		f.UnknownServices = append(f.UnknownServices, strings.TrimSpace(key+" "+l.Process+" "+l.Path))
+	}
 
 	label := func(ip string) string {
 		if addr, err := netip.ParseAddr(ip); err == nil {
@@ -239,7 +251,8 @@ const annotatePrompt = `你是资产梳理助手。根据给出的一台主机�
 2 辅助、开发测试；
 1 临时或无业务。
 只输出一个 JSON 对象，不要其他文字：
-{"role":"不超过 16 字的角色，如 PostgreSQL 数据库","summary":"不超过 120 字的功能说明","criticality":1-5,"reason":"不超过 150 字的重要程度依据","relations":[{"peer":"对端，必须原样取自 outbound 或 inbound 里的主机名或 IP","note":"不超过 30 字的关系说明，如 读写业务库"}]}`
+{"role":"不超过 16 字的角色，如 PostgreSQL 数据库","summary":"不超过 120 字的功能说明","criticality":1-5,"reason":"不超过 150 字的重要程度依据","relations":[{"peer":"对端，必须原样取自 outbound 或 inbound 里的主机名或 IP","note":"不超过 30 字的关系说明，如 读写业务库"}],"services":[{"port":"原样取自 unknownServices 开头的 协议/端口","name":"不超过 16 字的服务名，如 Corosync 集群通信","note":"不超过 60 字的用途"}]}
+services 只为 unknownServices 里的端口命名；凭进程名与路径认不出就不要写，不要猜。`
 
 // Annotation 模型给出的标注，已校验
 type Annotation struct {
@@ -248,6 +261,7 @@ type Annotation struct {
 	Criticality int               `json:"criticality"`
 	Reason      string            `json:"reason"`
 	Relations   map[string]string `json:"relations"`
+	Services    map[string]ServiceNote
 }
 
 func (e *Engine) annotate(ctx context.Context, w *World, a *ent.Asset) error {
@@ -263,9 +277,15 @@ func (e *Engine) annotate(ctx context.Context, w *World, a *ent.Asset) error {
 	if err != nil {
 		return err
 	}
-	ann, err := parseAnnotation(reply.Content, f.Peers)
+	ann, err := parseAnnotation(reply.Content, f.Peers, f.unknownKeys)
 	if err != nil {
 		return err
+	}
+	// 只覆盖 AI 自己写过的说明；调查与人工结论排在前面，不受影响
+	for key, n := range ann.Services {
+		if err := SetServiceNote(ctx, e.DB, a.ID, key, n); err != nil && !IsLowerSource(err) {
+			return err
+		}
 	}
 	locked := func(field string) bool { return slices.Contains(a.LockedFields, field) }
 	upd := e.DB.Asset.UpdateOneID(a.ID).
@@ -287,7 +307,7 @@ func (e *Engine) annotate(ctx context.Context, w *World, a *ent.Asset) error {
 
 // parseAnnotation 模型输出不可信：取第一个 JSON 对象，逐字段校验与截断，
 // 关系说明只保留事实里出现过的对端
-func parseAnnotation(answer string, peers []string) (Annotation, error) {
+func parseAnnotation(answer string, peers, unknown []string) (Annotation, error) {
 	start, end := strings.Index(answer, "{"), strings.LastIndex(answer, "}")
 	if start < 0 || end <= start {
 		return Annotation{}, fmt.Errorf("输出不含 JSON")
@@ -301,18 +321,28 @@ func parseAnnotation(answer string, peers []string) (Annotation, error) {
 			Peer string `json:"peer"`
 			Note string `json:"note"`
 		} `json:"relations"`
+		Services []struct {
+			Port string `json:"port"`
+			Name string `json:"name"`
+			Note string `json:"note"`
+		} `json:"services"`
 	}
 	if err := json.Unmarshal([]byte(answer[start:end+1]), &raw); err != nil {
 		return Annotation{}, fmt.Errorf("输出不是合法 JSON: %w", err)
 	}
 	ann := Annotation{Role: clean(raw.Role, 32), Summary: clean(raw.Summary, 300), Criticality: raw.Criticality,
-		Reason: clean(raw.Reason, 400), Relations: map[string]string{}}
+		Reason: clean(raw.Reason, 400), Relations: map[string]string{}, Services: map[string]ServiceNote{}}
 	if ann.Role == "" || ann.Criticality < 1 || ann.Criticality > 5 {
 		return Annotation{}, fmt.Errorf("角色为空或重要程度越界")
 	}
 	for _, r := range raw.Relations {
 		if note := clean(r.Note, 60); note != "" && slices.Contains(peers, r.Peer) && len(ann.Relations) < maxPeers {
 			ann.Relations[r.Peer] = note
+		}
+	}
+	for _, sv := range raw.Services {
+		if name, port := clean(sv.Name, 32), servicePort(sv.Port); name != "" && slices.Contains(unknown, port) {
+			ann.Services[port] = ServiceNote{Name: name, Note: clean(sv.Note, 120), Source: "ai"}
 		}
 	}
 	return ann, nil
@@ -365,4 +395,13 @@ func ptr(id *uuid.UUID) uuid.UUID {
 		return uuid.Nil
 	}
 	return *id
+}
+
+// servicePort 模型常把 unknownServices 整条抄回来（「udp/5405 corosync」），也有人写成「5405/udp」：取第一段并统一成 协议/端口
+func servicePort(s string) string {
+	first, _, _ := strings.Cut(strings.TrimSpace(s), " ")
+	if a, b, ok := strings.Cut(first, "/"); ok && (b == "tcp" || b == "udp") {
+		return b + "/" + a
+	}
+	return first
 }

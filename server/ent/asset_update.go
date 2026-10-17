@@ -268,6 +268,24 @@ func (_u *AssetUpdate) ClearInventoryAt() *AssetUpdate {
 	return _u
 }
 
+// SetServiceNotes sets the "service_notes" field.
+func (_u *AssetUpdate) SetServiceNotes(v json.RawMessage) *AssetUpdate {
+	_u.mutation.SetServiceNotes(v)
+	return _u
+}
+
+// AppendServiceNotes appends value to the "service_notes" field.
+func (_u *AssetUpdate) AppendServiceNotes(v json.RawMessage) *AssetUpdate {
+	_u.mutation.AppendServiceNotes(v)
+	return _u
+}
+
+// ClearServiceNotes clears the value of the "service_notes" field.
+func (_u *AssetUpdate) ClearServiceNotes() *AssetUpdate {
+	_u.mutation.ClearServiceNotes()
+	return _u
+}
+
 // SetZoneID sets the "zone_id" field.
 func (_u *AssetUpdate) SetZoneID(v uuid.UUID) *AssetUpdate {
 	_u.mutation.SetZoneID(v)
@@ -702,6 +720,17 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.InventoryAtCleared() {
 		_spec.ClearField(asset.FieldInventoryAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ServiceNotes(); ok {
+		_spec.SetField(asset.FieldServiceNotes, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedServiceNotes(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldServiceNotes, value)
+		})
+	}
+	if _u.mutation.ServiceNotesCleared() {
+		_spec.ClearField(asset.FieldServiceNotes, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ZoneID(); ok {
 		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)
@@ -1157,6 +1186,24 @@ func (_u *AssetUpdateOne) SetNillableInventoryAt(v *time.Time) *AssetUpdateOne {
 // ClearInventoryAt clears the value of the "inventory_at" field.
 func (_u *AssetUpdateOne) ClearInventoryAt() *AssetUpdateOne {
 	_u.mutation.ClearInventoryAt()
+	return _u
+}
+
+// SetServiceNotes sets the "service_notes" field.
+func (_u *AssetUpdateOne) SetServiceNotes(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.SetServiceNotes(v)
+	return _u
+}
+
+// AppendServiceNotes appends value to the "service_notes" field.
+func (_u *AssetUpdateOne) AppendServiceNotes(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.AppendServiceNotes(v)
+	return _u
+}
+
+// ClearServiceNotes clears the value of the "service_notes" field.
+func (_u *AssetUpdateOne) ClearServiceNotes() *AssetUpdateOne {
+	_u.mutation.ClearServiceNotes()
 	return _u
 }
 
@@ -1624,6 +1671,17 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.InventoryAtCleared() {
 		_spec.ClearField(asset.FieldInventoryAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ServiceNotes(); ok {
+		_spec.SetField(asset.FieldServiceNotes, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedServiceNotes(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldServiceNotes, value)
+		})
+	}
+	if _u.mutation.ServiceNotesCleared() {
+		_spec.ClearField(asset.FieldServiceNotes, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ZoneID(); ok {
 		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)

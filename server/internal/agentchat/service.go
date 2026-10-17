@@ -464,6 +464,7 @@ func (s *Service) tools(ctx context.Context, group uuid.UUID) []piruntime.Tool {
 	tools := []piruntime.Tool{
 		{Name: "exec", Description: "对组内资产执行命令，高风险命令会暂停等组管理员批准。host 为资产 UUID。", Parameters: json.RawMessage(`{"type":"object","properties":{"host":{"type":"string"},"cmd":{"type":"string","minLength":1,"maxLength":32768},"timeout":{"type":"integer","minimum":1,"maximum":300}},"required":["host","cmd"],"additionalProperties":false}`)},
 		{Name: "track", Description: trackDescription, Parameters: trackParameters},
+		{Name: "identify", Description: identifyDescription, Parameters: identifyParameters},
 		reportTool,
 	}
 	if s.queryURL(ctx, group) != "" {
@@ -512,6 +513,8 @@ func (s *Service) tool(ctx context.Context, session *ent.AgentSession, who comma
 		return marshal(map[string]any{"reportId": report.ID, "title": report.Title})
 	case "track":
 		return s.track(ctx, session, args)
+	case "identify":
+		return s.identify(ctx, session, args)
 	case "query":
 		var body struct {
 			SQL string `json:"sql"`

@@ -142,6 +142,7 @@ export function AssetProfileView({ assetId, groupId, canEdit, isGroupAdmin, comp
             locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
             columns={[
               { title: t('thPorts'), width: 92, render: (_, l) => <span className="mono">{l.proto}/{l.port}</span> },
+              { title: t('thService'), ellipsis: true, render: (_, l) => p.services?.[`${l.proto}/${l.port}`]?.name ?? '-' },
               { title: t('thBind'), dataIndex: 'addr', ellipsis: true, render: (v: string) => <span className="mono">{v}</span> },
               { title: t('listenProcess'), dataIndex: 'process', ellipsis: true, render: (_, l) => <Tooltip title={l.path}>{l.process ?? '-'}</Tooltip> },
             ]} />

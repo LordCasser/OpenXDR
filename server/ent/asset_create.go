@@ -167,6 +167,12 @@ func (_c *AssetCreate) SetNillableInventoryAt(v *time.Time) *AssetCreate {
 	return _c
 }
 
+// SetServiceNotes sets the "service_notes" field.
+func (_c *AssetCreate) SetServiceNotes(v json.RawMessage) *AssetCreate {
+	_c.mutation.SetServiceNotes(v)
+	return _c
+}
+
 // SetZoneID sets the "zone_id" field.
 func (_c *AssetCreate) SetZoneID(v uuid.UUID) *AssetCreate {
 	_c.mutation.SetZoneID(v)
@@ -496,6 +502,10 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.InventoryAt(); ok {
 		_spec.SetField(asset.FieldInventoryAt, field.TypeTime, value)
 		_node.InventoryAt = &value
+	}
+	if value, ok := _c.mutation.ServiceNotes(); ok {
+		_spec.SetField(asset.FieldServiceNotes, field.TypeJSON, value)
+		_node.ServiceNotes = value
 	}
 	if value, ok := _c.mutation.ZoneID(); ok {
 		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)

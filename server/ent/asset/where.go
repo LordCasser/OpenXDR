@@ -676,6 +676,16 @@ func InventoryAtNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldInventoryAt))
 }
 
+// ServiceNotesIsNil applies the IsNil predicate on the "service_notes" field.
+func ServiceNotesIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldServiceNotes))
+}
+
+// ServiceNotesNotNil applies the NotNil predicate on the "service_notes" field.
+func ServiceNotesNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldServiceNotes))
+}
+
 // ZoneIDEQ applies the EQ predicate on the "zone_id" field.
 func ZoneIDEQ(v uuid.UUID) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldZoneID, v))

@@ -39,6 +39,9 @@ func (Asset) Fields() []ent.Field {
 		field.JSON("listening", json.RawMessage{}).Optional(),
 		field.JSON("cloud", json.RawMessage{}).Optional(),
 		field.Time("inventory_at").Optional().Nillable(),
+		// 监听服务说明：键为 协议/端口（如 udp/5405），值含服务名、说明、风险与来源（ai / investigation / human）。
+		// 端口表认不出的服务靠它命名；人工写的优先级最高，AI 不覆盖
+		field.JSON("service_notes", json.RawMessage{}).Optional(),
 		// 组管理员手工指定的区域；为空按网段、云环境、IP 自动划分
 		field.UUID("zone_id", uuid.UUID{}).Optional().Nillable(),
 

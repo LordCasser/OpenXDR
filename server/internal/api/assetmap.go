@@ -15,11 +15,12 @@ import (
 	"openxdr/server/ent/zone"
 	"openxdr/server/internal/assetmap"
 	"openxdr/server/internal/audit"
+	"openxdr/server/internal/auth"
 )
 
 // AssetMapPaths 由 AssetMap 处理的路径，main 逐个挂到总路由上
 var AssetMapPaths = []string{"/api/asset-map", "/api/attack-surface", "/api/zones", "/api/zones/",
-	"/api/assets/{id}/profile", "/api/assets/{id}/zone", "/api/assets/{id}/annotate"}
+	"/api/assets/{id}/profile", "/api/assets/{id}/zone", "/api/assets/{id}/annotate", "/api/assets/{id}/services"}
 
 // AssetMap 资产图谱、攻击面、区域定义与资产画像。读按组 viewer；
 // 改标注要组 analyst；区域定义与资产的区域指派影响攻击面判定，要组 admin。
@@ -147,7 +148,7 @@ func AssetMap(db *ent.Client, aiEnabled bool) http.Handler {
 		_ = json.Unmarshal(a.Listening, &listening)
 		writeJSON(w, map[string]any{
 			"zone": facts.Zone, "exposure": facts.Exposure, "cloud": facts.Cloud,
-			"listening": listening, "inventoryAt": a.InventoryAt,
+			"listening": listening, "inventoryAt": a.InventoryAt, "services": assetmap.NotesOf(a),
 			"outbound": facts.Outbound, "inbound": facts.Inbound, "publicDestinations": facts.PublicDestinations,
 			"role": a.Role, "summary": a.Summary, "criticality": a.Criticality, "reason": a.AnnotationReason,
 			"relationNotes": a.RelationNotes, "lockedFields": a.LockedFields,
@@ -256,6 +257,40 @@ func AssetMap(db *ent.Client, aiEnabled bool) http.Handler {
 			return
 		}
 		audit.Log(r.Context(), db, r, "asset_zone_assigned", a.ID.String(), detail)
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// 人工给服务定名与风险，优先级最高；name 为空表示清除，回到 AI 识别或端口推测
+	mux.HandleFunc("PUT /api/assets/{id}/services", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := getByPath(w, r, "id", "asset", db.Asset.Get)
+		if !ok || !assetInScope(w, r, db, a.ID, "analyst") {
+			return
+		}
+		var body struct {
+			Port string `json:"port"`
+			Name string `json:"name"`
+			Note string `json:"note"`
+			Risk string `json:"risk"`
+		}
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body) != nil {
+			http.Error(w, "请求无效", http.StatusBadRequest)
+			return
+		}
+		n, err := assetmap.CleanNote(body.Name, body.Note, body.Risk)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		n.Source, n.By = "human", auth.From(r.Context()).Username
+		if err := assetmap.SetServiceNote(r.Context(), db, a.ID, body.Port, n); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		detail := a.Hostname + " " + body.Port + " → " + n.Name
+		if n.Name == "" {
+			detail = a.Hostname + " " + body.Port + " 清除"
+		}
+		audit.Log(r.Context(), db, r, "asset_service_noted", a.ID.String(), detail)
 		w.WriteHeader(http.StatusNoContent)
 	})
 

@@ -3188,6 +3188,8 @@ type AssetMutation struct {
 	cloud                 *json.RawMessage
 	appendcloud           json.RawMessage
 	inventory_at          *time.Time
+	service_notes         *json.RawMessage
+	appendservice_notes   json.RawMessage
 	zone_id               *uuid.UUID
 	role                  *string
 	summary               *string
@@ -3981,6 +3983,71 @@ func (m *AssetMutation) ResetInventoryAt() {
 	delete(m.clearedFields, asset.FieldInventoryAt)
 }
 
+// SetServiceNotes sets the "service_notes" field.
+func (m *AssetMutation) SetServiceNotes(jm json.RawMessage) {
+	m.service_notes = &jm
+	m.appendservice_notes = nil
+}
+
+// ServiceNotes returns the value of the "service_notes" field in the mutation.
+func (m *AssetMutation) ServiceNotes() (r json.RawMessage, exists bool) {
+	v := m.service_notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServiceNotes returns the old "service_notes" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldServiceNotes(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServiceNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServiceNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServiceNotes: %w", err)
+	}
+	return oldValue.ServiceNotes, nil
+}
+
+// AppendServiceNotes adds jm to the "service_notes" field.
+func (m *AssetMutation) AppendServiceNotes(jm json.RawMessage) {
+	m.appendservice_notes = append(m.appendservice_notes, jm...)
+}
+
+// AppendedServiceNotes returns the list of values that were appended to the "service_notes" field in this mutation.
+func (m *AssetMutation) AppendedServiceNotes() (json.RawMessage, bool) {
+	if len(m.appendservice_notes) == 0 {
+		return nil, false
+	}
+	return m.appendservice_notes, true
+}
+
+// ClearServiceNotes clears the value of the "service_notes" field.
+func (m *AssetMutation) ClearServiceNotes() {
+	m.service_notes = nil
+	m.appendservice_notes = nil
+	m.clearedFields[asset.FieldServiceNotes] = struct{}{}
+}
+
+// ServiceNotesCleared returns if the "service_notes" field was cleared in this mutation.
+func (m *AssetMutation) ServiceNotesCleared() bool {
+	_, ok := m.clearedFields[asset.FieldServiceNotes]
+	return ok
+}
+
+// ResetServiceNotes resets all changes to the "service_notes" field.
+func (m *AssetMutation) ResetServiceNotes() {
+	m.service_notes = nil
+	m.appendservice_notes = nil
+	delete(m.clearedFields, asset.FieldServiceNotes)
+}
+
 // SetZoneID sets the "zone_id" field.
 func (m *AssetMutation) SetZoneID(u uuid.UUID) {
 	m.zone_id = &u
@@ -4704,7 +4771,7 @@ func (m *AssetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.hostname != nil {
 		fields = append(fields, asset.FieldHostname)
 	}
@@ -4743,6 +4810,9 @@ func (m *AssetMutation) Fields() []string {
 	}
 	if m.inventory_at != nil {
 		fields = append(fields, asset.FieldInventoryAt)
+	}
+	if m.service_notes != nil {
+		fields = append(fields, asset.FieldServiceNotes)
 	}
 	if m.zone_id != nil {
 		fields = append(fields, asset.FieldZoneID)
@@ -4808,6 +4878,8 @@ func (m *AssetMutation) Field(name string) (ent.Value, bool) {
 		return m.Cloud()
 	case asset.FieldInventoryAt:
 		return m.InventoryAt()
+	case asset.FieldServiceNotes:
+		return m.ServiceNotes()
 	case asset.FieldZoneID:
 		return m.ZoneID()
 	case asset.FieldRole:
@@ -4863,6 +4935,8 @@ func (m *AssetMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldCloud(ctx)
 	case asset.FieldInventoryAt:
 		return m.OldInventoryAt(ctx)
+	case asset.FieldServiceNotes:
+		return m.OldServiceNotes(ctx)
 	case asset.FieldZoneID:
 		return m.OldZoneID(ctx)
 	case asset.FieldRole:
@@ -4982,6 +5056,13 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetInventoryAt(v)
+		return nil
+	case asset.FieldServiceNotes:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServiceNotes(v)
 		return nil
 	case asset.FieldZoneID:
 		v, ok := value.(uuid.UUID)
@@ -5128,6 +5209,9 @@ func (m *AssetMutation) ClearedFields() []string {
 	if m.FieldCleared(asset.FieldInventoryAt) {
 		fields = append(fields, asset.FieldInventoryAt)
 	}
+	if m.FieldCleared(asset.FieldServiceNotes) {
+		fields = append(fields, asset.FieldServiceNotes)
+	}
 	if m.FieldCleared(asset.FieldZoneID) {
 		fields = append(fields, asset.FieldZoneID)
 	}
@@ -5201,6 +5285,9 @@ func (m *AssetMutation) ClearField(name string) error {
 		return nil
 	case asset.FieldInventoryAt:
 		m.ClearInventoryAt()
+		return nil
+	case asset.FieldServiceNotes:
+		m.ClearServiceNotes()
 		return nil
 	case asset.FieldZoneID:
 		m.ClearZoneID()
@@ -5278,6 +5365,9 @@ func (m *AssetMutation) ResetField(name string) error {
 		return nil
 	case asset.FieldInventoryAt:
 		m.ResetInventoryAt()
+		return nil
+	case asset.FieldServiceNotes:
+		m.ResetServiceNotes()
 		return nil
 	case asset.FieldZoneID:
 		m.ResetZoneID()

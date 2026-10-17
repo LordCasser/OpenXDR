@@ -17,7 +17,7 @@
 | `PI_QUERY_DATABASE_URLS` | 空 | JSON 对象：组 UUID → 专属只读 DSN；未配置的组不开放 SQL |
 | `RESPONSE_ENABLED` | `false` | 现有响应总开关，exec 同样受其控制 |
 
-Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/report，以及已配置组的 query。
+Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/identify/report，以及已配置组的 query。identify 把对某个监听服务的调查结论写回资产（来源 investigation，不覆盖人工标注），见 [资产图谱与攻击面](asset-map.md#服务说明与调查)。
 没有新增对外工具执行端口，身份、组和来源均由 Go 绑定，模型不能修改；命令一律真执行，没有演练模式。
 每轮上下文包含本组最多 200 台资产的 UUID、主机名和 OS；超出会标注截断。
 每轮最多「组内主机数 × 20 + 遗留待办数 + 32」次模型调用（32–256），预算写进系统提示让模型留出提交报告的余量，每次输出最多 8192 token。exec 送入模型的 stdout/stderr 各最多 16 KiB，截断标记为 `truncated=true`，Command 记录仍保留原始回执。GLM 显式关闭模板 thinking。未实现费用预算或自动历史压缩。

@@ -103,6 +103,18 @@ func TestAssetMapPermissionsAndLocks(t *testing.T) {
 		t.Error("删区域后资产回到自动划分")
 	}
 
+	// 人工给服务定名：只认真实存在的监听；viewer 不能改
+	client.Asset.UpdateOneID(host.ID).SetListening([]byte(`[{"proto":"udp","addr":"10.1.1.5","port":5405,"process":"corosync"}]`)).ExecX(ctx)
+	if code := send(t, ana, "PUT", "/api/assets/"+host.ID.String()+"/services", `{"port":"udp/5405","name":"集群心跳","risk":"low"}`); code != http.StatusNoContent {
+		t.Fatalf("analyst 定名: %d", code)
+	}
+	if code := send(t, ana, "PUT", "/api/assets/"+host.ID.String()+"/services", `{"port":"tcp/1","name":"x"}`); code != http.StatusBadRequest {
+		t.Errorf("不存在的监听应 400: %d", code)
+	}
+	if code := send(t, ana, "PUT", "/api/assets/"+host.ID.String()+"/services", `{"port":"udp/5405","name":"x","risk":"extreme"}`); code != http.StatusBadRequest {
+		t.Errorf("非法风险应 400: %d", code)
+	}
+
 	// 没开 AI 时拒绝标注请求
 	noAI := httptest.NewServer(asAdmin(AssetMap(client, false)))
 	t.Cleanup(noAI.Close)

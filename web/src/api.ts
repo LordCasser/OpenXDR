@@ -729,12 +729,19 @@ export interface PortService { name: string; category: string; risk: 'high' | 'm
 export interface ExposedService {
   assetId: string; hostname: string; zone: ZoneRef; level: ExposureLevel; proto: string; addrs: string[]; port: number
   process?: string; service: PortService; criticality?: number; score: number; peers: string[] | null; peerCount: number; fromPublic: boolean
+  note?: ServiceNote
 }
+// 服务说明：端口表认不出时靠它命名；来源优先级 human > investigation > ai
+export interface ServiceNote { name: string; note?: string; risk?: 'high' | 'medium' | 'low'; source: 'ai' | 'investigation' | 'human'; by?: string; at: string }
+export interface SurfacePeer { id: string; label: string; kind: 'asset' | 'discovered' | 'managed' | 'internet'; zone: ZoneRef }
+export interface SurfacePath { from: string; assetId: string; service: string; count: number }
 export interface BlindSpot { ip: string; zone: ZoneRef; ports: string[]; accessed: string[]; seenBy: string[]; count: number; lastSeen: string }
 export interface AttackSurface {
   summary: { internet: number; dmz: number; internal: number; high: number; blind: number; noInventory: string[] }
   exposures: ExposedService[]
   blind: BlindSpot[]
+  peers: SurfacePeer[]
+  paths: SurfacePath[]
 }
 
 export interface Listener { proto: string; addr: string; port: number; pid?: number; process?: string; path?: string }
@@ -745,6 +752,7 @@ export interface AssetProfile {
   cloud?: CloudInfo | null
   listening: Listener[] | null
   inventoryAt?: string | null
+  services?: Record<string, ServiceNote> | null
   outbound: string[] | null
   inbound: string[] | null
   publicDestinations: number
@@ -769,4 +777,7 @@ export const deleteZone = async (id: string) => { await send('DELETE', `/api/zon
 export const fetchAssetProfile = (id: string) => get<AssetProfile>(`/api/assets/${id}/profile`)
 export const saveAssetProfile = async (id: string, edit: ProfileEdit) => { await send('PUT', `/api/assets/${id}/profile`, edit) }
 export const assignAssetZone = async (id: string, zoneId: string | null) => { await send('PUT', `/api/assets/${id}/zone`, { zoneId }) }
+export const saveServiceNote = async (id: string, body: { port: string; name: string; note?: string; risk?: string }) => {
+  await send('PUT', `/api/assets/${id}/services`, body)
+}
 export const requestAnnotate = async (id: string) => { await send('POST', `/api/assets/${id}/annotate`) }
