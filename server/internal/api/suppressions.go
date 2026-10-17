@@ -10,6 +10,7 @@ import (
 	"openxdr/server/ent"
 	entsuppression "openxdr/server/ent/suppression"
 	"openxdr/server/internal/audit"
+	"openxdr/server/internal/auth"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
 )
@@ -29,7 +30,16 @@ type suppressionRow struct {
 
 func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, rules *sigma.Engine) {
 	api.HandleFunc("GET /api/suppressions", func(w http.ResponseWriter, r *http.Request) {
-		rows, err := db.Suppression.Query().
+		sc, ok := requireScope(w, r, db, "viewer")
+		if !ok {
+			return
+		}
+		q := db.Suppression.Query()
+		// 非 admin 只看自己组内资产的抑制；全局抑制（无资产）IN 匹配不到，自然排除
+		if !sc.all {
+			q = q.Where(entsuppression.AssetIDIn(sc.assets...))
+		}
+		rows, err := q.
 			Order(ent.Desc(entsuppression.FieldCreatedAt)).
 			Limit(200).
 			All(r.Context())
@@ -66,6 +76,9 @@ func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, 
 			http.Error(w, "ruleId 必填", http.StatusBadRequest)
 			return
 		}
+		if !suppressionAllowed(w, r, db, body.AssetID) {
+			return
+		}
 
 		create := db.Suppression.Create().
 			SetRuleID(body.RuleID).
@@ -98,6 +111,18 @@ func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, 
 			http.Error(w, "无效的 id", http.StatusBadRequest)
 			return
 		}
+		s, err := db.Suppression.Get(r.Context(), id)
+		if ent.IsNotFound(err) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !suppressionAllowed(w, r, db, s.AssetID) {
+			return
+		}
 		err = db.Suppression.DeleteOneID(id).Exec(r.Context())
 		if ent.IsNotFound(err) {
 			http.NotFound(w, r)
@@ -111,4 +136,17 @@ func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, 
 		audit.Log(r.Context(), db, r, "suppression_deleted", id.String(), "")
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+// suppressionAllowed 增删抑制的权限：单资产抑制要求该资产所在组的 analyst，
+// 全局抑制影响所有组，只有全局 admin 能动。拒绝时已写好响应。
+func suppressionAllowed(w http.ResponseWriter, r *http.Request, db *ent.Client, assetID *uuid.UUID) bool {
+	if assetID != nil {
+		return assetInScope(w, r, db, *assetID, "analyst")
+	}
+	if u := auth.From(r.Context()); u == nil || u.Role != "admin" {
+		http.Error(w, "全局抑制仅限管理员", http.StatusForbidden)
+		return false
+	}
+	return true
 }

@@ -111,3 +111,90 @@ func TestAPIGroupScope(t *testing.T) {
 		t.Errorf("viewer 下发指令应被拒，得到 %d", r.StatusCode)
 	}
 }
+
+// 抑制按资产所在组授权：组内 viewer 只看本组资产的抑制，全局抑制只有 admin 可见；
+// 增删要求该资产组内 analyst，全局抑制只有 admin 能动。
+func TestAPISuppressionScope(t *testing.T) {
+	ctx, client := testdb.New(t)
+	gA := client.Group.Create().SetName("A").SaveX(ctx)
+	gB := client.Group.Create().SetName("B").SaveX(ctx)
+	a1 := client.Asset.Create().SetHostname("a1").SetGroupID(gA.ID).SaveX(ctx)
+	b1 := client.Asset.Create().SetHostname("b1").SetGroupID(gB.ID).SaveX(ctx)
+	supA := client.Suppression.Create().SetRuleID("r").SetAssetID(a1.ID).SetCreatedBy("t").SaveX(ctx)
+	supB := client.Suppression.Create().SetRuleID("r").SetAssetID(b1.ID).SetCreatedBy("t").SaveX(ctx)
+	supAll := client.Suppression.Create().SetRuleID("r").SetCreatedBy("t").SaveX(ctx)
+
+	member := func(name, role string) *ent.User {
+		u := client.User.Create().SetUsername(name).SetPasswordHash("x").SetRole("analyst").SaveX(ctx)
+		client.GroupMember.Create().SetGroupID(gA.ID).SetUserID(u.ID).SetRole(role).SaveX(ctx)
+		return u
+	}
+	h := Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
+	serve := func(u *ent.User) *httptest.Server {
+		ts := httptest.NewServer(as(u, h))
+		t.Cleanup(ts.Close)
+		return ts
+	}
+	viewerTS := serve(member("vera", "viewer"))
+	analystTS := serve(member("ana", "analyst"))
+	adminTS := serve(&ent.User{Username: "admin", Role: "admin"})
+
+	ids := func(ts *httptest.Server) []string {
+		t.Helper()
+		resp, body := get(t, ts, "/api/suppressions")
+		if resp.StatusCode != 200 {
+			t.Fatalf("GET status = %d", resp.StatusCode)
+		}
+		var rows []struct{ ID string }
+		if err := json.Unmarshal(body, &rows); err != nil {
+			t.Fatal(err)
+		}
+		out := make([]string, len(rows))
+		for i, r := range rows {
+			out[i] = r.ID
+		}
+		return out
+	}
+	if got := ids(viewerTS); len(got) != 1 || got[0] != supA.ID.String() {
+		t.Errorf("组 A viewer 只应看到 A 的抑制，得到 %v", got)
+	}
+	if got := ids(adminTS); len(got) != 3 {
+		t.Errorf("admin 应看到全部 3 条，得到 %v", got)
+	}
+
+	create := func(asset string) string {
+		if asset == "" {
+			return `{"ruleId":"r"}`
+		}
+		return `{"ruleId":"r","assetId":"` + asset + `"}`
+	}
+	cases := []struct {
+		name         string
+		ts           *httptest.Server
+		method, path string
+		body         string
+		want         int
+	}{
+		{"viewer 不能建本组抑制", viewerTS, "POST", "/api/suppressions", create(a1.ID.String()), 403},
+		{"analyst 不能建别组抑制", analystTS, "POST", "/api/suppressions", create(b1.ID.String()), 403},
+		{"analyst 不能建全局抑制", analystTS, "POST", "/api/suppressions", create(""), 403},
+		{"analyst 不能撤别组抑制", analystTS, "DELETE", "/api/suppressions/" + supB.ID.String(), "", 403},
+		{"analyst 不能撤全局抑制", analystTS, "DELETE", "/api/suppressions/" + supAll.ID.String(), "", 403},
+		{"analyst 可建本组抑制", analystTS, "POST", "/api/suppressions", create(a1.ID.String()), 201},
+		{"analyst 可撤本组抑制", analystTS, "DELETE", "/api/suppressions/" + supA.ID.String(), "", 204},
+		{"admin 可建别组抑制", adminTS, "POST", "/api/suppressions", create(b1.ID.String()), 201},
+		{"admin 可建全局抑制", adminTS, "POST", "/api/suppressions", create(""), 201},
+		{"admin 可撤别组抑制", adminTS, "DELETE", "/api/suppressions/" + supB.ID.String(), "", 204},
+		{"admin 可撤全局抑制", adminTS, "DELETE", "/api/suppressions/" + supAll.ID.String(), "", 204},
+	}
+	for _, c := range cases {
+		resp, err := doReq(t, c.ts, c.method, c.path, c.body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != c.want {
+			t.Errorf("%s: 得到 %d，期望 %d", c.name, resp.StatusCode, c.want)
+		}
+	}
+}
