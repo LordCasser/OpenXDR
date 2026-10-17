@@ -19,7 +19,7 @@ const STATUS: Record<Approval['status'], { key: MsgKey; color: string }> = {
   consumed: { key: 'apConsumed', color: 'success' },
 }
 
-// 名单：AI 走白名单（命中才免审批），人工走黑名单（命中才要审批）
+// 名单：AI 与人工都是黑名单，命中的命令暂停等组管理员批准，其余直接执行
 function PolicyCard({ groupId, origin, rows }: { groupId: string; origin: 'ai' | 'human'; rows: CommandPolicy[] }) {
   const { t } = useI18n()
   const { message } = App.useApp()
@@ -66,7 +66,7 @@ function PolicyCard({ groupId, origin, rows }: { groupId: string; origin: 'ai' |
   )
 }
 
-// 审批中心：名单外命令在这里放行或拒绝；命令名单也在这里配
+// 审批中心：命中黑名单的命令在这里批准或拒绝；黑名单也在这里配
 export function ApprovalsPage() {
   const { t } = useI18n()
   const { message, modal } = App.useApp()
