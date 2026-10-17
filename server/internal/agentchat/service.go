@@ -182,7 +182,9 @@ func (s *Service) run(ctx context.Context, session *ent.AgentSession, u *ent.Use
 		if err != nil {
 			return "", err
 		}
-		return s.tool(ctx, current, commandgate.Request{UserID: u.ID}, name, args)
+		// 对话里命中名单的命令一直等到本轮结束：管理员什么时候批都来得及，不会先过期
+		deadline, _ := ctx.Deadline()
+		return s.tool(ctx, current, commandgate.Request{UserID: u.ID, ApprovalTimeout: time.Until(deadline)}, name, args)
 	}
 	record := s.recorder(id, &seq, emit)
 	result, err = s.Runtime.Run(ctx, request, handle, record)
@@ -440,7 +442,7 @@ var reportTool = piruntime.Tool{Name: "report", Description: "保存当前会话
 
 func (s *Service) tools(ctx context.Context, group uuid.UUID) []piruntime.Tool {
 	tools := []piruntime.Tool{
-		{Name: "exec", Description: "对组内资产执行命令，可能阻塞等待审批。host 为资产 UUID；遵守会话 dry-run 设置。", Parameters: json.RawMessage(`{"type":"object","properties":{"host":{"type":"string"},"cmd":{"type":"string","minLength":1,"maxLength":32768},"timeout":{"type":"integer","minimum":1,"maximum":300}},"required":["host","cmd"],"additionalProperties":false}`)},
+		{Name: "exec", Description: "对组内资产执行命令，高风险命令会暂停等组管理员批准。host 为资产 UUID。", Parameters: json.RawMessage(`{"type":"object","properties":{"host":{"type":"string"},"cmd":{"type":"string","minLength":1,"maxLength":32768},"timeout":{"type":"integer","minimum":1,"maximum":300}},"required":["host","cmd"],"additionalProperties":false}`)},
 		{Name: "track", Description: trackDescription, Parameters: trackParameters},
 		reportTool,
 	}
