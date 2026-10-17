@@ -94,6 +94,12 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .mini-row { padding: 6px 0; border-bottom: 1px solid var(--ant-color-border-secondary); }
 .mini-row:last-child { border-bottom: none; }
 
+/* 告警时间线里的证据行 */
+.timeline-evidence { margin-top: 4px; font-size: 12px; color: var(--ant-color-text-secondary); word-break: break-all; }
+
+/* 实体图图例 */
+.graph-legend { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+
 /* 命令面板与顶栏搜索入口 */
 .search-trigger { width: 240px; display: inline-flex; align-items: center; color: var(--ant-color-text-tertiary); }
 .search-trigger > span:nth-child(2) { flex: 1; text-align: left; }

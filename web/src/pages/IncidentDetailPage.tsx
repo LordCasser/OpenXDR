@@ -1,6 +1,6 @@
 import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Col, Descriptions, Result, Row, Skeleton, Space, Table, Typography } from 'antd'
+import { App, Button, Card, Col, Descriptions, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Typography } from 'antd'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { HttpError, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
@@ -16,6 +16,37 @@ import { VerdictCard } from '../components/VerdictCard'
 import { IncidentStatusTag, SeverityTag, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
+// 告警里最能说明发生了什么的那一项：命令行 / 文件路径 / 连接目标
+function evidence(raw: unknown): string {
+  const r = (raw ?? {}) as Record<string, any>
+  const dst = r.dst_endpoint?.ip ? `→ ${r.dst_endpoint.ip}${r.dst_endpoint.port ? ':' + r.dst_endpoint.port : ''}` : ''
+  return r.process?.cmd_line || r.file?.path || dst || r.message || ''
+}
+
+// 告警按时间排开：每条带级别、规则与关键证据，读起来就是一条攻击经过
+function AlertTimeline({ alerts }: { alerts: AlertRow[] }) {
+  const sevColor = ['', 'gray', 'blue', 'gold', 'orange', 'red']
+  return (
+    <Timeline
+      items={[...alerts].sort((a, b) => a.ts.localeCompare(b.ts)).map(a => ({
+        key: a.id,
+        color: sevColor[a.severity] ?? 'gray',
+        content: (
+          <div style={{ paddingBottom: 4 }}>
+            <Space size={8} wrap>
+              <Typography.Text type="secondary" className="mono" style={{ fontSize: 12 }}>{fmtTime(a.ts).slice(11)}</Typography.Text>
+              <SeverityTag value={a.severity} />
+              <Typography.Text strong>{a.ruleTitle ?? a.ruleId}</Typography.Text>
+              {a.count > 1 && <Typography.Text type="secondary">×{a.count}</Typography.Text>}
+            </Space>
+            {evidence(a.event) && <div className="mono timeline-evidence">{evidence(a.event)}</div>}
+          </div>
+        ),
+      }))}
+    />
+  )
+}
+
 export function IncidentDetailPage() {
   const { t } = useI18n()
   const { id } = useParams()
@@ -25,6 +56,7 @@ export function IncidentDetailPage() {
   const { groups } = useSession()
   const [suppressing, setSuppressing] = useState(false)
   const [resolving, setResolving] = useState<'closed' | 'false_positive' | null>(null)
+  const [alertView, setAlertView] = useState<'table' | 'timeline'>('timeline')
   const { data: inc, isPending, error, refetch } = useQuery({ queryKey: ['incident', id], queryFn: () => fetchIncident(id!), refetchInterval: 15_000 })
   const canAct = useCanActIn(inc?.groupId)
 
@@ -69,7 +101,10 @@ export function IncidentDetailPage() {
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             <VerdictCard verdict={inc.aiVerdict} />
             <Card title={t('graphTitle')}><IncidentGraph graph={inc.graph} /></Card>
-            <Card title={t('alertsTitle', { n: inc.alerts.length })} styles={{ body: { padding: 0 } }}>
+            <Card title={t('alertsTitle', { n: inc.alerts.length })} styles={{ body: { padding: alertView === 'timeline' ? '20px 24px 4px' : 0 } }}
+              extra={<Segmented size="small" value={alertView} onChange={v => setAlertView(v as 'table' | 'timeline')}
+                options={[{ value: 'timeline', label: t('viewTimeline') }, { value: 'table', label: t('viewTable') }]} />}>
+              {alertView === 'timeline' ? <AlertTimeline alerts={inc.alerts} /> : (
               <Table<AlertRow>
                 size="small"
                 rowKey="id"
@@ -100,6 +135,7 @@ export function IncidentDetailPage() {
                   },
                 ]}
               />
+              )}
             </Card>
           </Space>
         </Col>
