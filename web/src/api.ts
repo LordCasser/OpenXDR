@@ -281,6 +281,28 @@ export interface IntelRow {
 
 export const fetchIntel = () => get<IntelRow[]>('/api/intel')
 
+// 情报订阅：内置公开源的开关与同步状态，以及命中过的订阅情报
+export interface IntelFeed {
+  id: string
+  name: string
+  url: string
+  severity: number
+  enabled: boolean
+  count: number
+  hits: number
+  syncedAt: string | null
+  error?: string
+}
+export interface IntelFeeds {
+  feeds: IntelFeed[]
+  hits: IntelRow[]
+  intervalHours: number
+}
+export const fetchIntelFeeds = () => get<IntelFeeds>('/api/intel/feeds')
+export const saveIntelFeeds = async (enabled: string[]): Promise<IntelFeeds> =>
+  (await send('PUT', '/api/intel/feeds', { enabled })).json()
+export const syncIntelFeeds = async (): Promise<IntelFeeds> => (await send('POST', '/api/intel/feeds/sync')).json()
+
 export async function importIntel(body: {
   text: string
   source?: string

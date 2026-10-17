@@ -1,0 +1,12 @@
+################################################################
+# abuse.ch URLhaus Host file                                   #
+# Last updated: 2026-10-17 03:17:07 (UTC)                      #
+#                                                              #
+# Terms Of Use: https://urlhaus.abuse.ch/api/                  #
+# For questions please contact urlhaus [at] abuse.ch           #
+################################################################
+#
+127.0.0.1	123.ywxww.net
+127.0.0.1	1717.1000uc.com
+127.0.0.1	198-macros.com
+127.0.0.1	22qq-client.com

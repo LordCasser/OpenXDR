@@ -492,6 +492,24 @@ const zh = {
   evUnload: '卸载',
   evLoginOk: '登录成功',
   evLoginFail: '登录失败',
+  // 情报订阅
+  intelFeeds: '情报订阅',
+  intelFeedsHint: '内置公开情报源，每 {n} 小时自动更新。内网地址不入库，手工录入的同值情报优先。',
+  intelFeedSync: '立即同步',
+  intelFeedCount: '{n} 条',
+  intelFeedHits: '命中 {n} 次',
+  intelFeedSynced: '同步于 {time}',
+  intelFeedNever: '尚未同步',
+  intelFeedError: '最近一次同步失败：{err}',
+  intelFeedHitList: '命中过的订阅情报',
+  intelFeedNoHits: '订阅情报暂无命中',
+  intelManual: '手工与导入的情报',
+  actNotifySettings: '修改通知配置',
+  actEnrollTokenCreated: '签发接入令牌',
+  actEnrollTokenRevoked: '撤销接入令牌',
+  actHostEnrolled: '主机接入',
+  actIntelFeedsUpdated: '修改情报订阅',
+  actIntelFeedsSynced: '同步情报订阅',
 }
 
 export type MsgKey = keyof typeof zh
@@ -966,6 +984,23 @@ const en = {
   evUnload: 'Unloaded',
   evLoginOk: 'Login succeeded',
   evLoginFail: 'Login failed',
+  intelFeeds: 'Intel feeds',
+  intelFeedsHint: 'Built-in public feeds, refreshed every {n} hours. Private addresses are dropped; manually entered IOCs take precedence.',
+  intelFeedSync: 'Sync now',
+  intelFeedCount: '{n} entries',
+  intelFeedHits: '{n} hits',
+  intelFeedSynced: 'synced {time}',
+  intelFeedNever: 'not synced yet',
+  intelFeedError: 'Last sync failed: {err}',
+  intelFeedHitList: 'Feed IOCs that matched',
+  intelFeedNoHits: 'No feed IOC has matched yet',
+  intelManual: 'Manual and imported IOCs',
+  actNotifySettings: 'Notification settings changed',
+  actEnrollTokenCreated: 'Enroll token issued',
+  actEnrollTokenRevoked: 'Enroll token revoked',
+  actHostEnrolled: 'Host enrolled',
+  actIntelFeedsUpdated: 'Intel feeds changed',
+  actIntelFeedsSynced: 'Intel feeds synced',
 } satisfies Record<MsgKey, string>
 
 const dicts = { zh, en }

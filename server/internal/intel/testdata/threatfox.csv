@@ -1,0 +1,16 @@
+################################################################
+# ThreatFox IOCs: recent additions - CSV format                #
+# Last updated: 2026-10-17 03:22:29 UTC                        #
+#                                                              #
+# Terms Of Use: https://threatfox.abuse.ch/faq/#tos            #
+# For questions please contact threatfox [at] abuse.ch         #
+################################################################
+#
+# "first_seen_utc","ioc_id","ioc_value","ioc_type","threat_type","fk_malware","malware_alias","malware_printable","last_seen_utc","confidence_level","is_compromised","reference","tags","anonymous","reporter"
+"2026-10-17 03:22:29", "1970784", "fyumg68489.workers.dev", "domain", "payload_delivery", "php.shin_webshell", "None", "php.shin_webshell", "", "50", "True", "None", "Cloudflare,GIF,PHP,webshell,WordPress,workers.dev,wp-admin", "0", "xscon"
+"2026-10-17 03:15:33", "1970782", "32.206.156.34.bc.googleusercontent.com", "domain", "payload_delivery", "php.shin_webshell", "None", "php.shin_webshell", "", "50", "True", "None", "GIF,PHP,webshell,WordPress,wp-admin", "0", "xscon"
+"2026-10-17 03:01:18", "1970776", "152.42.212.170:443", "ip:port", "botnet_cc", "elf.jackskid", "RCtea", "Jackskid", "", "100", "False", "https://github.com/deepfield/public-research/tree/main/jackskid", "botnet,ddos,jackskid,mirai,rctea", "0", "deepfield"
+"2026-10-17 03:01:18", "1970777", "157.230.241.185:443", "ip:port", "botnet_cc", "elf.jackskid", "RCtea", "Jackskid", "", "100", "False", "https://github.com/deepfield/public-research/tree/main/jackskid", "botnet,ddos,jackskid,mirai,rctea", "0", "deepfield"
+"2026-10-17 02:54:26", "1970775", "24f58f4db5552583f9be9d51b71cc9edcc3cdc8ea347528d36408bf1ed2ba56d", "sha256_hash", "payload", "elf.mirai", "Katana", "Mirai", "", "90", "False", "None", "elf,Mirai", "0", "whack_sh"
+"2026-10-17 02:05:48", "1970717", "https://r.88bravo.com/", "url", "botnet_cc", "win.vidar", "None", "Vidar", "", "100", "True", "None", "vidar", "0", "crep1x"
+"2026-10-17 00:19:43", "1970598", "http://124.29.194.167:51844/Mozi.m", "url", "payload_delivery", "elf.mozi", "None", "Mozi", "", "75", "False", "https://honeylabs.net/lookup/124.29.194.167", "elf,iot,Mozi", "0", "HoneyLabs"

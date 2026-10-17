@@ -117,6 +117,17 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
   默认 30s），API 增删后立即 reload（`store.go:127,154-180`）
 - **导入**：`detectKind` 自动识别——IP 字面量→ip；32/40/64 位十六进制
   →hash；其余→domain；重复条目跳过（`api/intel.go:205-214`）
+- **订阅**（`intel/feeds.go`）：内置 `Catalog` 四个公开源（Feodo / ThreatFox /
+  URLhaus / ET compromised），开关存 `settings.intel_feeds`（从未保存过时全开），
+  同步结果存 `settings.intel_feed_status`。`RunLeader("intel-feeds")` 启动即同步、之后
+  每 `INTEL_FEED_INTERVAL_HOURS`（默认 6）小时一次；控制台改开关或「立即同步」走同一
+  `Sync`，以 `WithLock("intel-feeds-sync")` 串行。条目以 `source=feed:<id>` 一条
+  `INSERT … ON CONFLICT (kind,value) DO UPDATE … WHERE source LIKE 'feed:%'` 批量写入，
+  手工情报不被覆盖；有效期为周期的 8 倍，源里撤下的条目到期失效、拉取暂时失败不断情报；
+  关掉的源立即删除，过期订阅条目每次同步清理。外部数据不可信：内网/保留地址剔除，域名与
+  哈希逐条校验，源内去重，单源 50 MiB / 10 万条封顶；源返回零条视为异常而非全部撤销。
+  ThreatFox 的 `url` 只取主机为 IP 的，避免公共平台主机名误伤。情报列表接口默认不含
+  订阅条目，订阅状态与命中过的订阅情报走 `/api/intel/feeds`
 
 ## 持久去重（`server/internal/ingest`）
 
@@ -322,7 +333,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
   不阻断（`audit/audit.go:39-53`）。action 全清单：`login / login_failed /
   login_throttled / logout / incident_status / command_issued /
   suppression_created / suppression_deleted / intel_created /
-  intel_imported / intel_deleted / agent_config_set / user_created /
+  intel_imported / intel_deleted / intel_feeds_updated / intel_feeds_synced / agent_config_set / user_created /
   user_deleted / password_reset / auto_response / auto_response_skipped /
   auto_response_failed`
 

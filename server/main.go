@@ -82,6 +82,10 @@ func main() {
 
 	intelStore := intel.New(client, time.Duration(getenvInt("INTEL_RELOAD_SECONDS", 30))*time.Second)
 	go intelStore.Run(ctx)
+	// 情报订阅：内置公开源，控制台开关，单活定时拉取；落库后由 intelStore 下个重载周期生效
+	intelFeeds := &intel.Feeds{DB: db, Client: client, HTTP: &http.Client{},
+		Interval: time.Duration(getenvInt("INTEL_FEED_INTERVAL_HOURS", 6)) * time.Hour}
+	go cluster.RunLeader(ctx, db, "intel-feeds", intelFeeds.Run)
 
 	rulesPath := getenv("RULES_PATH", "../rules")
 	rules := sigma.LoadDir(rulesPath)
@@ -309,6 +313,8 @@ func main() {
 	routes := http.NewServeMux()
 	routes.Handle("/api/host-import/", api.HostImports(&hostimport.Service{DB: client, Vault: credentialVault}, enrollSvc, os.Getenv("ENROLL_PUBLIC_URL"), getenv("ENROLL_SSH_ENABLED", "false") == "true"))
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook))
+	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))
+	routes.Handle("/api/intel/feeds/", api.IntelFeeds(client, intelFeeds))
 	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
 	routes.Handle("/api/enroll-tokens", enrollTokens)
 	routes.Handle("/api/enroll-tokens/", enrollTokens)

@@ -40,6 +40,9 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | POST | `/api/intel` | 单条：`{"kind":"ip\|domain\|hash","value","source","severity","note","expiresInDays"}`，kind 缺省自动识别 |
 | POST | `/api/intel/import` | 批量：`{"text":"一行一条","source","severity","expiresInDays"}`，类型自动识别，重复跳过，`#` 行忽略 |
 | DELETE | `/api/intel/{id}` | 删除 |
+| GET | `/api/intel/feeds` | 情报订阅：`{feeds:[{id,name,url,severity,enabled,count,hits,syncedAt,error}], hits:[命中过的订阅情报], intervalHours}`。`/api/intel` 列表不含订阅条目 |
+| PUT | `/api/intel/feeds` | `{"enabled":["feodo",...]}` 保存开关并立即同步（admin） |
+| POST | `/api/intel/feeds/sync` | 立即同步（admin） |
 
 ## 误报抑制
 

@@ -38,7 +38,9 @@ func toIntelRow(r *ent.Intel) intelRow {
 
 func mapIntel(api *http.ServeMux, db *ent.Client, store *intel.Store) {
 	api.HandleFunc("GET /api/intel", func(w http.ResponseWriter, r *http.Request) {
+		// 订阅条目成千上万，单独在订阅卡片里看，列表只放手工与导入的情报
 		rows, err := db.Intel.Query().
+			Where(entintel.Not(entintel.SourceHasPrefix("feed:"))).
 			Order(ent.Desc(entintel.FieldCreatedAt)).
 			Limit(500).
 			All(r.Context())

@@ -32,6 +32,12 @@ const ACTION: Record<string, { key: MsgKey; color?: string }> = {
   asset_ungrouped: { key: 'actAssetUngrouped' },
   task_updated: { key: 'actTaskUpdated' },
   hunt: { key: 'actHunt' },
+  notify_settings_updated: { key: 'actNotifySettings', color: 'cyan' },
+  enroll_token_created: { key: 'actEnrollTokenCreated', color: 'geekblue' },
+  enroll_token_revoked: { key: 'actEnrollTokenRevoked', color: 'geekblue' },
+  host_enrolled: { key: 'actHostEnrolled', color: 'geekblue' },
+  intel_feeds_updated: { key: 'actIntelFeedsUpdated' },
+  intel_feeds_synced: { key: 'actIntelFeedsSynced' },
 }
 
 export function AuditPage() {
