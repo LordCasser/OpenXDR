@@ -43,6 +43,19 @@ Witness 使用 [witness-compose.yml](witness-compose.yml) 和渲染后的
 `runtime/` 已被 Git 忽略。CA 私钥不能留在应用 VM；签发完成后应复制到至少两个
 受控的离线备份位置，再从节点删除。应用节点只保留运行所需的叶子证书。
 
+## 升级
+
+用 [`release.sh`](release.sh) 从当前提交滚动发布：
+
+```bash
+SSH="ssh -F <ssh 配置>" GOPROXY=https://goproxy.cn,direct deploy/ha/release.sh <节点1> <节点2>
+```
+
+脚本在本地构建 server / web 镜像（标签为提交短哈希），连同 `rules/`、`tasks/` 推到节点，
+先升不持有 VIP 的节点，`readyz` 通过后再升另一个；任一步失败立即停下。
+每个节点切换前把旧镜像标成 `pre-<标签>`，回滚方式见脚本头部注释。
+agent 不走这个脚本：把新版本放进节点的 `dist/` 目录，agent 重连时自动升级。
+
 ## 验收
 
 1. `patronictl list` 必须是一主一同步副本；
