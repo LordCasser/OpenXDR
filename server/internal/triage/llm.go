@@ -6,15 +6,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 )
+
+// glmModel 与 Pi runner 判定 GLM 的规则一致
+var glmModel = regexp.MustCompile(`(?i)(^|/)glm[-_.]`)
 
 // LLM OpenAI 兼容 chat completions 客户端。BaseURL 默认本地 Ollama——安全数据不出内网。
 type LLM struct {
 	BaseURL string
 	Model   string
 	APIKey  string
-	http    *http.Client
+	// NoThinking 关掉 GLM 模板里的隐式思考：思考内容不返回却占输出，时长波动大，
+	// 后台批量调用容易超时。只对 GLM 生效，其他端点不认这个参数
+	NoThinking bool
+	// MaxTokens 输出上限，0 表示不设
+	MaxTokens int
+	http      *http.Client
 }
 
 func NewLLM(baseURL, model, apiKey string, timeout time.Duration) *LLM {
@@ -75,6 +84,12 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 	}
 	if len(tools) > 0 {
 		payload["tools"] = tools
+	}
+	if l.NoThinking && glmModel.MatchString(l.Model) {
+		payload["chat_template_kwargs"] = map[string]bool{"enable_thinking": false}
+	}
+	if l.MaxTokens > 0 {
+		payload["max_tokens"] = l.MaxTokens
 	}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,

@@ -136,6 +136,8 @@ func main() {
 		Interval: time.Minute,
 		Refresh:  time.Duration(getenvInt("ASSET_ANNOTATE_REFRESH_HOURS", 24)) * time.Hour,
 	}
+	// 标注是后台批量调用：关掉 GLM 隐式思考、限住输出，耗时才稳定（实测 pve1 默认模式波动到 120 秒超时）
+	assetEngine.LLM.NoThinking, assetEngine.LLM.MaxTokens = true, 2048
 	go cluster.RunLeader(ctx, db, "assetmap", assetEngine.Run)
 
 	hub := response.NewHub(client, os.Getenv("RESPONSE_ENABLED") == "true")
