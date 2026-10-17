@@ -119,3 +119,73 @@ func TestParsePrivateKeyFromMarkdownYAML(t *testing.T) {
 		t.Fatal("预览泄露私钥")
 	}
 }
+
+func TestMarkdownRejectsDuplicateFields(t *testing.T) {
+	for name, doc := range map[string]string{
+		"address":  "| 主机名 | 地址 | IP |\n| app-01 | 192.0.2.1 | 192.0.2.2 |\n",
+		"password": "| 主机名 | 地址 | 账号 | password | 密码 |\n| app-01 | 192.0.2.1 | root | secret-marker | other-secret |\n",
+		"username": "| 主机名 | 地址 | username | 账号 | 密码 |\n| app-01 | 192.0.2.1 | root | admin | secret-marker |\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse(doc)
+			if err == nil || !strings.Contains(err.Error(), "字段重复") {
+				t.Fatalf("重复字段应被拒绝，得到 %v", err)
+			}
+			if strings.Contains(err.Error(), "secret-marker") || strings.Contains(err.Error(), "other-secret") {
+				t.Fatal("错误包含了原文凭据")
+			}
+		})
+	}
+}
+
+func TestNullCredentialsAreAbsent(t *testing.T) {
+	for _, doc := range []string{
+		"hosts:\n - address: 192.0.2.1\n   username: root\n   password: null\n",
+		"hosts:\n - address: 192.0.2.1\n   password: null\n   private_key: ~\n   passphrase:\n",
+		`{"hosts":[{"address":"192.0.2.1","password":null,"private_key":null,"passphrase":null}]}`,
+	} {
+		hosts, err := Parse(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(hosts) != 1 || hosts[0].Kind != "none" || hosts[0].Secret != (Secret{}) {
+			t.Fatal("null 不应变成凭据内容")
+		}
+	}
+	// 带引号的 null 是用户明确提供的字面密码，不能被清掉。
+	hosts, err := Parse("hosts:\n - address: 192.0.2.1\n   username: root\n   password: 'null'\n")
+	if err != nil || len(hosts) != 1 || hosts[0].Secret.Password != "null" || hosts[0].Kind != "password" {
+		t.Fatal("带引号的字面密码应原样保存")
+	}
+}
+
+func TestMarkdownSkipsExampleTablesInOtherFences(t *testing.T) {
+	for _, fence := range []string{"```bash", "```", "~~~text"} {
+		t.Run(fence, func(t *testing.T) {
+			doc := "# 运维记录\n" + fence + "\n| 主机名 | 地址 |\n| example | 192.0.2.99 |\n" + fence[:3] + "\n\n| 主机名 | 地址 |\n| real-host | 192.0.2.1 |\n"
+			hosts, err := Parse(doc)
+			if err != nil || len(hosts) != 1 || hosts[0].Hostname != "real-host" {
+				t.Fatalf("普通代码块中的示例不能作为资产导入，数量 %d，错误 %v", len(hosts), err)
+			}
+		})
+	}
+}
+
+func TestMarkdownFenceBoundaries(t *testing.T) {
+	for _, fence := range []string{"```yaml", "~~~yaml", "````yaml"} {
+		t.Run(fence, func(t *testing.T) {
+			marker := strings.TrimSuffix(fence, "yaml")
+			doc := "# 主机\n" + fence + "\nhosts:\n - hostname: app-01\n   address: 192.0.2.1\n   username: root\n   password: |\n     ```\n     preserved\n" + marker + "\n"
+			hosts, err := Parse(doc)
+			if err != nil || len(hosts) != 1 || hosts[0].Secret.Password != "```\npreserved\n" {
+				t.Fatalf("不同种类或较短的围栏不应提前结束代码块，错误 %v", err)
+			}
+		})
+	}
+	if _, err := Parse("# 主机\n````yaml\nhosts:\n - address: 192.0.2.1\n```\n````\n"); err == nil {
+		t.Fatal("较短围栏不能提前结束代码块并忽略尾部内容")
+	}
+	if _, err := Parse("# 主机\n```yaml\nhosts:\n - address: 192.0.2.1\n``` trailing\n"); err == nil {
+		t.Fatal("带尾随内容的标记不能结束代码块")
+	}
+}

@@ -1,6 +1,8 @@
+import { Spin } from 'antd'
+import { LoadError } from '../components/LoadError'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { fetchGroups, fetchMe, logout, type GroupRow, type Me } from '../api'
+import { fetchGroups, fetchMe, logout, Unauthorized, type GroupRow, type Me } from '../api'
 
 // 登录用户与当前组。组是授权与纳管的单位：对话、审批、报告都在当前组里看
 interface Session {
@@ -17,7 +19,8 @@ const SessionContext = createContext<Session | null>(null)
 
 export function SessionProvider({ me, children }: { me: Me; children: ReactNode }) {
   const client = useQueryClient()
-  const { data: groups = [] } = useQuery({ queryKey: ['groups'], queryFn: fetchGroups })
+  const groupsQuery = useQuery({ queryKey: ['groups'], queryFn: fetchGroups })
+  const groups = groupsQuery.data ?? []
   const [groupId, setGroupIdState] = useState(() => localStorage.getItem('groupId'))
   const group = groups.find(g => g.id === groupId) ?? groups[0]
 
@@ -36,6 +39,9 @@ export function SessionProvider({ me, children }: { me: Me; children: ReactNode 
     client.removeQueries({ predicate: query => query.queryKey[0] !== 'me' })
     client.setQueryData(['me'], null)
   }
+
+  if (groupsQuery.isPending) return <Spin fullscreen />
+  if (groupsQuery.isError) return <LoadError error={groupsQuery.error} onRetry={() => groupsQuery.refetch()} />
 
   return (
     <SessionContext.Provider
@@ -75,4 +81,10 @@ export function useCanAct() {
 }
 
 export const useMe = () =>
-  useQuery({ queryKey: ['me'], queryFn: () => fetchMe().catch(() => null), staleTime: Infinity })
+  useQuery({ queryKey: ['me'], queryFn: async () => {
+    try { return await fetchMe() }
+    catch (error) {
+      if (error instanceof Unauthorized) return null
+      throw error
+    }
+  }, staleTime: Infinity })

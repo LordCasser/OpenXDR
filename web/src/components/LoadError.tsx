@@ -1,3 +1,4 @@
+import { ReloadOutlined } from '@ant-design/icons'
 import { Button, Result } from 'antd'
 import { errText } from './format'
 import { useI18n } from '../i18n'
@@ -7,6 +8,6 @@ export function LoadError({ error, onRetry }: { error: unknown; onRetry?: () => 
   const { t } = useI18n()
   return (
     <Result status="warning" title={t('loadFailed')} subTitle={errText(error, t)}
-      extra={onRetry && <Button onClick={onRetry}>{t('retry')}</Button>} />
+      extra={onRetry && <Button icon={<ReloadOutlined aria-hidden />} onClick={onRetry}>{t('retry')}</Button>} />
   )
 }

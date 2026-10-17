@@ -61,6 +61,7 @@ export interface IncidentDetail extends Omit<IncidentSummary, 'alertCount'> {
 
 // 会话失效时抛出，App 捕获后切回登录页
 export class Unauthorized extends Error {}
+export const SESSION_EXPIRED = 'openxdr:session-expired'
 
 // 接口报错：保留状态码与后端给的说明，界面按状态码选文案（见 components/format errText）
 export class HttpError extends Error {
@@ -72,7 +73,10 @@ export class HttpError extends Error {
 }
 
 function check(r: Response) {
-  if (r.status === 401) throw new Unauthorized()
+  if (r.status === 401) {
+    window.dispatchEvent(new Event(SESSION_EXPIRED))
+    throw new Unauthorized()
+  }
 }
 
 async function fail(r: Response): Promise<never> {
@@ -128,7 +132,7 @@ export async function login(username: string, password: string): Promise<Me> {
   return r.json()
 }
 
-export const logout = () => post('/api/logout')
+export const logout = () => send('POST', '/api/logout')
 
 // status 可取 unresolved（open + triaged，未人工结案）、review（未结案里需要人复核的）；按 offset/limit 翻页，total 是筛选后的总数
 export const fetchIncidents = (params: { status?: string; assetId?: string; limit?: number; offset?: number } = {}) => {

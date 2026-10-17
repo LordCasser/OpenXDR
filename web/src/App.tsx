@@ -4,6 +4,7 @@ import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useSearchPa
 import { Layout } from './app/Layout'
 import { SessionProvider, useMe, useSession } from './app/session'
 import { useI18n } from './i18n'
+import { LoadError } from './components/LoadError'
 import { LoginPage } from './pages/LoginPage'
 
 // Webhook 里的老链接是 /?incident= 与 /?session=，进来后转到对应页面
@@ -82,8 +83,9 @@ const router = createBrowserRouter([
 ])
 
 export default function App() {
-  const { data: me, isPending } = useMe()
+  const { data: me, isPending, isError, error, refetch } = useMe()
   if (isPending) return <Spin fullscreen />
+  if (isError) return <LoadError error={error} onRetry={() => refetch()} />
   if (!me) return <LoginPage />
   return (
     <SessionProvider me={me}>

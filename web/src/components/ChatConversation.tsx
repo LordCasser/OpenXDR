@@ -108,8 +108,12 @@ function ExecChain({ calls, results, hosts, onPreview }: {
   )
 }
 
-function Meta({ at }: { at?: string }) {
-  return at ? <Typography.Text type="secondary" className="chat-meta">{fmtTime(at)}</Typography.Text> : null
+function Meta({ at, text }: { at?: string; text?: string }) {
+  const { t } = useI18n()
+  return <Space size={12} wrap className="chat-meta">
+    {at && <Typography.Text type="secondary">{fmtTime(at)}</Typography.Text>}
+    {text && <Typography.Text type="secondary" copyable={{ text, tooltips: [t('copyMessage'), t('copied')] }}>{t('copyMessage')}</Typography.Text>}
+  </Space>
 }
 
 // 会话渲染：user 右侧气泡；assistant 左侧，正文 Markdown + 本轮执行链；toolResult 不单独成行
@@ -129,7 +133,7 @@ export function ChatConversation({ rows, hosts }: { rows: ChatRow[]; hosts: Reco
             <Flex key={i} justify="flex-end" gap={8} className="chat-row">
               <Flex vertical align="flex-end" style={{ maxWidth: '80%' }}>
                 <div className="chat-bubble chat-bubble-user" style={{ background: token.colorPrimaryBg }}>{textOf(m.content)}</div>
-                <Meta at={at} />
+                <Meta at={at} text={textOf(m.content)} />
               </Flex>
               <Avatar icon={<UserOutlined />} style={{ flex: 'none' }} />
             </Flex>
@@ -147,7 +151,7 @@ export function ChatConversation({ rows, hosts }: { rows: ChatRow[]; hosts: Reco
               {calls.length > 0 && <ExecChain calls={calls} results={results} hosts={hosts} onPreview={setPreview} />}
               {m.errorMessage && <Alert type="error" showIcon title={m.errorMessage} />}
               {(m.stopReason === 'length' || m.stopReason === 'max_turns') && <Alert type="warning" showIcon title={t('chatTruncated')} />}
-              <Meta at={at} />
+              <Meta at={at} text={texts.map(p => p.text).join('\n\n')} />
             </Flex>
           </Flex>
         )

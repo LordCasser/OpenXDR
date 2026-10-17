@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Alert, Input, Select, Space, Table, Tag, Typography } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchAssets, searchEvents, type EventRow } from '../api'
+import { Refreshed } from '../components/Ago'
 import { HostLink } from '../components/HostLink'
 import { LoadError } from '../components/LoadError'
 import { eventSummary } from '../components/eventSummary'
@@ -29,12 +30,14 @@ export function EventsPage() {
     setParams(Object.fromEntries(Object.entries(next).filter(([k, v]) => v && !(k === 'hours' && v === 24)).map(([k, v]) => [k, String(v)])))
   }
   const [draft, setDraft] = useState(filter.q)
-  const { data, isFetching, isError, error, refetch } = useQuery({ queryKey: ['events', filter], queryFn: () => searchEvents(filter) })
+  useEffect(() => setDraft(filter.q), [filter.q])
+  const { data, isFetching, isError, error, refetch, dataUpdatedAt } = useQuery({ queryKey: ['events', filter], queryFn: () => searchEvents(filter) })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
 
   return (
     <Page title={t('navEvents')} subtitle={t('eventsSubtitle')}>
       <FilterCard
+        onReset={params.size || draft ? () => { setDraft(''); setParams({}) } : undefined}
         filters={
           <Space wrap>
             <Input.Search
@@ -42,10 +45,11 @@ export function EventsPage() {
               style={{ width: 360 }}
               placeholder={t('eventSearchHint')}
               value={draft}
-              onChange={e => setDraft(e.target.value)}
+              onChange={e => { setDraft(e.target.value); if (!e.target.value) setFilter({ q: '' }) }}
               onSearch={q => setFilter({ q })}
             />
             <Select
+              aria-label={t('thHostname')}
               style={{ width: 160 }}
               showSearch
               optionFilterProp="label"
@@ -54,12 +58,14 @@ export function EventsPage() {
               options={[{ value: '', label: t('allHosts') }, ...(assets.data ?? []).map(a => ({ value: a.id, label: a.hostname }))]}
             />
             <Select
+              aria-label={t('thClass')}
               style={{ width: 140 }}
               value={filter.classUid}
               onChange={classUid => setFilter({ classUid })}
               options={[{ value: 0, label: t('allClasses') }, ...Object.entries(CLASS_KEY).map(([uid, key]) => ({ value: Number(uid), label: t(key) }))]}
             />
             <Select
+              aria-label={t('thSource')}
               style={{ width: 130 }}
               value={filter.source}
               onChange={source => setFilter({ source })}
@@ -70,6 +76,7 @@ export function EventsPage() {
                 {fmtTime(filter.from)} ~ {filter.to ? fmtTime(filter.to).slice(11) : t('now')}
               </Tag>
             ) : <Select
+              aria-label={t('thTime')}
               style={{ width: 140 }}
               value={filter.hours}
               onChange={hours => setFilter({ hours })}
@@ -77,10 +84,11 @@ export function EventsPage() {
             />}
           </Space>
         }
-        extra={<Typography.Text type="secondary">{t('eventCount', { n: data ? `${data.items.length}${data.truncated ? '+' : ''}` : 0 })}</Typography.Text>}
+        extra={<Space wrap><Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} /><Typography.Text type="secondary">{t('eventCount', { n: data ? `${data.items.length}${data.truncated ? '+' : ''}` : 0 })}</Typography.Text></Space>}
       >
         {data?.truncated && <Alert type="info" banner showIcon title={t('listTruncated', { n: data.items.length })} />}
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<EventRow>
+          scroll={{ x: 950 }}
           size="small"
           rowKey="id"
           loading={isFetching}

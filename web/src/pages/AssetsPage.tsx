@@ -1,12 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { PlusOutlined } from '@ant-design/icons'
+import { ImportOutlined, PlusOutlined } from '@ant-design/icons'
 import { App, Button, Input, Select, Space, Table, Tag, Typography } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { assignAsset, fetchAssets, unassignAsset, type Asset } from '../api'
 import { useSession } from '../app/session'
 import { ImportHostsModal } from '../components/ImportHostsModal'
+import { LoadError } from '../components/LoadError'
 import { AddHostModal } from '../components/AddHostModal'
 import { errText, HostStateBadge, hostState } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
@@ -23,6 +24,8 @@ export function AssetsPage() {
   // 搜索与组筛选放 URL：从详情页返回、刷新都还在
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
+  const [draft, setDraft] = useState(q)
+  useEffect(() => setDraft(q), [q])
   const groupFilter = params.get('group') ?? ''
   const setFilter = (patch: { q?: string; group?: string }) =>
     setParams(Object.fromEntries(Object.entries({ q, group: groupFilter, ...patch }).filter(([, v]) => v)), { replace: true })
@@ -30,7 +33,7 @@ export function AssetsPage() {
   const [importing, setImporting] = useState(false)
   // 组 admin 才能为本组签发接入令牌
   const canAdd = groups.some(g => g.role === 'admin')
-  const { data, isPending, isFetching, dataUpdatedAt, refetch } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
+  const { data, isPending, isFetching, isError, error, dataUpdatedAt, refetch } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
 
   const imported = (a: Asset) => hostState(a) === 'imported'
   const rows = (data ?? []).filter(a =>
@@ -61,19 +64,21 @@ export function AssetsPage() {
 
   return (
     <Page title={t('navAssets')} subtitle={t('assetsSummary', { total, online: up })}
-      extra={canAdd && <Space wrap><Button onClick={() => setImporting(true)}>{t('hostImport')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>{t('addHost')}</Button></Space>}>
+      extra={canAdd && <Space wrap><Button icon={<ImportOutlined aria-hidden />} onClick={() => setImporting(true)}>{t('hostImport')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>{t('addHost')}</Button></Space>}>
       <ImportHostsModal open={importing} onClose={() => setImporting(false)} />
       <AddHostModal open={adding} onClose={() => setAdding(false)} />
       <FilterCard
+        onReset={q || groupFilter || draft ? () => { setDraft(''); setParams({}, { replace: true }) } : undefined}
         extra={<Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} />}
         filters={
           <Space wrap>
-            <Input.Search allowClear style={{ width: 280 }} placeholder={t('assetSearchHint')} defaultValue={q} onSearch={v => setFilter({ q: v })} onChange={e => !e.target.value && setFilter({ q: '' })} />
-            <Select style={{ width: 180 }} value={groupFilter} onChange={v => setFilter({ group: v })} options={[{ value: '', label: t('allGroups') }, ...groupOptions]} />
+            <Input.Search allowClear style={{ width: 280 }} placeholder={t('assetSearchHint')} value={draft} onSearch={v => setFilter({ q: v })} onChange={e => { setDraft(e.target.value); if (!e.target.value) setFilter({ q: '' }) }} />
+            <Select showSearch optionFilterProp="label" aria-label={t('group')} style={{ width: 180 }} value={groupFilter} onChange={v => setFilter({ group: v })} options={[{ value: '', label: t('allGroups') }, ...groupOptions]} />
           </Space>
         }
       >
-        <Table<Asset>
+        {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<Asset>
+          scroll={{ x: 1100 }}
           locale={{ emptyText: <EmptyHint title={t(q || groupFilter ? 'noMatch' : 'noAssets')} hint={q || groupFilter ? undefined : t('noAssetsHint')} /> }}
           rowKey="id"
           loading={isPending}
@@ -97,7 +102,7 @@ export function AssetsPage() {
             { title: t('thSource'), dataIndex: 'agentId', width: 90, render: (v, a) => <Tag>{v ? 'agent' : t(imported(a) ? 'hostImportedSource' : 'sourceLog')}</Tag> },
             { title: t('thLastSeen'), dataIndex: 'lastSeen', width: 180, render: (v, a) => imported(a) ? '—' : <Ago iso={v} />, sorter: (a, b) => a.lastSeen.localeCompare(b.lastSeen) },
           ]}
-        />
+        />}
       </FilterCard>
     </Page>
   )

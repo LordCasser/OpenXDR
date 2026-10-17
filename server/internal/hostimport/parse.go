@@ -32,6 +32,8 @@ type Host struct {
 	Secret   Secret `json:"-"`
 }
 
+var markdownFence = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})(.*)$")
+
 var hostnamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,252}$`)
 
 func Digest(document string) string {
@@ -57,28 +59,35 @@ func Parse(document string) ([]Host, error) {
 		scanner := bufio.NewScanner(strings.NewReader(document))
 		scanner.Buffer(make([]byte, 4096), MaxDocument)
 		var block strings.Builder
-		inBlock := false
+		fence := ""
+		parseBlock := false
 		var headers []string
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
-			if strings.HasPrefix(line, "```") {
-				if inBlock {
-					rows, err := parseYAML(block.String())
-					if err != nil {
-						return nil, err
+			marker := markdownFence.FindStringSubmatch(scanner.Text())
+			if fence != "" {
+				closed := marker != nil && marker[1][0] == fence[0] && len(marker[1]) >= len(fence) && strings.TrimSpace(marker[2]) == ""
+				if closed {
+					if parseBlock {
+						rows, err := parseYAML(block.String())
+						if err != nil {
+							return nil, err
+						}
+						records = append(records, rows...)
 					}
-					records = append(records, rows...)
 					block.Reset()
-					inBlock = false
-				} else if line == "```yaml" || line == "```yml" || line == "```json" {
-					inBlock = true
+					fence = ""
+				} else if parseBlock {
+					block.WriteString(scanner.Text())
+					block.WriteByte('\n')
 				}
-				headers = nil
 				continue
 			}
-			if inBlock {
-				block.WriteString(scanner.Text())
-				block.WriteByte('\n')
+			if marker != nil {
+				fence = marker[1]
+				language := strings.ToLower(strings.TrimSpace(marker[2]))
+				parseBlock = language == "yaml" || language == "yml" || language == "json"
+				headers = nil
 				continue
 			}
 			if !strings.HasPrefix(line, "|") {
@@ -94,6 +103,16 @@ func Parse(document string) ([]Host, error) {
 					hasHost = hasHost || candidate[i] == "address"
 				}
 				if hasHost {
+					fields := map[string]bool{}
+					for _, field := range candidate {
+						if field == "" {
+							continue
+						}
+						if fields[field] {
+							return nil, errors.New("主机表格字段重复")
+						}
+						fields[field] = true
+					}
 					headers = candidate
 				}
 				continue
@@ -112,7 +131,7 @@ func Parse(document string) ([]Host, error) {
 			}
 			records = append(records, row)
 		}
-		if scanner.Err() != nil || inBlock {
+		if scanner.Err() != nil || fence != "" {
 			return nil, errors.New("文档过长或代码块未闭合")
 		}
 	}
@@ -171,6 +190,9 @@ func parseYAML(text string) ([]map[string]string, error) {
 				return nil, errors.New("主机字段重复")
 			}
 			row[key] = value.Value
+			if value.Tag == "!!null" {
+				row[key] = ""
+			}
 		}
 		rows = append(rows, row)
 	}

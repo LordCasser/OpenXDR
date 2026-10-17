@@ -1,7 +1,7 @@
 import { RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { fetchFindings, setFindingStatus, type FindingRow } from '../api'
 import { useCanAct, useSession } from '../app/session'
@@ -37,7 +37,7 @@ export function FindingsPage() {
   const [params, setParams] = useSearchParams()
   const status = params.get('status') ?? 'open'
   const [acting, setActing] = useState<{ row: FindingRow; next: 'resolved' | 'ignored' } | null>(null)
-  const [selected, setSelected] = useState<string[]>([])
+  const [selectedKeys, setSelected] = useState<string[]>([])
   const canChat = useCanChat()
   const handoff = useHandoff()
   const { data, isPending, isError, error, refetch, dataUpdatedAt, isFetching } = useQuery({
@@ -59,7 +59,9 @@ export function FindingsPage() {
     return true
   }
 
-  const picked = (data ?? []).filter(f => selected.includes(f.id))
+  useEffect(() => { setSelected([]); setActing(null) }, [status])
+  const picked = (data ?? []).filter(f => selectedKeys.includes(f.id) && f.status === 'open' && canChat(f.groupId))
+  const selected = picked.map(f => f.id)
   const sameGroup = picked.length > 0 && picked.every(f => f.groupId === picked[0].groupId)
   const handTo = (list: FindingRow[]) => handoff.start(list[0].groupId, list.map(f => `finding:${f.id}`),
     list.length === 1 ? t('handoffFindingTitle', { title: list[0].title }) : t('handoffFindingsTitle', { n: list.length }),
@@ -69,7 +71,7 @@ export function FindingsPage() {
     <Page title={t('navFindings')} subtitle={t('findingsSubtitle')}>
       <FilterCard
         extra={(
-          <Space>
+          <Space wrap>
             {selected.length > 0 && (
               <Tooltip title={!sameGroup ? t('handoffSameGroup') : picked.length > 10 ? t('handoffMax') : undefined}>
                 <Button size="small" type="primary" icon={<RobotOutlined />} loading={handoff.busy}
@@ -84,7 +86,7 @@ export function FindingsPage() {
         filters={
           <Segmented
             value={status}
-            onChange={v => setParams({ status: String(v) })}
+            onChange={v => { setSelected([]); setParams({ status: String(v) }) }}
             options={[
               ...(['open', 'resolved', 'ignored'] as const).map(s => ({ value: s, label: t(STATUS[s].key) })),
               { value: 'all', label: t('all') },
@@ -93,6 +95,7 @@ export function FindingsPage() {
         }
       >
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<FindingRow>
+          scroll={{ x: 1100 }}
           rowKey="id"
           rowSelection={{ selectedRowKeys: selected, onChange: keys => setSelected(keys as string[]), getCheckboxProps: f => ({ disabled: f.status !== 'open' || !canChat(f.groupId) }) }}
           loading={isPending}

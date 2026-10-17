@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Collapse, Empty, Flex, List, Modal, Select, Space, Tabs, Tag, Typography, Popconfirm } from 'antd'
+import { Alert, App, Button, Collapse, Empty, Flex, List, Modal, Select, Space, Spin, Tabs, Tag, Typography, Popconfirm } from 'antd'
 import { useState } from 'react'
 import { createEnrollToken, fetchEnrollStatus, fetchEnrollTokens, revokeEnrollToken, type EnrollToken } from '../api'
 import { useSession } from '../app/session'
 import { useI18n } from '../i18n'
+import { LoadError } from './LoadError'
 import { fmtTime, errText } from './format'
 
 // 安装命令里的控制台地址就是用户现在访问的这个，主机必须能访问到它
@@ -32,7 +33,7 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
   const adminGroups = groups.filter(g => g.role === 'admin')
   // 组列表可能晚于弹窗挂载才到：没选过就跟着默认组走
   const [picked, setGroupId] = useState<string>()
-  const groupId = picked ?? (group?.role === 'admin' ? group.id : adminGroups[0]?.id)
+  const groupId = adminGroups.some(g => g.id === picked) ? picked : (group?.role === 'admin' ? group.id : adminGroups[0]?.id)
   const [days, setDays] = useState(7)
   const [issued, setIssued] = useState<EnrollToken>()
 
@@ -48,26 +49,35 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
   })
   const revoke = useMutation({
     mutationFn: revokeEnrollToken,
-    onSuccess: () => client.invalidateQueries({ queryKey: ['enroll-tokens'] }),
+    onSuccess: (_, id) => {
+      setIssued(current => current?.id === id ? undefined : current)
+      return client.invalidateQueries({ queryKey: ['enroll-tokens'] })
+    },
     onError: e => message.error(errText(e, t)),
   })
 
+  const busy = generate.isPending || revoke.isPending
   const close = () => {
+    if (busy) return
     setIssued(undefined)
     onClose()
   }
-  const cmds = issued?.token ? commands(issued.token) : undefined
+  const cmds = issued?.token && issued.groupId === groupId ? commands(issued.token) : undefined
   const tokenState = (tok: EnrollToken) =>
     tok.revoked ? <Tag>{t('tokenRevoked')}</Tag>
       : Date.parse(tok.expiresAt) < Date.now() ? <Tag>{t('tokenExpired')}</Tag>
-        : <Popconfirm title={t('revokeTokenConfirm')} okButtonProps={{ danger: true }} onConfirm={() => revoke.mutate(tok.id)}>
-          <Button size="small" danger type="link">{t('revoke')}</Button>
+        : <Popconfirm title={t('revokeTokenConfirm')} okButtonProps={{ danger: true }} onConfirm={() => revoke.mutateAsync(tok.id)}>
+          <Button disabled={busy} size="small" danger type="link">{t('revoke')}</Button>
         </Popconfirm>
 
   return (
-    <Modal title={t('addHost')} open={open} onCancel={close} footer={null} width={720} destroyOnHidden>
+    <Modal title={t('addHost')} open={open} onCancel={close} footer={null} width={720} closable={!busy} maskClosable={!busy} keyboard={!busy} destroyOnHidden>
       {window.location.protocol !== 'https:' ? (
         <Alert type="warning" showIcon message={t('hostHTTPSRequired')} />
+      ) : status.isError ? (
+        <LoadError error={status.error} onRetry={() => status.refetch()} />
+      ) : status.isPending ? (
+        <Spin />
       ) : status.data && !status.data.enabled ? (
         <Alert type="warning" showIcon message={t('addHostDisabled')} description={status.data.reason} />
       ) : adminGroups.length === 0 ? (
@@ -76,12 +86,12 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
         <Flex vertical gap={16}>
           <Space wrap>
             <span>{t('addHostGroup')}</span>
-            <Select style={{ width: 200 }} value={groupId} onChange={g => { setGroupId(g); setIssued(undefined) }}
+            <Select aria-label={t('addHostGroup')} showSearch optionFilterProp="label" disabled={busy} style={{ width: 200 }} value={groupId} onChange={g => { setGroupId(g); setIssued(undefined) }}
               options={adminGroups.map(g => ({ value: g.id, label: g.name }))} />
             <span>{t('addHostDays')}</span>
-            <Select style={{ width: 100 }} value={days} onChange={setDays}
+            <Select aria-label={t('addHostDays')} disabled={busy} style={{ width: 100 }} value={days} onChange={setDays}
               options={[1, 7, 30].map(n => ({ value: n, label: t('addHostDaysUnit', { n }) }))} />
-            <Button type="primary" loading={generate.isPending} onClick={() => generate.mutate()}>{t('addHostGenerate')}</Button>
+            <Button type="primary" loading={generate.isPending} disabled={busy || !groupId} onClick={() => generate.mutate()}>{t('addHostGenerate')}</Button>
           </Space>
           {cmds && (
             <>
@@ -96,7 +106,7 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
           <Collapse ghost size="small" items={[{
             key: 'tokens',
             label: t('addHostTokens'),
-            children: tokens.data?.length ? (
+            children: tokens.isError ? <LoadError error={tokens.error} onRetry={() => tokens.refetch()} /> : tokens.isPending ? <Spin /> : tokens.data?.length ? (
               <List size="small" dataSource={tokens.data} renderItem={tok => (
                 <List.Item actions={[tokenState(tok)]}>
                   <Space wrap>

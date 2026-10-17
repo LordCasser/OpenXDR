@@ -1,11 +1,13 @@
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Card, Col, Empty, Input, Popconfirm, Result, Row, Space, Table, Tabs, Tag, Typography } from 'antd'
-import { useState } from 'react'
+import { Alert, App, Button, Card, Col, Empty, Input, Popconfirm, Result, Row, Space, Spin, Table, Tabs, Tag, Typography } from 'antd'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { createPolicy, decideApproval, deletePolicy, fetchApprovals, fetchAssets, fetchPolicies, type Approval, type CommandPolicy } from '../api'
+import { createPolicy, deletePolicy, fetchApprovals, fetchAssets, fetchPolicies, type Approval, type CommandPolicy } from '../api'
 import { useSession } from '../app/session'
 import { HostLink } from '../components/HostLink'
+import { ApprovalActions } from '../components/ApprovalActions'
+import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
@@ -25,13 +27,18 @@ function PolicyCard({ groupId, origin, rows }: { groupId: string; origin: 'ai' |
   const { message } = App.useApp()
   const client = useQueryClient()
   const [pattern, setPattern] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submitting = useRef(false)
   const run = async (fn: () => Promise<unknown>) => {
+    if (submitting.current) return
+    submitting.current = true
+    setBusy(true)
     try {
       await fn()
       await client.invalidateQueries({ queryKey: ['policies', groupId] })
     } catch (e) {
       message.error(errText(e, t))
-    }
+    } finally { submitting.current = false; setBusy(false) }
   }
   const add = () => run(async () => { await createPolicy(groupId, origin, pattern.trim()); setPattern('') })
 
@@ -52,15 +59,15 @@ function PolicyCard({ groupId, origin, rows }: { groupId: string; origin: 'ai' |
             width: 56,
             render: (_, p) => (
               <Popconfirm title={t('confirmDelete')} onConfirm={() => run(() => deletePolicy(p.id))}>
-                <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+                <Button type="text" danger size="small" disabled={busy} aria-label={t('del')} icon={<DeleteOutlined />} />
               </Popconfirm>
             ),
           },
         ]}
       />
       <Space.Compact style={{ width: '100%', marginTop: 12 }}>
-        <Input className="mono" placeholder={t('policyPattern')} value={pattern} onChange={e => setPattern(e.target.value)} onPressEnter={() => pattern.trim() && add()} />
-        <Button type="primary" icon={<PlusOutlined />} disabled={!pattern.trim()} onClick={add}>{t('add')}</Button>
+        <Input disabled={busy} className="mono" placeholder={t('policyPattern')} value={pattern} onChange={e => setPattern(e.target.value)} onPressEnter={() => pattern.trim() && add()} />
+        <Button type="primary" icon={<PlusOutlined />} loading={busy} disabled={busy || !pattern.trim()} onClick={add}>{t('add')}</Button>
       </Space.Compact>
     </Card>
   )
@@ -69,7 +76,6 @@ function PolicyCard({ groupId, origin, rows }: { groupId: string; origin: 'ai' |
 // 审批中心：命中黑名单的命令在这里批准或拒绝；黑名单也在这里配
 export function ApprovalsPage() {
   const { t } = useI18n()
-  const { message, modal } = App.useApp()
   const { group } = useSession()
   const isGroupAdmin = group?.role === 'admin'
   const approvals = useQuery({
@@ -83,17 +89,6 @@ export function ApprovalsPage() {
 
   if (!group) return <Empty style={{ marginTop: 120 }} description={t('noGroupsHint')} />
   if (!isGroupAdmin) return <Result status="403" title="403" subTitle={t('groupAdminOnly', { name: group.name })} />
-
-  const decide = (a: Approval, approve: boolean) => {
-    const go = () => decideApproval(a.id, approve).then(() => approvals.refetch()).catch(e => message.error(errText(e, t)))
-    if (!approve) return go()
-    modal.confirm({
-      title: t('apConfirmLiveTitle', { host: hosts[a.asset_id] ?? a.asset_id }),
-      content: <pre className="chat-code">{a.cmd}</pre>,
-      okButtonProps: { danger: true },
-      onOk: go,
-    })
-  }
 
   const all = approvals.data ?? []
   const pending = all.filter(a => a.status === 'pending')
@@ -109,10 +104,7 @@ export function ApprovalsPage() {
           {
             title: t('actions'), width: 150,
             render: (_: unknown, a: Approval) => (
-              <Space>
-                <Button size="small" type="primary" onClick={() => decide(a, true)}>{t('apApprove')}</Button>
-                <Button size="small" danger onClick={() => decide(a, false)}>{t('apReject')}</Button>
-              </Space>
+              <ApprovalActions approval={a} host={hosts[a.asset_id] ?? a.asset_id} onDecided={() => { void approvals.refetch() }} />
             ),
           },
         ]
@@ -130,22 +122,22 @@ export function ApprovalsPage() {
             {
               key: 'pending',
               label: t('apTabQueue', { n: pending.length }),
-              children: <Table<Approval> rowKey="id" size="small" loading={approvals.isPending} dataSource={pending} pagination={false} columns={columns(true)} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('apNone')} /> }} />,
+              children: approvals.isError ? <LoadError error={approvals.error} onRetry={() => approvals.refetch()} /> : <Table<Approval> scroll={{ x: 1050 }} rowKey="id" size="small" loading={approvals.isPending} dataSource={pending} pagination={false} columns={columns(true)} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('apNone')} /> }} />,
             },
             {
               key: 'history',
               label: t('apTabHistory'),
-              children: <Table<Approval> rowKey="id" size="small" dataSource={all.filter(a => a.status !== 'pending')} pagination={{ pageSize: 20, hideOnSinglePage: true }} columns={columns(false)} />,
+              children: approvals.isError ? <LoadError error={approvals.error} onRetry={() => approvals.refetch()} /> : <Table<Approval> scroll={{ x: 1050 }} rowKey="id" size="small" dataSource={all.filter(a => a.status !== 'pending')} pagination={{ pageSize: 20, hideOnSinglePage: true }} columns={columns(false)} />,
             },
             {
               key: 'policies',
               label: t('apTabPolicies'),
-              children: (
+              children: policies.isError ? <LoadError error={policies.error} onRetry={() => policies.refetch()} /> : policies.isPending ? <Spin /> : (
                 <Space orientation="vertical" size={16} style={{ width: '100%' }}>
                   <Alert type="info" showIcon title={t('policyRegexHint')} />
-                  <Row gutter={16}>
-                    <Col xs={24} lg={12}><PolicyCard groupId={group.id} origin="ai" rows={policies.data ?? []} /></Col>
-                    <Col xs={24} lg={12}><PolicyCard groupId={group.id} origin="human" rows={policies.data ?? []} /></Col>
+                  <Row gutter={[16, 16]}>
+                    <Col xs={24} lg={12}><PolicyCard key={`${group.id}:ai`} groupId={group.id} origin="ai" rows={policies.data ?? []} /></Col>
+                    <Col xs={24} lg={12}><PolicyCard key={`${group.id}:human`} groupId={group.id} origin="human" rows={policies.data ?? []} /></Col>
                   </Row>
                 </Space>
               ),

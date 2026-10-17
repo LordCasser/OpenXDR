@@ -50,7 +50,7 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .verdict-list { margin: 4px 0 12px; padding-left: 22px; }
 
 /* AI 助手：会话列表 + 对话，占满内容区高度 */
-.chat-page { display: flex; gap: 16px; height: calc(100vh - 64px - 48px); }
+.chat-page { display: flex; gap: 16px; height: calc(100dvh - 64px - 48px); }
 .chat-sessions { width: 300px; flex: none; display: flex; flex-direction: column; }
 .chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .chat-session-item { cursor: pointer; padding: 10px 16px; border-bottom: 1px solid var(--ant-color-border-secondary); }
@@ -112,7 +112,8 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 
 /* 命令面板与顶栏搜索入口 */
 .search-trigger { width: 240px; display: inline-flex; align-items: center; color: var(--ant-color-text-tertiary); }
-.search-trigger > span:nth-child(2) { flex: 1; text-align: left; }
+.search-trigger > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.search-trigger .ant-btn-icon, .search-trigger kbd { flex-shrink: 0; }
 kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4px; margin: 0 2px;
   border: 1px solid var(--ant-color-border); background: var(--ant-color-fill-quaternary); color: var(--ant-color-text-secondary); }
 .palette-input.ant-input-affix-wrapper, .palette-input.ant-input-affix-wrapper:focus-within { border-width: 0 0 1px !important; border-radius: 0; box-shadow: none !important; }
@@ -154,12 +155,6 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 .matrix { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
 .matrix-head { padding: 8px; border-radius: 6px; margin-bottom: 8px; text-align: center; }
 
-@media (max-width: 900px) {
-  .chat-page { flex-direction: column; height: auto; }
-  .chat-sessions { width: 100%; max-height: 260px; }
-  .chat-main { min-height: 70vh; }
-}
-
 /* 窄屏导航使用抽屉，给内容保留完整宽度。 */
 .app-content { padding: 24px; }
 .brand { text-decoration: none; }
@@ -176,11 +171,36 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 }
 @media (max-width: 900px) {
   .login-mobile-brand { display: flex; }
-  .chat-page { height: auto; }
-  .chat-main { height: 75dvh; min-height: 420px; flex: none; }
+
   .chat-log { padding: 16px 12px; }
   .chat-indent { margin-left: 0; max-width: 100%; }
   .chat-welcome { padding: 24px 16px; overflow-y: auto; }
   .chat-main .ant-card-head-wrapper { flex-wrap: wrap; gap: 4px; padding: 8px 0; }
   .chat-main .ant-card-extra { max-width: 100%; overflow-wrap: anywhere; }
 }
+
+/* 滚动由会话和表格各自承担，窄屏不撑开整个页面。 */
+.filter-controls { min-width: 0; max-width: 100%; overflow-x: auto; }
+.chat-latest { align-self: center; margin: 4px 0; }
+.chat-log { overscroll-behavior: contain; overflow-anchor: none; }
+.chat-main .ant-card-head-title { min-width: 0; }
+@media (max-width: 991px) {
+  .chat-sessions { width: 100%; }
+  .chat-main .ant-card-head-title .ant-space-item { min-width: 0; }
+  .chat-main .ant-card-head-title .ant-space-item:nth-child(2) { overflow: hidden; text-overflow: ellipsis; }
+  .filter-controls .ant-input-search { max-width: 100%; }
+  .filter-controls .ant-space { max-width: 100%; }
+  .filter-controls .ant-space-item { max-width: 100%; }
+}
+@media (hover: none) {
+  .session-pin, .row-actions { opacity: 1; }
+}
+
+.chat-session-entry { display: flex; align-items: center; border-bottom: 1px solid var(--ant-color-border-secondary); }
+.chat-session-entry .chat-session-item { flex: 1; min-width: 0; border-bottom: 0; background: transparent; }
+.chat-session-entry .session-pin { flex: none; margin-right: 8px; border: 0; background: transparent; font: inherit; }
+.chat-session-entry:hover .session-pin, .chat-session-entry:focus-within .session-pin { opacity: 1; }
+
+.page-title-icon { display: inline-flex; margin-right: 10px; color: var(--ant-color-primary); vertical-align: middle; }
+.report-title-button { max-width: 100%; height: auto; padding: 0; text-align: left; white-space: normal; }
+.report-title-button > span:last-child { overflow-wrap: anywhere; }

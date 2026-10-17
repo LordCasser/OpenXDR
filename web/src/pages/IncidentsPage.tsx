@@ -1,7 +1,7 @@
 import { RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Badge, Button, Segmented, Space, Table, Tooltip, Typography } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { fetchIncidents, setIncidentStatus, type IncidentSummary } from '../api'
 import { useCanAct, useSession } from '../app/session'
@@ -31,8 +31,9 @@ export function IncidentsPage() {
   const canAct = useCanAct()
   const [params, setParams] = useSearchParams()
   const status = params.get('status') ?? 'review'
-  const page = Number(params.get('page') ?? 1)
-  const [selected, setSelected] = useState<string[]>([])
+  const requestedPage = Number(params.get('page') ?? 1)
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 && requestedPage <= Math.floor(Number.MAX_SAFE_INTEGER / PAGE_SIZE) ? requestedPage : 1
+  const [selectedKeys, setSelected] = useState<string[]>([])
   const [resolving, setResolving] = useState<'closed' | 'false_positive' | null>(null)
   const query = useQuery({
     queryKey: ['incidents', status, page],
@@ -41,6 +42,8 @@ export function IncidentsPage() {
   })
   const rows = query.data?.items ?? []
   const actable = (r: IncidentSummary) => !done(r) && canAct(r.groupId)
+  const selected = rows.filter(r => selectedKeys.includes(r.id) && actable(r)).map(r => r.id)
+  useEffect(() => { setSelected([]); setResolving(null) }, [status, page])
   const canChat = useCanChat()
   const handoff = useHandoff()
   // 多选交给 AI：一个会话属于一个组，选中的必须同组
@@ -61,6 +64,11 @@ export function IncidentsPage() {
 
   // 逐条走单个接口：组内权限与审计照旧。失败的留在勾选里、弹窗不关，备注不丢
   const batch = async (next: string, note: string) => {
+    if (!selected.length) {
+      message.warning(t('selectionChanged'))
+      setResolving(null)
+      return
+    }
     const results = await Promise.allSettled(selected.map(id => setIncidentStatus(id, next, note)))
     const failed = selected.filter((_, i) => results[i].status === 'rejected')
     client.invalidateQueries({ queryKey: ['incidents'] })
@@ -78,7 +86,7 @@ export function IncidentsPage() {
     <Page title={t('navIncidents')} subtitle={t('incidentsSubtitle')}>
       <FilterCard
         extra={(
-          <Space>
+          <Space wrap>
             <Refreshed at={query.dataUpdatedAt} fetching={query.isFetching} onRefresh={() => query.refetch()} />
             {anyActable && <Button size="small" onClick={() => setSelected(rows.filter(r => actable(r) && r.aiVerdict?.verdict === 'benign').map(r => r.id))}>{t('selectBenign')}</Button>}
             {selected.length > 0 && (
@@ -109,6 +117,7 @@ export function IncidentsPage() {
       >
         {query.isError ? <LoadError error={query.error} onRetry={() => query.refetch()} /> : (
           <Table<IncidentSummary>
+          scroll={{ x: 1100 }}
             rowKey="id"
             loading={query.isPending}
             dataSource={rows}

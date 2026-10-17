@@ -1,18 +1,19 @@
 import {
-  AlertOutlined, CloudServerOutlined, GlobalOutlined, LoginOutlined, PlusOutlined, PushpinOutlined, RobotOutlined, SendOutlined, StopOutlined,
+  ArrowDownOutlined, MenuOutlined, AlertOutlined, CloudServerOutlined, GlobalOutlined, LoginOutlined, PlusOutlined, PushpinOutlined, RobotOutlined, SendOutlined, StopOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Col, Empty, Flex, Form, Input, Modal, Result, Row, Segmented, Space, Spin, Tag, Tooltip, Typography, theme,
+  Alert, App, Button, Card, Col, Drawer, Empty, Flex, Form, Grid, Input, Modal, Result, Row, Segmented, Space, Spin, Tag, Tooltip, Typography, theme,
 } from 'antd'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import {
-  createAgentSession, decideApproval, fetchAgentSession, fetchAgentSessions, fetchApprovals, fetchAssets, fetchSessionMessages,
+  createAgentSession, fetchAgentSession, fetchAgentSessions, fetchApprovals, fetchAssets, fetchSessionMessages,
   startSessionMessage, cancelSession, type AgentSession, type Approval, type PiMessage,
 } from '../api'
 import { useSession } from '../app/session'
 import { ChatConversation, textOf, type ChatRow } from '../components/ChatConversation'
+import { ApprovalActions } from '../components/ApprovalActions'
 import { SubjectsBar } from '../components/Handoff'
 import { SessionStatusTag, fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
@@ -53,18 +54,6 @@ function Templates({ onPick }: { onPick: (prompt: string) => void }) {
 // 对话里卡着的审批：组 admin 直接在这里批，不用跳审批中心
 function InlineApprovals({ rows, hosts, onDecided }: { rows: Approval[]; hosts: Record<string, string>; onDecided: () => void }) {
   const { t } = useI18n()
-  const { modal, message } = App.useApp()
-  const decide = (a: Approval, approve: boolean) => {
-    const host = hosts[a.asset_id] ?? a.asset_id
-    const go = () => decideApproval(a.id, approve).then(onDecided).catch(e => message.error(errText(e, t)))
-    if (!approve) return go()
-    modal.confirm({
-      title: t('apConfirmLiveTitle', { host }),
-      content: <pre className="chat-code">{a.cmd}</pre>,
-      okButtonProps: { danger: true },
-      onOk: go,
-    })
-  }
   return rows.map(a => (
     <Alert
       key={a.id}
@@ -74,10 +63,7 @@ function InlineApprovals({ rows, hosts, onDecided }: { rows: Approval[]; hosts: 
       title={t('apInline', { host: hosts[a.asset_id] ?? a.asset_id })}
       description={<pre className="chat-code">{a.cmd}</pre>}
       action={
-        <Space orientation="vertical">
-          <Button size="small" type="primary" onClick={() => decide(a, true)}>{t('apApprove')}</Button>
-          <Button size="small" danger onClick={() => decide(a, false)}>{t('apReject')}</Button>
-        </Space>
+        <ApprovalActions approval={a} host={hosts[a.asset_id] ?? a.asset_id} onDecided={onDecided} vertical />
       }
     />
   ))
@@ -120,6 +106,17 @@ function NewSessionModal({ open, onClose, onCreated }: { open: boolean; onClose:
 
 // AI 助手：平台主入口。左侧会话、右侧对话；会话绑定当前组
 export function ChatPage() {
+  const { sessionId = '' } = useParams()
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const setPrompt = useCallback((value: SetStateAction<string>) => setDrafts(previous => ({
+    ...previous,
+    [sessionId]: typeof value === 'function' ? value(previous[sessionId] ?? '') : value,
+  })), [sessionId])
+  // 每段会话独立持有请求、滚动和错误状态，草稿在切换后仍保留。
+  return <ChatWorkspace key={sessionId} prompt={drafts[sessionId] ?? ''} setPrompt={setPrompt} />
+}
+
+function ChatWorkspace({ prompt, setPrompt }: { prompt: string; setPrompt: Dispatch<SetStateAction<string>> }) {
   const { t } = useI18n()
   const { me, group, setGroupId } = useSession()
   const { sessionId } = useParams()
@@ -129,14 +126,23 @@ export function ChatPage() {
   const { message } = App.useApp()
   const { token } = theme.useToken()
   const [creating, setCreating] = useState(false)
-  const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [kind, setKind] = useState<'' | 'chat' | 'task'>('')
-  const bottom = useRef<HTMLDivElement>(null)
+  const wide = !!Grid.useBreakpoint().lg
+  const [sessionsOpen, setSessionsOpen] = useState(false)
+  const log = useRef<HTMLDivElement>(null)
+  const follow = useRef(true)
+  const [away, setAway] = useState(false)
+  const scrollLatest = () => {
+    if (log.current) log.current.scrollTop = log.current.scrollHeight
+    follow.current = true
+    setAway(false)
+  }
   const input = useRef<HTMLTextAreaElement>(null)
+  const pendingAfter = useRef(0)
 
   const sessions = useQuery({
     queryKey: ['sessions', group?.id],
@@ -158,7 +164,12 @@ export function ChatPage() {
   )
   // 置顶存在本地，按用户分开；其余按今天 / 昨天 / 更早分组
   const pinKey = `pinnedSessions:${me.username}`
-  const [pinned, setPinned] = useState<string[]>(() => JSON.parse(localStorage.getItem(pinKey) ?? '[]'))
+  const [pinned, setPinned] = useState<string[]>(() => {
+    try {
+      const value: unknown = JSON.parse(localStorage.getItem(pinKey) ?? '[]')
+      return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+    } catch { return [] }
+  })
   const togglePin = (id: string) => {
     const next = pinned.includes(id) ? pinned.filter(x => x !== id) : [id, ...pinned]
     localStorage.setItem(pinKey, JSON.stringify(next))
@@ -207,7 +218,10 @@ export function ChatPage() {
 
   // 会话跑完（含定时任务）列表里的状态标签跟着刷新
   useEffect(() => {
-    if (session && session.status !== 'running') client.invalidateQueries({ queryKey: ['sessions', session.group_id] })
+    if (session && session.status !== 'running') {
+      client.invalidateQueries({ queryKey: ['sessions', session.group_id] })
+      client.invalidateQueries({ queryKey: ['messages', session.id] })
+    }
   }, [session?.status, session?.group_id, client, session])
 
   // 从资产详情"一键排查"或模板进来时带 ?prompt=，填进输入框后从地址栏拿掉；
@@ -222,10 +236,10 @@ export function ChatPage() {
       input.current?.focus()
     }
     setParams({}, { replace: true })
-  }, [params, session, setParams])
+  }, [params, session, setParams, setPrompt])
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' })
+    if (follow.current) scrollLatest()
   }, [messages.data, pending, inline.length])
 
   const canChat = group?.role === 'admin' || group?.role === 'analyst'
@@ -248,13 +262,15 @@ export function ChatPage() {
   // 发出去就交给后台：会话切到 running 后由轮询跟进度，离开页面不影响
   const submit = async (override?: string) => {
     const text = (override ?? prompt).trim()
-    if (!session || !text) return
-    if (override === undefined) setPrompt('')
+    if (!session || !text || !canSend) return
+    follow.current = true
     setBusy(true)
     setError(null)
+    pendingAfter.current = messages.data?.length ?? 0
     setPending(text)
     try {
       await startSessionMessage(session.id, text)
+      if (override === undefined) setPrompt(value => value.trim() === text ? '' : value)
     } catch (e) {
       setError(errText(e, t))
       setPending(null)
@@ -282,12 +298,9 @@ export function ChatPage() {
     void submit(autoSend)
   }, [autoSend, canSend]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 换会话时清掉上一个会话还没落库的占位消息
-  useEffect(() => setPending(null), [sessionId])
-
   const history = messages.data ?? []
   // 首条 user 消息入库前先占位，避免发出去的话"消失"一下
-  const showPending = pending && !history.some(r => r.message.role === 'user' && textOf(r.message.content) === pending)
+  const showPending = pending && !history.slice(pendingAfter.current).some(r => r.message.role === 'user' && textOf(r.message.content) === pending)
   const rows: ChatRow[] = [
     ...history,
     ...(showPending ? [{ message: { role: 'user', content: pending } as PiMessage }] : []),
@@ -297,8 +310,7 @@ export function ChatPage() {
     return <Empty style={{ marginTop: 120 }} description={t('noGroupsHint')} />
   }
 
-  return (
-    <div className="chat-page">
+  const sessionList = (
       <Card
         className="chat-sessions"
         title={t('sessions')}
@@ -307,7 +319,7 @@ export function ChatPage() {
         styles={{ body: { padding: 0, overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column' } }}
       >
         <div className="chat-session-filter">
-          <Input.Search size="small" allowClear placeholder={t('searchSessions')} onChange={e => setSearch(e.target.value)} />
+          <Input.Search size="small" allowClear value={search} placeholder={t('searchSessions')} onChange={e => setSearch(e.target.value)} />
           <Segmented size="small" block value={kind} onChange={v => setKind(v as '' | 'chat' | 'task')}
             options={[{ value: '', label: t('all') }, { value: 'chat', label: t('chatSession') }, { value: 'task', label: t('taskSession') }]} />
         </div>
@@ -319,26 +331,18 @@ export function ChatPage() {
             <div key={b.key}>
               <div className="chat-session-bucket">{t(b.key)}</div>
               {b.items.map(s => (
+                <div key={s.id} className="chat-session-entry" style={s.id === sessionId ? { background: token.controlItemBgActive } : undefined}>
                 <button
                   type="button"
                   aria-current={s.id === sessionId ? 'page' : undefined}
-                  key={s.id}
                   className="chat-session-item"
-                  style={s.id === sessionId ? { background: token.controlItemBgActive } : undefined}
-                  onClick={() => navigate(`/chat/${s.id}`)}
+                  onClick={() => { navigate(`/chat/${s.id}`); setSessionsOpen(false) }}
                 >
                   <Flex align="center" gap={4}>
                     <Typography.Text ellipsis strong style={{ flex: 1 }}>
                       {s.title || t(s.kind === 'task' ? 'taskSession' : 'chatSession')}
                     </Typography.Text>
-                    <Tooltip title={t(pinned.includes(s.id) ? 'unpin' : 'pin')}>
-                      <span role="button" tabIndex={0} aria-label={t(pinned.includes(s.id) ? 'unpin' : 'pin')}
-                        className={pinned.includes(s.id) ? 'session-pin pinned' : 'session-pin'}
-                        onClick={e => { e.stopPropagation(); togglePin(s.id) }}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); togglePin(s.id) } }}>
-                        <PushpinOutlined />
-                      </span>
-                    </Tooltip>
+
                   </Flex>
                   <Space size={4} wrap style={{ marginTop: 4 }}>
                     <SessionStatusTag value={s.id === sessionId && isRunning ? 'running' : s.status} />
@@ -346,20 +350,36 @@ export function ChatPage() {
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(s.created_at).slice(b.key === 'sessionsEarlier' || b.key === 'sessionsPinned' ? 5 : 11, 16)}</Typography.Text>
                   </Space>
                 </button>
+                    <Tooltip title={t(pinned.includes(s.id) ? 'unpin' : 'pin')}>
+                      <button type="button" aria-label={t(pinned.includes(s.id) ? 'unpin' : 'pin')}
+                        className={pinned.includes(s.id) ? 'session-pin pinned' : 'session-pin'}
+                        onClick={() => togglePin(s.id)}>
+                        <PushpinOutlined />
+                      </button>
+                    </Tooltip>
+                </div>
               ))}
             </div>
           ))}
         </div>
       </Card>
+  )
+
+  return (
+    <div className="chat-page">
+      {wide ? sessionList : <Drawer title={t('sessions')} open={sessionsOpen} onClose={() => setSessionsOpen(false)} placement="left" size={320} styles={{ body: { padding: 0, display: 'flex' } }}>{sessionList}</Drawer>}
 
       <Card className="chat-main" size="small" styles={{ body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: 0 } }}
-        title={session && (
-          <Space>
+        title={(
+          <Space style={{ maxWidth: '100%' }}>
+            {!wide && <Button type="text" icon={<MenuOutlined />} aria-label={t('sessions')} onClick={() => setSessionsOpen(true)} />}
+            {session && <>
             <span>{session.title || t('chatSession')}</span>
             <SessionStatusTag value={isRunning ? 'running' : session.status} />
+            </>}
           </Space>
         )}
-        extra={session && <Typography.Text type="secondary">{session.initiator} · {session.model}</Typography.Text>}
+        extra={wide && session && <Typography.Text type="secondary">{session.initiator} · {session.model}</Typography.Text>}
       >
         {sessionId && current.isError ? (
           <Result status="warning" title={t('sessionGone')} subTitle={errText(current.error, t)} extra={<Button onClick={() => navigate('/chat')}>{t('backToList')}</Button>} />
@@ -375,7 +395,11 @@ export function ChatPage() {
         ) : (
           <>
             {!!session.subjects?.length && <SubjectsBar subjects={session.subjects} groupId={session.group_id} />}
-            <div className="chat-log">
+            <div className="chat-log" ref={log} onScroll={e => {
+              const el = e.currentTarget
+              follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+              setAway(!follow.current)
+            }}>
               {messages.isPending && <Spin />}
               {messages.isError && <Alert type="error" showIcon title={errText(messages.error, t)} />}
               {messages.isSuccess && rows.length === 0 && canSend && (
@@ -392,8 +416,9 @@ export function ChatPage() {
               )}
               {session.error && <Alert className="chat-indent" type="error" showIcon title={session.error} />}
               {error && <Alert className="chat-indent" type="error" showIcon title={error} />}
-              <div ref={bottom} />
+
             </div>
+            {away && <Button className="chat-latest" size="small" icon={<ArrowDownOutlined />} onClick={scrollLatest}>{t('backToLatest')}</Button>}
             <div className="chat-composer" style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}>
               <Input.TextArea
                 aria-label={t('chatPlaceholder')}

@@ -3,12 +3,12 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout as AntLayout, Menu, Select, Space, Tag, Tooltip, Typography, theme } from 'antd'
+import { App, Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout as AntLayout, Menu, Select, Space, Tag, Tooltip, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { fetchApprovals } from '../api'
-import { ROLE_KEY } from '../components/format'
+import { errText, ROLE_KEY } from '../components/format'
 import { useI18n } from '../i18n'
 import { Logo } from '../components/Logo'
 import { CommandPalette } from './CommandPalette'
@@ -44,6 +44,7 @@ export function Layout() {
   const { dark, toggle } = useTheme()
   const { me, isAdmin, groups, group, setGroupId, signOut } = useSession()
   const { token } = theme.useToken()
+  const { message } = App.useApp()
   const wide = !!Grid.useBreakpoint().lg
   const [menuOpen, setMenuOpen] = useState(false)
   const navigate = useNavigate()
@@ -119,6 +120,8 @@ export function Layout() {
             {wide && <Typography.Text type="secondary">{t('currentGroup')}</Typography.Text>}
             <Select
               aria-label={t('currentGroup')}
+              showSearch
+              optionFilterProp="label"
               style={{ width: wide ? 180 : 112 }}
               value={group?.id}
               placeholder={t('noGroups')}
@@ -127,24 +130,35 @@ export function Layout() {
               notFoundContent={t('noGroups')}
             />
           </Space>
-          <div style={{ flex: 1 }} />
+          {wide && <div style={{ flex: 1 }} />}
           {wide ? (
             <Button className="search-trigger" icon={<SearchOutlined />} onClick={() => setPalette(true)}>
               <span>{t('paletteTrigger')}</span><kbd>{mac ? '⌘' : 'Ctrl'} K</kbd>
             </Button>
           ) : <Button type="text" aria-label={t('paletteTrigger')} icon={<SearchOutlined />} onClick={() => setPalette(true)} />}
           <ApprovalBell />
-          <Tooltip title={dark ? t('lightMode') : t('darkMode')}>
+          {wide && <><Tooltip title={dark ? t('lightMode') : t('darkMode')}>
             <Button type="text" aria-label={dark ? t('lightMode') : t('darkMode')} icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggle} />
           </Tooltip>
           <Tooltip title={locale === 'zh' ? 'English' : '中文'}>
             <Button type="text" aria-label={locale === 'zh' ? 'English' : '中文'} icon={<TranslationOutlined />} onClick={() => setLocale(locale === 'zh' ? 'en' : 'zh')} />
           </Tooltip>
+          </>}
           <Dropdown
             trigger={['click']}
             menu={{
-              items: [{ key: 'logout', icon: <LogoutOutlined />, label: t('logout') }],
-              onClick: () => signOut(),
+              items: [
+                ...(!wide ? [
+                  { key: 'theme', icon: dark ? <SunOutlined /> : <MoonOutlined />, label: dark ? t('lightMode') : t('darkMode') },
+                  { key: 'language', icon: <TranslationOutlined />, label: locale === 'zh' ? 'English' : '中文' },
+                ] : []),
+                { key: 'logout', icon: <LogoutOutlined />, label: t('logout') },
+              ],
+              onClick: ({ key }) => {
+                if (key === 'theme') toggle()
+                else if (key === 'language') setLocale(locale === 'zh' ? 'en' : 'zh')
+                else if (key === 'logout') void signOut().catch(error => message.error(errText(error, t)))
+              },
             }}
           >
             <Button type="text" aria-label={me.username}>
