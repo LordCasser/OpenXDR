@@ -59,9 +59,6 @@ func TestPiGroupAPI(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &session); err != nil {
 		t.Fatal(err)
 	}
-	if !session.DryRun {
-		t.Fatal("默认必须 dry-run")
-	}
 	w = request("POST", "/api/command-policies", `{"groupId":"`+group.ID.String()+`","origin":"ai","pattern":"whoami"}`)
 	if w.Code != 201 {
 		t.Fatalf("创建名单: %d %s", w.Code, w.Body.String())

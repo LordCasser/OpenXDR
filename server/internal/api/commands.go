@@ -20,7 +20,6 @@ type commandRow struct {
 	CreatedAt   time.Time  `json:"createdAt"`
 	Kind        string     `json:"kind"`
 	Status      string     `json:"status"`
-	DryRun      bool       `json:"dryRun"`
 	AssetID     uuid.UUID  `json:"assetId"`
 	IncidentID  *uuid.UUID `json:"incidentId"`
 	IssuedBy    string     `json:"issuedBy"`
@@ -36,16 +35,14 @@ type commandRow struct {
 func toRow(c *ent.Command) commandRow {
 	return commandRow{
 		ID: c.ID, CreatedAt: c.CreatedAt, Kind: c.Kind, Status: c.Status,
-		DryRun: c.DryRun, AssetID: c.AssetID, IncidentID: c.IncidentID,
+		AssetID: c.AssetID, IncidentID: c.IncidentID,
 		IssuedBy: c.IssuedBy, Detail: c.Detail, CompletedAt: c.CompletedAt,
 		Cmd: c.Cmd, ExitCode: c.ExitCode, Stdout: c.Stdout, Stderr: c.Stderr, Truncated: c.Truncated,
 	}
 }
 
 type issueBody struct {
-	Kind string `json:"kind"`
-	// 指针以便区分"没传"和"显式传 false"：没传一律按 dry-run 处理
-	DryRun      *bool      `json:"dryRun"`
+	Kind        string     `json:"kind"`
 	AssetID     uuid.UUID  `json:"assetId"`
 	IncidentID  *uuid.UUID `json:"incidentId"`
 	ProcessGUID *uuid.UUID `json:"processGuid"`
@@ -73,16 +70,9 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 		if !assetInScope(w, r, db, body.AssetID, "analyst") {
 			return
 		}
-		// 不传就是演练。真执行必须显式写明，绝不默认动手
-		dryRun := true
-		if body.DryRun != nil {
-			dryRun = *body.DryRun
-		}
-
 		req := response.Request{
 			AssetID:     body.AssetID,
 			Kind:        body.Kind,
-			DryRun:      dryRun,
 			IncidentID:  body.IncidentID,
 			ProcessGUID: body.ProcessGUID,
 			PID:         body.PID,
@@ -118,11 +108,7 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		mode := "live"
-		if dryRun {
-			mode = "dry-run"
-		}
-		detail := body.Kind + " (" + mode + ")"
+		detail := body.Kind
 		if body.Kind == "exec" {
 			detail += ": " + body.Cmd
 		}

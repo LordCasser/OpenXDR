@@ -73,20 +73,6 @@ func (_u *CommandUpdate) SetNillableStatus(v *string) *CommandUpdate {
 	return _u
 }
 
-// SetDryRun sets the "dry_run" field.
-func (_u *CommandUpdate) SetDryRun(v bool) *CommandUpdate {
-	_u.mutation.SetDryRun(v)
-	return _u
-}
-
-// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
-func (_u *CommandUpdate) SetNillableDryRun(v *bool) *CommandUpdate {
-	if v != nil {
-		_u.SetDryRun(*v)
-	}
-	return _u
-}
-
 // SetAssetID sets the "asset_id" field.
 func (_u *CommandUpdate) SetAssetID(v uuid.UUID) *CommandUpdate {
 	_u.mutation.SetAssetID(v)
@@ -428,9 +414,6 @@ func (_u *CommandUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(command.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.DryRun(); ok {
-		_spec.SetField(command.FieldDryRun, field.TypeBool, value)
-	}
 	if value, ok := _u.mutation.IncidentID(); ok {
 		_spec.SetField(command.FieldIncidentID, field.TypeUUID, value)
 	}
@@ -598,20 +581,6 @@ func (_u *CommandUpdateOne) SetStatus(v string) *CommandUpdateOne {
 func (_u *CommandUpdateOne) SetNillableStatus(v *string) *CommandUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
-	}
-	return _u
-}
-
-// SetDryRun sets the "dry_run" field.
-func (_u *CommandUpdateOne) SetDryRun(v bool) *CommandUpdateOne {
-	_u.mutation.SetDryRun(v)
-	return _u
-}
-
-// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
-func (_u *CommandUpdateOne) SetNillableDryRun(v *bool) *CommandUpdateOne {
-	if v != nil {
-		_u.SetDryRun(*v)
 	}
 	return _u
 }
@@ -986,9 +955,6 @@ func (_u *CommandUpdateOne) sqlSave(ctx context.Context) (_node *Command, err er
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(command.FieldStatus, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.DryRun(); ok {
-		_spec.SetField(command.FieldDryRun, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.IncidentID(); ok {
 		_spec.SetField(command.FieldIncidentID, field.TypeUUID, value)

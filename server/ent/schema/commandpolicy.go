@@ -36,7 +36,6 @@ func (Approval) Fields() []ent.Field {
 		field.Enum("origin").Values("ai", "human"),
 		field.Text("cmd"),
 		field.Uint32("timeout_ms"),
-		field.Bool("dry_run").Default(true),
 		field.Enum("status").Values("pending", "approved", "rejected", "expired", "cancelled", "consumed").Default("pending"),
 		field.Time("expires_at"),
 		field.String("decided_by").Optional().Nillable(),

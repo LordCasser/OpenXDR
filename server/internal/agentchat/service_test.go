@@ -51,32 +51,6 @@ func TestCommandOutputBoundedWithoutChangingReceipt(t *testing.T) {
 	}
 }
 
-// 演练回执不能长得像成功：模型只拿到"没执行"，库里的命令记录不变。
-func TestDryRunCommandNotEvidence(t *testing.T) {
-	cmd, stdout := "/usr/bin/ss -lntup", ""
-	exit := int32(0)
-	original := &ent.Command{ID: uuid.New(), Status: "succeeded", DryRun: true, Cmd: &cmd, ExitCode: &exit, Stdout: &stdout}
-	output, err := (&Service{}).waitCommand(context.Background(), original, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got map[string]any
-	if err := json.Unmarshal([]byte(output), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got["executed"] != false || got["dry_run"] != true || got["cmd"] != cmd {
-		t.Fatalf("演练结果形状不对：%s", output)
-	}
-	for _, key := range []string{"exit_code", "stdout", "stderr", "status"} {
-		if _, ok := got[key]; ok {
-			t.Errorf("演练结果不应带 %s：%s", key, output)
-		}
-	}
-	if original.Status != "succeeded" || *original.ExitCode != 0 {
-		t.Fatal("命令记录被修改")
-	}
-}
-
 func TestTurnBudget(t *testing.T) {
 	cases := [][4]int{{0, 0, 0, 32}, {2, 7, 0, 46}, {2, 20, 0, 72}, {2, 20, 5, 77}, {50, 40, 0, 256}}
 	for _, c := range cases {

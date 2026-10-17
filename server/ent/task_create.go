@@ -116,20 +116,6 @@ func (_c *TaskCreate) SetNillableApprovalTimeoutSeconds(v *int64) *TaskCreate {
 	return _c
 }
 
-// SetDryRun sets the "dry_run" field.
-func (_c *TaskCreate) SetDryRun(v bool) *TaskCreate {
-	_c.mutation.SetDryRun(v)
-	return _c
-}
-
-// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
-func (_c *TaskCreate) SetNillableDryRun(v *bool) *TaskCreate {
-	if v != nil {
-		_c.SetDryRun(*v)
-	}
-	return _c
-}
-
 // SetPrompt sets the "prompt" field.
 func (_c *TaskCreate) SetPrompt(v string) *TaskCreate {
 	_c.mutation.SetPrompt(v)
@@ -225,10 +211,6 @@ func (_c *TaskCreate) defaults() {
 		v := task.DefaultApprovalTimeoutSeconds
 		_c.mutation.SetApprovalTimeoutSeconds(v)
 	}
-	if _, ok := _c.mutation.DryRun(); !ok {
-		v := task.DefaultDryRun
-		_c.mutation.SetDryRun(v)
-	}
 	if _, ok := _c.mutation.Removed(); !ok {
 		v := task.DefaultRemoved
 		_c.mutation.SetRemoved(v)
@@ -254,9 +236,6 @@ func (_c *TaskCreate) check() error {
 	}
 	if _, ok := _c.mutation.ApprovalTimeoutSeconds(); !ok {
 		return &ValidationError{Name: "approval_timeout_seconds", err: errors.New(`ent: missing required field "Task.approval_timeout_seconds"`)}
-	}
-	if _, ok := _c.mutation.DryRun(); !ok {
-		return &ValidationError{Name: "dry_run", err: errors.New(`ent: missing required field "Task.dry_run"`)}
 	}
 	if _, ok := _c.mutation.Prompt(); !ok {
 		return &ValidationError{Name: "prompt", err: errors.New(`ent: missing required field "Task.prompt"`)}
@@ -330,10 +309,6 @@ func (_c *TaskCreate) createSpec() (*Task, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ApprovalTimeoutSeconds(); ok {
 		_spec.SetField(task.FieldApprovalTimeoutSeconds, field.TypeInt64, value)
 		_node.ApprovalTimeoutSeconds = value
-	}
-	if value, ok := _c.mutation.DryRun(); ok {
-		_spec.SetField(task.FieldDryRun, field.TypeBool, value)
-		_node.DryRun = value
 	}
 	if value, ok := _c.mutation.Prompt(); ok {
 		_spec.SetField(task.FieldPrompt, field.TypeString, value)

@@ -194,8 +194,10 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
       WHERE a.incident_id = i.id
         AND (a.asset_id IS NULL OR a.asset_id NOT IN
              (SELECT id FROM public.assets WHERE group_id = ` + gid + `)))`,
-		`CREATE OR REPLACE VIEW ` + schema + `.commands WITH (security_barrier) AS
-  SELECT id, created_at, completed_at, kind, status, dry_run, asset_id, incident_id,
+		// 旧版视图带已删除的列，CREATE OR REPLACE 删不掉列，先整个删掉；授权由下面的 GRANT ON ALL TABLES 补回
+		`DROP VIEW IF EXISTS ` + schema + `.commands`,
+		`CREATE VIEW ` + schema + `.commands WITH (security_barrier) AS
+  SELECT id, created_at, completed_at, kind, status, asset_id, incident_id,
          issued_by, detail, cmd, exit_code, stdout, stderr, truncated
   FROM public.commands WHERE ` + inGroup,
 		`COMMENT ON SCHEMA ` + schema + ` IS 'OpenXDR 单组只读视图，供 Pi query 工具使用'`,
@@ -216,6 +218,40 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
 		stmts = append(stmts, `ALTER ROLE `+role+` PASSWORD '`+password+`'`)
 	}
 	return stmts
+}
+
+// DropDryRun 删除演练模式遗留的 dry_run 列（列留着会默默记成 true），可重复执行。
+// 旧版组视图引用 commands.dry_run，必须在 Reconcile 重建视图之后调用。
+// 列已不存在就不碰表，免得每次启动都抢一次排他锁。
+func DropDryRun(ctx context.Context, db *sql.DB) error {
+	var errs []error
+	for _, table := range []string{"commands", "agent_sessions", "approvals", "tasks"} {
+		if err := dropColumn(ctx, db, table, "dry_run"); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", table, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func dropColumn(ctx context.Context, db *sql.DB, table, column string) error {
+	var exists bool
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+  WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2)`, table, column).Scan(&exists); err != nil || !exists {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// 排队等排他锁会堵住这张表的所有读写，等不到就放弃，下次启动再删
+	if _, err := tx.ExecContext(ctx, `SET LOCAL lock_timeout = '5s'`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE `+table+` DROP COLUMN IF EXISTS `+column); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func randomPassword() (string, error) {

@@ -126,12 +126,12 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
   Sigma 规则用了未实现的修饰符直接拒绝加载而不是降级匹配；Windows 规则不在
   Linux 资产上求值；坏采集配置一律退回内置默认；TLS 三个变量（CA/证书/私钥）
   必须同时配置，否则报错而不是降级明文。
-- **安全优先于便利**：危险能力默认关闭且多道闸门（`RESPONSE_ENABLED`、dry-run 优先、
-  `ISOLATION_ALLOW` 隔离自保）；抑制与情报都可撤销、有有效期、持续累计命中计数；
-  所有登录与处置操作落审计日志。
+- **安全优先于便利**：危险能力默认关闭且多道闸门（`RESPONSE_ENABLED`、`ISOLATION_ALLOW` 隔离自保、
+  AI exec 的组权限 + 命令名单 + 阻塞式人工审批）；指令一律真执行，不提供演练模式；
+  抑制与情报都可撤销、有有效期、持续累计命中计数；所有登录与处置操作落审计日志。
 - **AI 边界**：旧 triage 仍使用受限调查工具与最多 6 轮研判；Pi 会话使用
   `agentchat` / `commandgate`：exec 绑定组、名单与审批，query 仅使用组专属只读视图身份，
-  report 与 track（运维待办）绑定会话归组。Pi 不注册本机 shell/文件工具，模型不能改写身份、来源或 dry-run。
+  report 与 track（运维待办）绑定会话归组。Pi 不注册本机 shell/文件工具，模型不能改写身份或来源。
   模型输出与工具结果视为不可信输入；配置和接口见 `docs/pi-backend.md`。
 - **Rust 特性**：默认构建不依赖任何外部二进制（protoc 由 crate 分发）；
   `ebpf`/`xdp` 是可选特性，CI 单独构建。写采集端代码注意 `cfg(target_os)` 分支，
@@ -160,6 +160,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - RBAC 三档角色：admin / analyst / viewer；REST 走 cookie 会话，敏感操作有审计。
 - 响应处置（结束进程、隔离主机）是系统中唯一能影响被监控主机的功能：
   改 `response/`、`grpcsvc/commands.go` 或 agent `respond/` 时，必须保持
-  三道闸门（全局开关、dry-run 默认、隔离放行清单）不被绕过。
+  闸门（全局开关 `RESPONSE_ENABLED`、隔离放行清单 `ISOLATION_ALLOW`、exec 的组权限 /
+  命令名单 / 人工审批、审计落库）不被绕过。指令一律真执行，不要重新引入演练模式。
 - 不要把密钥、证书提交进仓库；`certs/` 等产物只应存在于本地。
 - 推理服务在内网时注意 `NO_PROXY`：Go 默认读 `HTTP_PROXY`，内网 LLM 端点可能被错误代理。

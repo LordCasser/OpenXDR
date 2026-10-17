@@ -51,12 +51,6 @@ pub fn isolate(cmd: &Command) -> Outcome {
         Ok(v) => v,
         Err(e) => return Outcome::failed(e),
     };
-    if cmd.dry_run {
-        return Outcome::ok(format!(
-            "dry-run：将通过 WFP 隔离，仅放行 {}",
-            cmd.allow_endpoints.join(", ")
-        ));
-    }
     match replace(Some(&allowed)) {
         Ok(()) => Outcome::ok(format!(
             "已通过 WFP 隔离，放行 {}",
@@ -65,10 +59,7 @@ pub fn isolate(cmd: &Command) -> Outcome {
         Err(e) => Outcome::failed(e),
     }
 }
-pub fn unisolate(cmd: &Command) -> Outcome {
-    if cmd.dry_run {
-        return Outcome::ok("dry-run：将移除 OpenXDR WFP 与旧版隔离规则");
-    }
+pub fn unisolate(_cmd: &Command) -> Outcome {
     if let Err(e) = replace(None) {
         return Outcome::failed(e);
     }

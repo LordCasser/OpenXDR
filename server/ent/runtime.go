@@ -43,12 +43,8 @@ func init() {
 	agentsessionDescCreatedAt := agentsessionFields[1].Descriptor()
 	// agentsession.DefaultCreatedAt holds the default value on creation for the created_at field.
 	agentsession.DefaultCreatedAt = agentsessionDescCreatedAt.Default.(func() time.Time)
-	// agentsessionDescDryRun is the schema descriptor for dry_run field.
-	agentsessionDescDryRun := agentsessionFields[6].Descriptor()
-	// agentsession.DefaultDryRun holds the default value on creation for the dry_run field.
-	agentsession.DefaultDryRun = agentsessionDescDryRun.Default.(bool)
 	// agentsessionDescStatus is the schema descriptor for status field.
-	agentsessionDescStatus := agentsessionFields[8].Descriptor()
+	agentsessionDescStatus := agentsessionFields[7].Descriptor()
 	// agentsession.DefaultStatus holds the default value on creation for the status field.
 	agentsession.DefaultStatus = agentsessionDescStatus.Default.(string)
 	// agentsessionDescID is the schema descriptor for id field.
@@ -71,10 +67,6 @@ func init() {
 	approvalDescCreatedAt := approvalFields[1].Descriptor()
 	// approval.DefaultCreatedAt holds the default value on creation for the created_at field.
 	approval.DefaultCreatedAt = approvalDescCreatedAt.Default.(func() time.Time)
-	// approvalDescDryRun is the schema descriptor for dry_run field.
-	approvalDescDryRun := approvalFields[9].Descriptor()
-	// approval.DefaultDryRun holds the default value on creation for the dry_run field.
-	approval.DefaultDryRun = approvalDescDryRun.Default.(bool)
 	// approvalDescID is the schema descriptor for id field.
 	approvalDescID := approvalFields[0].Descriptor()
 	// approval.DefaultID holds the default value on creation for the id field.
@@ -113,24 +105,20 @@ func init() {
 	commandDescStatus := commandFields[3].Descriptor()
 	// command.DefaultStatus holds the default value on creation for the status field.
 	command.DefaultStatus = commandDescStatus.Default.(string)
-	// commandDescDryRun is the schema descriptor for dry_run field.
-	commandDescDryRun := commandFields[4].Descriptor()
-	// command.DefaultDryRun holds the default value on creation for the dry_run field.
-	command.DefaultDryRun = commandDescDryRun.Default.(bool)
 	// commandDescPid is the schema descriptor for pid field.
-	commandDescPid := commandFields[8].Descriptor()
+	commandDescPid := commandFields[7].Descriptor()
 	// command.DefaultPid holds the default value on creation for the pid field.
 	command.DefaultPid = commandDescPid.Default.(uint32)
 	// commandDescIssuedBy is the schema descriptor for issued_by field.
-	commandDescIssuedBy := commandFields[10].Descriptor()
+	commandDescIssuedBy := commandFields[9].Descriptor()
 	// command.DefaultIssuedBy holds the default value on creation for the issued_by field.
 	command.DefaultIssuedBy = commandDescIssuedBy.Default.(string)
 	// commandDescTimeoutMs is the schema descriptor for timeout_ms field.
-	commandDescTimeoutMs := commandFields[13].Descriptor()
+	commandDescTimeoutMs := commandFields[12].Descriptor()
 	// command.DefaultTimeoutMs holds the default value on creation for the timeout_ms field.
 	command.DefaultTimeoutMs = commandDescTimeoutMs.Default.(uint32)
 	// commandDescTruncated is the schema descriptor for truncated field.
-	commandDescTruncated := commandFields[17].Descriptor()
+	commandDescTruncated := commandFields[16].Descriptor()
 	// command.DefaultTruncated holds the default value on creation for the truncated field.
 	command.DefaultTruncated = commandDescTruncated.Default.(bool)
 	// commandDescID is the schema descriptor for id field.
@@ -371,12 +359,8 @@ func init() {
 	taskDescApprovalTimeoutSeconds := taskFields[8].Descriptor()
 	// task.DefaultApprovalTimeoutSeconds holds the default value on creation for the approval_timeout_seconds field.
 	task.DefaultApprovalTimeoutSeconds = taskDescApprovalTimeoutSeconds.Default.(int64)
-	// taskDescDryRun is the schema descriptor for dry_run field.
-	taskDescDryRun := taskFields[9].Descriptor()
-	// task.DefaultDryRun holds the default value on creation for the dry_run field.
-	task.DefaultDryRun = taskDescDryRun.Default.(bool)
 	// taskDescRemoved is the schema descriptor for removed field.
-	taskDescRemoved := taskFields[11].Descriptor()
+	taskDescRemoved := taskFields[10].Descriptor()
 	// task.DefaultRemoved holds the default value on creation for the removed field.
 	task.DefaultRemoved = taskDescRemoved.Default.(bool)
 	taskrunFields := schema.TaskRun{}.Fields()

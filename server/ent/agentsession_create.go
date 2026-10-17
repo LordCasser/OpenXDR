@@ -59,20 +59,6 @@ func (_c *AgentSessionCreate) SetModel(v string) *AgentSessionCreate {
 	return _c
 }
 
-// SetDryRun sets the "dry_run" field.
-func (_c *AgentSessionCreate) SetDryRun(v bool) *AgentSessionCreate {
-	_c.mutation.SetDryRun(v)
-	return _c
-}
-
-// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
-func (_c *AgentSessionCreate) SetNillableDryRun(v *bool) *AgentSessionCreate {
-	if v != nil {
-		_c.SetDryRun(*v)
-	}
-	return _c
-}
-
 // SetTitle sets the "title" field.
 func (_c *AgentSessionCreate) SetTitle(v string) *AgentSessionCreate {
 	_c.mutation.SetTitle(v)
@@ -196,10 +182,6 @@ func (_c *AgentSessionCreate) defaults() {
 		v := agentsession.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.DryRun(); !ok {
-		v := agentsession.DefaultDryRun
-		_c.mutation.SetDryRun(v)
-	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := agentsession.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -226,9 +208,6 @@ func (_c *AgentSessionCreate) check() error {
 	}
 	if _, ok := _c.mutation.Model(); !ok {
 		return &ValidationError{Name: "model", err: errors.New(`ent: missing required field "AgentSession.model"`)}
-	}
-	if _, ok := _c.mutation.DryRun(); !ok {
-		return &ValidationError{Name: "dry_run", err: errors.New(`ent: missing required field "AgentSession.dry_run"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "AgentSession.status"`)}
@@ -287,10 +266,6 @@ func (_c *AgentSessionCreate) createSpec() (*AgentSession, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Model(); ok {
 		_spec.SetField(agentsession.FieldModel, field.TypeString, value)
 		_node.Model = value
-	}
-	if value, ok := _c.mutation.DryRun(); ok {
-		_spec.SetField(agentsession.FieldDryRun, field.TypeBool, value)
-		_node.DryRun = value
 	}
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(agentsession.FieldTitle, field.TypeString, value)

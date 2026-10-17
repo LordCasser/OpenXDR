@@ -272,19 +272,18 @@ curl -X POST http://localhost:8080/api/intel/import \
 检测到攻击后可以直接下发处置指令：**结束进程**、**隔离主机**、**解除隔离**。
 指令走 agent 主动连出的双向通道，被监控主机不需要开监听端口。
 
-这是系统里唯一能对主机造成实际影响的功能，三道闸门默认全开：
+这是系统里唯一能对主机造成实际影响的功能。指令一律真执行，没有演练模式，闸门默认全开：
 
 | 闸门 | 行为 |
 |---|---|
 | 全局开关 | `RESPONSE_ENABLED` 默认 false，不开则一律拒绝下发 |
-| 演练优先 | 不显式传 `dryRun: false` 就只报告"将会做什么"，不产生任何影响 |
 | 隔离自保 | 未配置 `ISOLATION_ALLOW` 时 agent 拒绝隔离——隔离后收不到解除指令只能人工上机 |
 
 ```bash
 RESPONSE_ENABLED=true ISOLATION_ALLOW=<server>:8081 docker compose up -d
 ```
 
-每条指令连同下发者、演练与否、执行结果一并落库，可在事件详情页查看。
+每条指令连同下发者、执行结果一并落库，可在事件详情页查看。
 隔离在 Linux 用 nftables 独立表实现（不触碰主机原有规则），Windows 使用独立 WFP 子层：管理端点许可优先于本子层的默认阻断，规则以事务原子更新并持久化。
 Windows 放行地址必须为数字 IP 或 IP:端口（IPv6 为 `[地址]:端口`），最多 128 项；
 解除隔离同时清理旧版 `OpenXDR-Isolation-*` 规则。部署前需在有本地控制台的 Windows 测试机
@@ -397,10 +396,9 @@ server 全部通过环境变量配置，均有默认值：
 | `AGENT_AUTO_UPGRADE` | `true` | 在线 agent 与安装包哈希不同时自动升级，`false` 关闭 |
 | `TRUSTED_PROXIES` | 空 | 可信反向代理的地址或网段（逗号分隔）。只有来自这些地址的请求才采信 `X-Forwarded-For`，从右往左取第一个不可信地址作为客户端，登录退避与审计按它记来源；留空不还原 |
 | `INTEL_FEED_INTERVAL_HOURS` | `6` | 情报订阅同步周期（小时），订阅条目有效期为它的 8 倍 |
-| `RESPONSE_ENABLED` | `false` | 是否允许下发响应指令 |
+| `RESPONSE_ENABLED` | `false` | 是否允许下发响应指令；开启后人工处置、Pi 命令、定时任务与自动响应下发的指令都会真执行 |
 | `ISOLATION_ALLOW` | 空 | 隔离主机时放行的地址，必须包含 server 的 gRPC 端点 |
-| `AUTO_RESPONSE_ENABLED` | `false` | AI 研判高置信度 malicious 时自动隔离涉事主机（依赖 `RESPONSE_ENABLED`） |
-| `AUTO_RESPONSE_LIVE` | `false` | 自动隔离真执行；默认只 dry-run 演练并留痕 |
+| `AUTO_RESPONSE_ENABLED` | `false` | AI 研判高置信度 malicious 时真实隔离涉事主机（依赖 `RESPONSE_ENABLED`，每次决策落审计） |
 | `AUTO_RESPONSE_MIN_CONFIDENCE` | `90` | 触发自动响应的置信度门槛 |
 | `AUTO_RESPONSE_EXEMPT` | 空 | 逗号分隔的主机名，绝不自动隔离 |
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测的按资产学习期 |

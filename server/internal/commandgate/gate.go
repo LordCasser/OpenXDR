@@ -146,7 +146,7 @@ func (g *Gate) Issue(ctx context.Context, req Request) (out *ent.Command, retErr
 		return nil, errors.New("命令超时不可超过 300 秒")
 	}
 	// 请求先持久化审计，包括随后因授权、名单或超时被拒绝的请求。
-	detail := fmt.Sprintf("origin=%s group=%s dry_run=%t cmd=%s", req.Origin, req.GroupID, req.Command.DryRun, *req.Command.Cmd)
+	detail := fmt.Sprintf("origin=%s group=%s cmd=%s", req.Origin, req.GroupID, *req.Command.Cmd)
 	// 审计里写用户名，与其它审计记录一致；查不到用户时留 ID，授权随后会拒绝
 	who := req.UserID.String()
 	if req.System {
@@ -219,7 +219,7 @@ func (g *Gate) await(ctx context.Context, req Request, username string) error {
 	}
 	a, err := g.DB.Approval.Create().SetGroupID(req.GroupID).SetNillableSessionID(req.SessionID).
 		SetAssetID(req.Command.AssetID).SetRequestedBy(username).SetOrigin(approval.Origin(req.Origin)).
-		SetCmd(*req.Command.Cmd).SetTimeoutMs(req.Command.TimeoutMS).SetDryRun(req.Command.DryRun).SetExpiresAt(expires).Save(ctx)
+		SetCmd(*req.Command.Cmd).SetTimeoutMs(req.Command.TimeoutMS).SetExpiresAt(expires).Save(ctx)
 	if err != nil {
 		return err
 	}

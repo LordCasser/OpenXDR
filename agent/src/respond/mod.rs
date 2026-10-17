@@ -1,10 +1,9 @@
 //! 响应执行器：接收 server 下发的指令并执行。
 //!
-//! 这是 agent 里唯一会改变主机状态的部分。结束进程与隔离两条铁律：
-//!   - dry_run 只报告"将会做什么"，绝不产生任何实际影响
-//!   - 隔离主机必须放行 server 通道，否则解除隔离的指令再也送不进来
+//! 这是 agent 里唯一会改变主机状态的部分，收到的指令一律真执行（不再有演练）。
+//! 铁律：隔离主机必须放行 server 通道，否则解除隔离的指令再也送不进来。
 //!
-//! exec 无条件执行平台下发的命令（dry_run 同样只报告），放行控制在平台侧。
+//! exec 无条件执行平台下发的命令，放行控制在平台侧。
 
 use crate::pb::{Command, CommandKind, CommandResult, command_result::Status};
 
@@ -94,12 +93,7 @@ mod tests {
         Command {
             id: "cmd-1".to_string(),
             kind: kind as i32,
-            dry_run: false,
-            process_guid: String::new(),
-            pid: 0,
-            allow_endpoints: Vec::new(),
-            cmd: String::new(),
-            timeout_ms: 0,
+            ..Default::default()
         }
     }
 
@@ -128,29 +122,7 @@ mod tests {
         assert!(r.detail.contains("不存在"));
     }
 
-    // 以下用例依赖 Linux 的 /proc 与 nft 语义（CI 即 Linux，macOS 上隔离为 unsupported）
-    #[cfg(target_os = "linux")]
-    #[tokio::test]
-    async fn kill_dry_run_uses_own_pid() {
-        // dry-run 不会真杀进程，用测试进程自己的 pid 保证 /proc 下可读
-        let mut c = cmd(CommandKind::KillProcess);
-        c.dry_run = true;
-        // 独立短命测试进程，避免与并发身份测试互相覆盖。
-        let mut child = std::process::Command::new("sleep")
-            .arg("10")
-            .spawn()
-            .unwrap();
-        c.pid = child.id();
-        let guid = uuid::Uuid::new_v4();
-        crate::process_identity::record(c.pid, guid);
-        c.process_guid = guid.to_string();
-        let r = execute("agent-1", &c).await;
-        assert_eq!(r.status, Status::Succeeded as i32);
-        assert!(r.detail.contains("dry-run"));
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-
+    // 依赖 Linux 的隔离实现（macOS 上隔离为 unsupported）
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn isolate_without_allowlist_refused() {
@@ -159,27 +131,6 @@ mod tests {
         assert_eq!(r.status, Status::Failed as i32);
         assert!(r.detail.contains("拒绝"));
         assert!(r.detail.contains("放行"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[tokio::test]
-    async fn isolate_dry_run_reports_without_effect() {
-        let mut c = cmd(CommandKind::IsolateHost);
-        c.dry_run = true;
-        c.allow_endpoints = vec!["10.0.0.1:443".to_string()];
-        let r = execute("agent-1", &c).await;
-        assert_eq!(r.status, Status::Succeeded as i32);
-        assert!(r.detail.contains("dry-run"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[tokio::test]
-    async fn unisolate_dry_run_reports() {
-        let mut c = cmd(CommandKind::UnisolateHost);
-        c.dry_run = true;
-        let r = execute("agent-1", &c).await;
-        assert_eq!(r.status, Status::Succeeded as i32);
-        assert!(r.detail.contains("dry-run"));
     }
 
     fn exec(line: &str) -> Command {
@@ -193,16 +144,6 @@ mod tests {
         let r = execute("agent-1", &exec("")).await;
         assert_eq!(r.status, Status::Failed as i32);
         assert!(r.detail.contains("未指定命令"));
-    }
-
-    #[tokio::test]
-    async fn exec_dry_run_reports_without_running() {
-        let mut c = exec("echo hi");
-        c.dry_run = true;
-        let r = execute("agent-1", &c).await;
-        assert_eq!(r.status, Status::Succeeded as i32);
-        assert!(r.detail.contains("dry-run"));
-        assert!(r.stdout.is_empty());
     }
 
     // 以下用例依赖 sh 语义

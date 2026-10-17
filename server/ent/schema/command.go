@@ -23,7 +23,6 @@ func (Command) Fields() []ent.Field {
 		field.String("kind"),
 		// pending 待下发 / sent 已下发待回执 / unknown 投递结果未知 / succeeded / failed / unsupported
 		field.String("status").Default("pending"),
-		field.Bool("dry_run").Default(true),
 		field.UUID("asset_id", uuid.UUID{}),
 		field.UUID("incident_id", uuid.UUID{}).Optional().Nillable(),
 		field.UUID("process_guid", uuid.UUID{}).Optional().Nillable(),

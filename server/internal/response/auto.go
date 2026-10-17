@@ -1,7 +1,8 @@
 // 自动响应：高置信度 malicious 的研判结论自动隔离涉事主机。
 //
-// 三道保险，一道不少：
-//   - 默认 dry-run，真隔离必须显式配置 AUTO_RESPONSE_LIVE
+// 保险一道不少：
+//   - 显式配置 AUTO_RESPONSE_ENABLED 才挂钩子，且仍受 RESPONSE_ENABLED 总开关约束；隔离一律真执行
+//   - 只有 malicious 且置信度达到门槛才动
 //   - 白名单主机绝不自动隔离——误杀一台生产机的代价高于慢五分钟
 //   - 每次决策（含跳过）都进审计，事后能还原"为什么动了/没动"
 package response
@@ -24,8 +25,6 @@ type Auto struct {
 	Hub *Hub
 	// 置信度门槛：verdict 为 malicious 且 confidence 达标才动
 	MinConfidence int
-	// false 时全部按 dry-run 下发
-	Live bool
 	// 绝不自动隔离的主机名
 	Exempt map[string]bool
 	// 隔离时放行的地址，必须含 server 自身
@@ -86,22 +85,17 @@ func (a *Auto) isolate(ctx context.Context, incidentID uuid.UUID, asset *ent.Ass
 	cmd, err := a.Hub.Issue(ctx, Request{
 		AssetID:        asset.ID,
 		Kind:           "isolate_host",
-		DryRun:         !a.Live,
 		IncidentID:     &incidentID,
 		IssuedBy:       "auto",
 		AllowEndpoints: a.AllowEndpoints,
 	})
-	mode := "dry-run"
-	if a.Live {
-		mode = "live"
-	}
 	if err != nil {
 		audit.System(ctx, db, "auto_response_failed", incidentID.String(),
 			asset.Hostname+": "+err.Error())
 		return
 	}
 	audit.System(ctx, db, "auto_response", cmd.ID.String(),
-		"isolate_host "+asset.Hostname+" ("+mode+", confidence "+strconv.Itoa(confidence)+")")
+		"isolate_host "+asset.Hostname+" (confidence "+strconv.Itoa(confidence)+")")
 	slog.Info("自动响应已下发隔离", "incident", incidentID,
-		"host", asset.Hostname, "mode", mode, "confidence", confidence)
+		"host", asset.Hostname, "confidence", confidence)
 }

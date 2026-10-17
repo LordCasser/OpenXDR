@@ -30,7 +30,7 @@ message AgentChunk {
 message Command {
   string id = 1;          // UUID，结果按此关联
   CommandKind kind = 2;
-  // 只做不改：dry_run 时执行器只报告"将会做什么"，不产生任何实际影响
+  // 已废弃：平台不再下发演练，恒为 false；agent 忽略此字段。保留字段号兼容已部署的 agent
   bool dry_run = 3;
   // KILL_PROCESS 用：优先按 GUID 校验，pid 会被系统复用
   string process_guid = 4;

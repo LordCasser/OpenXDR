@@ -10,9 +10,6 @@ pub fn kill(cmd: &Command) -> Outcome {
         Ok(target) => target,
         Err(e) => return Outcome::failed(e),
     };
-    if cmd.dry_run {
-        return Outcome::ok(format!("dry-run：将结束进程 {}", cmd.pid));
-    }
     match target.terminate() {
         Ok(()) => Outcome::ok(format!("已结束进程 {}", cmd.pid)),
         Err(e) => Outcome::failed(format!("结束进程 {} 失败: {e}", cmd.pid)),

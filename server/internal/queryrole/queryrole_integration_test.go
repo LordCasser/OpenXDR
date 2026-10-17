@@ -80,3 +80,64 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 		t.Error("回收后不应还能登录")
 	}
 }
+
+// 删遗留 dry_run 列：旧版组视图挡着时报错不删，视图重建后删干净；重复执行无害，组视图照常可查。
+func TestDropDryRunAfterViewRebuild(t *testing.T) {
+	ctx, client := testdb.New(t)
+	dsn := os.Getenv("INTEGRATION_DATABASE_URL")
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	g := client.Group.Create().SetName("g").SaveX(ctx)
+	a := client.Asset.Create().SetHostname("g1").SetGroupID(g.ID).SaveX(ctx)
+	p := &Provisioner{DB: db, Client: client, BaseDSN: dsn}
+	t.Cleanup(func() { p.Drop(ctx, g.ID) })
+	if err := p.Ensure(ctx, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	// 模拟升级前：四张表带 dry_run 列，组视图还是旧版定义
+	schema, _ := names(g.ID)
+	for _, stmt := range []string{
+		`ALTER TABLE commands ADD COLUMN IF NOT EXISTS dry_run boolean NOT NULL DEFAULT true`,
+		`ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS dry_run boolean NOT NULL DEFAULT true`,
+		`ALTER TABLE approvals ADD COLUMN IF NOT EXISTS dry_run boolean NOT NULL DEFAULT true`,
+		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS dry_run boolean NOT NULL DEFAULT true`,
+		`DROP VIEW ` + schema + `.commands`,
+		`CREATE VIEW ` + schema + `.commands AS SELECT id, status, dry_run FROM public.commands`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := DropDryRun(ctx, db); err == nil {
+		t.Fatal("旧版视图还引用 commands.dry_run 时应报错")
+	}
+
+	if err := p.Ensure(ctx, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := DropDryRun(ctx, db); err != nil {
+			t.Fatalf("视图重建后应能删列且可重复执行：%v", err)
+		}
+	}
+	var left int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.columns
+  WHERE table_schema = current_schema() AND column_name = 'dry_run'`).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("dry_run 列应全部删除，剩 %d %v", left, err)
+	}
+
+	client.Command.Create().SetKind("exec").SetAssetID(a.ID).SetIssuedBy("admin").SaveX(ctx)
+	ro, err := sql.Open("pgx", p.URL(ctx, g.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ro.Close() })
+	var n int
+	if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM commands`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("删列后组视图应照常可查：%d %v", n, err)
+	}
+}

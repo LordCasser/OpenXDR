@@ -52,7 +52,6 @@ type reportCommand struct {
 	CreatedAt time.Time
 	Kind      string
 	Status    string
-	DryRun    bool
 	IssuedBy  string
 	Detail    string
 }
@@ -144,14 +143,10 @@ func renderReport(d reportData) string {
 	if len(d.Commands) == 0 {
 		b.WriteString("未下发处置指令。\n\n")
 	} else {
-		b.WriteString("| 时间 | 动作 | 模式 | 状态 | 操作人 | 结果 |\n|---|---|---|---|---|---|\n")
+		b.WriteString("| 时间 | 动作 | 状态 | 操作人 | 结果 |\n|---|---|---|---|---|\n")
 		for _, c := range d.Commands {
-			mode := "真实执行"
-			if c.DryRun {
-				mode = "演练"
-			}
-			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n",
-				c.CreatedAt.Format("01-02 15:04:05"), c.Kind, mode, c.Status,
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n",
+				c.CreatedAt.Format("01-02 15:04:05"), c.Kind, c.Status,
 				c.IssuedBy, mdCell(c.Detail))
 		}
 		b.WriteString("\n")
@@ -308,7 +303,7 @@ func collectReport(r *http.Request, db *ent.Client, rules *sigma.Engine, id uuid
 	for _, c := range cmds {
 		rc := reportCommand{
 			CreatedAt: c.CreatedAt, Kind: c.Kind, Status: c.Status,
-			DryRun: c.DryRun, IssuedBy: c.IssuedBy,
+			IssuedBy: c.IssuedBy,
 		}
 		if c.Detail != nil {
 			rc.Detail = *c.Detail

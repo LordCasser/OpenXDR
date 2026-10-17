@@ -18,18 +18,18 @@
 | `RESPONSE_ENABLED` | `false` | 现有响应总开关，exec 同样受其控制 |
 
 Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/report，以及已配置组的 query。
-没有新增对外工具执行端口，身份、组、来源和 dry-run 均由 Go 绑定，模型不能修改。
+没有新增对外工具执行端口，身份、组和来源均由 Go 绑定，模型不能修改；命令一律真执行，没有演练模式。
 每轮上下文包含本组最多 200 台资产的 UUID、主机名和 OS；超出会标注截断。
 每轮最多「组内主机数 × 免审批命令数 + 遗留待办数 + 32」次模型调用（32–256），预算写进系统提示让模型留出提交报告的余量，每次输出最多 8192 token。exec 送入模型的 stdout/stderr 各最多 16 KiB，截断标记为 `truncated=true`，Command 记录仍保留原始回执。GLM 显式关闭模板 thinking。未实现费用预算或自动历史压缩。
 
 ## 前端接口
 
 所有请求使用现有会话 cookie 与同源保护。请求字段采用下表的 camelCase；直接返回的
-Ent 实体字段采用 snake_case（例如 `group_id`、`dry_run`、`created_at`）。
+Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 
 | 接口 | 请求 | 权限与响应 |
 |---|---|---|
-| `POST /api/agent-sessions` | `{groupId,title?,dryRun?}` | 组 analyst；创建 idle 会话，默认 dry-run，返回 201 + 实体 |
+| `POST /api/agent-sessions` | `{groupId,title?}` | 组 analyst；创建 idle 会话，返回 201 + 实体 |
 | `GET /api/agent-sessions?groupId=...` | — | 组 viewer；最近 100 个会话 |
 | `GET /api/agent-sessions/{id}` | — | 组 viewer；单个会话状态与元数据 |
 | `GET /api/agent-sessions/{id}/messages?afterSeq=0` | — | 组 viewer；seq 升序，每页最多 1000 条，下一页传最后一条 seq |
@@ -57,8 +57,6 @@ SSE 用 fetch 读取 POST 响应，不能直接用浏览器 EventSource：
 轮数耗尽（`max_turns`）时服务端先在同一会话上带全部历史续一次收尾（最多 4 次调用）：
 对话会话不给工具，只写总结；任务会话只给 `report` 并要求提交报告；未覆盖的检查项标「未验证」。
 收尾消息照常入库与推流，`done` 返回的是收尾那次的结果。
-dry-run 会话的 exec 结果只给模型 `{executed:false,dry_run:true,cmd,note}`，不带退出码与输出，
-避免模型把演练当成主机实况；命令表里的回执不变。
 客户端断开会终止推理与审批等待，已下发的命令不会因此撤销。
 同一会话只允许一个 running 请求；失败会话不自动重试，需检查命令记录后另建会话。
 进程异常退出导致遗留 running 状态时，不自动恢复或重放主机操作。
@@ -78,16 +76,16 @@ dry-run 会话的 exec 结果只给模型 `{executed:false,dry_run:true,cmd,note
   命令的第一个词在 `/usr/bin`、`/bin`、`/usr/sbin`、`/sbin` 间视为同一程序：名单写 `df -hT`，
   `/usr/bin/df -hT` 也命中，反之亦然；deny 名单同理。其他路径（`./x`、`/opt/x`）只认原样。
   **这不是 shell AST 解析**；管理员配置 `.*` 等宽泛表达式就会扩大放行范围。
-- 名单命中也不会越过组权限、`RESPONSE_ENABLED` 或 dry-run。审批只批准原始资产、
-  命令、超时和 dry-run 的组合，不能把演练升级成真执行。
+- 名单命中也不会越过组权限或 `RESPONSE_ENABLED`。审批只批准原始资产、命令与超时的组合，
+  批准后按原样真执行。
 - 审批状态：pending → approved/rejected；approved 只能原子消费一次变为 consumed；
   超时变 expired，客户端取消变 cancelled。过期批准不能消费。
 - 每个有效格式的 exec 请求先写审计；名单变更与审批决定均与审计同事务提交。
   命令下发与最终回执沿用现有 Command 表。
 
 旧 `POST /api/commands` 的 `kind=exec` 已接入相同名单与审批，origin 固定 human，
-默认 dry-run 保留；它仍是阻塞 HTTP 请求，另开审批界面批准后才返回。
-结束进程与隔离/解除隔离继续走现有三道闸门。
+同样真执行；它仍是阻塞 HTTP 请求，另开审批界面批准后才返回。
+结束进程与隔离/解除隔离继续走 `RESPONSE_ENABLED` 与 `ISOLATION_ALLOW` 闸门。
 等待回执超时意味着执行结果未知，不代表命令没有执行，不自动再次下发。
 EXEC 在重连时不自动补发，避免原命令已执行但回执丢失造成重复执行；原有响应动作维持补发。
 跨节点 EXEC 投递确认失败记录为 `unknown`，不能据此断言执行失败。
@@ -146,7 +144,6 @@ schedule: "0 2 * * *"          # 五段 cron，支持 @daily 与 CRON_TZ= 前缀
 model: ""                      # 空用 PI_MODEL
 targets: { group: "*" }        # "*" 每组各跑一次，或写组名
 approval_timeout: 10m          # 名单外命令的审批等待，超时按拒绝
-dry_run: false                 # 不写默认 true（演练）
 prompt: |
   ……
 ```
@@ -156,8 +153,8 @@ prompt: |
   停机或停用期间错过的周期只补跑一次。空组不跑；同组上一轮未结束则跳过本轮。
   接管时遗留的 running 记为失败，不重放。
 - 任务会话 `kind=task`、`initiator=system`。**系统身份不是用户**：审批闸门对它不查用户与组内角色，
-  但要求会话是本组任务会话，资产作用域、名单（按 AI 来源走白名单）、审批、`RESPONSE_ENABLED`
-  与 dry-run 照常生效；审批人看到的发起人为 `system`。用户名 `system` 保留，不能创建。
+  但要求会话是本组任务会话，资产作用域、名单（按 AI 来源走白名单）、审批与
+  `RESPONSE_ENABLED` 照常生效，命令真执行；审批人看到的发起人为 `system`。用户名 `system` 保留，不能创建。
 - 截断、收尾后仍轮数耗尽或会话结束时没有提交报告，一律记为失败。失败后立即换一个新会话重跑一次
   （同一行运行记录改挂新会话，失败那次的会话与错误留在会话历史里）；超时或失去租约不重跑。
   重跑仍失败才算这一轮失败。失败与报告都经通知配置外发

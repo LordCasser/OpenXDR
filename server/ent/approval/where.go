@@ -90,11 +90,6 @@ func TimeoutMs(v uint32) predicate.Approval {
 	return predicate.Approval(sql.FieldEQ(FieldTimeoutMs, v))
 }
 
-// DryRun applies equality check predicate on the "dry_run" field. It's identical to DryRunEQ.
-func DryRun(v bool) predicate.Approval {
-	return predicate.Approval(sql.FieldEQ(FieldDryRun, v))
-}
-
 // ExpiresAt applies equality check predicate on the "expires_at" field. It's identical to ExpiresAtEQ.
 func ExpiresAt(v time.Time) predicate.Approval {
 	return predicate.Approval(sql.FieldEQ(FieldExpiresAt, v))
@@ -468,16 +463,6 @@ func TimeoutMsLT(v uint32) predicate.Approval {
 // TimeoutMsLTE applies the LTE predicate on the "timeout_ms" field.
 func TimeoutMsLTE(v uint32) predicate.Approval {
 	return predicate.Approval(sql.FieldLTE(FieldTimeoutMs, v))
-}
-
-// DryRunEQ applies the EQ predicate on the "dry_run" field.
-func DryRunEQ(v bool) predicate.Approval {
-	return predicate.Approval(sql.FieldEQ(FieldDryRun, v))
-}
-
-// DryRunNEQ applies the NEQ predicate on the "dry_run" field.
-func DryRunNEQ(v bool) predicate.Approval {
-	return predicate.Approval(sql.FieldNEQ(FieldDryRun, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

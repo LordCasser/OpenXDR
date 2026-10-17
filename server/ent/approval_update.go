@@ -154,20 +154,6 @@ func (_u *ApprovalUpdate) AddTimeoutMs(v int32) *ApprovalUpdate {
 	return _u
 }
 
-// SetDryRun sets the "dry_run" field.
-func (_u *ApprovalUpdate) SetDryRun(v bool) *ApprovalUpdate {
-	_u.mutation.SetDryRun(v)
-	return _u
-}
-
-// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
-func (_u *ApprovalUpdate) SetNillableDryRun(v *bool) *ApprovalUpdate {
-	if v != nil {
-		_u.SetDryRun(*v)
-	}
-	return _u
-}
-
 // SetStatus sets the "status" field.
 func (_u *ApprovalUpdate) SetStatus(v approval.Status) *ApprovalUpdate {
 	_u.mutation.SetStatus(v)
@@ -324,9 +310,6 @@ func (_u *ApprovalUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedTimeoutMs(); ok {
 		_spec.AddField(approval.FieldTimeoutMs, field.TypeUint32, value)
-	}
-	if value, ok := _u.mutation.DryRun(); ok {
-		_spec.SetField(approval.FieldDryRun, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(approval.FieldStatus, field.TypeEnum, value)
@@ -488,20 +471,6 @@ func (_u *ApprovalUpdateOne) SetNillableTimeoutMs(v *uint32) *ApprovalUpdateOne 
 // AddTimeoutMs adds value to the "timeout_ms" field.
 func (_u *ApprovalUpdateOne) AddTimeoutMs(v int32) *ApprovalUpdateOne {
 	_u.mutation.AddTimeoutMs(v)
-	return _u
-}
-
-// SetDryRun sets the "dry_run" field.
-func (_u *ApprovalUpdateOne) SetDryRun(v bool) *ApprovalUpdateOne {
-	_u.mutation.SetDryRun(v)
-	return _u
-}
-
-// SetNillableDryRun sets the "dry_run" field if the given value is not nil.
-func (_u *ApprovalUpdateOne) SetNillableDryRun(v *bool) *ApprovalUpdateOne {
-	if v != nil {
-		_u.SetDryRun(*v)
-	}
 	return _u
 }
 
@@ -691,9 +660,6 @@ func (_u *ApprovalUpdateOne) sqlSave(ctx context.Context) (_node *Approval, err 
 	}
 	if value, ok := _u.mutation.AddedTimeoutMs(); ok {
 		_spec.AddField(approval.FieldTimeoutMs, field.TypeUint32, value)
-	}
-	if value, ok := _u.mutation.DryRun(); ok {
-		_spec.SetField(approval.FieldDryRun, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(approval.FieldStatus, field.TypeEnum, value)

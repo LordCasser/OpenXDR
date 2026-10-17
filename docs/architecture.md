@@ -49,7 +49,7 @@ agent (Rust)                    sensor (Rust)          syslog
 │ ueba: 新进程首次出现 → 合成 low 告警 xdr:new-process 进管线   │
 │ triage: open incident → LLM 研判 → verdict                  │
 │ notify: 研判后事件 → webhook（benign 不推，可设阈值）          │
-│ response: 研判高置信度 malicious → 自动隔离（四道保险）        │
+│ response: 研判高置信度 malicious → 自动隔离（多道保险）        │
 │ janitor: 过期事件/会话清理（告警引用的证据不删）               │
 └─────────────────────────────────────────────────────────────┘
      ▼
@@ -107,8 +107,8 @@ incident 的 status/graph 随关联与研判演进。janitor 只删无告警引�
 模型输出视为不可信输入，AI 不能改检测面——规则只来自规则目录。详见 [detection.md](detection.md)。
 
 **危险能力默认关闭且多道闸门。** 响应处置（结束进程/主机隔离）有
-`RESPONSE_ENABLED`、dry-run 默认、`ISOLATION_ALLOW` 隔离自保三道闸门；
-自动响应另有四道保险（启用开关、dry-run 默认、主机白名单、全程审计）。
+`RESPONSE_ENABLED` 全局开关、`ISOLATION_ALLOW` 隔离自保两道闸门，指令一律真执行；
+自动响应另有保险（启用开关、置信度门槛、主机白名单、全程审计）。
 
 ## 身份与安全
 

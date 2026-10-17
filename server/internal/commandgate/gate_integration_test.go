@@ -38,7 +38,7 @@ func setup(t *testing.T) fixture {
 	ch := hub.Attach(agent)
 	t.Cleanup(func() { hub.Detach(agent, ch) })
 	cmd := "whoami"
-	return fixture{ctx, db, &Gate{DB: db, Hub: hub, ApprovalTimeout: 2 * time.Second}, Request{UserID: actor.ID, GroupID: group.ID, Origin: "ai", Command: response.Request{Kind: "exec", AssetID: asset.ID, Cmd: &cmd, DryRun: true}}, admin, ch}
+	return fixture{ctx, db, &Gate{DB: db, Hub: hub, ApprovalTimeout: 2 * time.Second}, Request{UserID: actor.ID, GroupID: group.ID, Origin: "ai", Command: response.Request{Kind: "exec", AssetID: asset.ID, Cmd: &cmd}}, admin, ch}
 }
 func waitApproval(t *testing.T, f fixture) *ent.Approval {
 	t.Helper()
@@ -98,7 +98,7 @@ func TestApprovalLifecycle(t *testing.T) {
 					t.Fatal(err)
 				}
 				cmd := <-f.ch
-				if !cmd.DryRun || cmd.Cmd != "whoami" {
+				if cmd.Cmd != "whoami" {
 					t.Fatalf("审批命令变形: %+v", cmd)
 				}
 			} else {

@@ -34,8 +34,6 @@ type Approval struct {
 	Cmd string `json:"cmd,omitempty"`
 	// TimeoutMs holds the value of the "timeout_ms" field.
 	TimeoutMs uint32 `json:"timeout_ms,omitempty"`
-	// DryRun holds the value of the "dry_run" field.
-	DryRun bool `json:"dry_run,omitempty"`
 	// Status holds the value of the "status" field.
 	Status approval.Status `json:"status,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
@@ -54,8 +52,6 @@ func (*Approval) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case approval.FieldSessionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case approval.FieldDryRun:
-			values[i] = new(sql.NullBool)
 		case approval.FieldTimeoutMs:
 			values[i] = new(sql.NullInt64)
 		case approval.FieldRequestedBy, approval.FieldOrigin, approval.FieldCmd, approval.FieldStatus, approval.FieldDecidedBy:
@@ -133,12 +129,6 @@ func (_m *Approval) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field timeout_ms", values[i])
 			} else if value.Valid {
 				_m.TimeoutMs = uint32(value.Int64)
-			}
-		case approval.FieldDryRun:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field dry_run", values[i])
-			} else if value.Valid {
-				_m.DryRun = value.Bool
 			}
 		case approval.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -227,9 +217,6 @@ func (_m *Approval) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("timeout_ms=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TimeoutMs))
-	builder.WriteString(", ")
-	builder.WriteString("dry_run=")
-	builder.WriteString(fmt.Sprintf("%v", _m.DryRun))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Status))

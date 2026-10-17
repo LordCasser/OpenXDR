@@ -45,7 +45,7 @@ func TestIssueGateways(t *testing.T) {
 	}
 
 	// 闸门三：agent 在线但未连接指令通道（无 Router）→ 记 failed 而不是假装成功
-	cmd, err := on.Issue(ctx, Request{AssetID: asset.ID, Kind: "isolate_host", DryRun: true, IssuedBy: "admin"})
+	cmd, err := on.Issue(ctx, Request{AssetID: asset.ID, Kind: "isolate_host", IssuedBy: "admin"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,9 +58,6 @@ func TestIssueGateways(t *testing.T) {
 	}
 	if stored.CompletedAt == nil {
 		t.Error("failed 指令应记录完成时间")
-	}
-	if !stored.DryRun {
-		t.Error("默认 dry-run，不允许裸执行")
 	}
 }
 
@@ -103,12 +100,12 @@ func TestExecRoundTrip(t *testing.T) {
 		t.Fatalf("exec 结果未完整回写: %+v", got)
 	}
 
-	kill, err := hub.Issue(ctx, Request{AssetID: asset.ID, Kind: "kill_process", DryRun: true, PID: 1, IssuedBy: "admin"})
+	kill, err := hub.Issue(ctx, Request{AssetID: asset.ID, Kind: "kill_process", PID: 1, IssuedBy: "admin"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	<-ch
-	hub.Complete(ctx, agentID, &pb.CommandResult{CommandId: kill.ID.String(), Status: pb.CommandResult_SUCCEEDED, Detail: "dry-run"})
+	hub.Complete(ctx, agentID, &pb.CommandResult{CommandId: kill.ID.String(), Status: pb.CommandResult_SUCCEEDED, Detail: "已结束 pid 1"})
 	if got, _ := client.Command.Get(ctx, kill.ID); got.ExitCode != nil {
 		t.Errorf("非 exec 指令不应写退出码: %v", *got.ExitCode)
 	}
@@ -122,7 +119,7 @@ func TestResultBoundToAgentAndFirstTerminal(t *testing.T) {
 	h := NewHub(db, true)
 	ch := h.Attach(agentID)
 	line := "whoami"
-	cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line, DryRun: true})
+	cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +167,7 @@ func TestDeliveryCannotOverwriteEarlyResult(t *testing.T) {
 			h := NewHub(db, true)
 			h.Router = completingRouter{hub: h, fail: fail, complete: true}
 			line := "whoami"
-			cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line, DryRun: true})
+			cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -187,7 +184,7 @@ func TestExecUnknownDeliveryAndNoReplay(t *testing.T) {
 	h := NewHub(db, true)
 	h.Router = completingRouter{hub: h, fail: true}
 	line := "whoami"
-	cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line, DryRun: true})
+	cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,12 +192,12 @@ func TestExecUnknownDeliveryAndNoReplay(t *testing.T) {
 		t.Fatalf("不能把未知投递当作失败: %+v", cmd)
 	}
 	ch := h.Attach(id)
-	exec, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line, DryRun: true})
+	exec, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
 	if err != nil {
 		t.Fatal(err)
 	}
 	<-ch
-	kill, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "kill_process", DryRun: true})
+	kill, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "kill_process"})
 	if err != nil {
 		t.Fatal(err)
 	}

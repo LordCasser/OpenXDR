@@ -262,12 +262,10 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 
 ### 闸门与防护（改这块代码时全部不得绕过）
 
-三道闸门：
+指令一律真执行，没有演练模式。两道闸门：
 
 1. **全局开关** `RESPONSE_ENABLED`，否则一律拒绝下发（`hub.go:35-40,75-77`）
-2. **dry-run 默认**：API 不显式传 `dryRun:false` 就只报告"将会做什么"
-   （`api/commands.go:39-44,58-62`）
-3. **隔离自保**：未配置 `ISOLATION_ALLOW` 时 agent 拒绝隔离——隔离后收不到
+2. **隔离自保**：未配置 `ISOLATION_ALLOW` 时 agent 拒绝隔离——隔离后收不到
    解除指令只能人工上机；隔离指令自动附带放行清单
    （`main.go:203-211`、`api/commands.go:73-76`）
 
@@ -275,15 +273,14 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 断线重连补发未回执指令；指令流冒领防护 `verifyAgentID`；结果回写必须对上
 库里的 command_id（`hub.go:25-215`、`grpcsvc/commands.go:29-44`）。
 
-### 自动响应四道保险（`response/auto.go`）
+### 自动响应保险（`response/auto.go`）
 
 挂 `OnVerdict` 钩子，verdict=malicious 且 confidence ≥
 `AUTO_RESPONSE_MIN_CONFIDENCE`（默认 90）时触发：
 
-1. `AUTO_RESPONSE_ENABLED=true` 才挂钩子
-2. `AUTO_RESPONSE_LIVE` 未 true 则全部 dry-run
-3. `AUTO_RESPONSE_EXEMPT` 主机名白名单绝不隔离，跳过也记审计
-4. 每次决策（含跳过）落审计
+1. `AUTO_RESPONSE_ENABLED=true` 才挂钩子，隔离真执行，仍受 `RESPONSE_ENABLED` 约束
+2. `AUTO_RESPONSE_EXEMPT` 主机名白名单绝不隔离，跳过也记审计
+3. 每次决策（含跳过）落审计
 
 同一 incident 同一资产只自动隔离一次（查 issued_by="auto" 的 isolate_host），
 重开重判不重复隔离（`auto.go:28-104`）。
@@ -370,8 +367,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 | `AI_INTERVAL_SECONDS` | `30` | 研判批次周期 |
 | `RESPONSE_ENABLED` | `false` | 响应处置总开关 |
 | `ISOLATION_ALLOW` | 空（隔离将被 agent 拒绝） | 隔离放行地址，逗号分隔 |
-| `AUTO_RESPONSE_ENABLED` | `false` | 自动响应钩子（依赖 RESPONSE_ENABLED） |
-| `AUTO_RESPONSE_LIVE` | `false`（默认 dry-run） | 自动响应真执行 |
+| `AUTO_RESPONSE_ENABLED` | `false` | 自动响应钩子，开启即真实隔离（依赖 RESPONSE_ENABLED） |
 | `AUTO_RESPONSE_MIN_CONFIDENCE` | `90` | 自动隔离置信度门槛 |
 | `AUTO_RESPONSE_EXEMPT` | 空 | 自动隔离主机白名单 |
 | `WEBHOOK_URL` | 空（不启用） | 通知地址 |

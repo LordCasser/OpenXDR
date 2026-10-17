@@ -76,7 +76,6 @@ func TestRequestToProto(t *testing.T) {
 			req: Request{
 				AssetID:        asset,
 				Kind:           "isolate_host",
-				DryRun:         true,
 				IncidentID:     &incident,
 				ProcessGUID:    &proc,
 				PID:            1234,
@@ -85,13 +84,12 @@ func TestRequestToProto(t *testing.T) {
 			},
 			want: func() bool {
 				cmd := (&Request{
-					AssetID: asset, Kind: "isolate_host", DryRun: true,
+					AssetID: asset, Kind: "isolate_host",
 					IncidentID: &incident, ProcessGUID: &proc,
 					PID: 1234, IssuedBy: "admin", AllowEndpoints: []string{"1.2.3.4"},
 				}).toProto(id)
 				return cmd.Id == id.String() &&
 					cmd.Kind == pb.CommandKind_ISOLATE_HOST &&
-					cmd.DryRun &&
 					cmd.ProcessGuid == proc.String() &&
 					cmd.Pid == 1234 &&
 					len(cmd.AllowEndpoints) == 1 && cmd.AllowEndpoints[0] == "1.2.3.4"
@@ -99,10 +97,10 @@ func TestRequestToProto(t *testing.T) {
 		},
 		{
 			name: "无进程 GUID 留空",
-			req:  Request{AssetID: asset, Kind: "kill_process", DryRun: false},
+			req:  Request{AssetID: asset, Kind: "kill_process"},
 			want: func() bool {
 				cmd := (&Request{AssetID: asset, Kind: "kill_process"}).toProto(id)
-				return cmd.ProcessGuid == "" && cmd.DryRun == false
+				return cmd.ProcessGuid == ""
 			},
 		},
 	}
@@ -144,8 +142,8 @@ func TestToProto(t *testing.T) {
 	}
 
 	// 有进程 GUID
-	cmd = testToProto(&ent.Command{ID: id, Kind: "isolate_host", DryRun: true, ProcessGUID: &proc})
-	if cmd.ProcessGuid != proc.String() || cmd.Kind != pb.CommandKind_ISOLATE_HOST || cmd.DryRun != true {
+	cmd = testToProto(&ent.Command{ID: id, Kind: "isolate_host", ProcessGUID: &proc})
+	if cmd.ProcessGuid != proc.String() || cmd.Kind != pb.CommandKind_ISOLATE_HOST {
 		t.Errorf("有 GUID 映射错误: %+v", cmd)
 	}
 }
