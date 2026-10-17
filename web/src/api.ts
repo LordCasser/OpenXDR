@@ -623,6 +623,8 @@ export const updateTask = async (
   body: { enabled?: boolean; customSchedule?: string },
 ): Promise<TaskRow> => (await send('PATCH', `/api/tasks/${id}`, body)).json()
 export const fetchTaskRuns = (id: string) => get<TaskRunRow[]>(`/api/tasks/${id}/runs`)
+// 立即运行只是记下请求，调度器下一次检查（默认 30 秒内）拉起
+export const runTask = (id: string) => send('POST', `/api/tasks/${id}/run`)
 
 // 采集配置：随 Register 下发给 agent；字段缺省表示用 agent 内置默认
 export interface AgentConfig {

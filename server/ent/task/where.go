@@ -119,6 +119,11 @@ func Removed(v bool) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldRemoved, v))
 }
 
+// RunRequestedAt applies equality check predicate on the "run_requested_at" field. It's identical to RunRequestedAtEQ.
+func RunRequestedAt(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldRunRequestedAt, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldCreatedAt, v))
@@ -627,6 +632,56 @@ func RemovedEQ(v bool) predicate.Task {
 // RemovedNEQ applies the NEQ predicate on the "removed" field.
 func RemovedNEQ(v bool) predicate.Task {
 	return predicate.Task(sql.FieldNEQ(FieldRemoved, v))
+}
+
+// RunRequestedAtEQ applies the EQ predicate on the "run_requested_at" field.
+func RunRequestedAtEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldRunRequestedAt, v))
+}
+
+// RunRequestedAtNEQ applies the NEQ predicate on the "run_requested_at" field.
+func RunRequestedAtNEQ(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldRunRequestedAt, v))
+}
+
+// RunRequestedAtIn applies the In predicate on the "run_requested_at" field.
+func RunRequestedAtIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldRunRequestedAt, vs...))
+}
+
+// RunRequestedAtNotIn applies the NotIn predicate on the "run_requested_at" field.
+func RunRequestedAtNotIn(vs ...time.Time) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldRunRequestedAt, vs...))
+}
+
+// RunRequestedAtGT applies the GT predicate on the "run_requested_at" field.
+func RunRequestedAtGT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldRunRequestedAt, v))
+}
+
+// RunRequestedAtGTE applies the GTE predicate on the "run_requested_at" field.
+func RunRequestedAtGTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldRunRequestedAt, v))
+}
+
+// RunRequestedAtLT applies the LT predicate on the "run_requested_at" field.
+func RunRequestedAtLT(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldRunRequestedAt, v))
+}
+
+// RunRequestedAtLTE applies the LTE predicate on the "run_requested_at" field.
+func RunRequestedAtLTE(v time.Time) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldRunRequestedAt, v))
+}
+
+// RunRequestedAtIsNil applies the IsNil predicate on the "run_requested_at" field.
+func RunRequestedAtIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldRunRequestedAt))
+}
+
+// RunRequestedAtNotNil applies the NotNil predicate on the "run_requested_at" field.
+func RunRequestedAtNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldRunRequestedAt))
 }
 
 // And groups predicates with the AND operator between them.

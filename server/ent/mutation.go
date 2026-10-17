@@ -15649,6 +15649,7 @@ type TaskMutation struct {
 	dry_run                     *bool
 	prompt                      *string
 	removed                     *bool
+	run_requested_at            *time.Time
 	clearedFields               map[string]struct{}
 	done                        bool
 	oldValue                    func(context.Context) (*Task, error)
@@ -16188,6 +16189,55 @@ func (m *TaskMutation) ResetRemoved() {
 	m.removed = nil
 }
 
+// SetRunRequestedAt sets the "run_requested_at" field.
+func (m *TaskMutation) SetRunRequestedAt(t time.Time) {
+	m.run_requested_at = &t
+}
+
+// RunRequestedAt returns the value of the "run_requested_at" field in the mutation.
+func (m *TaskMutation) RunRequestedAt() (r time.Time, exists bool) {
+	v := m.run_requested_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunRequestedAt returns the old "run_requested_at" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldRunRequestedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunRequestedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunRequestedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunRequestedAt: %w", err)
+	}
+	return oldValue.RunRequestedAt, nil
+}
+
+// ClearRunRequestedAt clears the value of the "run_requested_at" field.
+func (m *TaskMutation) ClearRunRequestedAt() {
+	m.run_requested_at = nil
+	m.clearedFields[task.FieldRunRequestedAt] = struct{}{}
+}
+
+// RunRequestedAtCleared returns if the "run_requested_at" field was cleared in this mutation.
+func (m *TaskMutation) RunRequestedAtCleared() bool {
+	_, ok := m.clearedFields[task.FieldRunRequestedAt]
+	return ok
+}
+
+// ResetRunRequestedAt resets all changes to the "run_requested_at" field.
+func (m *TaskMutation) ResetRunRequestedAt() {
+	m.run_requested_at = nil
+	delete(m.clearedFields, task.FieldRunRequestedAt)
+}
+
 // Where appends a list predicates to the TaskMutation builder.
 func (m *TaskMutation) Where(ps ...predicate.Task) {
 	m.predicates = append(m.predicates, ps...)
@@ -16222,7 +16272,7 @@ func (m *TaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaskMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, task.FieldCreatedAt)
 	}
@@ -16256,6 +16306,9 @@ func (m *TaskMutation) Fields() []string {
 	if m.removed != nil {
 		fields = append(fields, task.FieldRemoved)
 	}
+	if m.run_requested_at != nil {
+		fields = append(fields, task.FieldRunRequestedAt)
+	}
 	return fields
 }
 
@@ -16286,6 +16339,8 @@ func (m *TaskMutation) Field(name string) (ent.Value, bool) {
 		return m.Prompt()
 	case task.FieldRemoved:
 		return m.Removed()
+	case task.FieldRunRequestedAt:
+		return m.RunRequestedAt()
 	}
 	return nil, false
 }
@@ -16317,6 +16372,8 @@ func (m *TaskMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldPrompt(ctx)
 	case task.FieldRemoved:
 		return m.OldRemoved(ctx)
+	case task.FieldRunRequestedAt:
+		return m.OldRunRequestedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Task field %s", name)
 }
@@ -16403,6 +16460,13 @@ func (m *TaskMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRemoved(v)
 		return nil
+	case task.FieldRunRequestedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunRequestedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Task field %s", name)
 }
@@ -16451,6 +16515,9 @@ func (m *TaskMutation) ClearedFields() []string {
 	if m.FieldCleared(task.FieldCustomSchedule) {
 		fields = append(fields, task.FieldCustomSchedule)
 	}
+	if m.FieldCleared(task.FieldRunRequestedAt) {
+		fields = append(fields, task.FieldRunRequestedAt)
+	}
 	return fields
 }
 
@@ -16467,6 +16534,9 @@ func (m *TaskMutation) ClearField(name string) error {
 	switch name {
 	case task.FieldCustomSchedule:
 		m.ClearCustomSchedule()
+		return nil
+	case task.FieldRunRequestedAt:
+		m.ClearRunRequestedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Task nullable field %s", name)
@@ -16508,6 +16578,9 @@ func (m *TaskMutation) ResetField(name string) error {
 		return nil
 	case task.FieldRemoved:
 		m.ResetRemoved()
+		return nil
+	case task.FieldRunRequestedAt:
+		m.ResetRunRequestedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Task field %s", name)

@@ -175,6 +175,38 @@ func TestSchedulerRetriesOnce(t *testing.T) {
 	}
 }
 
+// 立即运行：请求晚于上次运行就跑一轮，跑完不再重复。
+func TestSchedulerRunRequested(t *testing.T) {
+	ctx, client := testdb.New(t)
+	g := client.Group.Create().SetName("A").SaveX(ctx)
+	client.Asset.Create().SetHostname("a1").SetGroupID(g.ID).SaveX(ctx)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "t.yml"), []byte("id: t\nname: 巡检\nschedule: '0 2 * * *'\nprompt: 看看\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{db: client}
+	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute}
+	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
+		t.Fatal(err)
+	}
+	tick := func() {
+		if err := s.tick(ctx, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		s.wg.Wait()
+	}
+	tick()
+	if len(runner.jobs) != 0 {
+		t.Fatal("没到点也没请求，不应运行")
+	}
+	client.Task.UpdateOneID("t").SetRunRequestedAt(time.Now()).ExecX(ctx)
+	tick()
+	tick()
+	if len(runner.jobs) != 1 {
+		t.Fatalf("一次请求应只跑一轮，得到 %d", len(runner.jobs))
+	}
+}
+
 type blockedRunner struct {
 	started chan struct{}
 	release chan struct{}

@@ -150,6 +150,20 @@ func (_c *TaskCreate) SetNillableRemoved(v *bool) *TaskCreate {
 	return _c
 }
 
+// SetRunRequestedAt sets the "run_requested_at" field.
+func (_c *TaskCreate) SetRunRequestedAt(v time.Time) *TaskCreate {
+	_c.mutation.SetRunRequestedAt(v)
+	return _c
+}
+
+// SetNillableRunRequestedAt sets the "run_requested_at" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableRunRequestedAt(v *time.Time) *TaskCreate {
+	if v != nil {
+		_c.SetRunRequestedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *TaskCreate) SetID(v string) *TaskCreate {
 	_c.mutation.SetID(v)
@@ -328,6 +342,10 @@ func (_c *TaskCreate) createSpec() (*Task, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Removed(); ok {
 		_spec.SetField(task.FieldRemoved, field.TypeBool, value)
 		_node.Removed = value
+	}
+	if value, ok := _c.mutation.RunRequestedAt(); ok {
+		_spec.SetField(task.FieldRunRequestedAt, field.TypeTime, value)
+		_node.RunRequestedAt = &value
 	}
 	return _node, _spec
 }

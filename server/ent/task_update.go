@@ -195,6 +195,26 @@ func (_u *TaskUpdate) SetNillableRemoved(v *bool) *TaskUpdate {
 	return _u
 }
 
+// SetRunRequestedAt sets the "run_requested_at" field.
+func (_u *TaskUpdate) SetRunRequestedAt(v time.Time) *TaskUpdate {
+	_u.mutation.SetRunRequestedAt(v)
+	return _u
+}
+
+// SetNillableRunRequestedAt sets the "run_requested_at" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableRunRequestedAt(v *time.Time) *TaskUpdate {
+	if v != nil {
+		_u.SetRunRequestedAt(*v)
+	}
+	return _u
+}
+
+// ClearRunRequestedAt clears the value of the "run_requested_at" field.
+func (_u *TaskUpdate) ClearRunRequestedAt() *TaskUpdate {
+	_u.mutation.ClearRunRequestedAt()
+	return _u
+}
+
 // Mutation returns the TaskMutation object of the builder.
 func (_u *TaskUpdate) Mutation() *TaskMutation {
 	return _u.mutation
@@ -274,6 +294,12 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Removed(); ok {
 		_spec.SetField(task.FieldRemoved, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RunRequestedAt(); ok {
+		_spec.SetField(task.FieldRunRequestedAt, field.TypeTime, value)
+	}
+	if _u.mutation.RunRequestedAtCleared() {
+		_spec.ClearField(task.FieldRunRequestedAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -462,6 +488,26 @@ func (_u *TaskUpdateOne) SetNillableRemoved(v *bool) *TaskUpdateOne {
 	return _u
 }
 
+// SetRunRequestedAt sets the "run_requested_at" field.
+func (_u *TaskUpdateOne) SetRunRequestedAt(v time.Time) *TaskUpdateOne {
+	_u.mutation.SetRunRequestedAt(v)
+	return _u
+}
+
+// SetNillableRunRequestedAt sets the "run_requested_at" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableRunRequestedAt(v *time.Time) *TaskUpdateOne {
+	if v != nil {
+		_u.SetRunRequestedAt(*v)
+	}
+	return _u
+}
+
+// ClearRunRequestedAt clears the value of the "run_requested_at" field.
+func (_u *TaskUpdateOne) ClearRunRequestedAt() *TaskUpdateOne {
+	_u.mutation.ClearRunRequestedAt()
+	return _u
+}
+
 // Mutation returns the TaskMutation object of the builder.
 func (_u *TaskUpdateOne) Mutation() *TaskMutation {
 	return _u.mutation
@@ -571,6 +617,12 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 	}
 	if value, ok := _u.mutation.Removed(); ok {
 		_spec.SetField(task.FieldRemoved, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RunRequestedAt(); ok {
+		_spec.SetField(task.FieldRunRequestedAt, field.TypeTime, value)
+	}
+	if _u.mutation.RunRequestedAtCleared() {
+		_spec.ClearField(task.FieldRunRequestedAt, field.TypeTime)
 	}
 	_node = &Task{config: _u.config}
 	_spec.Assign = _node.assignValues

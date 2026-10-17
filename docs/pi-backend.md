@@ -151,6 +151,7 @@ prompt: |
 |---|---|---|
 | `GET /api/tasks` | viewer | 任务列表 |
 | `PATCH /api/tasks/{id}` | admin | `{enabled?, customSchedule?}`；`customSchedule` 传空串恢复 YAML 周期 |
+| `POST /api/tasks/{id}/run` | admin | 立即运行：记下请求时间，调度器下一次检查时对每个目标组各跑一轮；停用的任务返回 409 |
 | `GET /api/tasks/{id}/runs` | viewer | 最近 100 次运行，按组裁剪 |
 | `GET /api/agent-reports/{id}/html` | 组 viewer | goldmark 渲染，原始 HTML 与危险链接被丢弃，带 CSP |
 | `GET /api/agent-reports/{id}/pdf` | 组 viewer | headless Chromium 打印，禁外网；找不到 Chromium 返回 503 |

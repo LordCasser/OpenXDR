@@ -35,6 +35,8 @@ const (
 	FieldPrompt = "prompt"
 	// FieldRemoved holds the string denoting the removed field in the database.
 	FieldRemoved = "removed"
+	// FieldRunRequestedAt holds the string denoting the run_requested_at field in the database.
+	FieldRunRequestedAt = "run_requested_at"
 	// Table holds the table name of the task in the database.
 	Table = "tasks"
 )
@@ -53,6 +55,7 @@ var Columns = []string{
 	FieldDryRun,
 	FieldPrompt,
 	FieldRemoved,
+	FieldRunRequestedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -143,4 +146,9 @@ func ByPrompt(opts ...sql.OrderTermOption) OrderOption {
 // ByRemoved orders the results by the removed field.
 func ByRemoved(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRemoved, opts...).ToFunc()
+}
+
+// ByRunRequestedAt orders the results by the run_requested_at field.
+func ByRunRequestedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRunRequestedAt, opts...).ToFunc()
 }

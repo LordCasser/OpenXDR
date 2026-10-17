@@ -37,6 +37,8 @@ func (Task) Fields() []ent.Field {
 		field.Text("prompt"),
 		// YAML 里已删掉的任务不再调度，但保留历史
 		field.Bool("removed").Default(false),
+		// 界面点「立即运行」的时间；晚于该组上次运行就在下一次检查时跑
+		field.Time("run_requested_at").Optional().Nillable(),
 	}
 }
 

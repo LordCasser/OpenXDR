@@ -1,9 +1,9 @@
-import { EditOutlined } from '@ant-design/icons'
+import { CaretRightOutlined, EditOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Empty, Form, Input, Modal, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { fetchTaskRuns, fetchTasks, updateTask, type TaskRow, type TaskRunRow } from '../api'
+import { fetchTaskRuns, fetchTasks, runTask, updateTask, type TaskRow, type TaskRunRow } from '../api'
 import { useSession } from '../app/session'
 import { Page } from '../components/Page'
 import { SessionStatusTag, fmtTime } from '../components/format'
@@ -54,6 +54,16 @@ export function TasksPage() {
     }
   }
 
+  const runNow = async (id: string) => {
+    try {
+      await runTask(id)
+      message.success(t('taskRunQueued'))
+      await client.invalidateQueries({ queryKey: ['taskRuns', id] })
+    } catch (e) {
+      message.error(String(e))
+    }
+  }
+
   // 与 YAML 一致就清掉自定义，免得 YAML 后续改了周期却被旧覆盖值挡住
   const saveSchedule = async ({ schedule }: { schedule: string }) => {
     if (!editing) return
@@ -99,6 +109,10 @@ export function TasksPage() {
               title: t('thStatus'), dataIndex: 'enabled', width: 110,
               render: (v, task) => <Switch checked={v} disabled={!isAdmin} onChange={enabled => update(task.id, { enabled })} checkedChildren={t('taskEnabled')} unCheckedChildren={t('taskDisabled')} />,
             },
+            ...(isAdmin ? [{
+              title: '', width: 120,
+              render: (_: unknown, task: TaskRow) => <Button size="small" icon={<CaretRightOutlined />} disabled={!task.enabled} onClick={() => runNow(task.id)}>{t('taskRunNow')}</Button>,
+            }] : []),
           ]}
         />
       </Card>

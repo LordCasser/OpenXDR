@@ -565,6 +565,7 @@ var (
 		{Name: "dry_run", Type: field.TypeBool, Default: true},
 		{Name: "prompt", Type: field.TypeString, Size: 2147483647},
 		{Name: "removed", Type: field.TypeBool, Default: false},
+		{Name: "run_requested_at", Type: field.TypeTime, Nullable: true},
 	}
 	// TasksTable holds the schema information for the "tasks" table.
 	TasksTable = &schema.Table{

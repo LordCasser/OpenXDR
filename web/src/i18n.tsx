@@ -247,6 +247,8 @@ const zh = {
   defaultModel: '平台默认',
   taskEnabled: '启用',
   taskDisabled: '停用',
+  taskRunNow: '立即运行',
+  taskRunQueued: '已排队，半分钟内开始，展开可看运行记录',
   taskEditSchedule: '调整周期',
   taskScheduleHint: '五段 cron，如 0 2 * * *；支持 @daily 与 CRON_TZ= 前缀。YAML 默认：{yaml}',
   // 审批
@@ -352,6 +354,7 @@ const zh = {
   actAssetGrouped: '资产归组',
   actAssetUngrouped: '资产移出组',
   actTaskUpdated: '修改定时任务',
+  actTaskRunRequested: '立即运行定时任务',
   actHunt: '威胁狩猎',
   // 第二轮优化
   save: '保存',
@@ -746,6 +749,8 @@ const en = {
   defaultModel: 'Platform default',
   taskEnabled: 'On',
   taskDisabled: 'Off',
+  taskRunNow: 'Run now',
+  taskRunQueued: 'Queued; starts within half a minute. Expand the row to see runs',
   taskEditSchedule: 'Reschedule',
   taskScheduleHint: 'Five-field cron, e.g. 0 2 * * *; @daily and CRON_TZ= prefix supported. YAML default: {yaml}',
   approvalsSubtitle: 'Command approvals and command lists for "{name}"',
@@ -848,6 +853,7 @@ const en = {
   actAssetGrouped: 'Asset grouped',
   actAssetUngrouped: 'Asset ungrouped',
   actTaskUpdated: 'Task updated',
+  actTaskRunRequested: 'Task run requested',
   actHunt: 'Threat hunt',
   save: 'Save',
   viewChart: 'Chart',

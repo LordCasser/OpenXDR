@@ -109,6 +109,10 @@ func (s *Scheduler) due(ctx context.Context, t *ent.Task, groupID uuid.UUID, now
 	if last != nil {
 		base = last.StartedAt
 	}
+	// 手动请求晚于上次运行就立即跑；计划时间记请求时刻，集群内同一请求只跑一轮
+	if r := t.RunRequestedAt; r != nil && r.After(base) && !r.After(now) {
+		return *r, nil
+	}
 	next := sched.Next(base)
 	if next.After(now) {
 		return time.Time{}, nil

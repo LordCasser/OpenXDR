@@ -54,6 +54,22 @@ func TestAPITasks(t *testing.T) {
 		t.Errorf("空串应恢复 YAML 周期")
 	}
 
+	run := func() int {
+		resp, err := http.Post(admin.URL+"/api/tasks/daily/run", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := run(); code != http.StatusConflict {
+		t.Errorf("停用的任务立即运行应 409，得到 %d", code)
+	}
+	patch(`{"enabled":true}`)
+	if code := run(); code != http.StatusAccepted || client.Task.GetX(ctx, "daily").RunRequestedAt == nil {
+		t.Errorf("立即运行应记下请求时间，得到 %d", code)
+	}
+
 	client.Task.Create().SetID("only-a").SetName("A任务").SetSchedule("0 2 * * *").SetTargetGroup("A").SetPrompt("A指令").SaveX(ctx)
 	client.Task.Create().SetID("only-b").SetName("B任务").SetSchedule("0 2 * * *").SetTargetGroup("B").SetPrompt("B秘密指令").SaveX(ctx)
 	_, definitions := get(t, viewer, "/api/tasks")

@@ -110,6 +110,29 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 		writeJSON(w, taskRow{t.ID, t.Name, t.Schedule, t.CustomSchedule, t.Enabled, t.Model, t.TargetGroup, t.Prompt})
 	})
 
+	// 立即运行：只记请求时间，由集群单活的调度器在下一次检查时拉起，避免多节点各跑一份
+	api.HandleFunc("POST /api/tasks/{id}/run", func(w http.ResponseWriter, r *http.Request) {
+		t, err := db.Task.Query().Where(enttask.IDEQ(r.PathValue("id")), enttask.Removed(false)).Only(r.Context())
+		if ent.IsNotFound(err) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !t.Enabled {
+			http.Error(w, "任务已停用，先启用再运行", http.StatusConflict)
+			return
+		}
+		if err := db.Task.UpdateOneID(t.ID).SetRunRequestedAt(time.Now()).Exec(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		audit.Log(r.Context(), db, r, "task_run_requested", t.ID, "")
+		w.WriteHeader(http.StatusAccepted)
+	})
+
 	// 运行记录按组裁剪：只看得到自己所在组的运行
 	api.HandleFunc("GET /api/tasks/{id}/runs", func(w http.ResponseWriter, r *http.Request) {
 		s, ok := requireScope(w, r, db, "viewer")
