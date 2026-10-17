@@ -52,10 +52,10 @@ func TestCommandOutputBoundedWithoutChangingReceipt(t *testing.T) {
 }
 
 func TestTurnBudget(t *testing.T) {
-	cases := [][3]int{{0, 0, 32}, {2, 7, 32}, {2, 20, 56}, {50, 40, 256}}
+	cases := [][4]int{{0, 0, 0, 32}, {2, 7, 0, 32}, {2, 20, 0, 56}, {2, 20, 5, 61}, {50, 40, 0, 256}}
 	for _, c := range cases {
-		if got := turnBudget(c[0], c[1]); got != c[2] {
-			t.Errorf("turnBudget(%d, %d) = %d, want %d", c[0], c[1], got, c[2])
+		if got := turnBudget(c[0], c[1], c[2]); got != c[3] {
+			t.Errorf("turnBudget(%d, %d, %d) = %d, want %d", c[0], c[1], c[2], got, c[3])
 		}
 	}
 }

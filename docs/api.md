@@ -18,7 +18,9 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 |---|---|---|
 | GET | `/api/incidents?status=&assetId=` | incident 列表（最新 50 条），含派生严重度与告警数；`assetId` 筛涉及该主机的事件 |
 | GET | `/api/incidents/{id}` | 详情：实体图、告警明细（含原始事件）、AI verdict |
-| POST | `/api/incidents/{id}/status` | `{"status":"open\|closed\|false_positive"}` |
+| POST | `/api/incidents/{id}/status` | `{"status":"open\|closed\|false_positive","note":"…"}`；closed 为属实已处置、false_positive 为误报或良性，两者必须写 `note`（1–2000 字），记录结案人与时间并作为案例喂回研判；改回 open 清掉结案信息 |
+| GET | `/api/findings?status=` | 运维待办（巡检 AI 登记，按组裁剪，最近 500 条），含主机名、首次与最近发现时间 |
+| POST | `/api/findings/{id}/status` | `{"status":"open\|resolved\|ignored","note":"…"}`，需组内 analyst；resolved / ignored 必须写原因，忽略原因会交给巡检 AI，之后不再登记 |
 | GET | `/api/incidents/{id}/report` | 事件报告（Markdown 附件下载）：判定、攻击链、涉及实体、告警时间线、处置记录、处置建议 |
 | GET | `/api/events` | 原始事件检索，参数见下 |
 | GET | `/api/stats` | 概览：24h 降噪漏斗、告警趋势、按级别的告警分布（`alertsBySeverity`）、Top 规则、资产在线率 |

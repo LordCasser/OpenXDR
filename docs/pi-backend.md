@@ -17,7 +17,7 @@
 | `PI_QUERY_DATABASE_URLS` | 空 | JSON 对象：组 UUID → 专属只读 DSN；未配置的组不开放 SQL |
 | `RESPONSE_ENABLED` | `false` | 现有响应总开关，exec 同样受其控制 |
 
-Pi 不注册内置文件和 shell 工具，平台只暴露 exec/report，以及已配置组的 query。
+Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/report，以及已配置组的 query。
 没有新增对外工具执行端口，身份、组、来源和 dry-run 均由 Go 绑定，模型不能修改。
 每轮上下文包含本组最多 200 台资产的 UUID、主机名和 OS；超出会标注截断。
 每轮最多「组内主机数 × 免审批命令数 + 16」次模型调用（32–256），每次输出最多 8192 token。exec 送入模型的 stdout/stderr 各最多 16 KiB，截断标记为 `truncated=true`，Command 记录仍保留原始回执。GLM 显式关闭模板 thinking。未实现费用预算或自动历史压缩。
@@ -117,6 +117,15 @@ incident 与 REST 同口径（全部告警都在本组才可见），角色只�
 
 组未开通时完全不注册 query，不回退到平台数据库账号。SQL 不能用于写入报告；报告走
 `report({title,markdown})`，平台强制绑定当前组和会话。
+
+## 运维待办
+
+`track({host,key,title,detail?,severity,status})` 按（组、主机、key）登记或复查一条待办，
+`status=open` 新登记或确认仍在（之前标过修复的会重开），`status=resolved` 表示复查确认已修复。
+主机必须属于本组；没有对应待办时不能标修复。人工 `ignored` 的待办 track 原样返回忽略原因、不做改动。
+每轮会话的系统提示数据带 `open_findings`（遗留）与 `ignored_findings`（忽略及原因，各最多 100 条），
+模型据此先复查遗留、不再报忽略项；轮数预算按遗留条数加宽。人在控制台「运维待办」标已处理或忽略，
+接口见 `docs/api.md`。删组、主机换组或移出组时，该主机在原组的待办一并删除。
 
 ## 预设任务
 
