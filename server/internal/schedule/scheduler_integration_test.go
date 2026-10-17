@@ -13,15 +13,18 @@ import (
 	"time"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/agentsession"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/internal/testdb"
 )
 
 type fakeRunner struct {
-	mu   sync.Mutex
-	db   *ent.Client
-	jobs []Job
-	fail string // 该组的会话返回失败，其余组交一份报告
+	mu    sync.Mutex
+	db    *ent.Client
+	jobs  []Job
+	fail  string // 该组的会话总是失败，其余组交一份报告
+	flaky string // 该组只有第一次失败
+	tried bool
 }
 
 func (f *fakeRunner) RunTask(_ context.Context, job Job) error {
@@ -30,6 +33,10 @@ func (f *fakeRunner) RunTask(_ context.Context, job Job) error {
 	f.jobs = append(f.jobs, job)
 	if job.Session.GroupID.String() == f.fail {
 		return errors.New("输出被截断")
+	}
+	if job.Session.GroupID.String() == f.flaky && !f.tried {
+		f.tried = true
+		return errors.New("会话结束但没有提交报告")
 	}
 	return f.db.Report.Create().SetSessionID(job.Session.ID).SetGroupID(job.Session.GroupID).
 		SetTitle("日报").SetMarkdown("# 一切正常").Exec(context.Background())
@@ -70,8 +77,9 @@ func TestSchedulerTick(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.wg.Wait()
-	if len(runner.jobs) != 2 {
-		t.Fatalf("应对两个非空组各跑一次，得到 %d", len(runner.jobs))
+	// A 一次成功；B 失败后重试一次仍失败
+	if len(runner.jobs) != 3 {
+		t.Fatalf("应 A 跑一次、B 跑两次，得到 %d", len(runner.jobs))
 	}
 	for _, j := range runner.jobs {
 		if j.Session.Kind != "task" || j.Session.Initiator != Initiator || j.Session.Model != "m" ||
@@ -98,7 +106,7 @@ func TestSchedulerTick(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.wg.Wait()
-	if len(runner.jobs) != 2 {
+	if len(runner.jobs) != 3 {
 		t.Errorf("未到下个周期不应再跑，累计 %d", len(runner.jobs))
 	}
 
@@ -108,8 +116,8 @@ func TestSchedulerTick(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.wg.Wait()
-	if len(runner.jobs) != 3 || runner.jobs[2].Session.GroupID != gB.ID {
-		t.Errorf("A 在跑应只补 B，累计 %d", len(runner.jobs))
+	if len(runner.jobs) != 5 || runner.jobs[3].Session.GroupID != gB.ID || runner.jobs[4].Session.GroupID != gB.ID {
+		t.Errorf("A 在跑应只补 B（含一次重试），累计 %d", len(runner.jobs))
 	}
 
 	// 界面停用后不再调度；YAML 删除后标记 removed
@@ -118,7 +126,7 @@ func TestSchedulerTick(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.wg.Wait()
-	if len(runner.jobs) != 3 {
+	if len(runner.jobs) != 5 {
 		t.Errorf("停用后不应再跑，累计 %d", len(runner.jobs))
 	}
 	if client.Task.GetX(ctx, "t").Enabled {
@@ -130,6 +138,40 @@ func TestSchedulerTick(t *testing.T) {
 	}
 	if task := client.Task.GetX(ctx, "t"); !task.Removed {
 		t.Error("YAML 删除后应标记 removed")
+	}
+}
+
+// 第一次失败、重试成功：同一行运行记录换成重试会话，只推报告不报失败。
+func TestSchedulerRetriesOnce(t *testing.T) {
+	ctx, client := testdb.New(t)
+	g := client.Group.Create().SetName("A").SaveX(ctx)
+	client.Asset.Create().SetHostname("a1").SetGroupID(g.ID).SaveX(ctx)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "t.yml"), []byte("id: t\nname: 巡检\nschedule: '*/5 * * * *'\nprompt: 看看\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{db: client, flaky: g.ID.String()}
+	var titles []string
+	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute,
+		Notify: func(_ context.Context, title, _, _ string) error { titles = append(titles, title); return nil }}
+	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
+		t.Fatal(err)
+	}
+	client.Task.UpdateOneID("t").SetCreatedAt(time.Now().Add(-10 * time.Minute)).ExecX(ctx)
+	if err := s.tick(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s.wg.Wait()
+	runs := client.TaskRun.Query().AllX(ctx)
+	if len(runner.jobs) != 2 || len(runs) != 1 || runs[0].Status != "succeeded" || runs[0].Error != nil ||
+		*runs[0].SessionID != runner.jobs[1].Session.ID {
+		t.Fatalf("应重试一次并以重试会话成功收场：%d 次 %+v", len(runner.jobs), runs)
+	}
+	if !client.AgentSession.Query().Where(agentsession.IDEQ(runner.jobs[0].Session.ID)).ExistX(ctx) {
+		t.Error("失败那次的会话应保留")
+	}
+	if len(titles) != 1 || titles[0] != "日报" {
+		t.Errorf("重试成功只应推报告：%v", titles)
 	}
 }
 

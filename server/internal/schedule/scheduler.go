@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -185,10 +186,7 @@ func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model 
 	if err != nil {
 		return nil, nil, err
 	}
-	session, err := tx.AgentSession.Create().
-		SetKind("task").SetGroupID(g.ID).SetInitiator(Initiator).SetModel(model).
-		SetTitle(t.Name).SetDryRun(t.DryRun).SetRunExpiresAt(time.Now().Add(s.runTimeout() + time.Minute)).
-		Save(ctx)
+	session, err := s.newSession(ctx, tx, t, g, model)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, nil, err
@@ -203,7 +201,62 @@ func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model 
 	return run, session, tx.Commit()
 }
 
+// rerun 同一轮运行换一个新会话重跑：一个计划时间只占一行运行记录（唯一索引），
+// 失败那次的会话与错误仍留在 agent_sessions 里可查。
+func (s *Scheduler) rerun(ctx context.Context, t *ent.Task, g *ent.Group, run *ent.TaskRun, model string) (*ent.AgentSession, error) {
+	tx, err := s.DB.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	session, err := s.newSession(ctx, tx, t, g, model)
+	if err == nil {
+		err = tx.TaskRun.UpdateOneID(run.ID).SetSessionID(session.ID).SetStatus("running").
+			ClearFinishedAt().ClearError().Exec(ctx)
+	}
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return session, tx.Commit()
+}
+
+func (s *Scheduler) newSession(ctx context.Context, tx *ent.Tx, t *ent.Task, g *ent.Group, model string) (*ent.AgentSession, error) {
+	return tx.AgentSession.Create().
+		SetKind("task").SetGroupID(g.ID).SetInitiator(Initiator).SetModel(model).
+		SetTitle(t.Name).SetDryRun(t.DryRun).SetRunExpiresAt(time.Now().Add(s.runTimeout() + time.Minute)).
+		Save(ctx)
+}
+
 func (s *Scheduler) execute(ctx context.Context, t *ent.Task, g *ent.Group, run *ent.TaskRun, session *ent.AgentSession) {
+	err := s.attempt(ctx, t, g, run, session)
+	// 模型偶尔乱写、漏交报告，换个新会话重跑一次通常就好；超时与失去租约不重跑
+	if err != nil && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
+		slog.Warn("任务失败，新开会话重试一次", "task", t.ID, "group", g.Name, "err", err)
+		if next, rerr := s.rerun(ctx, t, g, run, session.Model); rerr != nil {
+			slog.Error("创建重试会话失败", "task", t.ID, "group", g.Name, "err", rerr)
+		} else {
+			session = next
+			err = s.attempt(ctx, t, g, run, session)
+		}
+	}
+
+	done, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err == nil {
+		s.pushReports(done, g, session)
+		return
+	}
+	// 巡检失败不能悄无声息：没人看控制台时，Webhook 是唯一的信号
+	if s.Notify != nil {
+		text := fmt.Sprintf("组「%s」的任务重试后仍失败：%v", g.Name, err)
+		if nerr := s.Notify(done, "任务失败："+t.Name, text, "/?session="+session.ID.String()); nerr != nil {
+			slog.Error("任务失败通知发送失败", "run", run.ID, "err", nerr)
+		}
+	}
+}
+
+// attempt 跑一次会话并落终态。
+func (s *Scheduler) attempt(ctx context.Context, t *ent.Task, g *ent.Group, run *ent.TaskRun, session *ent.AgentSession) error {
 	runCtx, cancel := context.WithTimeout(ctx, s.runTimeout())
 	defer cancel()
 	slog.Info("任务开始", "task", t.ID, "group", g.Name, "session", session.ID)
@@ -222,21 +275,13 @@ func (s *Scheduler) execute(ctx context.Context, t *ent.Task, g *ent.Group, run 
 	}
 	if uerr := update.Exec(done); uerr != nil {
 		slog.Error("保存任务运行终态失败", "run", run.ID, "err", uerr)
-		return
 	}
-	if err == nil {
-		slog.Info("任务完成", "task", t.ID, "group", g.Name)
-		s.pushReports(done, g, session)
-		return
+	if err != nil {
+		slog.Error("任务失败", "task", t.ID, "group", g.Name, "err", err)
+		return err
 	}
-	slog.Error("任务失败", "task", t.ID, "group", g.Name, "err", err)
-	// 巡检失败不能悄无声息：没人看控制台时，Webhook 是唯一的信号
-	if s.Notify != nil {
-		text := fmt.Sprintf("组「%s」的任务运行失败：%v", g.Name, err)
-		if nerr := s.Notify(done, "任务失败："+t.Name, text, "/?session="+session.ID.String()); nerr != nil {
-			slog.Error("任务失败通知发送失败", "run", run.ID, "err", nerr)
-		}
-	}
+	slog.Info("任务完成", "task", t.ID, "group", g.Name)
+	return nil
 }
 
 // pushReports 把会话提交的报告推出去：标题、摘要与控制台里的 HTML 链接。
