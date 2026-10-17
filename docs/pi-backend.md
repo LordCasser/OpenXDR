@@ -121,7 +121,9 @@ incident 与 REST 同口径（全部告警都在本组才可见），角色只�
 ## 运维待办
 
 `track({host,key,title,detail?,severity,status})` 按（组、主机、key）登记或复查一条待办，
-`status=open` 新登记或确认仍在（之前标过修复的会重开），`status=resolved` 表示复查确认已修复。
+`status=open` 新登记或确认仍在（之前标过修复的会重开），`status=resolved` 表示复查确认已修复，
+`status=withdrawn` 撤回本轮新登记的条目（直接删除，遗留待办不能撤回）。只收需要人处理的问题：
+severity 只有 low / medium / high，detail 必填，每轮最多新登记 10 条。
 主机必须属于本组；没有对应待办时不能标修复。人工 `ignored` 的待办 track 原样返回忽略原因、不做改动。
 每轮会话的系统提示数据带 `open_findings`（遗留）与 `ignored_findings`（忽略及原因，各最多 100 条），
 模型据此先复查遗留、不再报忽略项；轮数预算按遗留条数加宽。人在控制台「运维待办」标已处理或忽略，

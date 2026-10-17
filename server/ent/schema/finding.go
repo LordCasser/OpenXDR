@@ -22,7 +22,7 @@ func (Finding) Fields() []ent.Field {
 		field.String("key").MaxLen(64),
 		field.String("title").MaxLen(200),
 		field.Text("detail").Default(""),
-		// info / low / medium / high
+		// low / medium / high；不需要人处理的不登记
 		field.String("severity").Default("low"),
 		// open / resolved / ignored
 		field.String("status").Default("open"),

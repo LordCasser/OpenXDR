@@ -4,6 +4,7 @@ package agentchat
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -57,6 +58,45 @@ func TestTrackFindings(t *testing.T) {
 	if _, err := track(stranger.ID.String(), "open"); err == nil {
 		t.Fatal("别组主机不能登记")
 	}
+
+	// 不需要人处理的（info）与空 detail 拒绝登记
+	for _, bad := range []string{
+		`{"host":"` + host.ID.String() + `","key":"ok-record","title":"磁盘正常","detail":"无异常","severity":"info","status":"open"}`,
+		`{"host":"` + host.ID.String() + `","key":"empty","title":"空","detail":"  ","severity":"low","status":"open"}`,
+	} {
+		if out, err := s.tool(ctx, session, commandgate.Request{System: true}, "track", []byte(bad)); err == nil {
+			t.Errorf("应拒绝：%s → %s", bad, out)
+		}
+	}
+
+	// 本轮登记错的可以撤回，遗留的不行；每轮最多新登记 maxNewFindings 条
+	fresh := db.AgentSession.Create().SetKind("task").SetGroupID(group.ID).SetInitiator(commandgate.SystemActor).
+		SetModel("m").SetStatus("running").SetTitle("巡检").SaveX(ctx)
+	add := func(key, status string) error {
+		_, err := s.tool(ctx, fresh, commandgate.Request{System: true}, "track", []byte(
+			`{"host":"`+host.ID.String()+`","key":"`+key+`","title":"t","detail":"d","severity":"low","status":"`+status+`"}`))
+		return err
+	}
+	db.Finding.Create().SetGroupID(group.ID).SetAssetID(host.ID).SetKey("legacy").SetTitle("上轮的").SetSessionID(session.ID).SaveX(ctx)
+	if err := add("legacy", "withdrawn"); err == nil {
+		t.Error("遗留待办不能撤回")
+	}
+	db.Finding.Delete().Where(finding.KeyEQ("legacy")).ExecX(ctx)
+	if err := add("typo", "open"); err != nil {
+		t.Fatal(err)
+	}
+	if err := add("typo", "withdrawn"); err != nil || db.Finding.Query().Where(finding.KeyEQ("typo")).ExistX(ctx) {
+		t.Fatalf("本轮登记的应能撤回：%v", err)
+	}
+	for i := range maxNewFindings {
+		if err := add(fmt.Sprintf("n%d", i), "open"); err != nil {
+			t.Fatalf("第 %d 条不该被拦：%v", i, err)
+		}
+	}
+	if err := add("one-more", "open"); err == nil {
+		t.Error("超过上限应拒绝")
+	}
+	db.Finding.Delete().Where(finding.SessionIDEQ(fresh.ID)).ExecX(ctx)
 
 	// 遗留与忽略的待办随系统提示交给模型
 	db.Finding.Create().SetGroupID(group.ID).SetAssetID(host.ID).SetKey("disk-full").SetTitle("磁盘将满").SaveX(ctx)
