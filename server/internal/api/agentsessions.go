@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"openxdr/server/ent"
@@ -19,7 +17,6 @@ import (
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/auth"
-	"openxdr/server/internal/piruntime"
 )
 
 func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Service) {
@@ -134,60 +131,37 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 			http.Error(w, "prompt 必填且不超过 64 KiB", 400)
 			return
 		}
-		if _, ok := w.(http.Flusher); !ok {
-			http.Error(w, "SSE 不可用", 500)
+		// 运行在后台：请求只负责把会话切到 running，前端切页、断开都不影响；进度靠轮询会话与消息
+		if err := service.Start(r.Context(), session.ID, u, body.Prompt); err != nil {
+			http.Error(w, err.Error(), 409)
 			return
 		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("X-Accel-Buffering", "no")
-		ctx, cancel := context.WithCancel(r.Context())
-		defer cancel()
-		var mu sync.Mutex
-		send := func(event string, value any) error {
-			data, err := json.Marshal(value)
-			if err != nil {
-				return err
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			controller := http.NewResponseController(w)
-			_ = controller.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			if _, err = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data); err == nil {
-				err = controller.Flush()
-			}
-			_ = controller.SetWriteDeadline(time.Time{})
-			if err != nil {
-				cancel()
-			}
-			return err
-		}
-		if send("session", map[string]any{"id": session.ID}) != nil {
+		w.WriteHeader(http.StatusAccepted)
+		writeJSON(w, map[string]any{"id": session.ID})
+	})
+	// 停止：发起人或组 admin；只写停止请求，运行所在节点轮询到后收手，会话回到 idle 可接着问
+	mux.HandleFunc("POST /api/agent-sessions/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
+		session, ok := getByPath(w, r, "id", "session", db.AgentSession.Get)
+		if !ok {
 			return
 		}
-		done := make(chan struct{})
-		defer func() { cancel(); <-done }()
-		go func() {
-			defer close(done)
-			ticker := time.NewTicker(15 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					if send("heartbeat", struct{}{}) != nil {
-						return
-					}
-				}
-			}
-		}()
-		result, err := service.Chat(ctx, session.ID, u, body.Prompt, func(ctx context.Context, event piruntime.Event) error { return send("pi", event) })
-		if err != nil {
-			_ = send("error", map[string]string{"error": err.Error()})
+		if !requireGroup(w, r, db, session.GroupID, "analyst") {
 			return
 		}
-		_ = send("done", result)
+		u := auth.From(r.Context())
+		if session.Initiator != u.Username && !auth.Allowed(auth.GroupRole(r.Context(), db, u, session.GroupID), "admin") {
+			http.Error(w, "只能停止自己发起的会话", 403)
+			return
+		}
+		if service == nil {
+			http.Error(w, "Pi 未启用", 503)
+			return
+		}
+		if err := service.Cancel(r.Context(), session.ID); err != nil {
+			http.Error(w, err.Error(), 409)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /api/agent-reports", func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.URL.Query().Get("groupId"))

@@ -105,6 +105,11 @@ func RunExpiresAt(v time.Time) predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldEQ(FieldRunExpiresAt, v))
 }
 
+// CancelRequestedAt applies equality check predicate on the "cancel_requested_at" field. It's identical to CancelRequestedAtEQ.
+func CancelRequestedAt(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldEQ(FieldCancelRequestedAt, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldEQ(FieldCreatedAt, v))
@@ -703,6 +708,56 @@ func SubjectsIsNil() predicate.AgentSession {
 // SubjectsNotNil applies the NotNil predicate on the "subjects" field.
 func SubjectsNotNil() predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldNotNull(FieldSubjects))
+}
+
+// CancelRequestedAtEQ applies the EQ predicate on the "cancel_requested_at" field.
+func CancelRequestedAtEQ(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldEQ(FieldCancelRequestedAt, v))
+}
+
+// CancelRequestedAtNEQ applies the NEQ predicate on the "cancel_requested_at" field.
+func CancelRequestedAtNEQ(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldNEQ(FieldCancelRequestedAt, v))
+}
+
+// CancelRequestedAtIn applies the In predicate on the "cancel_requested_at" field.
+func CancelRequestedAtIn(vs ...time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldIn(FieldCancelRequestedAt, vs...))
+}
+
+// CancelRequestedAtNotIn applies the NotIn predicate on the "cancel_requested_at" field.
+func CancelRequestedAtNotIn(vs ...time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldNotIn(FieldCancelRequestedAt, vs...))
+}
+
+// CancelRequestedAtGT applies the GT predicate on the "cancel_requested_at" field.
+func CancelRequestedAtGT(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldGT(FieldCancelRequestedAt, v))
+}
+
+// CancelRequestedAtGTE applies the GTE predicate on the "cancel_requested_at" field.
+func CancelRequestedAtGTE(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldGTE(FieldCancelRequestedAt, v))
+}
+
+// CancelRequestedAtLT applies the LT predicate on the "cancel_requested_at" field.
+func CancelRequestedAtLT(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldLT(FieldCancelRequestedAt, v))
+}
+
+// CancelRequestedAtLTE applies the LTE predicate on the "cancel_requested_at" field.
+func CancelRequestedAtLTE(v time.Time) predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldLTE(FieldCancelRequestedAt, v))
+}
+
+// CancelRequestedAtIsNil applies the IsNil predicate on the "cancel_requested_at" field.
+func CancelRequestedAtIsNil() predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldIsNull(FieldCancelRequestedAt))
+}
+
+// CancelRequestedAtNotNil applies the NotNil predicate on the "cancel_requested_at" field.
+func CancelRequestedAtNotNil() predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldNotNull(FieldCancelRequestedAt))
 }
 
 // And groups predicates with the AND operator between them.

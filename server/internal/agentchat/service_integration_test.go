@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"openxdr/server/ent"
+	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/piruntime"
 	"openxdr/server/internal/testdb"
@@ -174,5 +175,52 @@ func TestSessionGroupScope(t *testing.T) {
 	}
 	if _, err := service.tool(ctx, &ent.AgentSession{GroupID: uuid.New()}, commandgate.Request{UserID: user.ID}, "query", json.RawMessage(`{"sql":"select 1"}`)); err == nil {
 		t.Fatal("无 DSN 必须拒绝")
+	}
+}
+
+// 后台运行：有人点停止就收手，会话回到 idle，停在半截的工具调用补上结果，可以接着问
+func TestStartAndCancel(t *testing.T) {
+	ctx, db := testdb.New(t)
+	group := db.Group.Create().SetName("g").SaveX(ctx)
+	user := db.User.Create().SetUsername("a").SetPasswordHash("unused").SetRole("admin").SaveX(ctx)
+	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SetTitle("").SaveX(ctx)
+	started := make(chan struct{})
+	service := &Service{DB: db, Base: context.Background()}
+	service.Runtime = fakeRunner{func(ctx context.Context, r piruntime.Request, h piruntime.Handler, o piruntime.Observer) (*piruntime.Result, error) {
+		call := `{"role":"assistant","content":[{"type":"toolCall","id":"c1","name":"exec","arguments":{}}],"stopReason":"toolUse"}`
+		if err := o(ctx, piruntime.Event{Type: "event", Event: json.RawMessage(`{"type":"message_end","message":` + call + `}`)}); err != nil {
+			return nil, err
+		}
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}
+	if err := service.Start(ctx, session.ID, user, "检查"); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	if err := service.Start(ctx, session.ID, user, "再来"); err == nil {
+		t.Fatal("运行中不能再发")
+	}
+	if err := service.Cancel(ctx, session.ID); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for db.AgentSession.GetX(ctx, session.ID).Status == "running" && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	got := db.AgentSession.GetX(ctx, session.ID)
+	if got.Status != "idle" || got.Error != nil || got.CancelRequestedAt != nil {
+		t.Fatalf("停止后应回到 idle 且无错误：%+v", got)
+	}
+	msgs := db.SessionMessage.Query().Order(ent.Asc(sessionmessage.FieldSeq)).AllX(ctx)
+	var closed struct {
+		ToolCallID string `json:"toolCallId"`
+	}
+	if len(msgs) == 2 {
+		_ = json.Unmarshal(msgs[1].Content, &closed)
+	}
+	if len(msgs) != 2 || msgs[1].Role != "toolResult" || closed.ToolCallID != "c1" {
+		t.Fatalf("应补齐被停止的工具调用：%d 条", len(msgs))
 	}
 }

@@ -212,6 +212,26 @@ func (_u *AgentSessionUpdate) ClearSubjects() *AgentSessionUpdate {
 	return _u
 }
 
+// SetCancelRequestedAt sets the "cancel_requested_at" field.
+func (_u *AgentSessionUpdate) SetCancelRequestedAt(v time.Time) *AgentSessionUpdate {
+	_u.mutation.SetCancelRequestedAt(v)
+	return _u
+}
+
+// SetNillableCancelRequestedAt sets the "cancel_requested_at" field if the given value is not nil.
+func (_u *AgentSessionUpdate) SetNillableCancelRequestedAt(v *time.Time) *AgentSessionUpdate {
+	if v != nil {
+		_u.SetCancelRequestedAt(*v)
+	}
+	return _u
+}
+
+// ClearCancelRequestedAt clears the value of the "cancel_requested_at" field.
+func (_u *AgentSessionUpdate) ClearCancelRequestedAt() *AgentSessionUpdate {
+	_u.mutation.ClearCancelRequestedAt()
+	return _u
+}
+
 // Mutation returns the AgentSessionMutation object of the builder.
 func (_u *AgentSessionUpdate) Mutation() *AgentSessionMutation {
 	return _u.mutation
@@ -305,6 +325,12 @@ func (_u *AgentSessionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.SubjectsCleared() {
 		_spec.ClearField(agentsession.FieldSubjects, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CancelRequestedAt(); ok {
+		_spec.SetField(agentsession.FieldCancelRequestedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CancelRequestedAtCleared() {
+		_spec.ClearField(agentsession.FieldCancelRequestedAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -508,6 +534,26 @@ func (_u *AgentSessionUpdateOne) ClearSubjects() *AgentSessionUpdateOne {
 	return _u
 }
 
+// SetCancelRequestedAt sets the "cancel_requested_at" field.
+func (_u *AgentSessionUpdateOne) SetCancelRequestedAt(v time.Time) *AgentSessionUpdateOne {
+	_u.mutation.SetCancelRequestedAt(v)
+	return _u
+}
+
+// SetNillableCancelRequestedAt sets the "cancel_requested_at" field if the given value is not nil.
+func (_u *AgentSessionUpdateOne) SetNillableCancelRequestedAt(v *time.Time) *AgentSessionUpdateOne {
+	if v != nil {
+		_u.SetCancelRequestedAt(*v)
+	}
+	return _u
+}
+
+// ClearCancelRequestedAt clears the value of the "cancel_requested_at" field.
+func (_u *AgentSessionUpdateOne) ClearCancelRequestedAt() *AgentSessionUpdateOne {
+	_u.mutation.ClearCancelRequestedAt()
+	return _u
+}
+
 // Mutation returns the AgentSessionMutation object of the builder.
 func (_u *AgentSessionUpdateOne) Mutation() *AgentSessionMutation {
 	return _u.mutation
@@ -631,6 +677,12 @@ func (_u *AgentSessionUpdateOne) sqlSave(ctx context.Context) (_node *AgentSessi
 	}
 	if _u.mutation.SubjectsCleared() {
 		_spec.ClearField(agentsession.FieldSubjects, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CancelRequestedAt(); ok {
+		_spec.SetField(agentsession.FieldCancelRequestedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CancelRequestedAtCleared() {
+		_spec.ClearField(agentsession.FieldCancelRequestedAt, field.TypeTime)
 	}
 	_node = &AgentSession{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -87,15 +87,23 @@ func TestPiGroupAPI(t *testing.T) {
 	if w.Code != 201 {
 		t.Fatalf("创建名单: %d %s", w.Code, w.Body.String())
 	}
+	// 发消息只把会话切到 running 就返回，运行在后台跑完
 	w = request("POST", "/api/agent-sessions/"+session.ID.String()+"/messages", `{"prompt":"检查"}`)
-	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "text/event-stream") || !strings.Contains(w.Body.String(), "event: done") {
-		t.Fatalf("SSE 未完成: %d %s", w.Code, w.Body.String())
+	if w.Code != 202 {
+		t.Fatalf("后台运行未受理: %d %s", w.Code, w.Body.String())
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for db.AgentSession.GetX(ctx, session.ID).Status != "idle" && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
 	}
 	if got := db.AgentSession.GetX(ctx, session.ID); got.Status != "idle" {
-		t.Fatal("done 前未保存 idle")
+		t.Fatalf("后台运行没有回到 idle: %s", got.Status)
 	}
 	if n := db.SessionMessage.Query().CountX(ctx); n != 2 {
-		t.Fatalf("SSE 消息未落库: %d", n)
+		t.Fatalf("消息未落库: %d", n)
+	}
+	if w := request("POST", "/api/agent-sessions/"+session.ID.String()+"/cancel", ""); w.Code != 409 {
+		t.Errorf("没在运行的会话停止应 409，得到 %d", w.Code)
 	}
 	db.SessionMessage.Delete().ExecX(ctx)
 	db.GroupMember.UpdateOne(member).SetRole("viewer").ExecX(ctx)

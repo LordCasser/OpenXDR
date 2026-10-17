@@ -78,25 +78,26 @@ const (
 // AgentSessionMutation represents an operation that mutates the AgentSession nodes in the graph.
 type AgentSessionMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *uuid.UUID
-	created_at     *time.Time
-	kind           *string
-	group_id       *uuid.UUID
-	initiator      *string
-	model          *string
-	title          *string
-	status         *string
-	error          *string
-	finished_at    *time.Time
-	run_expires_at *time.Time
-	subjects       *[]string
-	appendsubjects []string
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*AgentSession, error)
-	predicates     []predicate.AgentSession
+	op                  Op
+	typ                 string
+	id                  *uuid.UUID
+	created_at          *time.Time
+	kind                *string
+	group_id            *uuid.UUID
+	initiator           *string
+	model               *string
+	title               *string
+	status              *string
+	error               *string
+	finished_at         *time.Time
+	run_expires_at      *time.Time
+	subjects            *[]string
+	appendsubjects      []string
+	cancel_requested_at *time.Time
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*AgentSession, error)
+	predicates          []predicate.AgentSession
 }
 
 var _ ent.Mutation = (*AgentSessionMutation)(nil)
@@ -680,6 +681,55 @@ func (m *AgentSessionMutation) ResetSubjects() {
 	delete(m.clearedFields, agentsession.FieldSubjects)
 }
 
+// SetCancelRequestedAt sets the "cancel_requested_at" field.
+func (m *AgentSessionMutation) SetCancelRequestedAt(t time.Time) {
+	m.cancel_requested_at = &t
+}
+
+// CancelRequestedAt returns the value of the "cancel_requested_at" field in the mutation.
+func (m *AgentSessionMutation) CancelRequestedAt() (r time.Time, exists bool) {
+	v := m.cancel_requested_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCancelRequestedAt returns the old "cancel_requested_at" field's value of the AgentSession entity.
+// If the AgentSession object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AgentSessionMutation) OldCancelRequestedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCancelRequestedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCancelRequestedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCancelRequestedAt: %w", err)
+	}
+	return oldValue.CancelRequestedAt, nil
+}
+
+// ClearCancelRequestedAt clears the value of the "cancel_requested_at" field.
+func (m *AgentSessionMutation) ClearCancelRequestedAt() {
+	m.cancel_requested_at = nil
+	m.clearedFields[agentsession.FieldCancelRequestedAt] = struct{}{}
+}
+
+// CancelRequestedAtCleared returns if the "cancel_requested_at" field was cleared in this mutation.
+func (m *AgentSessionMutation) CancelRequestedAtCleared() bool {
+	_, ok := m.clearedFields[agentsession.FieldCancelRequestedAt]
+	return ok
+}
+
+// ResetCancelRequestedAt resets all changes to the "cancel_requested_at" field.
+func (m *AgentSessionMutation) ResetCancelRequestedAt() {
+	m.cancel_requested_at = nil
+	delete(m.clearedFields, agentsession.FieldCancelRequestedAt)
+}
+
 // Where appends a list predicates to the AgentSessionMutation builder.
 func (m *AgentSessionMutation) Where(ps ...predicate.AgentSession) {
 	m.predicates = append(m.predicates, ps...)
@@ -714,7 +764,7 @@ func (m *AgentSessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AgentSessionMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, agentsession.FieldCreatedAt)
 	}
@@ -748,6 +798,9 @@ func (m *AgentSessionMutation) Fields() []string {
 	if m.subjects != nil {
 		fields = append(fields, agentsession.FieldSubjects)
 	}
+	if m.cancel_requested_at != nil {
+		fields = append(fields, agentsession.FieldCancelRequestedAt)
+	}
 	return fields
 }
 
@@ -778,6 +831,8 @@ func (m *AgentSessionMutation) Field(name string) (ent.Value, bool) {
 		return m.RunExpiresAt()
 	case agentsession.FieldSubjects:
 		return m.Subjects()
+	case agentsession.FieldCancelRequestedAt:
+		return m.CancelRequestedAt()
 	}
 	return nil, false
 }
@@ -809,6 +864,8 @@ func (m *AgentSessionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldRunExpiresAt(ctx)
 	case agentsession.FieldSubjects:
 		return m.OldSubjects(ctx)
+	case agentsession.FieldCancelRequestedAt:
+		return m.OldCancelRequestedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown AgentSession field %s", name)
 }
@@ -895,6 +952,13 @@ func (m *AgentSessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSubjects(v)
 		return nil
+	case agentsession.FieldCancelRequestedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCancelRequestedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AgentSession field %s", name)
 }
@@ -940,6 +1004,9 @@ func (m *AgentSessionMutation) ClearedFields() []string {
 	if m.FieldCleared(agentsession.FieldSubjects) {
 		fields = append(fields, agentsession.FieldSubjects)
 	}
+	if m.FieldCleared(agentsession.FieldCancelRequestedAt) {
+		fields = append(fields, agentsession.FieldCancelRequestedAt)
+	}
 	return fields
 }
 
@@ -968,6 +1035,9 @@ func (m *AgentSessionMutation) ClearField(name string) error {
 		return nil
 	case agentsession.FieldSubjects:
 		m.ClearSubjects()
+		return nil
+	case agentsession.FieldCancelRequestedAt:
+		m.ClearCancelRequestedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown AgentSession nullable field %s", name)
@@ -1009,6 +1079,9 @@ func (m *AgentSessionMutation) ResetField(name string) error {
 		return nil
 	case agentsession.FieldSubjects:
 		m.ResetSubjects()
+		return nil
+	case agentsession.FieldCancelRequestedAt:
+		m.ResetCancelRequestedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown AgentSession field %s", name)

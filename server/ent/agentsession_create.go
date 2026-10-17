@@ -135,6 +135,20 @@ func (_c *AgentSessionCreate) SetSubjects(v []string) *AgentSessionCreate {
 	return _c
 }
 
+// SetCancelRequestedAt sets the "cancel_requested_at" field.
+func (_c *AgentSessionCreate) SetCancelRequestedAt(v time.Time) *AgentSessionCreate {
+	_c.mutation.SetCancelRequestedAt(v)
+	return _c
+}
+
+// SetNillableCancelRequestedAt sets the "cancel_requested_at" field if the given value is not nil.
+func (_c *AgentSessionCreate) SetNillableCancelRequestedAt(v *time.Time) *AgentSessionCreate {
+	if v != nil {
+		_c.SetCancelRequestedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AgentSessionCreate) SetID(v uuid.UUID) *AgentSessionCreate {
 	_c.mutation.SetID(v)
@@ -296,6 +310,10 @@ func (_c *AgentSessionCreate) createSpec() (*AgentSession, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Subjects(); ok {
 		_spec.SetField(agentsession.FieldSubjects, field.TypeJSON, value)
 		_node.Subjects = value
+	}
+	if value, ok := _c.mutation.CancelRequestedAt(); ok {
+		_spec.SetField(agentsession.FieldCancelRequestedAt, field.TypeTime, value)
+		_node.CancelRequestedAt = &value
 	}
 	return _node, _spec
 }

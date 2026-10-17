@@ -36,6 +36,8 @@ const (
 	FieldRunExpiresAt = "run_expires_at"
 	// FieldSubjects holds the string denoting the subjects field in the database.
 	FieldSubjects = "subjects"
+	// FieldCancelRequestedAt holds the string denoting the cancel_requested_at field in the database.
+	FieldCancelRequestedAt = "cancel_requested_at"
 	// Table holds the table name of the agentsession in the database.
 	Table = "agent_sessions"
 )
@@ -54,6 +56,7 @@ var Columns = []string{
 	FieldFinishedAt,
 	FieldRunExpiresAt,
 	FieldSubjects,
+	FieldCancelRequestedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -131,4 +134,9 @@ func ByFinishedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByRunExpiresAt orders the results by the run_expires_at field.
 func ByRunExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRunExpiresAt, opts...).ToFunc()
+}
+
+// ByCancelRequestedAt orders the results by the cancel_requested_at field.
+func ByCancelRequestedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCancelRequestedAt, opts...).ToFunc()
 }

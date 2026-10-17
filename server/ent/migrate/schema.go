@@ -22,6 +22,7 @@ var (
 		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
 		{Name: "run_expires_at", Type: field.TypeTime, Nullable: true},
 		{Name: "subjects", Type: field.TypeJSON, Nullable: true},
+		{Name: "cancel_requested_at", Type: field.TypeTime, Nullable: true},
 	}
 	// AgentSessionsTable holds the schema information for the "agent_sessions" table.
 	AgentSessionsTable = &schema.Table{

@@ -40,8 +40,10 @@ type AgentSession struct {
 	// RunExpiresAt holds the value of the "run_expires_at" field.
 	RunExpiresAt *time.Time `json:"run_expires_at,omitempty"`
 	// Subjects holds the value of the "subjects" field.
-	Subjects     []string `json:"subjects,omitempty"`
-	selectValues sql.SelectValues
+	Subjects []string `json:"subjects,omitempty"`
+	// CancelRequestedAt holds the value of the "cancel_requested_at" field.
+	CancelRequestedAt *time.Time `json:"cancel_requested_at,omitempty"`
+	selectValues      sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -53,7 +55,7 @@ func (*AgentSession) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case agentsession.FieldKind, agentsession.FieldInitiator, agentsession.FieldModel, agentsession.FieldTitle, agentsession.FieldStatus, agentsession.FieldError:
 			values[i] = new(sql.NullString)
-		case agentsession.FieldCreatedAt, agentsession.FieldFinishedAt, agentsession.FieldRunExpiresAt:
+		case agentsession.FieldCreatedAt, agentsession.FieldFinishedAt, agentsession.FieldRunExpiresAt, agentsession.FieldCancelRequestedAt:
 			values[i] = new(sql.NullTime)
 		case agentsession.FieldID, agentsession.FieldGroupID:
 			values[i] = new(uuid.UUID)
@@ -150,6 +152,13 @@ func (_m *AgentSession) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field subjects: %w", err)
 				}
 			}
+		case agentsession.FieldCancelRequestedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field cancel_requested_at", values[i])
+			} else if value.Valid {
+				_m.CancelRequestedAt = new(time.Time)
+				*_m.CancelRequestedAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -226,6 +235,11 @@ func (_m *AgentSession) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("subjects=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Subjects))
+	builder.WriteString(", ")
+	if v := _m.CancelRequestedAt; v != nil {
+		builder.WriteString("cancel_requested_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -26,6 +28,8 @@ type Runner interface {
 	Run(context.Context, piruntime.Request, piruntime.Handler, piruntime.Observer) (*piruntime.Result, error)
 }
 type Service struct {
+	// 后台对话运行挂在它上面：进程停机时取消，与任何 HTTP 请求无关
+	Base                   context.Context
 	DB                     *ent.Client
 	Gate                   *commandgate.Gate
 	Runtime                Runner
@@ -68,45 +72,107 @@ func (s *Service) allowed(ctx context.Context, id uuid.UUID, u *ent.User) (*ent.
 }
 
 // Chat 由请求上下文控制生命周期；客户端断开后中止推理和审批等待。
-func (s *Service) Chat(ctx context.Context, id uuid.UUID, u *ent.User, prompt string, emit piruntime.Observer) (result *piruntime.Result, retErr error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout())
-	defer cancel()
+// Chat 同步跑一轮对话，测试与需要等结果的调用方用；界面走 Start，运行不随请求结束。
+func (s *Service) Chat(ctx context.Context, id uuid.UUID, u *ent.User, prompt string, emit piruntime.Observer) (*piruntime.Result, error) {
+	session, err := s.claim(ctx, id, u, prompt)
+	if err != nil {
+		return nil, err
+	}
+	return s.run(ctx, session, u, prompt, emit)
+}
+
+// Start 在后台跑一轮对话：用请求的 ctx 同步把会话从 idle 切到 running（忙则报错）后立即返回。
+// 运行挂在 Base（进程生命周期）上，前端切页、刷新、断开都不影响，只在完成、超时或有人点停止时结束。
+func (s *Service) Start(ctx context.Context, id uuid.UUID, u *ent.User, prompt string) error {
+	session, err := s.claim(ctx, id, u, prompt)
+	if err != nil {
+		return err
+	}
+	base := s.Base
+	if base == nil {
+		base = context.Background()
+	}
+	go func() {
+		if _, err := s.run(base, session, u, prompt, nil); err != nil {
+			slog.Warn("对话运行结束于错误", "session", id, "err", err)
+		}
+	}()
+	return nil
+}
+
+// Cancel 请求停止正在运行的会话。只写库，运行所在节点轮询到后收手，多节点下也成立。
+func (s *Service) Cancel(ctx context.Context, id uuid.UUID) error {
+	n, err := s.DB.AgentSession.Update().Where(agentsession.IDEQ(id), agentsession.StatusEQ("running")).SetCancelRequestedAt(time.Now()).Save(ctx)
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return errors.New("会话没有在运行")
+	}
+	return nil
+}
+
+// claim 校验发起人，把会话从 idle 切到 running，并给没起标题的会话用第一句提问当标题。
+func (s *Service) claim(ctx context.Context, id uuid.UUID, u *ent.User, prompt string) (*ent.AgentSession, error) {
 	session, err := s.allowed(ctx, id, u)
 	if err != nil {
 		return nil, err
 	}
-	n, err := s.DB.AgentSession.Update().Where(agentsession.IDEQ(id), agentsession.StatusEQ("idle")).SetStatus("running").SetRunExpiresAt(expiry(ctx)).ClearError().ClearFinishedAt().Save(ctx)
+	n, err := s.DB.AgentSession.Update().Where(agentsession.IDEQ(id), agentsession.StatusEQ("idle")).SetStatus("running").
+		SetRunExpiresAt(time.Now().Add(s.timeout() + time.Minute)).ClearError().ClearFinishedAt().ClearCancelRequestedAt().Save(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if n != 1 {
 		return nil, errors.New("会话正在运行或已失败，请新建会话")
 	}
-	defer func() {
-		finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-		defer cancel()
-		update := s.DB.AgentSession.UpdateOneID(id).Where(agentsession.StatusEQ("running")).ClearRunExpiresAt().SetStatus("idle").SetFinishedAt(time.Now())
-		if retErr != nil {
-			update.SetStatus("failed").SetError(retErr.Error())
-		}
-		if err := update.Exec(finish); err != nil {
-			retErr = fmt.Errorf("保存会话终态失败: %w", err)
-		}
-	}()
-	// 没起标题的会话用第一句提问当标题，列表里才分得清
 	if session.Title == nil || *session.Title == "" {
 		title := []rune(strings.TrimSpace(prompt))
 		if len(title) > 40 {
 			title = append(title[:40], '…')
 		}
 		if err := s.DB.AgentSession.UpdateOneID(id).SetTitle(string(title)).Exec(ctx); err != nil {
+			// 已经切到 running，这里失败也要收尾，不能让会话卡住
+			finish, done := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+			defer done()
+			_ = s.DB.AgentSession.UpdateOneID(id).Where(agentsession.StatusEQ("running")).ClearRunExpiresAt().
+				SetStatus("failed").SetError(err.Error()).SetFinishedAt(time.Now()).Exec(finish)
 			return nil, err
 		}
 	}
-	messages, seq, err := s.history(ctx, id)
+	return session, nil
+}
+
+// run 跑完一轮并落终态。有人点停止时会话回到 idle，可以接着问；其余失败记 failed。
+func (s *Service) run(ctx context.Context, session *ent.AgentSession, u *ent.User, prompt string, emit piruntime.Observer) (result *piruntime.Result, retErr error) {
+	id := session.ID
+	ctx, cancel := context.WithTimeout(ctx, s.timeout())
+	defer cancel()
+	stopped := s.watchCancel(ctx, id, cancel)
+	var seq int
+	defer func() {
+		finish, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer done()
+		update := s.DB.AgentSession.UpdateOneID(id).Where(agentsession.StatusEQ("running")).ClearRunExpiresAt().ClearCancelRequestedAt().SetStatus("idle").SetFinishedAt(time.Now())
+		switch {
+		case stopped.Load():
+			// 停在半截的工具调用补上结果，否则下一轮把历史交给模型时接口会拒绝
+			if err := s.closeDangling(finish, id, &seq); err != nil {
+				slog.Error("补齐被停止的工具调用失败", "session", id, "err", err)
+			}
+			result, retErr = nil, nil
+		case retErr != nil:
+			update.SetStatus("failed").SetError(retErr.Error())
+		}
+		if err := update.Exec(finish); err != nil {
+			retErr = fmt.Errorf("保存会话终态失败: %w", err)
+		}
+	}()
+	messages, last, err := s.history(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	seq = last
 	request, err := s.request(ctx, session, prompt, messages)
 	if err != nil {
 		return nil, err
@@ -124,6 +190,80 @@ func (s *Service) Chat(ctx context.Context, id uuid.UUID, u *ent.User, prompt st
 		return nil, err
 	}
 	return s.wrapUp(ctx, session, request, result, handle, record)
+}
+
+// watchCancel 每 2 秒看一眼库里有没有停止请求，有就取消本轮；返回值告诉终态处理是不是人停的。
+func (s *Service) watchCancel(ctx context.Context, id uuid.UUID, cancel context.CancelFunc) *atomic.Bool {
+	stopped := new(atomic.Bool)
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				requested, err := s.DB.AgentSession.Query().Where(agentsession.IDEQ(id), agentsession.CancelRequestedAtNotNil()).Exist(ctx)
+				if err == nil && requested {
+					stopped.Store(true)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return stopped
+}
+
+// closeDangling 给最后一轮里没有结果的工具调用补一条"已停止"的结果。
+func (s *Service) closeDangling(ctx context.Context, id uuid.UUID, seq *int) error {
+	rows, err := s.DB.SessionMessage.Query().Where(sessionmessage.SessionIDEQ(id)).Order(ent.Desc(sessionmessage.FieldSeq)).Limit(50).All(ctx)
+	if err != nil {
+		return err
+	}
+	answered := map[string]bool{}
+	var pending []struct{ ID, Name string }
+	for _, m := range rows {
+		var msg struct {
+			Role       string `json:"role"`
+			ToolCallID string `json:"toolCallId"`
+			Content    []struct {
+				Type string `json:"type"`
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"content"`
+		}
+		if json.Unmarshal(m.Content, &msg) != nil {
+			continue
+		}
+		if msg.Role == "toolResult" {
+			answered[msg.ToolCallID] = true
+			continue
+		}
+		if msg.Role != "assistant" {
+			break
+		}
+		for _, c := range msg.Content {
+			if c.Type == "toolCall" && !answered[c.ID] {
+				pending = append(pending, struct{ ID, Name string }{c.ID, c.Name})
+			}
+		}
+		break
+	}
+	for _, p := range pending {
+		content, err := json.Marshal(map[string]any{
+			"role": "toolResult", "toolCallId": p.ID, "toolName": p.Name, "isError": true, "timestamp": time.Now().UnixMilli(),
+			"content": []map[string]string{{"type": "text", "text": "用户停止了本轮，这个工具调用没有完成"}},
+		})
+		if err != nil {
+			return err
+		}
+		*seq++
+		if err := s.DB.SessionMessage.Create().SetSessionID(id).SetSeq(*seq).SetRole("toolResult").SetContent(content).Exec(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // history 按 seq 取出会话已入库的全部消息，返回最后一条的 seq 供续写编号。
