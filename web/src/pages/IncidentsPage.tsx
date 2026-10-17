@@ -28,7 +28,7 @@ export function IncidentsPage() {
   const { groups } = useSession()
   const canAct = useCanAct()
   const [params, setParams] = useSearchParams()
-  const status = params.get('status') ?? 'unresolved'
+  const status = params.get('status') ?? 'review'
   const page = Number(params.get('page') ?? 1)
   const [selected, setSelected] = useState<string[]>([])
   const [resolving, setResolving] = useState<'closed' | 'false_positive' | null>(null)
@@ -45,7 +45,7 @@ export function IncidentsPage() {
   const go = (next: { status?: string; page?: number }) => {
     setSelected([])
     const s = next.status ?? status
-    setParams({ ...(s !== 'unresolved' && { status: s }), ...((next.page ?? 1) > 1 && { page: String(next.page) }) })
+    setParams({ ...(s !== 'review' && { status: s }), ...((next.page ?? 1) > 1 && { page: String(next.page) }) })
   }
 
   // 逐条走单个接口：组内权限与审计照旧。失败的留在勾选里、弹窗不关，备注不丢
@@ -84,6 +84,7 @@ export function IncidentsPage() {
             value={status}
             onChange={v => go({ status: String(v) })}
             options={[
+              { value: 'review', label: t('statusReview') },
               { value: 'unresolved', label: t('statusUnresolved') },
               ...INCIDENT_STATUSES.map(s => ({ value: s, label: t(incidentStatusKey(s)!) })),
               { value: 'all', label: t('all') },
@@ -96,7 +97,7 @@ export function IncidentsPage() {
             rowKey="id"
             loading={query.isPending}
             dataSource={rows}
-            locale={{ emptyText: <EmptyHint title={t(status === 'unresolved' ? 'noUnresolved' : 'noIncidents')} hint={status === 'unresolved' ? t('noUnresolvedHint') : undefined} /> }}
+            locale={{ emptyText: <EmptyHint title={t(status === 'review' ? 'noReview' : status === 'unresolved' ? 'noUnresolved' : 'noIncidents')} hint={status === 'review' || status === 'unresolved' ? t('noUnresolvedHint') : undefined} /> }}
             pagination={{
               current: page, pageSize: PAGE_SIZE, total: query.data?.total ?? rows.length,
               hideOnSinglePage: true, showSizeChanger: false, onChange: p => go({ page: p }),

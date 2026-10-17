@@ -130,7 +130,7 @@ export async function login(username: string, password: string): Promise<Me> {
 
 export const logout = () => post('/api/logout')
 
-// status 可取 unresolved（open + triaged，未人工结案）；按 offset/limit 翻页，total 是筛选后的总数
+// status 可取 unresolved（open + triaged，未人工结案）、review（未结案里需要人复核的）；按 offset/limit 翻页，total 是筛选后的总数
 export const fetchIncidents = (params: { status?: string; assetId?: string; limit?: number; offset?: number } = {}) => {
   const qs = new URLSearchParams()
   if (params.status) qs.set('status', params.status)
@@ -264,6 +264,8 @@ export interface Stats {
   events24h: number
   alerts24h: number
   openIncidents: number
+  // 未结案里需要人看的：AI 非良性，或良性但高危及以上（与通知策略同一口径）
+  reviewIncidents: number
   incidentsByStatus: Record<string, number>
   alertTrend: { hour: string; count: number }[]
   topRules: { ruleId: string; ruleTitle: string | null; count: number }[]

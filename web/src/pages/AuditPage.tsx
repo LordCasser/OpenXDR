@@ -51,6 +51,7 @@ const ACTION: Record<string, { key: MsgKey; color?: string }> = {
   intel_deleted: { key: 'actIntelDeleted' },
   intel_imported: { key: 'actIntelImported' },
   login_throttled: { key: 'actLoginThrottled', color: 'red' },
+  incident_auto_closed: { key: 'actIncidentAutoClosed', color: 'blue' },
 }
 
 export function AuditPage() {

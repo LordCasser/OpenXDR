@@ -7,6 +7,7 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { fetchAgentReports, fetchApprovals, fetchAssets, fetchFindings, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks } from '../api'
 import { useSession } from '../app/session'
+import { Ago } from '../components/Ago'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { BarList, ColumnChart, SEVERITY_COLOR, compact, useSeriesColor } from '../components/charts'
@@ -20,7 +21,7 @@ function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: n
   const stages = [
     { label: t('funnelEvents'), value: events, to: '/events' },
     { label: t('funnelAlerts'), value: alerts },
-    { label: t('unresolvedIncidents'), value: incidents, to: '/incidents' },
+    { label: t('reviewIncidents'), value: incidents, to: '/incidents' },
   ]
   const squeeze = (from: number, to: number) => (from ? ((1 - to / from) * 100).toFixed(from > 1000 ? 2 : 1) : '-')
   return (
@@ -123,7 +124,7 @@ export function OverviewPage() {
   const series = useSeriesColor()
   const [trendView, setTrendView] = useState<'chart' | 'table'>('chart')
   const stats = useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 30_000, placeholderData: keepPreviousData })
-  const incidents = useQuery({ queryKey: ['incidents', 'unresolved', 'overview'], queryFn: () => fetchIncidents({ status: 'unresolved', limit: 6 }), refetchInterval: 30_000 })
+  const incidents = useQuery({ queryKey: ['incidents', 'review', 'overview'], queryFn: () => fetchIncidents({ status: 'review', limit: 6 }), refetchInterval: 30_000 })
   const findings = useQuery({ queryKey: ['findings', 'open'], queryFn: () => fetchFindings('open'), refetchInterval: 60_000 })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
   const isGroupAdmin = group?.role === 'admin'
@@ -144,8 +145,9 @@ export function OverviewPage() {
     <Page title={t('navOverview')} subtitle={t('overviewSubtitle')}>
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={16}>
-          <Funnel events={s?.events24h ?? 0} alerts={s?.alerts24h ?? 0} incidents={s?.openIncidents ?? 0}
+          <Funnel events={s?.events24h ?? 0} alerts={s?.alerts24h ?? 0} incidents={s?.reviewIncidents ?? 0}
             foot={[
+              ...(s && s.openIncidents > s.reviewIncidents ? [t('footBenignPending', { n: s.openIncidents - s.reviewIncidents })] : []),
               t('footRules', { n: s?.topRules.length ?? 0 }),
               t('footCritical', { n: (s?.alertsBySeverity?.[5] ?? 0) + (s?.alertsBySeverity?.[4] ?? 0) }),
               t('footHosts', { up: s?.assetsOnline ?? 0, total: s?.assetsTotal ?? 0 }),
@@ -153,7 +155,7 @@ export function OverviewPage() {
         </Col>
         <Col xs={24} xl={8}>
           <ActionCenter items={[
-            { icon: <AlertOutlined />, label: t('unresolvedIncidents'), count: s?.openIncidents ?? 0, to: '/incidents', color: token.colorError },
+            { icon: <AlertOutlined />, label: t('reviewIncidents'), count: s?.reviewIncidents ?? 0, to: '/incidents', color: token.colorError },
             { icon: <ToolOutlined />, label: t('navFindings'), count: findings.data?.length ?? 0, to: '/findings', color: token.colorWarning },
             ...(isGroupAdmin ? [{ icon: <CheckCircleOutlined />, label: t('navApprovals'), count: approvals.data?.filter(a => a.status === 'pending').length ?? 0, to: '/approvals', color: token.colorPrimary }] : []),
             { icon: <CloudServerOutlined />, label: t('offlineHosts'), count: offline.length, to: '/assets', color: token.colorError },
@@ -186,7 +188,7 @@ export function OverviewPage() {
         </Col>
 
         <Col xs={24} xl={16}>
-          <Card title={t('unresolvedIncidents')} extra={<Link to="/incidents">{t('viewAll')}</Link>} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
+          <Card title={t('reviewIncidents')} extra={<Link to="/incidents">{t('viewAll')}</Link>} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
             {incidents.isError ? <LoadError error={incidents.error} onRetry={() => incidents.refetch()} /> : (
               <Table
                 size="small"
@@ -200,7 +202,7 @@ export function OverviewPage() {
                   { title: t('thTitle'), dataIndex: 'title', ellipsis: true, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
                   { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
                   { title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
-                  { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
+                  { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
                 ]}
               />
             )}
