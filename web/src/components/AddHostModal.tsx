@@ -62,7 +62,9 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <Modal title={t('addHost')} open={open} onCancel={close} footer={null} width={720} destroyOnHidden>
-      {status.data && !status.data.enabled ? (
+      {window.location.protocol !== 'https:' ? (
+        <Alert type="warning" showIcon message={t('hostHTTPSRequired')} />
+      ) : status.data && !status.data.enabled ? (
         <Alert type="warning" showIcon message={t('addHostDisabled')} description={status.data.reason} />
       ) : adminGroups.length === 0 ? (
         <Alert type="info" showIcon message={t('addHostNoGroup')} />

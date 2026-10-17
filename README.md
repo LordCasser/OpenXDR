@@ -114,10 +114,15 @@ docker compose up -d
 
 ```bash
 # Linux（root）
-curl -fsSL http://<控制台>/api/enroll/install.sh | sudo sh -s -- http://<控制台> <接入令牌>
+curl -fsSL https://<控制台>/api/enroll/install.sh | sudo sh -s -- https://<控制台> <接入令牌>
 # Windows（管理员 PowerShell）
-& ([scriptblock]::Create((irm http://<控制台>/api/enroll/install.ps1))) http://<控制台> <接入令牌>
+& ([scriptblock]::Create((irm https://<控制台>/api/enroll/install.ps1))) https://<控制台> <接入令牌>
 ```
+
+控制台必须是主机信任其证书的 HTTPS 地址：脚本、agent 与令牌都经它传输，明文会被中间人
+篡改成任意代码以 root 执行。非 HTTPS 访问时控制台不给出安装命令，脚本也会拒绝运行。
+失败时脚本原样打印 server 给出的原因（令牌无效、主机名已有在线 agent 等）；
+新私钥在签发成功前只暂存，失败的重装不会破坏已安装主机的身份。
 
 脚本会下载 agent、在本机生成私钥并由 server 签发主机绑定证书、写好配置、注册为
 systemd 服务（Windows 为 SYSTEM 身份的开机计划任务）。主机自动进入令牌所属的组，

@@ -6,6 +6,11 @@ set -eu
 
 BASE=${1:?缺少控制台地址}
 TOKEN=${2:?缺少接入令牌}
+# 脚本、二进制与令牌都从这个地址走，明文传输等于把主机 root 交给中间人
+case "$BASE" in
+  https://*) ;;
+  *) echo "接入需要可信 HTTPS 控制台地址" >&2; exit 1 ;;
+esac
 DIR=/etc/openxdr
 BIN=/usr/local/bin/openxdr-agent
 UNIT=/etc/systemd/system/openxdr-agent.service
@@ -29,13 +34,21 @@ chmod 755 "$TMP"
 echo "签发主机证书并接入"
 mkdir -p "$DIR"
 chmod 700 "$DIR"
-"$TMP" enroll-request "$DIR" |
-  curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-    --data-binary @- "$BASE/api/enroll/register" |
-  "$TMP" enroll-apply "$DIR"
+GRANT=$(mktemp)
+trap 'rm -f "$TMP" "$GRANT"' EXIT
+# 不用 curl -f：被拒绝时要把 server 给的原因原样告诉用户
+CODE=$("$TMP" enroll-request "$DIR" |
+  curl -sS -o "$GRANT" -w '%{http_code}' -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" --data-binary @- "$BASE/api/enroll/register")
+if [ "$CODE" != 200 ]; then
+  echo "接入被拒绝（HTTP $CODE）：$(cat "$GRANT")" >&2
+  exit 1
+fi
+"$TMP" enroll-apply "$DIR" <"$GRANT"
 
 [ -f "$BIN" ] && cp -a "$BIN" "$BIN.prev"
 mv "$TMP" "$BIN"
+rm -f "$GRANT"
 trap - EXIT
 
 cat >"$UNIT" <<'UNIT'

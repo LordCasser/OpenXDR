@@ -4,6 +4,7 @@
 # （自动升级后的退出、意外崩溃都靠它恢复）。重复执行即重装。
 param([Parameter(Mandatory)][string]$Base, [Parameter(Mandatory)][string]$Token)
 $ErrorActionPreference = 'Stop'
+if (([uri]$Base).Scheme -ne 'https') { throw '接入需要可信 HTTPS 控制台地址' }
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -14,22 +15,33 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 $dir = Join-Path $env:ProgramData 'OpenXDR'
 $bin = Join-Path $dir 'openxdr-agent.exe'
-$new = "$bin.new"
+$new = Join-Path $dir 'openxdr-agent.new.exe'
 $task = 'OpenXDR Agent'
 
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 # 私钥与证书所在目录只留 SYSTEM 与管理员
-icacls $dir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
+icacls $dir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw '无法限制凭据目录访问权限' }
 
 Write-Host '下载 agent（windows-amd64）'
 Invoke-WebRequest -UseBasicParsing -Uri "$Base/api/enroll/agent/windows-amd64" -OutFile $new
 & $new version | Out-Null
+if ($LASTEXITCODE -ne 0) { throw '新版 agent 自检失败' }
 
 Write-Host '签发主机证书并接入'
 $request = (& $new enroll-request $dir) -join "`n"
 if ($LASTEXITCODE -ne 0) { throw '生成接入请求失败' }
-$grant = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$Base/api/enroll/register" `
-    -Headers @{ Authorization = "Bearer $Token" } -ContentType 'application/json' -Body $request
+try {
+    $grant = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$Base/api/enroll/register" `
+        -Headers @{ Authorization = "Bearer $Token" } -ContentType 'application/json' -Body $request
+} catch {
+    # 被拒绝时把 server 给的原因原样告诉用户，而不是只有状态码
+    $reason = $_.ErrorDetails.Message
+    if (-not $reason -and $_.Exception.Response) {
+        $reason = (New-Object IO.StreamReader($_.Exception.Response.GetResponseStream())).ReadToEnd()
+    }
+    throw "接入被拒绝：$reason"
+}
 $grant.Content | & $new enroll-apply $dir
 if ($LASTEXITCODE -ne 0) { throw '写入接入配置失败' }
 

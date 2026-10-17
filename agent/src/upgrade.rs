@@ -92,9 +92,20 @@ fn install(exe: &Path, data: &[u8]) -> Result<String, Box<dyn std::error::Error>
         }
     };
     // 运行中的二进制在 Linux 和 Windows 上都允许改名
-    std::fs::rename(exe, with_suffix(exe, ".prev"))?;
-    std::fs::rename(&new, exe)?;
+    replace(exe, &new)?;
     Ok(String::from_utf8_lossy(&check.stdout).trim().to_string())
+}
+
+fn replace(exe: &Path, new: &Path) -> std::io::Result<()> {
+    let previous = with_suffix(exe, ".prev");
+    std::fs::rename(exe, &previous)?;
+    if let Err(error) = std::fs::rename(new, exe) {
+        std::fs::rename(&previous, exe).map_err(|rollback| {
+            std::io::Error::other(format!("安装失败：{error}；恢复旧程序失败：{rollback}"))
+        })?;
+        return Err(error);
+    }
+    Ok(())
 }
 
 fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
@@ -148,6 +159,17 @@ mod tests {
             "old"
         );
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn failed_replacement_restores_old_executable() {
+        let dir = std::env::temp_dir().join(format!("openxdr-rollback-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).unwrap();
+        let exe = dir.join("agent");
+        std::fs::write(&exe, "old").unwrap();
+        assert!(replace(&exe, &dir.join("missing")).is_err());
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

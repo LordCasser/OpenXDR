@@ -1051,6 +1051,7 @@ dependencies = [
  "prost",
  "protoc-bin-vendored",
  "rcgen",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",

@@ -25,7 +25,10 @@ pub fn request(dir: &Path) -> Result<String, Box<dyn std::error::Error>> {
     dn.push(DnType::CommonName, format!("host:{host}"));
     params.distinguished_name = dn;
     let csr = params.serialize_request(&key)?.pem()?;
-    write_private(&dir.join("agent.key"), key.serialize_pem().as_bytes())?;
+    write_private(
+        &dir.join("agent.key.pending"),
+        key.serialize_pem().as_bytes(),
+    )?;
     Ok(serde_json::json!({ "hostname": host, "os": std::env::consts::OS, "csr": csr }).to_string())
 }
 
@@ -42,21 +45,35 @@ struct Grant {
 pub fn apply(dir: &Path, mut input: impl Read) -> Result<(), Box<dyn std::error::Error>> {
     let mut body = String::new();
     input.read_to_string(&mut body)?;
-    let grant: Grant =
-        serde_json::from_str(&body).map_err(|e| format!("接入应答无法解析（{e}）：{body}"))?;
+    let grant: Grant = serde_json::from_str(&body).map_err(|e| format!("接入应答无法解析：{e}"))?;
     if grant.server.is_empty() || grant.server.contains(['\n', '\r']) {
         return Err("接入应答缺少有效的 server 地址".into());
     }
     let mut env = format!("OPENXDR_SERVER={}\n", grant.server);
     if !grant.cert.is_empty() {
-        let (ca, cert, key) = (
-            dir.join("ca.crt"),
-            dir.join("agent.crt"),
-            dir.join("agent.key"),
-        );
-        if !key.exists() {
-            return Err("缺少私钥，先执行 enroll-request".into());
+        use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
+        let key_pem = std::fs::read(dir.join("agent.key.pending"))?;
+        let key = PrivateKeyDer::from_pem_slice(&key_pem)?;
+        let certs =
+            CertificateDer::pem_slice_iter(grant.cert.as_bytes()).collect::<Result<Vec<_>, _>>()?;
+        let provider = rustls::crypto::ring::default_provider();
+        let certified = rustls::sign::CertifiedKey::from_der(certs, key, &provider)?;
+        certified.keys_match()?;
+        if CertificateDer::pem_slice_iter(grant.ca.as_bytes())
+            .collect::<Result<Vec<_>, _>>()?
+            .is_empty()
+        {
+            return Err("接入应答缺少 CA 证书".into());
         }
+        // 每次签发独立保存，只有配置原子替换后才启用；旧身份始终可回滚。
+        let identity = dir.join(format!("identity-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&identity)?;
+        let (ca, cert, key) = (
+            identity.join("ca.crt"),
+            identity.join("agent.crt"),
+            identity.join("agent.key"),
+        );
+        write_private(&key, &key_pem)?;
         std::fs::write(&ca, &grant.ca)?;
         std::fs::write(&cert, &grant.cert)?;
         env += &format!(
@@ -66,7 +83,9 @@ pub fn apply(dir: &Path, mut input: impl Read) -> Result<(), Box<dyn std::error:
             key.display()
         );
     }
-    write_private(&dir.join("agent.env"), env.as_bytes())?;
+    write_private(&dir.join("agent.env.new"), env.as_bytes())?;
+    std::fs::rename(dir.join("agent.env.new"), dir.join("agent.env"))?;
+    let _ = std::fs::remove_file(dir.join("agent.key.pending"));
     Ok(())
 }
 
@@ -134,16 +153,43 @@ mod tests {
         let req: serde_json::Value = serde_json::from_str(&request(&dir).unwrap()).unwrap();
         assert_eq!(req["hostname"], hostname());
         assert!(req["csr"].as_str().unwrap().contains("CERTIFICATE REQUEST"));
-        assert!(dir.join("agent.key").exists());
-
-        let grant = r#"{"server":"https://10.0.0.1:8081","ca":"CA","cert":"CERT"}"#;
+        assert!(dir.join("agent.key.pending").exists());
+        // 被拒绝、无效应答或证书与私钥不匹配都不能损坏已安装身份。
+        std::fs::write(dir.join("agent.key"), "old-key").unwrap();
+        std::fs::write(dir.join("agent.env"), "old-config").unwrap();
+        assert!(
+            apply(
+                &dir,
+                br#"{"server":"https://host:8081","ca":"bad","cert":"bad"}"#.as_slice()
+            )
+            .is_err()
+        );
+        request(&dir).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("agent.key")).unwrap(),
+            "old-key"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("agent.env")).unwrap(),
+            "old-config"
+        );
+        let key =
+            KeyPair::from_pem(&std::fs::read_to_string(dir.join("agent.key.pending")).unwrap())
+                .unwrap();
+        let cert = CertificateParams::new(vec!["localhost".into()])
+            .unwrap()
+            .self_signed(&key)
+            .unwrap()
+            .pem();
+        let grant =
+            serde_json::json!({"server":"https://host:8081", "ca":cert, "cert":cert}).to_string();
         apply(&dir, grant.as_bytes()).unwrap();
         let env = std::fs::read_to_string(dir.join("agent.env")).unwrap();
-        assert!(env.starts_with("OPENXDR_SERVER=https://10.0.0.1:8081\n"));
-        assert!(env.contains("OPENXDR_KEY="));
+        assert!(env.contains("identity-"));
+        assert!(!dir.join("agent.key.pending").exists());
         assert_eq!(
-            std::fs::read_to_string(dir.join("agent.crt")).unwrap(),
-            "CERT"
+            std::fs::read_to_string(dir.join("agent.key")).unwrap(),
+            "old-key"
         );
 
         // 明文部署：只写地址
