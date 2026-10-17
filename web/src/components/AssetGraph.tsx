@@ -172,7 +172,7 @@ export function AssetGraph({ graph, search, selected, onSelect, height = 640 }: 
           ))}
           <defs>
             {(['idle', 'sel'] as const).map(k => (
-              <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse">
+              <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={9} markerHeight={9} markerUnits="userSpaceOnUse" orient="auto-start-reverse">
                 <path d="M0,0 L10,5 L0,10 z" fill={k === 'sel' ? token.colorPrimary : token.colorTextQuaternary} />
               </marker>
             ))}
