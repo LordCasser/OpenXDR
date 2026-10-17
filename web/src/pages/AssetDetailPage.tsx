@@ -11,6 +11,7 @@ import {
   type AgentConfig, type FindingRow,
 } from '../api'
 import { useCanActIn, useSession } from '../app/session'
+import { AssetProfileView } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { eventSummary } from '../components/eventSummary'
@@ -37,6 +38,7 @@ const SWITCHES: { name: keyof AgentConfig; key: MsgKey }[] = [
   { name: 'collectAuth', key: 'cfgAuth' },
   { name: 'collectPersist', key: 'cfgPersist' },
   { name: 'collectNetwork', key: 'cfgNetwork' },
+  { name: 'collectInventory', key: 'cfgInventory' },
 ]
 
 // 采集配置：开关缺省全开；目录为空表示用 agent 内置的敏感目录清单
@@ -98,7 +100,7 @@ export function AssetDetailPage() {
   const navigate = useNavigate()
   const client = useQueryClient()
   const { message } = App.useApp()
-  const { groups } = useSession()
+  const { groups, isAdmin } = useSession()
   const [starting, setStarting] = useState(false)
   const [tab, setTab] = useState('incidents')
   const [incPage, setIncPage] = useState(1)
@@ -235,6 +237,9 @@ export function AssetDetailPage() {
           </Card>
         </Col>
         <Col xs={24} xl={7}>
+          <Card title={t('profileTitle')} style={{ marginBottom: 16 }}>
+            <AssetProfileView assetId={asset.id} groupId={asset.groupId} canEdit={canAct} isGroupAdmin={isAdmin || group?.role === 'admin'} compact />
+          </Card>
           <Card title={t('hostInfo')}>
             <Descriptions column={1} size="small">
               <Descriptions.Item label="OS">{asset.os ?? '-'}</Descriptions.Item>

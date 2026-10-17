@@ -1,0 +1,144 @@
+import { ArrowRightOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Card, Descriptions, Drawer, Empty, Flex, Input, Skeleton, Space, Switch, Tag, Typography, theme } from 'antd'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router'
+import { fetchAssetMap, type AssetMap, type MapNode } from '../api'
+import { useSession } from '../app/session'
+import { AssetGraph, type Selection } from '../components/AssetGraph'
+import { AssetProfileView, CritTag, ZoneTag, useZoneColor } from '../components/AssetProfile'
+import { LoadError } from '../components/LoadError'
+import { Page } from '../components/Page'
+import { fmtTime } from '../components/format'
+import { useI18n } from '../i18n'
+
+// 图例：区域颜色 + 节点形态
+function Legend() {
+  const { t } = useI18n()
+  const { token } = theme.useToken()
+  const color = useZoneColor()
+  const dot = (fill: string, dashed?: boolean) => (
+    <svg width={14} height={14} aria-hidden><circle cx={7} cy={7} r={5.5} fill={dashed ? 'none' : fill} stroke={fill} strokeWidth={1.5} strokeDasharray={dashed ? '2 2' : undefined} /></svg>
+  )
+  return (
+    <Flex gap={16} wrap style={{ fontSize: 12, color: token.colorTextSecondary }}>
+      {(['external', 'dmz', 'cloud', 'internal'] as const).map(k => (
+        <Space key={k} size={4}>{dot(color(k))}{t(({ external: 'zoneExternal', dmz: 'zoneDmz', cloud: 'zoneCloud', internal: 'zoneInternal' } as const)[k])}</Space>
+      ))}
+      <Space size={4}>{dot(token.colorTextTertiary, true)}{t('mapLegendDiscovered')}</Space>
+      <Space size={4}>{dot(token.colorTextTertiary)}{t('mapLegendManaged')}</Space>
+      <span>{t('mapLegendSize')}</span>
+    </Flex>
+  )
+}
+
+export function AssetMapPage() {
+  const { t } = useI18n()
+  const { group, isAdmin, canWrite } = useSession()
+  const [search, setSearch] = useState('')
+  const [showDiscovered, setShowDiscovered] = useState(true)
+  const [showInternet, setShowInternet] = useState(true)
+  const [selected, setSelected] = useState<Selection>(null)
+  const query = useQuery({ queryKey: ['assetMap', group?.id], queryFn: () => fetchAssetMap(group!.id), enabled: !!group, refetchInterval: 60_000 })
+
+  // 开关只影响画面，不改数据：去掉的节点连同它的边一起隐藏
+  const graph = useMemo<AssetMap | undefined>(() => {
+    if (!query.data) return undefined
+    const keep = (n: MapNode) => (showDiscovered || (n.kind !== 'discovered' && n.kind !== 'managed')) && (showInternet || n.kind !== 'internet')
+    const nodes = query.data.nodes.filter(keep)
+    const ids = new Set(nodes.map(n => n.id))
+    return { nodes, edges: query.data.edges.filter(e => ids.has(e.from) && ids.has(e.to)) }
+  }, [query.data, showDiscovered, showInternet])
+
+  const isGroupAdmin = isAdmin || group?.role === 'admin'
+  const canEdit = isAdmin || (canWrite && (group?.role === 'admin' || group?.role === 'analyst'))
+
+  return (
+    <Page title={t('navAssetMap')} subtitle={t('assetMapSubtitle')}>
+      <Card styles={{ body: { padding: 0 } }}>
+        <Flex justify="space-between" align="center" gap={12} wrap className="filter-bar">
+          <Space wrap>
+            <Input.Search allowClear placeholder={t('mapSearch')} aria-label={t('mapSearch')} style={{ width: 240, maxWidth: '100%' }}
+              value={search} onChange={e => setSearch(e.target.value)} />
+            <Space size={6}><Switch size="small" checked={showDiscovered} onChange={setShowDiscovered} aria-label={t('mapShowDiscovered')} />{t('mapShowDiscovered')}</Space>
+            <Space size={6}><Switch size="small" checked={showInternet} onChange={setShowInternet} aria-label={t('mapShowInternet')} />{t('mapShowInternet')}</Space>
+          </Space>
+          <Legend />
+        </Flex>
+        {query.isError ? <LoadError error={query.error} onRetry={() => query.refetch()} />
+          : !graph ? <Skeleton active style={{ padding: 24 }} />
+            : graph.nodes.length === 0 ? <Empty style={{ padding: 64 }} description={t('mapEmpty')} />
+              : <AssetGraph graph={graph} search={search} selected={selected} onSelect={setSelected} height={Math.max(520, window.innerHeight - 260)} />}
+      </Card>
+
+      <Drawer open={!!selected} size={480} mask={false} onClose={() => setSelected(null)}
+        title={selected && ('node' in selected ? <NodeTitle node={selected.node} /> : `${selected.from.label} → ${selected.to.label}`)}>
+        {selected && 'node' in selected && <NodeDetail node={selected.node} graph={query.data!} canEdit={canEdit} isGroupAdmin={isGroupAdmin} />}
+        {selected && 'edge' in selected && (
+          <Descriptions column={1} size="small">
+            {selected.edge.note && <Descriptions.Item label={t('edgeNote')}>{selected.edge.note}</Descriptions.Item>}
+            <Descriptions.Item label={t('edgePorts')}>{selected.edge.ports.map(p => <Tag key={p} className="mono">{p}</Tag>)}</Descriptions.Item>
+            <Descriptions.Item label={t('edgeProcesses')}>{selected.edge.processes.length ? selected.edge.processes.join(', ') : '-'}</Descriptions.Item>
+            <Descriptions.Item label={t('edgeCount')}>{selected.edge.count}</Descriptions.Item>
+            <Descriptions.Item label={t('thLastActive')}>{fmtTime(selected.edge.lastSeen)}</Descriptions.Item>
+            {selected.edge.targets?.length ? <Descriptions.Item label={t('topTargets')}>{selected.edge.targets.map(x => <div key={x} className="mono">{x}</div>)}</Descriptions.Item> : null}
+          </Descriptions>
+        )}
+      </Drawer>
+    </Page>
+  )
+}
+
+function NodeTitle({ node }: { node: MapNode }) {
+  const { t } = useI18n()
+  return (
+    <Space wrap>
+      <span className={node.kind === 'asset' ? undefined : 'mono'}>{node.kind === 'internet' ? t('mapLegendInternet') : node.label}</span>
+      {node.kind !== 'internet' && <ZoneTag zone={node.zone} />}
+      {node.kind === 'asset' && <CritTag value={node.criticality} />}
+    </Space>
+  )
+}
+
+function NodeDetail({ node, graph, canEdit, isGroupAdmin }: { node: MapNode; graph: AssetMap; canEdit: boolean; isGroupAdmin: boolean }) {
+  const { t } = useI18n()
+  const navigate = useNavigate()
+  const { group } = useSession()
+  const label = (id: string) => graph.nodes.find(n => n.id === id)?.label ?? id
+
+  if (node.kind === 'asset') {
+    return (
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+        <Link to={`/assets/${node.id}`}>{t('viewAsset')} <ArrowRightOutlined /></Link>
+        <AssetProfileView key={node.id} assetId={node.id} groupId={group?.id} canEdit={canEdit} isGroupAdmin={isGroupAdmin} compact />
+      </Space>
+    )
+  }
+  const inbound = graph.edges.filter(e => e.to === node.id)
+  return (
+    <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+        {t(node.kind === 'internet' ? 'nodeInternetHint' : node.kind === 'managed' ? 'nodeOtherGroupHint' : 'nodeUnmanagedHint')}
+      </Typography.Paragraph>
+      {node.ports?.length ? (
+        <div>
+          <Typography.Text strong>{t('portsSeen')}</Typography.Text>
+          <div style={{ marginTop: 8 }}>{node.ports.map(p => <Tag key={p} className="mono">{p}</Tag>)}</div>
+        </div>
+      ) : null}
+      {node.kind !== 'internet' && inbound.length > 0 && (
+        <div>
+          <Typography.Text strong>{t('connectedBy')}</Typography.Text>
+          <div style={{ marginTop: 8 }}>{inbound.map(e => <Tag key={e.from}>{label(e.from)}</Tag>)}</div>
+        </div>
+      )}
+      {node.kind === 'internet' && graph.edges.filter(e => e.from === node.id || e.to === node.id).map(e => (
+        <div key={`${e.from}>${e.to}`}>
+          <Typography.Text strong>{e.from === node.id ? `${t('mapLegendInternet')} → ${label(e.to)}` : `${label(e.from)} → ${t('mapLegendInternet')}`}</Typography.Text>
+          <div style={{ marginTop: 6 }}>{(e.targets ?? []).map(x => <div key={x} className="mono" style={{ fontSize: 12 }}>{x}</div>)}</div>
+        </div>
+      ))}
+      {node.kind === 'discovered' && <Button type="primary" onClick={() => navigate('/assets')}>{t('goEnroll')}</Button>}
+    </Space>
+  )
+}

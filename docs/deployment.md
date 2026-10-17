@@ -357,6 +357,7 @@ server 全部通过环境变量配置，均有默认值：
 | `AUTO_RESPONSE_EXEMPT` | 空 | 逗号分隔的主机名，绝不自动隔离 |
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测的按资产学习期 |
 | `RETENTION_DAYS` | `30` | 原始事件保留天数，0 表示不清理。被告警引用的证据事件不受影响 |
+| `ASSET_ANNOTATE_REFRESH_HOURS` | `24` | 资产 AI 标注的定时刷新周期（小时），0 表示只在事实变化或人工要求时标注；需配置 `AI_MODEL`，见 [资产图谱与攻击面](asset-map.md) |
 | `AUTO_CLOSE_BENIGN_DAYS` | `7` | 未结案事件 AI 判良性、最高级别低于 4（高危）且创建超过 N 天时，每小时由系统按 `false_positive` 自动结案并记审计；0 表示关闭 |
 
 AI 助手相关的 `PI_*` 变量见 [pi-backend.md](pi-backend.md#配置)；按包整理的完整清单见 [detection.md](detection.md#server-环境变量全清单servermaingo)。

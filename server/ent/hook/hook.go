@@ -56,6 +56,18 @@ func (f AssetFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AssetMutation", m)
 }
 
+// The AssetLinkFunc type is an adapter to allow the use of ordinary
+// function as AssetLink mutator.
+type AssetLinkFunc func(context.Context, *ent.AssetLinkMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AssetLinkFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AssetLinkMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AssetLinkMutation", m)
+}
+
 // The AuditLogFunc type is an adapter to allow the use of ordinary
 // function as AuditLog mutator.
 type AuditLogFunc func(context.Context, *ent.AuditLogMutation) (ent.Value, error)
@@ -294,6 +306,18 @@ func (f UserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserMutation", m)
+}
+
+// The ZoneFunc type is an adapter to allow the use of ordinary
+// function as Zone mutator.
+type ZoneFunc func(context.Context, *ent.ZoneMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ZoneFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ZoneMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ZoneMutation", m)
 }
 
 // Condition is a hook condition function.

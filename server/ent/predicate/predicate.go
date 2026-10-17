@@ -18,6 +18,9 @@ type Approval func(*sql.Selector)
 // Asset is the predicate function for asset builders.
 type Asset func(*sql.Selector)
 
+// AssetLink is the predicate function for assetlink builders.
+type AssetLink func(*sql.Selector)
+
 // AuditLog is the predicate function for auditlog builders.
 type AuditLog func(*sql.Selector)
 
@@ -77,3 +80,6 @@ type TaskRun func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
+
+// Zone is the predicate function for zone builders.
+type Zone func(*sql.Selector)

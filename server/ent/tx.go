@@ -20,6 +20,8 @@ type Tx struct {
 	Approval *ApprovalClient
 	// Asset is the client for interacting with the Asset builders.
 	Asset *AssetClient
+	// AssetLink is the client for interacting with the AssetLink builders.
+	AssetLink *AssetLinkClient
 	// AuditLog is the client for interacting with the AuditLog builders.
 	AuditLog *AuditLogClient
 	// Command is the client for interacting with the Command builders.
@@ -60,6 +62,8 @@ type Tx struct {
 	TaskRun *TaskRunClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// Zone is the client for interacting with the Zone builders.
+	Zone *ZoneClient
 
 	// lazily loaded.
 	client     *Client
@@ -195,6 +199,7 @@ func (tx *Tx) init() {
 	tx.Alert = NewAlertClient(tx.config)
 	tx.Approval = NewApprovalClient(tx.config)
 	tx.Asset = NewAssetClient(tx.config)
+	tx.AssetLink = NewAssetLinkClient(tx.config)
 	tx.AuditLog = NewAuditLogClient(tx.config)
 	tx.Command = NewCommandClient(tx.config)
 	tx.CommandPolicy = NewCommandPolicyClient(tx.config)
@@ -215,6 +220,7 @@ func (tx *Tx) init() {
 	tx.Task = NewTaskClient(tx.config)
 	tx.TaskRun = NewTaskRunClient(tx.config)
 	tx.User = NewUserClient(tx.config)
+	tx.Zone = NewZoneClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

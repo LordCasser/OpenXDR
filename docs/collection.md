@@ -152,6 +152,15 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 - 路径按 /lib/modules/$(uname -r)/ 解析，解析失败只报名字不编造路径；
   /proc/modules 拿不到加载者——进程与 username 留空（那是 audit/eBPF 的领域）
 
+### 设备清单（inventory，监听端口与云环境）
+
+`inventory_linux.rs` 读 `/proc/net/{tcp,tcp6,udp,udp6}`：TCP 取 LISTEN，UDP 取未连接且端口低于
+`ip_local_port_range` 下界的套接字。属主按 socket inode 扫 `/proc/<pid>/fd` 找，只在监听集合
+变化时重扫。只看得到 agent 所在网络命名空间。云环境由 `cloud.rs` 在进程启动时探测一次
+（手写最小 HTTP 客户端，连接 300ms、读写 1s 超时）：AWS 要求实例 ID 格式正确且拿得到
+region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实例 ID 前缀，拿不准就不报。
+产出 class 5001，见 [事件模型](events.md#5001-设备清单)。
+
 ## Windows 采集路径
 
 ### 进程采集（ETW）
@@ -214,6 +223,12 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 - 缓冲溢出（`ERROR_NOTIFY_ENUM_DIR`）打日志继续；事件格式与 Linux 侧完全一致
   （1001 + activity_id + `file.path`，无进程上下文——RDCW 不提供）
 
+### 设备清单（inventory_win）
+
+`GetExtendedTcpTable`（`TCP_TABLE_OWNER_PID_LISTENER`）与 `GetExtendedUdpTable`
+（`UDP_TABLE_OWNER_PID`）取 v4/v6 监听表，UDP 端口 ≥ 49152 视为客户端套接字丢弃；
+进程名与路径按 pid 补齐。云探测与 Linux 共用 `cloud.rs`。未实机验证。
+
 ### 登录与安全日志事件（authwatch_win）
 
 - `EvtSubscribe` 订阅 Security 日志，只订未来事件：
@@ -247,6 +262,7 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 | `collectAuth` | true | 控制 authwatch | 控制 authwatch_win |
 | `collectPersist` | true | 无消费者 | 控制 persistwatch |
 | `collectNetwork` | true | 仅 eBPF 构建有效 | 无消费者 |
+| `collectInventory` | true | 控制 inventory | 控制 inventory_win |
 | `fileWatchDirs` | []（内置清单） | 覆盖 fswatch 默认目录 | 覆盖 fswatch_win 默认目录 |
 | （进程采集） | — | 无开关，按降级链选择 | 无开关，无条件启动 |
 

@@ -34,6 +34,27 @@ func (Asset) Fields() []ent.Field {
 		field.String("agent_version").Optional().Nillable(),
 		// 失联起始时刻：已发过失联通知，恢复后清空。避免同一次失联反复通知
 		field.Time("silent_since").Optional().Nillable(),
+
+		// 设备清单：agent 上报的监听端口与云环境（OCSF 5001），由 assetmap 物化。原样是 agent 的 JSON，读时校验
+		field.JSON("listening", json.RawMessage{}).Optional(),
+		field.JSON("cloud", json.RawMessage{}).Optional(),
+		field.Time("inventory_at").Optional().Nillable(),
+		// 组管理员手工指定的区域；为空按网段、云环境、IP 自动划分
+		field.UUID("zone_id", uuid.UUID{}).Optional().Nillable(),
+
+		// AI 标注：角色、功能说明、重要程度（1-5）与依据；人改过的字段记进 locked_fields，AI 不再覆盖
+		field.String("role").Optional().Nillable(),
+		field.Text("summary").Optional().Nillable(),
+		field.Int("criticality").Optional().Nillable(),
+		field.Text("annotation_reason").Optional().Nillable(),
+		// 对端（主机名或 IP）到关系说明，图谱边上展示
+		field.JSON("relation_notes", map[string]string{}).Optional(),
+		field.Strings("locked_fields").Optional(),
+		field.Time("annotated_at").Optional().Nillable(),
+		// 标注时的事实指纹：监听端口、内网依赖等变了才重新标注
+		field.String("annotated_facts").Optional().Nillable(),
+		// 人工点了「重新标注」，下一轮优先处理
+		field.Time("annotate_requested_at").Optional().Nillable(),
 	}
 }
 

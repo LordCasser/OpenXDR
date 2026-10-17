@@ -13,6 +13,7 @@ OpenXDR 采用 OCSF 风格事件模型。本文列出所有事件类别、字段
 | 4001 | 网络活动（Network Activity） | agent / sensor | agent netwatch 出站连接（Linux eBPF / Windows ETW Kernel-Network）；sensor 非 DNS 会话 |
 | 4003 | DNS 活动（DNS Activity） | sensor | 会话带 dns_query 时判定 |
 | 1005 | 模块活动（Module Activity） | agent | Linux kmodwatch（/proc/modules diff） |
+| 5001 | 设备清单（Device Inventory Info） | agent | inventory：监听端口与云环境快照，供资产图谱与攻击面 |
 | 201002 | 注册表值活动（Registry Value Activity） | agent | Windows persistwatch 注册表键/服务快照 |
 | 100001 | 应用日志（OCSF 私有段） | syslog | server syslog 接入 |
 
@@ -201,6 +202,28 @@ Linux kmodwatch（`kmodwatch.rs`）：每 30s 读 /proc/modules 做 diff，
 路径按 /lib/modules/$(uname -r)/ 解析，解析失败只有 name 不编造 path。
 `module.file.path` 与 Sigma 引擎的 ImageLoaded 字段映射对齐
 （`server/internal/sigma/engine.go:50`）。
+
+## 5001 设备清单
+
+agent inventory（`collector/inventory.rs`）：启动时报一次全量，之后每 60 秒比对监听表，
+（协议、地址、端口、进程名）有变化或满 6 小时才再报。不产告警，由 server `assetmap`
+物化到资产上，见 [资产图谱与攻击面](asset-map.md)：
+
+```json
+{
+  "activity_id": 2,
+  "device": {
+    "listening": [
+      { "proto": "tcp", "addr": "0.0.0.0", "port": 22, "process": { "pid": 812, "name": "sshd", "file": { "path": "/usr/sbin/sshd" } } },
+      { "proto": "udp", "addr": "::", "port": 53 }
+    ],
+    "cloud": { "provider": "aliyun", "instance_id": "i-bp1...", "region": "cn-hangzhou", "public_ip": "47.1.2.3" }
+  }
+}
+```
+
+属主进程拿不到时整个 `process` 省略；不在云上时省略 `cloud`。`listening` 按 (proto, addr, port)
+去重排序，最多 512 条。
 
 ## 201002 注册表值活动
 

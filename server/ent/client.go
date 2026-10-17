@@ -15,6 +15,7 @@ import (
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/approval"
 	"openxdr/server/ent/asset"
+	"openxdr/server/ent/assetlink"
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
@@ -35,6 +36,7 @@ import (
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
+	"openxdr/server/ent/zone"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -56,6 +58,8 @@ type Client struct {
 	Approval *ApprovalClient
 	// Asset is the client for interacting with the Asset builders.
 	Asset *AssetClient
+	// AssetLink is the client for interacting with the AssetLink builders.
+	AssetLink *AssetLinkClient
 	// AuditLog is the client for interacting with the AuditLog builders.
 	AuditLog *AuditLogClient
 	// Command is the client for interacting with the Command builders.
@@ -96,6 +100,8 @@ type Client struct {
 	TaskRun *TaskRunClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// Zone is the client for interacting with the Zone builders.
+	Zone *ZoneClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -111,6 +117,7 @@ func (c *Client) init() {
 	c.Alert = NewAlertClient(c.config)
 	c.Approval = NewApprovalClient(c.config)
 	c.Asset = NewAssetClient(c.config)
+	c.AssetLink = NewAssetLinkClient(c.config)
 	c.AuditLog = NewAuditLogClient(c.config)
 	c.Command = NewCommandClient(c.config)
 	c.CommandPolicy = NewCommandPolicyClient(c.config)
@@ -131,6 +138,7 @@ func (c *Client) init() {
 	c.Task = NewTaskClient(c.config)
 	c.TaskRun = NewTaskRunClient(c.config)
 	c.User = NewUserClient(c.config)
+	c.Zone = NewZoneClient(c.config)
 }
 
 type (
@@ -227,6 +235,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Alert:           NewAlertClient(cfg),
 		Approval:        NewApprovalClient(cfg),
 		Asset:           NewAssetClient(cfg),
+		AssetLink:       NewAssetLinkClient(cfg),
 		AuditLog:        NewAuditLogClient(cfg),
 		Command:         NewCommandClient(cfg),
 		CommandPolicy:   NewCommandPolicyClient(cfg),
@@ -247,6 +256,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Task:            NewTaskClient(cfg),
 		TaskRun:         NewTaskRunClient(cfg),
 		User:            NewUserClient(cfg),
+		Zone:            NewZoneClient(cfg),
 	}, nil
 }
 
@@ -270,6 +280,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Alert:           NewAlertClient(cfg),
 		Approval:        NewApprovalClient(cfg),
 		Asset:           NewAssetClient(cfg),
+		AssetLink:       NewAssetLinkClient(cfg),
 		AuditLog:        NewAuditLogClient(cfg),
 		Command:         NewCommandClient(cfg),
 		CommandPolicy:   NewCommandPolicyClient(cfg),
@@ -290,6 +301,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Task:            NewTaskClient(cfg),
 		TaskRun:         NewTaskRunClient(cfg),
 		User:            NewUserClient(cfg),
+		Zone:            NewZoneClient(cfg),
 	}, nil
 }
 
@@ -319,10 +331,11 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
-		c.CommandPolicy, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
-		c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline, c.Report, c.Session,
-		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User,
+		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink, c.AuditLog,
+		c.Command, c.CommandPolicy, c.EnrollToken, c.Event, c.Finding, c.Group,
+		c.GroupMember, c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline,
+		c.Report, c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task,
+		c.TaskRun, c.User, c.Zone,
 	} {
 		n.Use(hooks...)
 	}
@@ -332,10 +345,11 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
-		c.CommandPolicy, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
-		c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline, c.Report, c.Session,
-		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User,
+		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink, c.AuditLog,
+		c.Command, c.CommandPolicy, c.EnrollToken, c.Event, c.Finding, c.Group,
+		c.GroupMember, c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline,
+		c.Report, c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task,
+		c.TaskRun, c.User, c.Zone,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -352,6 +366,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Approval.mutate(ctx, m)
 	case *AssetMutation:
 		return c.Asset.mutate(ctx, m)
+	case *AssetLinkMutation:
+		return c.AssetLink.mutate(ctx, m)
 	case *AuditLogMutation:
 		return c.AuditLog.mutate(ctx, m)
 	case *CommandMutation:
@@ -392,6 +408,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.TaskRun.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
+	case *ZoneMutation:
+		return c.Zone.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -1022,6 +1040,139 @@ func (c *AssetClient) mutate(ctx context.Context, m *AssetMutation) (Value, erro
 		return (&AssetDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Asset mutation op: %q", m.Op())
+	}
+}
+
+// AssetLinkClient is a client for the AssetLink schema.
+type AssetLinkClient struct {
+	config
+}
+
+// NewAssetLinkClient returns a client for the AssetLink from the given config.
+func NewAssetLinkClient(c config) *AssetLinkClient {
+	return &AssetLinkClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `assetlink.Hooks(f(g(h())))`.
+func (c *AssetLinkClient) Use(hooks ...Hook) {
+	c.hooks.AssetLink = append(c.hooks.AssetLink, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `assetlink.Intercept(f(g(h())))`.
+func (c *AssetLinkClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AssetLink = append(c.inters.AssetLink, interceptors...)
+}
+
+// Create returns a builder for creating a AssetLink entity.
+func (c *AssetLinkClient) Create() *AssetLinkCreate {
+	mutation := newAssetLinkMutation(c.config, OpCreate)
+	return &AssetLinkCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AssetLink entities.
+func (c *AssetLinkClient) CreateBulk(builders ...*AssetLinkCreate) *AssetLinkCreateBulk {
+	return &AssetLinkCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AssetLinkClient) MapCreateBulk(slice any, setFunc func(*AssetLinkCreate, int)) *AssetLinkCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AssetLinkCreateBulk{err: fmt.Errorf("calling to AssetLinkClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AssetLinkCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AssetLinkCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AssetLink.
+func (c *AssetLinkClient) Update() *AssetLinkUpdate {
+	mutation := newAssetLinkMutation(c.config, OpUpdate)
+	return &AssetLinkUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AssetLinkClient) UpdateOne(_m *AssetLink) *AssetLinkUpdateOne {
+	mutation := newAssetLinkMutation(c.config, OpUpdateOne, withAssetLink(_m))
+	return &AssetLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AssetLinkClient) UpdateOneID(id uuid.UUID) *AssetLinkUpdateOne {
+	mutation := newAssetLinkMutation(c.config, OpUpdateOne, withAssetLinkID(id))
+	return &AssetLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AssetLink.
+func (c *AssetLinkClient) Delete() *AssetLinkDelete {
+	mutation := newAssetLinkMutation(c.config, OpDelete)
+	return &AssetLinkDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AssetLinkClient) DeleteOne(_m *AssetLink) *AssetLinkDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AssetLinkClient) DeleteOneID(id uuid.UUID) *AssetLinkDeleteOne {
+	builder := c.Delete().Where(assetlink.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AssetLinkDeleteOne{builder}
+}
+
+// Query returns a query builder for AssetLink.
+func (c *AssetLinkClient) Query() *AssetLinkQuery {
+	return &AssetLinkQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAssetLink},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AssetLink entity by its id.
+func (c *AssetLinkClient) Get(ctx context.Context, id uuid.UUID) (*AssetLink, error) {
+	return c.Query().Where(assetlink.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AssetLinkClient) GetX(ctx context.Context, id uuid.UUID) *AssetLink {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AssetLinkClient) Hooks() []Hook {
+	return c.hooks.AssetLink
+}
+
+// Interceptors returns the client interceptors.
+func (c *AssetLinkClient) Interceptors() []Interceptor {
+	return c.inters.AssetLink
+}
+
+func (c *AssetLinkClient) mutate(ctx context.Context, m *AssetLinkMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AssetLinkCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AssetLinkUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AssetLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AssetLinkDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AssetLink mutation op: %q", m.Op())
 	}
 }
 
@@ -3749,18 +3900,151 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 	}
 }
 
+// ZoneClient is a client for the Zone schema.
+type ZoneClient struct {
+	config
+}
+
+// NewZoneClient returns a client for the Zone from the given config.
+func NewZoneClient(c config) *ZoneClient {
+	return &ZoneClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `zone.Hooks(f(g(h())))`.
+func (c *ZoneClient) Use(hooks ...Hook) {
+	c.hooks.Zone = append(c.hooks.Zone, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `zone.Intercept(f(g(h())))`.
+func (c *ZoneClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Zone = append(c.inters.Zone, interceptors...)
+}
+
+// Create returns a builder for creating a Zone entity.
+func (c *ZoneClient) Create() *ZoneCreate {
+	mutation := newZoneMutation(c.config, OpCreate)
+	return &ZoneCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Zone entities.
+func (c *ZoneClient) CreateBulk(builders ...*ZoneCreate) *ZoneCreateBulk {
+	return &ZoneCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ZoneClient) MapCreateBulk(slice any, setFunc func(*ZoneCreate, int)) *ZoneCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ZoneCreateBulk{err: fmt.Errorf("calling to ZoneClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ZoneCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ZoneCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Zone.
+func (c *ZoneClient) Update() *ZoneUpdate {
+	mutation := newZoneMutation(c.config, OpUpdate)
+	return &ZoneUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ZoneClient) UpdateOne(_m *Zone) *ZoneUpdateOne {
+	mutation := newZoneMutation(c.config, OpUpdateOne, withZone(_m))
+	return &ZoneUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ZoneClient) UpdateOneID(id uuid.UUID) *ZoneUpdateOne {
+	mutation := newZoneMutation(c.config, OpUpdateOne, withZoneID(id))
+	return &ZoneUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Zone.
+func (c *ZoneClient) Delete() *ZoneDelete {
+	mutation := newZoneMutation(c.config, OpDelete)
+	return &ZoneDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ZoneClient) DeleteOne(_m *Zone) *ZoneDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ZoneClient) DeleteOneID(id uuid.UUID) *ZoneDeleteOne {
+	builder := c.Delete().Where(zone.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ZoneDeleteOne{builder}
+}
+
+// Query returns a query builder for Zone.
+func (c *ZoneClient) Query() *ZoneQuery {
+	return &ZoneQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeZone},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Zone entity by its id.
+func (c *ZoneClient) Get(ctx context.Context, id uuid.UUID) (*Zone, error) {
+	return c.Query().Where(zone.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ZoneClient) GetX(ctx context.Context, id uuid.UUID) *Zone {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ZoneClient) Hooks() []Hook {
+	return c.hooks.Zone
+}
+
+// Interceptors returns the client interceptors.
+func (c *ZoneClient) Interceptors() []Interceptor {
+	return c.inters.Zone
+}
+
+func (c *ZoneClient) mutate(ctx context.Context, m *ZoneMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ZoneCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ZoneUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ZoneUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ZoneDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Zone mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy,
-		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, Incident,
-		Intel, ProcessBaseline, Report, Session, SessionMessage, Setting, Suppression,
-		Task, TaskRun, User []ent.Hook
+		AgentSession, Alert, Approval, Asset, AssetLink, AuditLog, Command,
+		CommandPolicy, EnrollToken, Event, Finding, Group, GroupMember, HostCredential,
+		Incident, Intel, ProcessBaseline, Report, Session, SessionMessage, Setting,
+		Suppression, Task, TaskRun, User, Zone []ent.Hook
 	}
 	inters struct {
-		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy,
-		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, Incident,
-		Intel, ProcessBaseline, Report, Session, SessionMessage, Setting, Suppression,
-		Task, TaskRun, User []ent.Interceptor
+		AgentSession, Alert, Approval, Asset, AssetLink, AuditLog, Command,
+		CommandPolicy, EnrollToken, Event, Finding, Group, GroupMember, HostCredential,
+		Incident, Intel, ProcessBaseline, Report, Session, SessionMessage, Setting,
+		Suppression, Task, TaskRun, User, Zone []ent.Interceptor
 	}
 )

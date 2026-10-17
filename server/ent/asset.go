@@ -39,6 +39,32 @@ type Asset struct {
 	AgentVersion *string `json:"agent_version,omitempty"`
 	// SilentSince holds the value of the "silent_since" field.
 	SilentSince *time.Time `json:"silent_since,omitempty"`
+	// Listening holds the value of the "listening" field.
+	Listening json.RawMessage `json:"listening,omitempty"`
+	// Cloud holds the value of the "cloud" field.
+	Cloud json.RawMessage `json:"cloud,omitempty"`
+	// InventoryAt holds the value of the "inventory_at" field.
+	InventoryAt *time.Time `json:"inventory_at,omitempty"`
+	// ZoneID holds the value of the "zone_id" field.
+	ZoneID *uuid.UUID `json:"zone_id,omitempty"`
+	// Role holds the value of the "role" field.
+	Role *string `json:"role,omitempty"`
+	// Summary holds the value of the "summary" field.
+	Summary *string `json:"summary,omitempty"`
+	// Criticality holds the value of the "criticality" field.
+	Criticality *int `json:"criticality,omitempty"`
+	// AnnotationReason holds the value of the "annotation_reason" field.
+	AnnotationReason *string `json:"annotation_reason,omitempty"`
+	// RelationNotes holds the value of the "relation_notes" field.
+	RelationNotes map[string]string `json:"relation_notes,omitempty"`
+	// LockedFields holds the value of the "locked_fields" field.
+	LockedFields []string `json:"locked_fields,omitempty"`
+	// AnnotatedAt holds the value of the "annotated_at" field.
+	AnnotatedAt *time.Time `json:"annotated_at,omitempty"`
+	// AnnotatedFacts holds the value of the "annotated_facts" field.
+	AnnotatedFacts *string `json:"annotated_facts,omitempty"`
+	// AnnotateRequestedAt holds the value of the "annotate_requested_at" field.
+	AnnotateRequestedAt *time.Time `json:"annotate_requested_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AssetQuery when eager-loading is set.
 	Edges        AssetEdges `json:"edges"`
@@ -90,13 +116,15 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case asset.FieldAgentID, asset.FieldGroupID:
+		case asset.FieldAgentID, asset.FieldGroupID, asset.FieldZoneID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case asset.FieldIPAddrs, asset.FieldConfig:
+		case asset.FieldIPAddrs, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldRelationNotes, asset.FieldLockedFields:
 			values[i] = new([]byte)
-		case asset.FieldHostname, asset.FieldOs, asset.FieldAgentVersion:
+		case asset.FieldCriticality:
+			values[i] = new(sql.NullInt64)
+		case asset.FieldHostname, asset.FieldOs, asset.FieldAgentVersion, asset.FieldRole, asset.FieldSummary, asset.FieldAnnotationReason, asset.FieldAnnotatedFacts:
 			values[i] = new(sql.NullString)
-		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince:
+		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince, asset.FieldInventoryAt, asset.FieldAnnotatedAt, asset.FieldAnnotateRequestedAt:
 			values[i] = new(sql.NullTime)
 		case asset.FieldID:
 			values[i] = new(uuid.UUID)
@@ -190,6 +218,101 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 				_m.SilentSince = new(time.Time)
 				*_m.SilentSince = value.Time
 			}
+		case asset.FieldListening:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field listening", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Listening); err != nil {
+					return fmt.Errorf("unmarshal field listening: %w", err)
+				}
+			}
+		case asset.FieldCloud:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field cloud", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Cloud); err != nil {
+					return fmt.Errorf("unmarshal field cloud: %w", err)
+				}
+			}
+		case asset.FieldInventoryAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field inventory_at", values[i])
+			} else if value.Valid {
+				_m.InventoryAt = new(time.Time)
+				*_m.InventoryAt = value.Time
+			}
+		case asset.FieldZoneID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field zone_id", values[i])
+			} else if value.Valid {
+				_m.ZoneID = new(uuid.UUID)
+				*_m.ZoneID = *value.S.(*uuid.UUID)
+			}
+		case asset.FieldRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field role", values[i])
+			} else if value.Valid {
+				_m.Role = new(string)
+				*_m.Role = value.String
+			}
+		case asset.FieldSummary:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field summary", values[i])
+			} else if value.Valid {
+				_m.Summary = new(string)
+				*_m.Summary = value.String
+			}
+		case asset.FieldCriticality:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field criticality", values[i])
+			} else if value.Valid {
+				_m.Criticality = new(int)
+				*_m.Criticality = int(value.Int64)
+			}
+		case asset.FieldAnnotationReason:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field annotation_reason", values[i])
+			} else if value.Valid {
+				_m.AnnotationReason = new(string)
+				*_m.AnnotationReason = value.String
+			}
+		case asset.FieldRelationNotes:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field relation_notes", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.RelationNotes); err != nil {
+					return fmt.Errorf("unmarshal field relation_notes: %w", err)
+				}
+			}
+		case asset.FieldLockedFields:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field locked_fields", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.LockedFields); err != nil {
+					return fmt.Errorf("unmarshal field locked_fields: %w", err)
+				}
+			}
+		case asset.FieldAnnotatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field annotated_at", values[i])
+			} else if value.Valid {
+				_m.AnnotatedAt = new(time.Time)
+				*_m.AnnotatedAt = value.Time
+			}
+		case asset.FieldAnnotatedFacts:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field annotated_facts", values[i])
+			} else if value.Valid {
+				_m.AnnotatedFacts = new(string)
+				*_m.AnnotatedFacts = value.String
+			}
+		case asset.FieldAnnotateRequestedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field annotate_requested_at", values[i])
+			} else if value.Valid {
+				_m.AnnotateRequestedAt = new(time.Time)
+				*_m.AnnotateRequestedAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -278,6 +401,63 @@ func (_m *Asset) String() string {
 	builder.WriteString(", ")
 	if v := _m.SilentSince; v != nil {
 		builder.WriteString("silent_since=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("listening=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Listening))
+	builder.WriteString(", ")
+	builder.WriteString("cloud=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Cloud))
+	builder.WriteString(", ")
+	if v := _m.InventoryAt; v != nil {
+		builder.WriteString("inventory_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ZoneID; v != nil {
+		builder.WriteString("zone_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.Role; v != nil {
+		builder.WriteString("role=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Summary; v != nil {
+		builder.WriteString("summary=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Criticality; v != nil {
+		builder.WriteString("criticality=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.AnnotationReason; v != nil {
+		builder.WriteString("annotation_reason=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("relation_notes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RelationNotes))
+	builder.WriteString(", ")
+	builder.WriteString("locked_fields=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LockedFields))
+	builder.WriteString(", ")
+	if v := _m.AnnotatedAt; v != nil {
+		builder.WriteString("annotated_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.AnnotatedFacts; v != nil {
+		builder.WriteString("annotated_facts=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.AnnotateRequestedAt; v != nil {
+		builder.WriteString("annotate_requested_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')

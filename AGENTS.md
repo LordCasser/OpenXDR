@@ -22,7 +22,8 @@
   4720/4726/4732 账户管理、1102 日志清空、4648 显式凭据、4719 审计策略，
   以及 PowerShell Operational 4104 脚本块）、网络出站采集（Linux eBPF /
   Windows ETW Kernel-Network TcpConnect，进程归属，与 sensor 同构 conn_tuple）
-  与内核模块加载监控（Linux /proc/modules diff，class_uid=1005）。
+  与内核模块加载监控（Linux /proc/modules diff，class_uid=1005），以及设备清单
+  （监听端口与属主进程、云厂商元数据，class_uid=5001，供资产图谱与攻击面）。
   容器或 WSL2 中 netlink 不可用，agent 会主动退回轮询——宁可弱采集也不产假数据。
 - **sensor/**（Rust，crate 名 `openxdr-sensor`）：全流量探针，只出会话元数据不存 PCAP。
   双抓包后端：AF_PACKET v3（默认）与 AF_XDP（`--features xdp`，需驱动支持，仅入向）。
@@ -111,6 +112,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `syslog`：syslog 接入（UDP+TCP，RFC3164/RFC5424）
 - `api` / `auth` / `audit`：REST API、认证与 RBAC、审计日志
 - `janitor`：原始事件保留期清理、低危良性事件到期自动结案
+- `assetmap`：资产图谱与攻击面——设备清单物化、依赖边聚合、区域与暴露判定、AI 标注（单活增量扫描事件）
 - `review`：需人工复核的统一口径（通知、总览计数、列表筛选与自动结案共用）
 - `testdb`：集成测试共享的 Postgres 连接与清表（仅 `integration` tag 编译）
 - `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`gencerts`（证书工具）

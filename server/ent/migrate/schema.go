@@ -144,12 +144,66 @@ var (
 		{Name: "group_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "agent_version", Type: field.TypeString, Nullable: true},
 		{Name: "silent_since", Type: field.TypeTime, Nullable: true},
+		{Name: "listening", Type: field.TypeJSON, Nullable: true},
+		{Name: "cloud", Type: field.TypeJSON, Nullable: true},
+		{Name: "inventory_at", Type: field.TypeTime, Nullable: true},
+		{Name: "zone_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "role", Type: field.TypeString, Nullable: true},
+		{Name: "summary", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "criticality", Type: field.TypeInt, Nullable: true},
+		{Name: "annotation_reason", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "relation_notes", Type: field.TypeJSON, Nullable: true},
+		{Name: "locked_fields", Type: field.TypeJSON, Nullable: true},
+		{Name: "annotated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "annotated_facts", Type: field.TypeString, Nullable: true},
+		{Name: "annotate_requested_at", Type: field.TypeTime, Nullable: true},
 	}
 	// AssetsTable holds the schema information for the "assets" table.
 	AssetsTable = &schema.Table{
 		Name:       "assets",
 		Columns:    AssetsColumns,
 		PrimaryKey: []*schema.Column{AssetsColumns[0]},
+	}
+	// AssetLinksColumns holds the columns for the "asset_links" table.
+	AssetLinksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "src_ip", Type: field.TypeString},
+		{Name: "src_asset_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "dst_ip", Type: field.TypeString},
+		{Name: "dst_port", Type: field.TypeInt},
+		{Name: "proto", Type: field.TypeString},
+		{Name: "process", Type: field.TypeString, Default: ""},
+		{Name: "count", Type: field.TypeInt64},
+		{Name: "first_seen", Type: field.TypeTime},
+		{Name: "last_seen", Type: field.TypeTime},
+	}
+	// AssetLinksTable holds the schema information for the "asset_links" table.
+	AssetLinksTable = &schema.Table{
+		Name:       "asset_links",
+		Columns:    AssetLinksColumns,
+		PrimaryKey: []*schema.Column{AssetLinksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "assetlink_src_ip_dst_ip_dst_port_proto_process",
+				Unique:  true,
+				Columns: []*schema.Column{AssetLinksColumns[1], AssetLinksColumns[3], AssetLinksColumns[4], AssetLinksColumns[5], AssetLinksColumns[6]},
+			},
+			{
+				Name:    "assetlink_src_asset_id",
+				Unique:  false,
+				Columns: []*schema.Column{AssetLinksColumns[2]},
+			},
+			{
+				Name:    "assetlink_dst_ip",
+				Unique:  false,
+				Columns: []*schema.Column{AssetLinksColumns[3]},
+			},
+			{
+				Name:    "assetlink_last_seen",
+				Unique:  false,
+				Columns: []*schema.Column{AssetLinksColumns[9]},
+			},
+		},
 	}
 	// AuditLogsColumns holds the columns for the "audit_logs" table.
 	AuditLogsColumns = []*schema.Column{
@@ -658,12 +712,35 @@ var (
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
 	}
+	// ZonesColumns holds the columns for the "zones" table.
+	ZonesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "name", Type: field.TypeString, Size: 64},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"internal", "dmz", "external", "cloud"}},
+		{Name: "cidrs", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// ZonesTable holds the schema information for the "zones" table.
+	ZonesTable = &schema.Table{
+		Name:       "zones",
+		Columns:    ZonesColumns,
+		PrimaryKey: []*schema.Column{ZonesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "zone_group_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{ZonesColumns[1], ZonesColumns[2]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AgentSessionsTable,
 		AlertsTable,
 		ApprovalsTable,
 		AssetsTable,
+		AssetLinksTable,
 		AuditLogsTable,
 		CommandsTable,
 		CommandPoliciesTable,
@@ -684,6 +761,7 @@ var (
 		TasksTable,
 		TaskRunsTable,
 		UsersTable,
+		ZonesTable,
 	}
 )
 

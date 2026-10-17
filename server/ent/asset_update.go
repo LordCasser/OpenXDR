@@ -212,6 +212,259 @@ func (_u *AssetUpdate) ClearSilentSince() *AssetUpdate {
 	return _u
 }
 
+// SetListening sets the "listening" field.
+func (_u *AssetUpdate) SetListening(v json.RawMessage) *AssetUpdate {
+	_u.mutation.SetListening(v)
+	return _u
+}
+
+// AppendListening appends value to the "listening" field.
+func (_u *AssetUpdate) AppendListening(v json.RawMessage) *AssetUpdate {
+	_u.mutation.AppendListening(v)
+	return _u
+}
+
+// ClearListening clears the value of the "listening" field.
+func (_u *AssetUpdate) ClearListening() *AssetUpdate {
+	_u.mutation.ClearListening()
+	return _u
+}
+
+// SetCloud sets the "cloud" field.
+func (_u *AssetUpdate) SetCloud(v json.RawMessage) *AssetUpdate {
+	_u.mutation.SetCloud(v)
+	return _u
+}
+
+// AppendCloud appends value to the "cloud" field.
+func (_u *AssetUpdate) AppendCloud(v json.RawMessage) *AssetUpdate {
+	_u.mutation.AppendCloud(v)
+	return _u
+}
+
+// ClearCloud clears the value of the "cloud" field.
+func (_u *AssetUpdate) ClearCloud() *AssetUpdate {
+	_u.mutation.ClearCloud()
+	return _u
+}
+
+// SetInventoryAt sets the "inventory_at" field.
+func (_u *AssetUpdate) SetInventoryAt(v time.Time) *AssetUpdate {
+	_u.mutation.SetInventoryAt(v)
+	return _u
+}
+
+// SetNillableInventoryAt sets the "inventory_at" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableInventoryAt(v *time.Time) *AssetUpdate {
+	if v != nil {
+		_u.SetInventoryAt(*v)
+	}
+	return _u
+}
+
+// ClearInventoryAt clears the value of the "inventory_at" field.
+func (_u *AssetUpdate) ClearInventoryAt() *AssetUpdate {
+	_u.mutation.ClearInventoryAt()
+	return _u
+}
+
+// SetZoneID sets the "zone_id" field.
+func (_u *AssetUpdate) SetZoneID(v uuid.UUID) *AssetUpdate {
+	_u.mutation.SetZoneID(v)
+	return _u
+}
+
+// SetNillableZoneID sets the "zone_id" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableZoneID(v *uuid.UUID) *AssetUpdate {
+	if v != nil {
+		_u.SetZoneID(*v)
+	}
+	return _u
+}
+
+// ClearZoneID clears the value of the "zone_id" field.
+func (_u *AssetUpdate) ClearZoneID() *AssetUpdate {
+	_u.mutation.ClearZoneID()
+	return _u
+}
+
+// SetRole sets the "role" field.
+func (_u *AssetUpdate) SetRole(v string) *AssetUpdate {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableRole(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetRole(*v)
+	}
+	return _u
+}
+
+// ClearRole clears the value of the "role" field.
+func (_u *AssetUpdate) ClearRole() *AssetUpdate {
+	_u.mutation.ClearRole()
+	return _u
+}
+
+// SetSummary sets the "summary" field.
+func (_u *AssetUpdate) SetSummary(v string) *AssetUpdate {
+	_u.mutation.SetSummary(v)
+	return _u
+}
+
+// SetNillableSummary sets the "summary" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableSummary(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetSummary(*v)
+	}
+	return _u
+}
+
+// ClearSummary clears the value of the "summary" field.
+func (_u *AssetUpdate) ClearSummary() *AssetUpdate {
+	_u.mutation.ClearSummary()
+	return _u
+}
+
+// SetCriticality sets the "criticality" field.
+func (_u *AssetUpdate) SetCriticality(v int) *AssetUpdate {
+	_u.mutation.ResetCriticality()
+	_u.mutation.SetCriticality(v)
+	return _u
+}
+
+// SetNillableCriticality sets the "criticality" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableCriticality(v *int) *AssetUpdate {
+	if v != nil {
+		_u.SetCriticality(*v)
+	}
+	return _u
+}
+
+// AddCriticality adds value to the "criticality" field.
+func (_u *AssetUpdate) AddCriticality(v int) *AssetUpdate {
+	_u.mutation.AddCriticality(v)
+	return _u
+}
+
+// ClearCriticality clears the value of the "criticality" field.
+func (_u *AssetUpdate) ClearCriticality() *AssetUpdate {
+	_u.mutation.ClearCriticality()
+	return _u
+}
+
+// SetAnnotationReason sets the "annotation_reason" field.
+func (_u *AssetUpdate) SetAnnotationReason(v string) *AssetUpdate {
+	_u.mutation.SetAnnotationReason(v)
+	return _u
+}
+
+// SetNillableAnnotationReason sets the "annotation_reason" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableAnnotationReason(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetAnnotationReason(*v)
+	}
+	return _u
+}
+
+// ClearAnnotationReason clears the value of the "annotation_reason" field.
+func (_u *AssetUpdate) ClearAnnotationReason() *AssetUpdate {
+	_u.mutation.ClearAnnotationReason()
+	return _u
+}
+
+// SetRelationNotes sets the "relation_notes" field.
+func (_u *AssetUpdate) SetRelationNotes(v map[string]string) *AssetUpdate {
+	_u.mutation.SetRelationNotes(v)
+	return _u
+}
+
+// ClearRelationNotes clears the value of the "relation_notes" field.
+func (_u *AssetUpdate) ClearRelationNotes() *AssetUpdate {
+	_u.mutation.ClearRelationNotes()
+	return _u
+}
+
+// SetLockedFields sets the "locked_fields" field.
+func (_u *AssetUpdate) SetLockedFields(v []string) *AssetUpdate {
+	_u.mutation.SetLockedFields(v)
+	return _u
+}
+
+// AppendLockedFields appends value to the "locked_fields" field.
+func (_u *AssetUpdate) AppendLockedFields(v []string) *AssetUpdate {
+	_u.mutation.AppendLockedFields(v)
+	return _u
+}
+
+// ClearLockedFields clears the value of the "locked_fields" field.
+func (_u *AssetUpdate) ClearLockedFields() *AssetUpdate {
+	_u.mutation.ClearLockedFields()
+	return _u
+}
+
+// SetAnnotatedAt sets the "annotated_at" field.
+func (_u *AssetUpdate) SetAnnotatedAt(v time.Time) *AssetUpdate {
+	_u.mutation.SetAnnotatedAt(v)
+	return _u
+}
+
+// SetNillableAnnotatedAt sets the "annotated_at" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableAnnotatedAt(v *time.Time) *AssetUpdate {
+	if v != nil {
+		_u.SetAnnotatedAt(*v)
+	}
+	return _u
+}
+
+// ClearAnnotatedAt clears the value of the "annotated_at" field.
+func (_u *AssetUpdate) ClearAnnotatedAt() *AssetUpdate {
+	_u.mutation.ClearAnnotatedAt()
+	return _u
+}
+
+// SetAnnotatedFacts sets the "annotated_facts" field.
+func (_u *AssetUpdate) SetAnnotatedFacts(v string) *AssetUpdate {
+	_u.mutation.SetAnnotatedFacts(v)
+	return _u
+}
+
+// SetNillableAnnotatedFacts sets the "annotated_facts" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableAnnotatedFacts(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetAnnotatedFacts(*v)
+	}
+	return _u
+}
+
+// ClearAnnotatedFacts clears the value of the "annotated_facts" field.
+func (_u *AssetUpdate) ClearAnnotatedFacts() *AssetUpdate {
+	_u.mutation.ClearAnnotatedFacts()
+	return _u
+}
+
+// SetAnnotateRequestedAt sets the "annotate_requested_at" field.
+func (_u *AssetUpdate) SetAnnotateRequestedAt(v time.Time) *AssetUpdate {
+	_u.mutation.SetAnnotateRequestedAt(v)
+	return _u
+}
+
+// SetNillableAnnotateRequestedAt sets the "annotate_requested_at" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableAnnotateRequestedAt(v *time.Time) *AssetUpdate {
+	if v != nil {
+		_u.SetAnnotateRequestedAt(*v)
+	}
+	return _u
+}
+
+// ClearAnnotateRequestedAt clears the value of the "annotate_requested_at" field.
+func (_u *AssetUpdate) ClearAnnotateRequestedAt() *AssetUpdate {
+	_u.mutation.ClearAnnotateRequestedAt()
+	return _u
+}
+
 // AddEventIDs adds the "events" edge to the Event entity by IDs.
 func (_u *AssetUpdate) AddEventIDs(ids ...uuid.UUID) *AssetUpdate {
 	_u.mutation.AddEventIDs(ids...)
@@ -421,6 +674,102 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.SilentSinceCleared() {
 		_spec.ClearField(asset.FieldSilentSince, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Listening(); ok {
+		_spec.SetField(asset.FieldListening, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedListening(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldListening, value)
+		})
+	}
+	if _u.mutation.ListeningCleared() {
+		_spec.ClearField(asset.FieldListening, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Cloud(); ok {
+		_spec.SetField(asset.FieldCloud, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCloud(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldCloud, value)
+		})
+	}
+	if _u.mutation.CloudCleared() {
+		_spec.ClearField(asset.FieldCloud, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.InventoryAt(); ok {
+		_spec.SetField(asset.FieldInventoryAt, field.TypeTime, value)
+	}
+	if _u.mutation.InventoryAtCleared() {
+		_spec.ClearField(asset.FieldInventoryAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ZoneID(); ok {
+		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)
+	}
+	if _u.mutation.ZoneIDCleared() {
+		_spec.ClearField(asset.FieldZoneID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(asset.FieldRole, field.TypeString, value)
+	}
+	if _u.mutation.RoleCleared() {
+		_spec.ClearField(asset.FieldRole, field.TypeString)
+	}
+	if value, ok := _u.mutation.Summary(); ok {
+		_spec.SetField(asset.FieldSummary, field.TypeString, value)
+	}
+	if _u.mutation.SummaryCleared() {
+		_spec.ClearField(asset.FieldSummary, field.TypeString)
+	}
+	if value, ok := _u.mutation.Criticality(); ok {
+		_spec.SetField(asset.FieldCriticality, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCriticality(); ok {
+		_spec.AddField(asset.FieldCriticality, field.TypeInt, value)
+	}
+	if _u.mutation.CriticalityCleared() {
+		_spec.ClearField(asset.FieldCriticality, field.TypeInt)
+	}
+	if value, ok := _u.mutation.AnnotationReason(); ok {
+		_spec.SetField(asset.FieldAnnotationReason, field.TypeString, value)
+	}
+	if _u.mutation.AnnotationReasonCleared() {
+		_spec.ClearField(asset.FieldAnnotationReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.RelationNotes(); ok {
+		_spec.SetField(asset.FieldRelationNotes, field.TypeJSON, value)
+	}
+	if _u.mutation.RelationNotesCleared() {
+		_spec.ClearField(asset.FieldRelationNotes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.LockedFields(); ok {
+		_spec.SetField(asset.FieldLockedFields, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedLockedFields(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldLockedFields, value)
+		})
+	}
+	if _u.mutation.LockedFieldsCleared() {
+		_spec.ClearField(asset.FieldLockedFields, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.AnnotatedAt(); ok {
+		_spec.SetField(asset.FieldAnnotatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.AnnotatedAtCleared() {
+		_spec.ClearField(asset.FieldAnnotatedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AnnotatedFacts(); ok {
+		_spec.SetField(asset.FieldAnnotatedFacts, field.TypeString, value)
+	}
+	if _u.mutation.AnnotatedFactsCleared() {
+		_spec.ClearField(asset.FieldAnnotatedFacts, field.TypeString)
+	}
+	if value, ok := _u.mutation.AnnotateRequestedAt(); ok {
+		_spec.SetField(asset.FieldAnnotateRequestedAt, field.TypeTime, value)
+	}
+	if _u.mutation.AnnotateRequestedAtCleared() {
+		_spec.ClearField(asset.FieldAnnotateRequestedAt, field.TypeTime)
 	}
 	if _u.mutation.EventsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -755,6 +1104,259 @@ func (_u *AssetUpdateOne) ClearSilentSince() *AssetUpdateOne {
 	return _u
 }
 
+// SetListening sets the "listening" field.
+func (_u *AssetUpdateOne) SetListening(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.SetListening(v)
+	return _u
+}
+
+// AppendListening appends value to the "listening" field.
+func (_u *AssetUpdateOne) AppendListening(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.AppendListening(v)
+	return _u
+}
+
+// ClearListening clears the value of the "listening" field.
+func (_u *AssetUpdateOne) ClearListening() *AssetUpdateOne {
+	_u.mutation.ClearListening()
+	return _u
+}
+
+// SetCloud sets the "cloud" field.
+func (_u *AssetUpdateOne) SetCloud(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.SetCloud(v)
+	return _u
+}
+
+// AppendCloud appends value to the "cloud" field.
+func (_u *AssetUpdateOne) AppendCloud(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.AppendCloud(v)
+	return _u
+}
+
+// ClearCloud clears the value of the "cloud" field.
+func (_u *AssetUpdateOne) ClearCloud() *AssetUpdateOne {
+	_u.mutation.ClearCloud()
+	return _u
+}
+
+// SetInventoryAt sets the "inventory_at" field.
+func (_u *AssetUpdateOne) SetInventoryAt(v time.Time) *AssetUpdateOne {
+	_u.mutation.SetInventoryAt(v)
+	return _u
+}
+
+// SetNillableInventoryAt sets the "inventory_at" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableInventoryAt(v *time.Time) *AssetUpdateOne {
+	if v != nil {
+		_u.SetInventoryAt(*v)
+	}
+	return _u
+}
+
+// ClearInventoryAt clears the value of the "inventory_at" field.
+func (_u *AssetUpdateOne) ClearInventoryAt() *AssetUpdateOne {
+	_u.mutation.ClearInventoryAt()
+	return _u
+}
+
+// SetZoneID sets the "zone_id" field.
+func (_u *AssetUpdateOne) SetZoneID(v uuid.UUID) *AssetUpdateOne {
+	_u.mutation.SetZoneID(v)
+	return _u
+}
+
+// SetNillableZoneID sets the "zone_id" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableZoneID(v *uuid.UUID) *AssetUpdateOne {
+	if v != nil {
+		_u.SetZoneID(*v)
+	}
+	return _u
+}
+
+// ClearZoneID clears the value of the "zone_id" field.
+func (_u *AssetUpdateOne) ClearZoneID() *AssetUpdateOne {
+	_u.mutation.ClearZoneID()
+	return _u
+}
+
+// SetRole sets the "role" field.
+func (_u *AssetUpdateOne) SetRole(v string) *AssetUpdateOne {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableRole(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetRole(*v)
+	}
+	return _u
+}
+
+// ClearRole clears the value of the "role" field.
+func (_u *AssetUpdateOne) ClearRole() *AssetUpdateOne {
+	_u.mutation.ClearRole()
+	return _u
+}
+
+// SetSummary sets the "summary" field.
+func (_u *AssetUpdateOne) SetSummary(v string) *AssetUpdateOne {
+	_u.mutation.SetSummary(v)
+	return _u
+}
+
+// SetNillableSummary sets the "summary" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableSummary(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetSummary(*v)
+	}
+	return _u
+}
+
+// ClearSummary clears the value of the "summary" field.
+func (_u *AssetUpdateOne) ClearSummary() *AssetUpdateOne {
+	_u.mutation.ClearSummary()
+	return _u
+}
+
+// SetCriticality sets the "criticality" field.
+func (_u *AssetUpdateOne) SetCriticality(v int) *AssetUpdateOne {
+	_u.mutation.ResetCriticality()
+	_u.mutation.SetCriticality(v)
+	return _u
+}
+
+// SetNillableCriticality sets the "criticality" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableCriticality(v *int) *AssetUpdateOne {
+	if v != nil {
+		_u.SetCriticality(*v)
+	}
+	return _u
+}
+
+// AddCriticality adds value to the "criticality" field.
+func (_u *AssetUpdateOne) AddCriticality(v int) *AssetUpdateOne {
+	_u.mutation.AddCriticality(v)
+	return _u
+}
+
+// ClearCriticality clears the value of the "criticality" field.
+func (_u *AssetUpdateOne) ClearCriticality() *AssetUpdateOne {
+	_u.mutation.ClearCriticality()
+	return _u
+}
+
+// SetAnnotationReason sets the "annotation_reason" field.
+func (_u *AssetUpdateOne) SetAnnotationReason(v string) *AssetUpdateOne {
+	_u.mutation.SetAnnotationReason(v)
+	return _u
+}
+
+// SetNillableAnnotationReason sets the "annotation_reason" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableAnnotationReason(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetAnnotationReason(*v)
+	}
+	return _u
+}
+
+// ClearAnnotationReason clears the value of the "annotation_reason" field.
+func (_u *AssetUpdateOne) ClearAnnotationReason() *AssetUpdateOne {
+	_u.mutation.ClearAnnotationReason()
+	return _u
+}
+
+// SetRelationNotes sets the "relation_notes" field.
+func (_u *AssetUpdateOne) SetRelationNotes(v map[string]string) *AssetUpdateOne {
+	_u.mutation.SetRelationNotes(v)
+	return _u
+}
+
+// ClearRelationNotes clears the value of the "relation_notes" field.
+func (_u *AssetUpdateOne) ClearRelationNotes() *AssetUpdateOne {
+	_u.mutation.ClearRelationNotes()
+	return _u
+}
+
+// SetLockedFields sets the "locked_fields" field.
+func (_u *AssetUpdateOne) SetLockedFields(v []string) *AssetUpdateOne {
+	_u.mutation.SetLockedFields(v)
+	return _u
+}
+
+// AppendLockedFields appends value to the "locked_fields" field.
+func (_u *AssetUpdateOne) AppendLockedFields(v []string) *AssetUpdateOne {
+	_u.mutation.AppendLockedFields(v)
+	return _u
+}
+
+// ClearLockedFields clears the value of the "locked_fields" field.
+func (_u *AssetUpdateOne) ClearLockedFields() *AssetUpdateOne {
+	_u.mutation.ClearLockedFields()
+	return _u
+}
+
+// SetAnnotatedAt sets the "annotated_at" field.
+func (_u *AssetUpdateOne) SetAnnotatedAt(v time.Time) *AssetUpdateOne {
+	_u.mutation.SetAnnotatedAt(v)
+	return _u
+}
+
+// SetNillableAnnotatedAt sets the "annotated_at" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableAnnotatedAt(v *time.Time) *AssetUpdateOne {
+	if v != nil {
+		_u.SetAnnotatedAt(*v)
+	}
+	return _u
+}
+
+// ClearAnnotatedAt clears the value of the "annotated_at" field.
+func (_u *AssetUpdateOne) ClearAnnotatedAt() *AssetUpdateOne {
+	_u.mutation.ClearAnnotatedAt()
+	return _u
+}
+
+// SetAnnotatedFacts sets the "annotated_facts" field.
+func (_u *AssetUpdateOne) SetAnnotatedFacts(v string) *AssetUpdateOne {
+	_u.mutation.SetAnnotatedFacts(v)
+	return _u
+}
+
+// SetNillableAnnotatedFacts sets the "annotated_facts" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableAnnotatedFacts(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetAnnotatedFacts(*v)
+	}
+	return _u
+}
+
+// ClearAnnotatedFacts clears the value of the "annotated_facts" field.
+func (_u *AssetUpdateOne) ClearAnnotatedFacts() *AssetUpdateOne {
+	_u.mutation.ClearAnnotatedFacts()
+	return _u
+}
+
+// SetAnnotateRequestedAt sets the "annotate_requested_at" field.
+func (_u *AssetUpdateOne) SetAnnotateRequestedAt(v time.Time) *AssetUpdateOne {
+	_u.mutation.SetAnnotateRequestedAt(v)
+	return _u
+}
+
+// SetNillableAnnotateRequestedAt sets the "annotate_requested_at" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableAnnotateRequestedAt(v *time.Time) *AssetUpdateOne {
+	if v != nil {
+		_u.SetAnnotateRequestedAt(*v)
+	}
+	return _u
+}
+
+// ClearAnnotateRequestedAt clears the value of the "annotate_requested_at" field.
+func (_u *AssetUpdateOne) ClearAnnotateRequestedAt() *AssetUpdateOne {
+	_u.mutation.ClearAnnotateRequestedAt()
+	return _u
+}
+
 // AddEventIDs adds the "events" edge to the Event entity by IDs.
 func (_u *AssetUpdateOne) AddEventIDs(ids ...uuid.UUID) *AssetUpdateOne {
 	_u.mutation.AddEventIDs(ids...)
@@ -994,6 +1596,102 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.SilentSinceCleared() {
 		_spec.ClearField(asset.FieldSilentSince, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Listening(); ok {
+		_spec.SetField(asset.FieldListening, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedListening(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldListening, value)
+		})
+	}
+	if _u.mutation.ListeningCleared() {
+		_spec.ClearField(asset.FieldListening, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Cloud(); ok {
+		_spec.SetField(asset.FieldCloud, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCloud(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldCloud, value)
+		})
+	}
+	if _u.mutation.CloudCleared() {
+		_spec.ClearField(asset.FieldCloud, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.InventoryAt(); ok {
+		_spec.SetField(asset.FieldInventoryAt, field.TypeTime, value)
+	}
+	if _u.mutation.InventoryAtCleared() {
+		_spec.ClearField(asset.FieldInventoryAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ZoneID(); ok {
+		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)
+	}
+	if _u.mutation.ZoneIDCleared() {
+		_spec.ClearField(asset.FieldZoneID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(asset.FieldRole, field.TypeString, value)
+	}
+	if _u.mutation.RoleCleared() {
+		_spec.ClearField(asset.FieldRole, field.TypeString)
+	}
+	if value, ok := _u.mutation.Summary(); ok {
+		_spec.SetField(asset.FieldSummary, field.TypeString, value)
+	}
+	if _u.mutation.SummaryCleared() {
+		_spec.ClearField(asset.FieldSummary, field.TypeString)
+	}
+	if value, ok := _u.mutation.Criticality(); ok {
+		_spec.SetField(asset.FieldCriticality, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCriticality(); ok {
+		_spec.AddField(asset.FieldCriticality, field.TypeInt, value)
+	}
+	if _u.mutation.CriticalityCleared() {
+		_spec.ClearField(asset.FieldCriticality, field.TypeInt)
+	}
+	if value, ok := _u.mutation.AnnotationReason(); ok {
+		_spec.SetField(asset.FieldAnnotationReason, field.TypeString, value)
+	}
+	if _u.mutation.AnnotationReasonCleared() {
+		_spec.ClearField(asset.FieldAnnotationReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.RelationNotes(); ok {
+		_spec.SetField(asset.FieldRelationNotes, field.TypeJSON, value)
+	}
+	if _u.mutation.RelationNotesCleared() {
+		_spec.ClearField(asset.FieldRelationNotes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.LockedFields(); ok {
+		_spec.SetField(asset.FieldLockedFields, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedLockedFields(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldLockedFields, value)
+		})
+	}
+	if _u.mutation.LockedFieldsCleared() {
+		_spec.ClearField(asset.FieldLockedFields, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.AnnotatedAt(); ok {
+		_spec.SetField(asset.FieldAnnotatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.AnnotatedAtCleared() {
+		_spec.ClearField(asset.FieldAnnotatedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AnnotatedFacts(); ok {
+		_spec.SetField(asset.FieldAnnotatedFacts, field.TypeString, value)
+	}
+	if _u.mutation.AnnotatedFactsCleared() {
+		_spec.ClearField(asset.FieldAnnotatedFacts, field.TypeString)
+	}
+	if value, ok := _u.mutation.AnnotateRequestedAt(); ok {
+		_spec.SetField(asset.FieldAnnotateRequestedAt, field.TypeTime, value)
+	}
+	if _u.mutation.AnnotateRequestedAtCleared() {
+		_spec.ClearField(asset.FieldAnnotateRequestedAt, field.TypeTime)
 	}
 	if _u.mutation.EventsCleared() {
 		edge := &sqlgraph.EdgeSpec{

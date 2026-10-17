@@ -141,6 +141,156 @@ func (_c *AssetCreate) SetNillableSilentSince(v *time.Time) *AssetCreate {
 	return _c
 }
 
+// SetListening sets the "listening" field.
+func (_c *AssetCreate) SetListening(v json.RawMessage) *AssetCreate {
+	_c.mutation.SetListening(v)
+	return _c
+}
+
+// SetCloud sets the "cloud" field.
+func (_c *AssetCreate) SetCloud(v json.RawMessage) *AssetCreate {
+	_c.mutation.SetCloud(v)
+	return _c
+}
+
+// SetInventoryAt sets the "inventory_at" field.
+func (_c *AssetCreate) SetInventoryAt(v time.Time) *AssetCreate {
+	_c.mutation.SetInventoryAt(v)
+	return _c
+}
+
+// SetNillableInventoryAt sets the "inventory_at" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableInventoryAt(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetInventoryAt(*v)
+	}
+	return _c
+}
+
+// SetZoneID sets the "zone_id" field.
+func (_c *AssetCreate) SetZoneID(v uuid.UUID) *AssetCreate {
+	_c.mutation.SetZoneID(v)
+	return _c
+}
+
+// SetNillableZoneID sets the "zone_id" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableZoneID(v *uuid.UUID) *AssetCreate {
+	if v != nil {
+		_c.SetZoneID(*v)
+	}
+	return _c
+}
+
+// SetRole sets the "role" field.
+func (_c *AssetCreate) SetRole(v string) *AssetCreate {
+	_c.mutation.SetRole(v)
+	return _c
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableRole(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetRole(*v)
+	}
+	return _c
+}
+
+// SetSummary sets the "summary" field.
+func (_c *AssetCreate) SetSummary(v string) *AssetCreate {
+	_c.mutation.SetSummary(v)
+	return _c
+}
+
+// SetNillableSummary sets the "summary" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableSummary(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetSummary(*v)
+	}
+	return _c
+}
+
+// SetCriticality sets the "criticality" field.
+func (_c *AssetCreate) SetCriticality(v int) *AssetCreate {
+	_c.mutation.SetCriticality(v)
+	return _c
+}
+
+// SetNillableCriticality sets the "criticality" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableCriticality(v *int) *AssetCreate {
+	if v != nil {
+		_c.SetCriticality(*v)
+	}
+	return _c
+}
+
+// SetAnnotationReason sets the "annotation_reason" field.
+func (_c *AssetCreate) SetAnnotationReason(v string) *AssetCreate {
+	_c.mutation.SetAnnotationReason(v)
+	return _c
+}
+
+// SetNillableAnnotationReason sets the "annotation_reason" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableAnnotationReason(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetAnnotationReason(*v)
+	}
+	return _c
+}
+
+// SetRelationNotes sets the "relation_notes" field.
+func (_c *AssetCreate) SetRelationNotes(v map[string]string) *AssetCreate {
+	_c.mutation.SetRelationNotes(v)
+	return _c
+}
+
+// SetLockedFields sets the "locked_fields" field.
+func (_c *AssetCreate) SetLockedFields(v []string) *AssetCreate {
+	_c.mutation.SetLockedFields(v)
+	return _c
+}
+
+// SetAnnotatedAt sets the "annotated_at" field.
+func (_c *AssetCreate) SetAnnotatedAt(v time.Time) *AssetCreate {
+	_c.mutation.SetAnnotatedAt(v)
+	return _c
+}
+
+// SetNillableAnnotatedAt sets the "annotated_at" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableAnnotatedAt(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetAnnotatedAt(*v)
+	}
+	return _c
+}
+
+// SetAnnotatedFacts sets the "annotated_facts" field.
+func (_c *AssetCreate) SetAnnotatedFacts(v string) *AssetCreate {
+	_c.mutation.SetAnnotatedFacts(v)
+	return _c
+}
+
+// SetNillableAnnotatedFacts sets the "annotated_facts" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableAnnotatedFacts(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetAnnotatedFacts(*v)
+	}
+	return _c
+}
+
+// SetAnnotateRequestedAt sets the "annotate_requested_at" field.
+func (_c *AssetCreate) SetAnnotateRequestedAt(v time.Time) *AssetCreate {
+	_c.mutation.SetAnnotateRequestedAt(v)
+	return _c
+}
+
+// SetNillableAnnotateRequestedAt sets the "annotate_requested_at" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableAnnotateRequestedAt(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetAnnotateRequestedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AssetCreate) SetID(v uuid.UUID) *AssetCreate {
 	_c.mutation.SetID(v)
@@ -334,6 +484,58 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SilentSince(); ok {
 		_spec.SetField(asset.FieldSilentSince, field.TypeTime, value)
 		_node.SilentSince = &value
+	}
+	if value, ok := _c.mutation.Listening(); ok {
+		_spec.SetField(asset.FieldListening, field.TypeJSON, value)
+		_node.Listening = value
+	}
+	if value, ok := _c.mutation.Cloud(); ok {
+		_spec.SetField(asset.FieldCloud, field.TypeJSON, value)
+		_node.Cloud = value
+	}
+	if value, ok := _c.mutation.InventoryAt(); ok {
+		_spec.SetField(asset.FieldInventoryAt, field.TypeTime, value)
+		_node.InventoryAt = &value
+	}
+	if value, ok := _c.mutation.ZoneID(); ok {
+		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)
+		_node.ZoneID = &value
+	}
+	if value, ok := _c.mutation.Role(); ok {
+		_spec.SetField(asset.FieldRole, field.TypeString, value)
+		_node.Role = &value
+	}
+	if value, ok := _c.mutation.Summary(); ok {
+		_spec.SetField(asset.FieldSummary, field.TypeString, value)
+		_node.Summary = &value
+	}
+	if value, ok := _c.mutation.Criticality(); ok {
+		_spec.SetField(asset.FieldCriticality, field.TypeInt, value)
+		_node.Criticality = &value
+	}
+	if value, ok := _c.mutation.AnnotationReason(); ok {
+		_spec.SetField(asset.FieldAnnotationReason, field.TypeString, value)
+		_node.AnnotationReason = &value
+	}
+	if value, ok := _c.mutation.RelationNotes(); ok {
+		_spec.SetField(asset.FieldRelationNotes, field.TypeJSON, value)
+		_node.RelationNotes = value
+	}
+	if value, ok := _c.mutation.LockedFields(); ok {
+		_spec.SetField(asset.FieldLockedFields, field.TypeJSON, value)
+		_node.LockedFields = value
+	}
+	if value, ok := _c.mutation.AnnotatedAt(); ok {
+		_spec.SetField(asset.FieldAnnotatedAt, field.TypeTime, value)
+		_node.AnnotatedAt = &value
+	}
+	if value, ok := _c.mutation.AnnotatedFacts(); ok {
+		_spec.SetField(asset.FieldAnnotatedFacts, field.TypeString, value)
+		_node.AnnotatedFacts = &value
+	}
+	if value, ok := _c.mutation.AnnotateRequestedAt(); ok {
+		_spec.SetField(asset.FieldAnnotateRequestedAt, field.TypeTime, value)
+		_node.AnnotateRequestedAt = &value
 	}
 	if nodes := _c.mutation.EventsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

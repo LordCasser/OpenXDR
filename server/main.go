@@ -25,6 +25,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/api"
+	"openxdr/server/internal/assetmap"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/cluster"
 	"openxdr/server/internal/commandgate"
@@ -126,6 +127,16 @@ func main() {
 		autoClose := &janitor.AutoClose{DB: client, Days: days, Interval: time.Hour}
 		go cluster.RunLeader(ctx, db, "auto-close-benign", autoClose.Run)
 	}
+
+	// 资产图谱与攻击面：物化清单与依赖边始终运行；配置了 AI_MODEL 才做 AI 标注
+	assetEngine := &assetmap.Engine{
+		DB: client, SQL: db,
+		LLM: triage.NewLLM(getenv("AI_BASE_URL", "http://localhost:11434/v1"), os.Getenv("AI_MODEL"), os.Getenv("AI_API_KEY"),
+			time.Duration(getenvInt("AI_TIMEOUT_SECONDS", 120))*time.Second),
+		Interval: time.Minute,
+		Refresh:  time.Duration(getenvInt("ASSET_ANNOTATE_REFRESH_HOURS", 24)) * time.Hour,
+	}
+	go cluster.RunLeader(ctx, db, "assetmap", assetEngine.Run)
 
 	hub := response.NewHub(client, os.Getenv("RESPONSE_ENABLED") == "true")
 	allowlist := isolationAllowlist()
@@ -331,6 +342,10 @@ func main() {
 	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
 	routes.Handle("/api/enroll-tokens", enrollTokens)
 	routes.Handle("/api/enroll-tokens/", enrollTokens)
+	assetMap := api.AssetMap(client, assetEngine.LLM.Enabled())
+	for _, path := range api.AssetMapPaths {
+		routes.Handle(path, assetMap)
+	}
 	routes.Handle("/", api.Handler(client, rules, hub, suppressions, intelStore, allowlist, chat))
 	app := auth.Middleware(client, routes)
 	mux := http.NewServeMux()

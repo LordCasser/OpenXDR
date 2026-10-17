@@ -18,6 +18,8 @@ import (
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/sessionmessage"
+	"openxdr/server/ent/zone"
+	"openxdr/server/internal/assetmap"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/piruntime"
@@ -321,13 +323,20 @@ func (s *Service) request(ctx context.Context, session *ent.AgentSession, prompt
 	if err != nil {
 		return piruntime.Request{}, err
 	}
+	zones, err := s.DB.Zone.Query().Where(zone.GroupIDEQ(session.GroupID)).All(ctx)
+	if err != nil {
+		return piruntime.Request{}, err
+	}
 	inventory := make([]map[string]any, 0, len(assets))
 	hostnames := map[uuid.UUID]string{}
 	for i, a := range assets {
 		if i == 200 {
 			break
 		}
-		inventory = append(inventory, map[string]any{"id": a.ID, "hostname": a.Hostname, "os": a.Os})
+		// 角色与重要程度来自资产标注，区域按组内网段判定：让模型分得清哪台是要紧的、哪台对外
+		entry := map[string]any{"id": a.ID, "hostname": a.Hostname, "os": a.Os, "role": a.Role, "criticality": a.Criticality}
+		entry["zone"], entry["exposure"] = assetmap.ZoneOf(a, zones)
+		inventory = append(inventory, entry)
 		hostnames[a.ID] = a.Hostname
 	}
 	titles, err := s.ruleTitles(ctx, session.GroupID)

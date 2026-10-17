@@ -665,6 +665,7 @@ export interface AgentConfig {
   collectAuth?: boolean
   collectPersist?: boolean
   collectNetwork?: boolean
+  collectInventory?: boolean
 }
 
 export const fetchAgentConfig = (assetId: string) => get<AgentConfig>(`/api/assets/${assetId}/config`)
@@ -699,3 +700,73 @@ export async function deleteHostCredential(id: string): Promise<void> {
   check(r)
   if (!r.ok) await fail(r)
 }
+
+// 资产图谱与攻击面。区域 name 为空表示自动划分，按 kind 显示内置名称；云上自动划分时 name 是云厂商
+export type ZoneKind = 'internal' | 'dmz' | 'external' | 'cloud'
+export type ExposureLevel = 'internet' | 'dmz' | 'internal'
+export interface ZoneRef { id?: string; name: string; kind: ZoneKind; source: 'manual' | 'cidr' | 'cloud' | 'auto' }
+export interface ZoneRow { id: string; group_id: string; name: string; kind: ZoneKind; cidrs?: string[] }
+
+export interface MapNode {
+  id: string
+  kind: 'asset' | 'discovered' | 'managed' | 'internet'
+  label: string
+  zone: ZoneRef
+  exposure?: ExposureLevel
+  role?: string
+  criticality?: number
+  os?: string
+  online?: boolean
+  listening?: number
+  ports?: string[]
+}
+export interface MapEdge {
+  from: string; to: string; ports: string[]; processes: string[]; count: number; lastSeen: string; note?: string; targets?: string[]
+}
+export interface AssetMap { nodes: MapNode[]; edges: MapEdge[] }
+
+export interface PortService { name: string; category: string; risk: 'high' | 'medium' | 'low' }
+export interface ExposedService {
+  assetId: string; hostname: string; zone: ZoneRef; level: ExposureLevel; proto: string; addr: string; port: number
+  process?: string; service: PortService; criticality?: number; score: number; peers: string[] | null; peerCount: number; fromPublic: boolean
+}
+export interface BlindSpot { ip: string; zone: ZoneRef; ports: string[]; accessed: string[]; seenBy: string[]; count: number; lastSeen: string }
+export interface AttackSurface {
+  summary: { internet: number; dmz: number; internal: number; high: number; blind: number; noInventory: string[] }
+  exposures: ExposedService[]
+  blind: BlindSpot[]
+}
+
+export interface Listener { proto: string; addr: string; port: number; pid?: number; process?: string; path?: string }
+export interface CloudInfo { provider: string; instanceId: string; region?: string; publicIp?: string }
+export interface AssetProfile {
+  zone: ZoneRef
+  exposure: ExposureLevel
+  cloud?: CloudInfo | null
+  listening: Listener[] | null
+  inventoryAt?: string | null
+  outbound: string[] | null
+  inbound: string[] | null
+  publicDestinations: number
+  role?: string | null
+  summary?: string | null
+  criticality?: number | null
+  reason?: string | null
+  relationNotes?: Record<string, string> | null
+  lockedFields?: string[] | null
+  annotatedAt?: string | null
+  annotateRequestedAt?: string | null
+  aiEnabled: boolean
+}
+export type ProfileEdit = { role?: string; summary?: string; criticality?: number; unlock?: string[] }
+
+export const fetchAssetMap = (groupId: string) => get<AssetMap>(`/api/asset-map?groupId=${groupId}`)
+export const fetchAttackSurface = (groupId: string) => get<AttackSurface>(`/api/attack-surface?groupId=${groupId}`)
+export const fetchZones = (groupId: string) => get<ZoneRow[]>(`/api/zones?groupId=${groupId}`)
+export const createZone = async (z: { groupId: string; name: string; kind: ZoneKind; cidrs: string[] }) => { await send('POST', '/api/zones', z) }
+export const updateZone = async (id: string, z: { name: string; kind: ZoneKind; cidrs: string[] }) => { await send('PUT', `/api/zones/${id}`, z) }
+export const deleteZone = async (id: string) => { await send('DELETE', `/api/zones/${id}`) }
+export const fetchAssetProfile = (id: string) => get<AssetProfile>(`/api/assets/${id}/profile`)
+export const saveAssetProfile = async (id: string, edit: ProfileEdit) => { await send('PUT', `/api/assets/${id}/profile`, edit) }
+export const assignAssetZone = async (id: string, zoneId: string | null) => { await send('PUT', `/api/assets/${id}/zone`, { zoneId }) }
+export const requestAnnotate = async (id: string) => { await send('POST', `/api/assets/${id}/annotate`) }

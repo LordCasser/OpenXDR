@@ -35,6 +35,32 @@ const (
 	FieldAgentVersion = "agent_version"
 	// FieldSilentSince holds the string denoting the silent_since field in the database.
 	FieldSilentSince = "silent_since"
+	// FieldListening holds the string denoting the listening field in the database.
+	FieldListening = "listening"
+	// FieldCloud holds the string denoting the cloud field in the database.
+	FieldCloud = "cloud"
+	// FieldInventoryAt holds the string denoting the inventory_at field in the database.
+	FieldInventoryAt = "inventory_at"
+	// FieldZoneID holds the string denoting the zone_id field in the database.
+	FieldZoneID = "zone_id"
+	// FieldRole holds the string denoting the role field in the database.
+	FieldRole = "role"
+	// FieldSummary holds the string denoting the summary field in the database.
+	FieldSummary = "summary"
+	// FieldCriticality holds the string denoting the criticality field in the database.
+	FieldCriticality = "criticality"
+	// FieldAnnotationReason holds the string denoting the annotation_reason field in the database.
+	FieldAnnotationReason = "annotation_reason"
+	// FieldRelationNotes holds the string denoting the relation_notes field in the database.
+	FieldRelationNotes = "relation_notes"
+	// FieldLockedFields holds the string denoting the locked_fields field in the database.
+	FieldLockedFields = "locked_fields"
+	// FieldAnnotatedAt holds the string denoting the annotated_at field in the database.
+	FieldAnnotatedAt = "annotated_at"
+	// FieldAnnotatedFacts holds the string denoting the annotated_facts field in the database.
+	FieldAnnotatedFacts = "annotated_facts"
+	// FieldAnnotateRequestedAt holds the string denoting the annotate_requested_at field in the database.
+	FieldAnnotateRequestedAt = "annotate_requested_at"
 	// EdgeEvents holds the string denoting the events edge name in mutations.
 	EdgeEvents = "events"
 	// EdgeAlerts holds the string denoting the alerts edge name in mutations.
@@ -79,6 +105,19 @@ var Columns = []string{
 	FieldGroupID,
 	FieldAgentVersion,
 	FieldSilentSince,
+	FieldListening,
+	FieldCloud,
+	FieldInventoryAt,
+	FieldZoneID,
+	FieldRole,
+	FieldSummary,
+	FieldCriticality,
+	FieldAnnotationReason,
+	FieldRelationNotes,
+	FieldLockedFields,
+	FieldAnnotatedAt,
+	FieldAnnotatedFacts,
+	FieldAnnotateRequestedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -146,6 +185,51 @@ func ByAgentVersion(opts ...sql.OrderTermOption) OrderOption {
 // BySilentSince orders the results by the silent_since field.
 func BySilentSince(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSilentSince, opts...).ToFunc()
+}
+
+// ByInventoryAt orders the results by the inventory_at field.
+func ByInventoryAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInventoryAt, opts...).ToFunc()
+}
+
+// ByZoneID orders the results by the zone_id field.
+func ByZoneID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldZoneID, opts...).ToFunc()
+}
+
+// ByRole orders the results by the role field.
+func ByRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRole, opts...).ToFunc()
+}
+
+// BySummary orders the results by the summary field.
+func BySummary(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSummary, opts...).ToFunc()
+}
+
+// ByCriticality orders the results by the criticality field.
+func ByCriticality(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCriticality, opts...).ToFunc()
+}
+
+// ByAnnotationReason orders the results by the annotation_reason field.
+func ByAnnotationReason(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAnnotationReason, opts...).ToFunc()
+}
+
+// ByAnnotatedAt orders the results by the annotated_at field.
+func ByAnnotatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAnnotatedAt, opts...).ToFunc()
+}
+
+// ByAnnotatedFacts orders the results by the annotated_facts field.
+func ByAnnotatedFacts(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAnnotatedFacts, opts...).ToFunc()
+}
+
+// ByAnnotateRequestedAt orders the results by the annotate_requested_at field.
+func ByAnnotateRequestedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAnnotateRequestedAt, opts...).ToFunc()
 }
 
 // ByEventsCount orders the results by events count.

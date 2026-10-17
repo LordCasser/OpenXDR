@@ -20,6 +20,8 @@ type agentConfig struct {
 	CollectAuth    *bool `json:"collectAuth,omitempty"`
 	CollectPersist *bool `json:"collectPersist,omitempty"`
 	CollectNetwork *bool `json:"collectNetwork,omitempty"`
+	// 监听端口与云环境清单，资产图谱与攻击面的数据来源
+	CollectInventory *bool `json:"collectInventory,omitempty"`
 }
 
 func mapAgentConfig(api *http.ServeMux, db *ent.Client) {

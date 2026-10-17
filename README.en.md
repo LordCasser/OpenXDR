@@ -30,6 +30,10 @@ People make the calls instead of digging through alert lists.
   persistent dedup, revocable suppressions, entity-based correlation into incident graphs, UEBA first-seen detection,
   and finally AI triage that investigates with tools. Low-severity benign incidents are auto-closed after a grace period;
   anything that needs human review stays with humans.
+- **Asset map and attack surface**: agents report listening ports and cloud metadata, and observed connections
+  become a dependency graph; AI annotates each asset's role, function and criticality (editable and lockable by people).
+  Assets are zoned automatically as internal / DMZ / internet-facing / cloud by CIDR, cloud metadata and IP, every
+  listening service is ranked by exposure × port risk × criticality, and unmanaged hosts in contact are listed as blind spots.
 - **AI assistant and inspections**: run commands on the group's hosts, query the database through a per-group
   read-only view, track ops findings and file reports — all by conversation. Incidents and findings can be
   multi-selected and handed to the AI. Conversations run in the background on the server, so switching pages
@@ -86,6 +90,7 @@ collection modes, mTLS, intel, suppression, response actions and every configura
 |---|---|
 | [Deployment guide](docs/deployment.md) | Startup, onboarding, logs and intel, suppression and response, mTLS, configuration |
 | [High availability](deploy/ha/README.md) | Patroni + 3-node JetStream + Keepalived VIP, rolling release |
+| [Asset map and attack surface](docs/asset-map.md) | Inventory, dependencies, zones, risk scores and AI annotation |
 | [AI assistant and inspections](docs/pi-backend.md) | Sessions, command list and approvals, read-only queries, findings, preset tasks |
 | [Document import and onboarding](docs/host-enrollment.md) | Ops document import, credential encryption, SSH onboarding |
 | [Architecture](docs/architecture.md) · [Collection](docs/collection.md) · [Event model](docs/events.md) · [Detection](docs/detection.md) | Design and implementation |

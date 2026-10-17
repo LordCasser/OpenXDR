@@ -7,6 +7,7 @@ import (
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/approval"
 	"openxdr/server/ent/asset"
+	"openxdr/server/ent/assetlink"
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
@@ -28,6 +29,7 @@ import (
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
+	"openxdr/server/ent/zone"
 	"time"
 
 	"github.com/google/uuid"
@@ -85,6 +87,16 @@ func init() {
 	assetDescID := assetFields[0].Descriptor()
 	// asset.DefaultID holds the default value on creation for the id field.
 	asset.DefaultID = assetDescID.Default.(func() uuid.UUID)
+	assetlinkFields := schema.AssetLink{}.Fields()
+	_ = assetlinkFields
+	// assetlinkDescProcess is the schema descriptor for process field.
+	assetlinkDescProcess := assetlinkFields[6].Descriptor()
+	// assetlink.DefaultProcess holds the default value on creation for the process field.
+	assetlink.DefaultProcess = assetlinkDescProcess.Default.(string)
+	// assetlinkDescID is the schema descriptor for id field.
+	assetlinkDescID := assetlinkFields[0].Descriptor()
+	// assetlink.DefaultID holds the default value on creation for the id field.
+	assetlink.DefaultID = assetlinkDescID.Default.(func() uuid.UUID)
 	auditlogFields := schema.AuditLog{}.Fields()
 	_ = auditlogFields
 	// auditlogDescTs is the schema descriptor for ts field.
@@ -387,4 +399,18 @@ func init() {
 	userDescID := userFields[0].Descriptor()
 	// user.DefaultID holds the default value on creation for the id field.
 	user.DefaultID = userDescID.Default.(func() uuid.UUID)
+	zoneFields := schema.Zone{}.Fields()
+	_ = zoneFields
+	// zoneDescName is the schema descriptor for name field.
+	zoneDescName := zoneFields[2].Descriptor()
+	// zone.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	zone.NameValidator = zoneDescName.Validators[0].(func(string) error)
+	// zoneDescCreatedAt is the schema descriptor for created_at field.
+	zoneDescCreatedAt := zoneFields[5].Descriptor()
+	// zone.DefaultCreatedAt holds the default value on creation for the created_at field.
+	zone.DefaultCreatedAt = zoneDescCreatedAt.Default.(func() time.Time)
+	// zoneDescID is the schema descriptor for id field.
+	zoneDescID := zoneFields[0].Descriptor()
+	// zone.DefaultID holds the default value on creation for the id field.
+	zone.DefaultID = zoneDescID.Default.(func() uuid.UUID)
 }

@@ -96,6 +96,51 @@ func SilentSince(v time.Time) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldSilentSince, v))
 }
 
+// InventoryAt applies equality check predicate on the "inventory_at" field. It's identical to InventoryAtEQ.
+func InventoryAt(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldInventoryAt, v))
+}
+
+// ZoneID applies equality check predicate on the "zone_id" field. It's identical to ZoneIDEQ.
+func ZoneID(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldZoneID, v))
+}
+
+// Role applies equality check predicate on the "role" field. It's identical to RoleEQ.
+func Role(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldRole, v))
+}
+
+// Summary applies equality check predicate on the "summary" field. It's identical to SummaryEQ.
+func Summary(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSummary, v))
+}
+
+// Criticality applies equality check predicate on the "criticality" field. It's identical to CriticalityEQ.
+func Criticality(v int) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldCriticality, v))
+}
+
+// AnnotationReason applies equality check predicate on the "annotation_reason" field. It's identical to AnnotationReasonEQ.
+func AnnotationReason(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAnnotationReason, v))
+}
+
+// AnnotatedAt applies equality check predicate on the "annotated_at" field. It's identical to AnnotatedAtEQ.
+func AnnotatedAt(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAnnotatedAt, v))
+}
+
+// AnnotatedFacts applies equality check predicate on the "annotated_facts" field. It's identical to AnnotatedFactsEQ.
+func AnnotatedFacts(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAnnotatedFacts, v))
+}
+
+// AnnotateRequestedAt applies equality check predicate on the "annotate_requested_at" field. It's identical to AnnotateRequestedAtEQ.
+func AnnotateRequestedAt(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAnnotateRequestedAt, v))
+}
+
 // HostnameEQ applies the EQ predicate on the "hostname" field.
 func HostnameEQ(v string) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldHostname, v))
@@ -559,6 +604,596 @@ func SilentSinceIsNil() predicate.Asset {
 // SilentSinceNotNil applies the NotNil predicate on the "silent_since" field.
 func SilentSinceNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldSilentSince))
+}
+
+// ListeningIsNil applies the IsNil predicate on the "listening" field.
+func ListeningIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldListening))
+}
+
+// ListeningNotNil applies the NotNil predicate on the "listening" field.
+func ListeningNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldListening))
+}
+
+// CloudIsNil applies the IsNil predicate on the "cloud" field.
+func CloudIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldCloud))
+}
+
+// CloudNotNil applies the NotNil predicate on the "cloud" field.
+func CloudNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldCloud))
+}
+
+// InventoryAtEQ applies the EQ predicate on the "inventory_at" field.
+func InventoryAtEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldInventoryAt, v))
+}
+
+// InventoryAtNEQ applies the NEQ predicate on the "inventory_at" field.
+func InventoryAtNEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldInventoryAt, v))
+}
+
+// InventoryAtIn applies the In predicate on the "inventory_at" field.
+func InventoryAtIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldInventoryAt, vs...))
+}
+
+// InventoryAtNotIn applies the NotIn predicate on the "inventory_at" field.
+func InventoryAtNotIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldInventoryAt, vs...))
+}
+
+// InventoryAtGT applies the GT predicate on the "inventory_at" field.
+func InventoryAtGT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldInventoryAt, v))
+}
+
+// InventoryAtGTE applies the GTE predicate on the "inventory_at" field.
+func InventoryAtGTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldInventoryAt, v))
+}
+
+// InventoryAtLT applies the LT predicate on the "inventory_at" field.
+func InventoryAtLT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldInventoryAt, v))
+}
+
+// InventoryAtLTE applies the LTE predicate on the "inventory_at" field.
+func InventoryAtLTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldInventoryAt, v))
+}
+
+// InventoryAtIsNil applies the IsNil predicate on the "inventory_at" field.
+func InventoryAtIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldInventoryAt))
+}
+
+// InventoryAtNotNil applies the NotNil predicate on the "inventory_at" field.
+func InventoryAtNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldInventoryAt))
+}
+
+// ZoneIDEQ applies the EQ predicate on the "zone_id" field.
+func ZoneIDEQ(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldZoneID, v))
+}
+
+// ZoneIDNEQ applies the NEQ predicate on the "zone_id" field.
+func ZoneIDNEQ(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldZoneID, v))
+}
+
+// ZoneIDIn applies the In predicate on the "zone_id" field.
+func ZoneIDIn(vs ...uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldZoneID, vs...))
+}
+
+// ZoneIDNotIn applies the NotIn predicate on the "zone_id" field.
+func ZoneIDNotIn(vs ...uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldZoneID, vs...))
+}
+
+// ZoneIDGT applies the GT predicate on the "zone_id" field.
+func ZoneIDGT(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldZoneID, v))
+}
+
+// ZoneIDGTE applies the GTE predicate on the "zone_id" field.
+func ZoneIDGTE(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldZoneID, v))
+}
+
+// ZoneIDLT applies the LT predicate on the "zone_id" field.
+func ZoneIDLT(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldZoneID, v))
+}
+
+// ZoneIDLTE applies the LTE predicate on the "zone_id" field.
+func ZoneIDLTE(v uuid.UUID) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldZoneID, v))
+}
+
+// ZoneIDIsNil applies the IsNil predicate on the "zone_id" field.
+func ZoneIDIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldZoneID))
+}
+
+// ZoneIDNotNil applies the NotNil predicate on the "zone_id" field.
+func ZoneIDNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldZoneID))
+}
+
+// RoleEQ applies the EQ predicate on the "role" field.
+func RoleEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldRole, v))
+}
+
+// RoleNEQ applies the NEQ predicate on the "role" field.
+func RoleNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldRole, v))
+}
+
+// RoleIn applies the In predicate on the "role" field.
+func RoleIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldRole, vs...))
+}
+
+// RoleNotIn applies the NotIn predicate on the "role" field.
+func RoleNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldRole, vs...))
+}
+
+// RoleGT applies the GT predicate on the "role" field.
+func RoleGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldRole, v))
+}
+
+// RoleGTE applies the GTE predicate on the "role" field.
+func RoleGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldRole, v))
+}
+
+// RoleLT applies the LT predicate on the "role" field.
+func RoleLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldRole, v))
+}
+
+// RoleLTE applies the LTE predicate on the "role" field.
+func RoleLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldRole, v))
+}
+
+// RoleContains applies the Contains predicate on the "role" field.
+func RoleContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldRole, v))
+}
+
+// RoleHasPrefix applies the HasPrefix predicate on the "role" field.
+func RoleHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldRole, v))
+}
+
+// RoleHasSuffix applies the HasSuffix predicate on the "role" field.
+func RoleHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldRole, v))
+}
+
+// RoleIsNil applies the IsNil predicate on the "role" field.
+func RoleIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldRole))
+}
+
+// RoleNotNil applies the NotNil predicate on the "role" field.
+func RoleNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldRole))
+}
+
+// RoleEqualFold applies the EqualFold predicate on the "role" field.
+func RoleEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldRole, v))
+}
+
+// RoleContainsFold applies the ContainsFold predicate on the "role" field.
+func RoleContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldRole, v))
+}
+
+// SummaryEQ applies the EQ predicate on the "summary" field.
+func SummaryEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSummary, v))
+}
+
+// SummaryNEQ applies the NEQ predicate on the "summary" field.
+func SummaryNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldSummary, v))
+}
+
+// SummaryIn applies the In predicate on the "summary" field.
+func SummaryIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldSummary, vs...))
+}
+
+// SummaryNotIn applies the NotIn predicate on the "summary" field.
+func SummaryNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldSummary, vs...))
+}
+
+// SummaryGT applies the GT predicate on the "summary" field.
+func SummaryGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldSummary, v))
+}
+
+// SummaryGTE applies the GTE predicate on the "summary" field.
+func SummaryGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldSummary, v))
+}
+
+// SummaryLT applies the LT predicate on the "summary" field.
+func SummaryLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldSummary, v))
+}
+
+// SummaryLTE applies the LTE predicate on the "summary" field.
+func SummaryLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldSummary, v))
+}
+
+// SummaryContains applies the Contains predicate on the "summary" field.
+func SummaryContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldSummary, v))
+}
+
+// SummaryHasPrefix applies the HasPrefix predicate on the "summary" field.
+func SummaryHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldSummary, v))
+}
+
+// SummaryHasSuffix applies the HasSuffix predicate on the "summary" field.
+func SummaryHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldSummary, v))
+}
+
+// SummaryIsNil applies the IsNil predicate on the "summary" field.
+func SummaryIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSummary))
+}
+
+// SummaryNotNil applies the NotNil predicate on the "summary" field.
+func SummaryNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSummary))
+}
+
+// SummaryEqualFold applies the EqualFold predicate on the "summary" field.
+func SummaryEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldSummary, v))
+}
+
+// SummaryContainsFold applies the ContainsFold predicate on the "summary" field.
+func SummaryContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldSummary, v))
+}
+
+// CriticalityEQ applies the EQ predicate on the "criticality" field.
+func CriticalityEQ(v int) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldCriticality, v))
+}
+
+// CriticalityNEQ applies the NEQ predicate on the "criticality" field.
+func CriticalityNEQ(v int) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldCriticality, v))
+}
+
+// CriticalityIn applies the In predicate on the "criticality" field.
+func CriticalityIn(vs ...int) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldCriticality, vs...))
+}
+
+// CriticalityNotIn applies the NotIn predicate on the "criticality" field.
+func CriticalityNotIn(vs ...int) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldCriticality, vs...))
+}
+
+// CriticalityGT applies the GT predicate on the "criticality" field.
+func CriticalityGT(v int) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldCriticality, v))
+}
+
+// CriticalityGTE applies the GTE predicate on the "criticality" field.
+func CriticalityGTE(v int) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldCriticality, v))
+}
+
+// CriticalityLT applies the LT predicate on the "criticality" field.
+func CriticalityLT(v int) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldCriticality, v))
+}
+
+// CriticalityLTE applies the LTE predicate on the "criticality" field.
+func CriticalityLTE(v int) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldCriticality, v))
+}
+
+// CriticalityIsNil applies the IsNil predicate on the "criticality" field.
+func CriticalityIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldCriticality))
+}
+
+// CriticalityNotNil applies the NotNil predicate on the "criticality" field.
+func CriticalityNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldCriticality))
+}
+
+// AnnotationReasonEQ applies the EQ predicate on the "annotation_reason" field.
+func AnnotationReasonEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonNEQ applies the NEQ predicate on the "annotation_reason" field.
+func AnnotationReasonNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonIn applies the In predicate on the "annotation_reason" field.
+func AnnotationReasonIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldAnnotationReason, vs...))
+}
+
+// AnnotationReasonNotIn applies the NotIn predicate on the "annotation_reason" field.
+func AnnotationReasonNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldAnnotationReason, vs...))
+}
+
+// AnnotationReasonGT applies the GT predicate on the "annotation_reason" field.
+func AnnotationReasonGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonGTE applies the GTE predicate on the "annotation_reason" field.
+func AnnotationReasonGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonLT applies the LT predicate on the "annotation_reason" field.
+func AnnotationReasonLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonLTE applies the LTE predicate on the "annotation_reason" field.
+func AnnotationReasonLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonContains applies the Contains predicate on the "annotation_reason" field.
+func AnnotationReasonContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonHasPrefix applies the HasPrefix predicate on the "annotation_reason" field.
+func AnnotationReasonHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonHasSuffix applies the HasSuffix predicate on the "annotation_reason" field.
+func AnnotationReasonHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonIsNil applies the IsNil predicate on the "annotation_reason" field.
+func AnnotationReasonIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldAnnotationReason))
+}
+
+// AnnotationReasonNotNil applies the NotNil predicate on the "annotation_reason" field.
+func AnnotationReasonNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldAnnotationReason))
+}
+
+// AnnotationReasonEqualFold applies the EqualFold predicate on the "annotation_reason" field.
+func AnnotationReasonEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldAnnotationReason, v))
+}
+
+// AnnotationReasonContainsFold applies the ContainsFold predicate on the "annotation_reason" field.
+func AnnotationReasonContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldAnnotationReason, v))
+}
+
+// RelationNotesIsNil applies the IsNil predicate on the "relation_notes" field.
+func RelationNotesIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldRelationNotes))
+}
+
+// RelationNotesNotNil applies the NotNil predicate on the "relation_notes" field.
+func RelationNotesNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldRelationNotes))
+}
+
+// LockedFieldsIsNil applies the IsNil predicate on the "locked_fields" field.
+func LockedFieldsIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldLockedFields))
+}
+
+// LockedFieldsNotNil applies the NotNil predicate on the "locked_fields" field.
+func LockedFieldsNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldLockedFields))
+}
+
+// AnnotatedAtEQ applies the EQ predicate on the "annotated_at" field.
+func AnnotatedAtEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAnnotatedAt, v))
+}
+
+// AnnotatedAtNEQ applies the NEQ predicate on the "annotated_at" field.
+func AnnotatedAtNEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldAnnotatedAt, v))
+}
+
+// AnnotatedAtIn applies the In predicate on the "annotated_at" field.
+func AnnotatedAtIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldAnnotatedAt, vs...))
+}
+
+// AnnotatedAtNotIn applies the NotIn predicate on the "annotated_at" field.
+func AnnotatedAtNotIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldAnnotatedAt, vs...))
+}
+
+// AnnotatedAtGT applies the GT predicate on the "annotated_at" field.
+func AnnotatedAtGT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldAnnotatedAt, v))
+}
+
+// AnnotatedAtGTE applies the GTE predicate on the "annotated_at" field.
+func AnnotatedAtGTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldAnnotatedAt, v))
+}
+
+// AnnotatedAtLT applies the LT predicate on the "annotated_at" field.
+func AnnotatedAtLT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldAnnotatedAt, v))
+}
+
+// AnnotatedAtLTE applies the LTE predicate on the "annotated_at" field.
+func AnnotatedAtLTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldAnnotatedAt, v))
+}
+
+// AnnotatedAtIsNil applies the IsNil predicate on the "annotated_at" field.
+func AnnotatedAtIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldAnnotatedAt))
+}
+
+// AnnotatedAtNotNil applies the NotNil predicate on the "annotated_at" field.
+func AnnotatedAtNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldAnnotatedAt))
+}
+
+// AnnotatedFactsEQ applies the EQ predicate on the "annotated_facts" field.
+func AnnotatedFactsEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsNEQ applies the NEQ predicate on the "annotated_facts" field.
+func AnnotatedFactsNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsIn applies the In predicate on the "annotated_facts" field.
+func AnnotatedFactsIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldAnnotatedFacts, vs...))
+}
+
+// AnnotatedFactsNotIn applies the NotIn predicate on the "annotated_facts" field.
+func AnnotatedFactsNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldAnnotatedFacts, vs...))
+}
+
+// AnnotatedFactsGT applies the GT predicate on the "annotated_facts" field.
+func AnnotatedFactsGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsGTE applies the GTE predicate on the "annotated_facts" field.
+func AnnotatedFactsGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsLT applies the LT predicate on the "annotated_facts" field.
+func AnnotatedFactsLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsLTE applies the LTE predicate on the "annotated_facts" field.
+func AnnotatedFactsLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsContains applies the Contains predicate on the "annotated_facts" field.
+func AnnotatedFactsContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsHasPrefix applies the HasPrefix predicate on the "annotated_facts" field.
+func AnnotatedFactsHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsHasSuffix applies the HasSuffix predicate on the "annotated_facts" field.
+func AnnotatedFactsHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsIsNil applies the IsNil predicate on the "annotated_facts" field.
+func AnnotatedFactsIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldAnnotatedFacts))
+}
+
+// AnnotatedFactsNotNil applies the NotNil predicate on the "annotated_facts" field.
+func AnnotatedFactsNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldAnnotatedFacts))
+}
+
+// AnnotatedFactsEqualFold applies the EqualFold predicate on the "annotated_facts" field.
+func AnnotatedFactsEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldAnnotatedFacts, v))
+}
+
+// AnnotatedFactsContainsFold applies the ContainsFold predicate on the "annotated_facts" field.
+func AnnotatedFactsContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldAnnotatedFacts, v))
+}
+
+// AnnotateRequestedAtEQ applies the EQ predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldAnnotateRequestedAt, v))
+}
+
+// AnnotateRequestedAtNEQ applies the NEQ predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtNEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldAnnotateRequestedAt, v))
+}
+
+// AnnotateRequestedAtIn applies the In predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldAnnotateRequestedAt, vs...))
+}
+
+// AnnotateRequestedAtNotIn applies the NotIn predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtNotIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldAnnotateRequestedAt, vs...))
+}
+
+// AnnotateRequestedAtGT applies the GT predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtGT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldAnnotateRequestedAt, v))
+}
+
+// AnnotateRequestedAtGTE applies the GTE predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtGTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldAnnotateRequestedAt, v))
+}
+
+// AnnotateRequestedAtLT applies the LT predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtLT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldAnnotateRequestedAt, v))
+}
+
+// AnnotateRequestedAtLTE applies the LTE predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtLTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldAnnotateRequestedAt, v))
+}
+
+// AnnotateRequestedAtIsNil applies the IsNil predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldAnnotateRequestedAt))
+}
+
+// AnnotateRequestedAtNotNil applies the NotNil predicate on the "annotate_requested_at" field.
+func AnnotateRequestedAtNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldAnnotateRequestedAt))
 }
 
 // HasEvents applies the HasEdge predicate on the "events" edge.

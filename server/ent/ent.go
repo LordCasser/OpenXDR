@@ -10,6 +10,7 @@ import (
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/approval"
 	"openxdr/server/ent/asset"
+	"openxdr/server/ent/assetlink"
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
@@ -30,6 +31,7 @@ import (
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
+	"openxdr/server/ent/zone"
 	"reflect"
 	"sync"
 
@@ -100,6 +102,7 @@ func checkColumn(t, c string) error {
 			alert.Table:           alert.ValidColumn,
 			approval.Table:        approval.ValidColumn,
 			asset.Table:           asset.ValidColumn,
+			assetlink.Table:       assetlink.ValidColumn,
 			auditlog.Table:        auditlog.ValidColumn,
 			command.Table:         command.ValidColumn,
 			commandpolicy.Table:   commandpolicy.ValidColumn,
@@ -120,6 +123,7 @@ func checkColumn(t, c string) error {
 			task.Table:            task.ValidColumn,
 			taskrun.Table:         taskrun.ValidColumn,
 			user.Table:            user.ValidColumn,
+			zone.Table:            zone.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)
