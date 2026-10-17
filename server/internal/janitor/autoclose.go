@@ -19,19 +19,20 @@ type AutoClose struct {
 	Interval time.Duration
 }
 
+// Run 拿到租约先扫一次再按周期扫：只靠定时器的话，部署频繁时每次重启都把计时清零，永远轮不到。
 func (a *AutoClose) Run(ctx context.Context) {
 	ticker := time.NewTicker(a.Interval)
 	defer ticker.Stop()
 	for {
+		if n, err := a.sweep(ctx); err != nil {
+			slog.Error("良性事件自动结案失败", "err", err)
+		} else if n > 0 {
+			slog.Info("良性事件自动结案", "closed", n)
+		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if n, err := a.sweep(ctx); err != nil {
-				slog.Error("良性事件自动结案失败", "err", err)
-			} else if n > 0 {
-				slog.Info("良性事件自动结案", "closed", n)
-			}
 		}
 	}
 }
