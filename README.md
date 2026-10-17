@@ -381,6 +381,7 @@ server 全部通过环境变量配置，均有默认值：
 | `TLS_CA_KEY_FILE` | 空 | CA 私钥，开了 mTLS 时在线接入用它签发主机证书 |
 | `AGENT_DIST_DIR` | 空 | agent 安装包目录，供安装脚本下载，也是在线 agent 自动升级的目标版本 |
 | `AGENT_AUTO_UPGRADE` | `true` | 在线 agent 与安装包哈希不同时自动升级，`false` 关闭 |
+| `TRUSTED_PROXIES` | 空 | 可信反向代理的地址或网段（逗号分隔）。只有来自这些地址的请求才采信 `X-Forwarded-For`，从右往左取第一个不可信地址作为客户端，登录退避与审计按它记来源；留空不还原 |
 | `RESPONSE_ENABLED` | `false` | 是否允许下发响应指令 |
 | `ISOLATION_ALLOW` | 空 | 隔离主机时放行的地址，必须包含 server 的 gRPC 端点 |
 | `AUTO_RESPONSE_ENABLED` | `false` | AI 研判高置信度 malicious 时自动隔离涉事主机（依赖 `RESPONSE_ENABLED`） |

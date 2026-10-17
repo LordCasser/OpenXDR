@@ -84,6 +84,8 @@ services:
       ENROLL_GRPC_URL: ${ENROLL_GRPC_URL:-https://10.1.1.199:8081}
       TLS_CA_KEY_FILE: ${TLS_CA_KEY_FILE:-}
       AGENT_DIST_DIR: /dist
+      # 采信 X-Forwarded-For 的上游：两节点的 haproxy 与网关 Caddy（xdr.internal.yuzhian.com.cn）
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-10.1.1.197,10.1.1.198,10.1.1.100}
     volumes:
       - ./rules:/rules:ro
       - ./tasks:/tasks:ro

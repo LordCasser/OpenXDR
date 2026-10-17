@@ -39,6 +39,7 @@ import (
 	"openxdr/server/internal/notify"
 	"openxdr/server/internal/piruntime"
 	"openxdr/server/internal/queryrole"
+	"openxdr/server/internal/realip"
 	"openxdr/server/internal/report"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/schedule"
@@ -316,7 +317,13 @@ func main() {
 		_, _ = w.Write([]byte("ready\n"))
 	})
 	mux.Handle("/", app)
-	httpServer := &http.Server{Addr: httpAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	// 经反向代理时还原客户端地址，登录退避与审计才按真人计
+	trustedProxies, err := realip.Parse(os.Getenv("TRUSTED_PROXIES"))
+	if err != nil {
+		slog.Error("TRUSTED_PROXIES 配置无效", "err", err)
+		os.Exit(1)
+	}
+	httpServer := &http.Server{Addr: httpAddr, Handler: realip.Middleware(trustedProxies, mux), ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	httpErr := make(chan error, 1)
 	go func() { httpErr <- httpServer.ListenAndServe() }()
 	select {
