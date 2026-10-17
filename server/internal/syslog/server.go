@@ -17,6 +17,7 @@ import (
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/ingest"
 	"openxdr/server/internal/intel"
+	"openxdr/server/internal/redact"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
 )
@@ -171,6 +172,7 @@ func (s *Server) consume(ctx context.Context, queue <-chan incoming) {
 
 func (s *Server) enqueue(ctx context.Context, in incoming) error {
 	msg := Parse(in.line, time.Now())
+	msg.Content = redact.String(msg.Content)
 	assetID, assetOS := s.resolveAsset(ctx, msg.Hostname, in.from)
 	raw, _ := json.Marshal(map[string]any{
 		"activity_id": 1, "severity_id": msg.Severity, "message": msg.Content,
@@ -196,6 +198,7 @@ func (s *Server) enqueue(ctx context.Context, in incoming) error {
 
 func (s *Server) build(ctx context.Context, in incoming, deduper *dedup.Deduper) (*ent.EventCreate, []*ent.AlertCreate) {
 	msg := Parse(in.line, time.Now())
+	msg.Content = redact.String(msg.Content)
 	assetID, assetOS := s.resolveAsset(ctx, msg.Hostname, in.from)
 
 	raw, _ := json.Marshal(map[string]any{
