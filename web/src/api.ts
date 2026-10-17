@@ -514,6 +514,8 @@ export interface AgentSession {
   title?: string
   status: 'running' | 'idle' | 'succeeded' | 'failed'
   error?: string
+  // 「交给 AI」绑定的对象：incident:<id> / finding:<id>
+  subjects?: string[]
 }
 
 // Pi 原生消息，原样存库、原样回放
@@ -545,6 +547,7 @@ export const fetchAgentSession = (id: string) => get<AgentSession>(`/api/agent-s
 export const createAgentSession = async (body: {
   groupId: string
   title?: string
+  subjects?: string[]
 }): Promise<AgentSession> => (await send('POST', '/api/agent-sessions', body)).json()
 
 export const fetchSessionMessages = (id: string) =>

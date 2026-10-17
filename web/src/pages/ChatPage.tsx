@@ -13,6 +13,7 @@ import {
 } from '../api'
 import { useSession } from '../app/session'
 import { ChatConversation, textOf, type ChatRow } from '../components/ChatConversation'
+import { SubjectsBar } from '../components/Handoff'
 import { SessionStatusTag, fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
@@ -211,13 +212,18 @@ export function ChatPage() {
     if (session && session.status !== 'running') client.invalidateQueries({ queryKey: ['sessions', session.group_id] })
   }, [session?.status, session?.group_id, client, session])
 
-  // 从资产详情"一键排查"或模板进来时带 ?prompt=，填进输入框后从地址栏拿掉
+  // 从资产详情"一键排查"或模板进来时带 ?prompt=，填进输入框后从地址栏拿掉；
+  // 「交给 AI」还带 send=1，会话就绪后直接发出去，人到了对话页 AI 已经在干活
+  const [autoSend, setAutoSend] = useState<string | null>(null)
   useEffect(() => {
     const p = params.get('prompt')
     if (!p || !session) return
-    setPrompt(p)
+    if (params.get('send') === '1') setAutoSend(p)
+    else {
+      setPrompt(p)
+      input.current?.focus()
+    }
     setParams({}, { replace: true })
-    input.current?.focus()
   }, [params, session, setParams])
 
   useEffect(() => {
@@ -242,10 +248,10 @@ export function ChatPage() {
     }
   }
 
-  const submit = async () => {
-    const text = prompt.trim()
+  const submit = async (override?: string) => {
+    const text = (override ?? prompt).trim()
     if (!session || !text) return
-    setPrompt('')
+    if (override === undefined) setPrompt('')
     setBusy(true)
     setError(null)
     setPending(text)
@@ -274,6 +280,13 @@ export function ChatPage() {
       setBusy(false)
     }
   }
+
+  // 会话可发言了就把「交给 AI」带来的第一句发出去，只发一次
+  useEffect(() => {
+    if (!autoSend || !canSend) return
+    setAutoSend(null)
+    void submit(autoSend)
+  }, [autoSend, canSend]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const history = messages.data ?? []
   // 首条 user 消息入库前先占位，避免发出去的话"消失"一下
@@ -333,7 +346,7 @@ export function ChatPage() {
                     </Tooltip>
                   </Flex>
                   <Space size={4} wrap style={{ marginTop: 4 }}>
-                    <SessionStatusTag value={s.status} />
+                    <SessionStatusTag value={s.id === sessionId && isRunning ? 'running' : s.status} />
                     {s.kind === 'task' && <Tag>{t('taskSession')}</Tag>}
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(s.created_at).slice(b.key === 'sessionsEarlier' || b.key === 'sessionsPinned' ? 5 : 11, 16)}</Typography.Text>
                   </Space>
@@ -348,7 +361,7 @@ export function ChatPage() {
         title={session && (
           <Space>
             <span>{session.title || t('chatSession')}</span>
-            <SessionStatusTag value={session.status} />
+            <SessionStatusTag value={isRunning ? 'running' : session.status} />
           </Space>
         )}
         extra={session && <Typography.Text type="secondary">{session.initiator} · {session.model}</Typography.Text>}
@@ -366,6 +379,7 @@ export function ChatPage() {
           </Flex>
         ) : (
           <>
+            {!!session.subjects?.length && <SubjectsBar subjects={session.subjects} groupId={session.group_id} />}
             <div className="chat-log">
               {messages.isPending && <Spin />}
               {messages.isError && <Alert type="error" showIcon title={errText(messages.error, t)} />}
@@ -404,7 +418,7 @@ export function ChatPage() {
               {busy ? (
                 <Button danger icon={<StopOutlined />} onClick={() => abort.current?.abort()}>{t('stop')}</Button>
               ) : (
-                <Button type="primary" icon={<SendOutlined />} disabled={!canSend || !prompt.trim()} onClick={submit}>{t('send')}</Button>
+                <Button type="primary" icon={<SendOutlined />} disabled={!canSend || !prompt.trim()} onClick={() => submit()}>{t('send')}</Button>
               )}
             </div>
           </>

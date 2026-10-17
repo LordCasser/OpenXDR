@@ -1,10 +1,11 @@
-import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DownloadOutlined, RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Col, Descriptions, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Typography } from 'antd'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { HttpError, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
 import { useCanActIn, useSession } from '../app/session'
+import { useCanChat, useHandoff } from '../components/Handoff'
 import { HostLink } from '../components/HostLink'
 import { IncidentGraph } from '../components/IncidentGraph'
 import { LoadError } from '../components/LoadError'
@@ -59,6 +60,8 @@ export function IncidentDetailPage() {
   const [alertView, setAlertView] = useState<'table' | 'timeline'>('timeline')
   const { data: inc, isPending, error, refetch } = useQuery({ queryKey: ['incident', id], queryFn: () => fetchIncident(id!), refetchInterval: 15_000 })
   const canAct = useCanActIn(inc?.groupId)
+  const canChat = useCanChat()(inc?.groupId)
+  const handoff = useHandoff()
 
   if (isPending) return <Skeleton active paragraph={{ rows: 12 }} style={{ marginTop: 24 }} />
   if (error instanceof HttpError && error.status === 404) {
@@ -88,6 +91,12 @@ export function IncidentDetailPage() {
       title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} /><SeverityTag value={inc.severity} />{inc.title ?? inc.id}<IncidentStatusTag value={inc.status} /></Space>}
       extra={
         <>
+          {canChat && inc.groupId && !done && (
+            <Button type="primary" icon={<RobotOutlined />} loading={handoff.busy}
+              onClick={() => handoff.start(inc.groupId!, [`incident:${inc.id}`], t('handoffIncidentTitle', { title: inc.title ?? inc.id }), t('handoffIncidentPrompt'))}>
+              {t('handoffToAI')}
+            </Button>
+          )}
           {/* 只读角色也能导报告：写汇报不是处置动作 */}
           <Button icon={<DownloadOutlined />} onClick={() => downloadReport(inc.id, inc.title).catch(e => message.error(errText(e, t)))}>{t('exportReport')}</Button>
           {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('close')}</Button>}

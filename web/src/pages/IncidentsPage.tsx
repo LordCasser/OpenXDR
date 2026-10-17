@@ -1,3 +1,4 @@
+import { RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Badge, Button, Segmented, Space, Table, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
@@ -5,6 +6,7 @@ import { Link, useSearchParams } from 'react-router'
 import { fetchIncidents, setIncidentStatus, type IncidentSummary } from '../api'
 import { useCanAct, useSession } from '../app/session'
 import { Ago, EmptyHint, Refreshed } from '../components/Ago'
+import { useCanChat, useHandoff } from '../components/Handoff'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
@@ -39,6 +41,15 @@ export function IncidentsPage() {
   })
   const rows = query.data?.items ?? []
   const actable = (r: IncidentSummary) => !done(r) && canAct(r.groupId)
+  const canChat = useCanChat()
+  const handoff = useHandoff()
+  // 多选交给 AI：一个会话属于一个组，选中的必须同组
+  const picked = rows.filter(r => selected.includes(r.id))
+  const pickedGroup = picked[0]?.groupId
+  const sameGroup = picked.length > 0 && picked.every(r => r.groupId === pickedGroup)
+  const handTo = (list: IncidentSummary[]) => handoff.start(list[0].groupId!, list.map(r => `incident:${r.id}`),
+    list.length === 1 ? t('handoffIncidentTitle', { title: list[0].title ?? list[0].id }) : t('handoffIncidentsTitle', { n: list.length }),
+    t('handoffIncidentPrompt'))
   const anyActable = rows.some(actable)
 
   // 换筛选或翻页就清掉勾选，批量操作只作用于看得见的行
@@ -73,6 +84,10 @@ export function IncidentsPage() {
             {selected.length > 0 && (
               <>
                 <Typography.Text type="secondary">{t('batchSelected', { n: selected.length })}</Typography.Text>
+                <Tooltip title={!sameGroup ? t('handoffSameGroup') : picked.length > 10 ? t('handoffMax') : undefined}>
+                  <Button size="small" type="primary" icon={<RobotOutlined />} loading={handoff.busy}
+                    disabled={!sameGroup || picked.length > 10 || !canChat(pickedGroup)} onClick={() => handTo(picked)}>{t('handoffToAI')}</Button>
+                </Tooltip>
                 <Button size="small" onClick={() => setResolving('closed')}>{t('close')}</Button>
                 <Button size="small" danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>
               </>
@@ -128,10 +143,11 @@ export function IncidentsPage() {
               { title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
               { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
               ...(anyActable ? [{
-                title: '', width: 120,
+                title: '', width: 170,
                 // 单条处理不用先勾选：直接点，弹窗写结论
                 render: (_: unknown, r: IncidentSummary) => actable(r) && (
                   <Space size={0} className="row-actions">
+                    {canChat(r.groupId) && <Button type="link" size="small" icon={<RobotOutlined />} onClick={() => handTo([r])}>AI</Button>}
                     <Button type="link" size="small" onClick={() => { setSelected([r.id]); setResolving('closed') }}>{t('close')}</Button>
                     <Button type="link" size="small" danger onClick={() => { setSelected([r.id]); setResolving('false_positive') }}>{t('markFpShort')}</Button>
                   </Space>

@@ -94,6 +94,10 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .mini-row { padding: 6px 0; border-bottom: 1px solid var(--ant-color-border-secondary); }
 .mini-row:last-child { border-bottom: none; }
 
+/* 对话页顶部：本会话处理的事件与待办 */
+.subjects-bar { border-bottom: 1px solid var(--ant-color-border-secondary); border-radius: 0 !important; background: var(--ant-color-fill-quaternary); }
+.subject-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; min-width: 0; }
+
 /* 会话列表：日期分组标题与置顶按钮（悬停才出现，已置顶常亮） */
 .chat-session-bucket { font-size: 12px; color: var(--ant-color-text-tertiary); padding: 10px 16px 4px; }
 .session-pin { color: var(--ant-color-text-quaternary); opacity: 0; padding: 0 2px; transition: opacity .15s; }

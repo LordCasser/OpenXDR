@@ -1,9 +1,11 @@
+import { RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { fetchFindings, setFindingStatus, type FindingRow } from '../api'
 import { useCanAct, useSession } from '../app/session'
+import { useCanChat, useHandoff } from '../components/Handoff'
 import { HostLink } from '../components/HostLink'
 import { FilterCard, Page } from '../components/Page'
 import { Ago, EmptyHint, Refreshed } from '../components/Ago'
@@ -35,6 +37,9 @@ export function FindingsPage() {
   const [params, setParams] = useSearchParams()
   const status = params.get('status') ?? 'open'
   const [acting, setActing] = useState<{ row: FindingRow; next: 'resolved' | 'ignored' } | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
+  const canChat = useCanChat()
+  const handoff = useHandoff()
   const { data, isPending, isError, error, refetch, dataUpdatedAt, isFetching } = useQuery({
     queryKey: ['findings', status],
     queryFn: () => fetchFindings(status === 'all' ? undefined : status),
@@ -54,10 +59,28 @@ export function FindingsPage() {
     return true
   }
 
+  const picked = (data ?? []).filter(f => selected.includes(f.id))
+  const sameGroup = picked.length > 0 && picked.every(f => f.groupId === picked[0].groupId)
+  const handTo = (list: FindingRow[]) => handoff.start(list[0].groupId, list.map(f => `finding:${f.id}`),
+    list.length === 1 ? t('handoffFindingTitle', { title: list[0].title }) : t('handoffFindingsTitle', { n: list.length }),
+    t('handoffFindingPrompt'))
+
   return (
     <Page title={t('navFindings')} subtitle={t('findingsSubtitle')}>
       <FilterCard
-        extra={<Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} />}
+        extra={(
+          <Space>
+            {selected.length > 0 && (
+              <Tooltip title={!sameGroup ? t('handoffSameGroup') : picked.length > 10 ? t('handoffMax') : undefined}>
+                <Button size="small" type="primary" icon={<RobotOutlined />} loading={handoff.busy}
+                  disabled={!sameGroup || picked.length > 10 || !canChat(picked[0]?.groupId)} onClick={() => handTo(picked)}>
+                  {t('handoffToAI')}（{selected.length}）
+                </Button>
+              </Tooltip>
+            )}
+            <Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} />
+          </Space>
+        )}
         filters={
           <Segmented
             value={status}
@@ -71,6 +94,7 @@ export function FindingsPage() {
       >
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<FindingRow>
           rowKey="id"
+          rowSelection={{ selectedRowKeys: selected, onChange: keys => setSelected(keys as string[]), getCheckboxProps: f => ({ disabled: f.status !== 'open' || !canChat(f.groupId) }) }}
           loading={isPending}
           dataSource={data ?? []}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
@@ -96,6 +120,7 @@ export function FindingsPage() {
               render: (_, f) => (
                 <Space size={4}>
                   {f.sessionId && <Link to={`/chat/${f.sessionId}`}>{t('openSession')}</Link>}
+                  {canChat(f.groupId) && f.status === 'open' && <Button size="small" icon={<RobotOutlined />} onClick={() => handTo([f])}>AI</Button>}
                   {canAct(f.groupId) && f.status === 'open' && <Button size="small" onClick={() => setActing({ row: f, next: 'resolved' })}>{t('markResolved')}</Button>}
                   {canAct(f.groupId) && f.status === 'open' && <Button size="small" onClick={() => setActing({ row: f, next: 'ignored' })}>{t('markIgnored')}</Button>}
                   {canAct(f.groupId) && f.status !== 'open' && <Button size="small" onClick={() => change(f, 'open')}>{t('reopen')}</Button>}
