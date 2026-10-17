@@ -46,6 +46,9 @@ impl ConnSampler {
 pub struct ConnInfo {
     pub pid: u32,
     pub guid: Option<Uuid>,
+    /// 进程名与路径：长驻进程早于 agent 启动，server 回查不到它的启动事件，只能随连接带上
+    pub name: Option<String>,
+    pub exe: Option<String>,
     pub src: IpAddr,
     pub sport: u16,
     pub dst: IpAddr,
@@ -55,13 +58,20 @@ pub struct ConnInfo {
 /// 组装一条出站连接事件。conn_tuple 与 sensor 同一格式，
 /// 横向移动关联（ConnTupleContains）对两路数据一视同仁。
 pub fn conn_event(agent_id: &str, info: &ConnInfo) -> AgentEvent {
-    let raw = serde_json::json!({
+    let mut raw = serde_json::json!({
         "activity_id": 1, // OCSF: Open
         "connection_info": { "direction": "outbound", "protocol_name": "tcp" },
         "src_endpoint": { "ip": info.src.to_string(), "port": info.sport },
         "dst_endpoint": { "ip": info.dst.to_string(), "port": info.dport },
         "process": { "pid": info.pid, "uid": info.guid.map(|g| g.to_string()) },
     });
+    // 拿不到就不写，不编造
+    if let Some(name) = info.name.as_deref().filter(|n| !n.is_empty()) {
+        raw["process"]["name"] = name.into();
+    }
+    if let Some(exe) = &info.exe {
+        raw["process"]["file"] = serde_json::json!({ "path": exe });
+    }
     AgentEvent {
         agent_id: agent_id.to_string(),
         ts_unix_ns: SystemTime::now()
@@ -104,6 +114,8 @@ mod tests {
             &ConnInfo {
                 pid: 42,
                 guid: Some(guid),
+                name: Some("curl".into()),
+                exe: Some("/usr/bin/curl".into()),
                 src: "192.168.1.5".parse().unwrap(),
                 sport: 51000,
                 dst: "1.2.3.4".parse().unwrap(),
@@ -118,6 +130,8 @@ mod tests {
         assert_eq!(v["dst_endpoint"]["port"], 443);
         assert_eq!(v["connection_info"]["direction"], "outbound");
         assert_eq!(v["process"]["uid"], guid.to_string());
+        assert_eq!(v["process"]["name"], "curl");
+        assert_eq!(v["process"]["file"]["path"], "/usr/bin/curl");
     }
 
     #[test]
@@ -127,6 +141,8 @@ mod tests {
             &ConnInfo {
                 pid: 7,
                 guid: None,
+                name: None,
+                exe: None,
                 src: "::1".parse().unwrap(),
                 sport: 1,
                 dst: "2001:db8::1".parse().unwrap(),
@@ -136,5 +152,6 @@ mod tests {
         assert!(evt.process_guid.is_empty());
         let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
         assert!(v["process"]["uid"].is_null());
+        assert!(v["process"].get("name").is_none() && v["process"].get("file").is_none());
     }
 }

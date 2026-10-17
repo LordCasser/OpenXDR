@@ -174,14 +174,25 @@ func FactsOf(ctx context.Context, db *ent.Client, w *World, a *ent.Asset) (Facts
 		return Facts{}, err
 	}
 	public := map[string]bool{}
+	// 同一对端端口合成一条，进程并列；有已知进程就不再写「?」（旧版 agent 留下的边没有进程名）
+	procs := map[string][]string{}
 	for _, l := range out {
 		if addr, err := netip.ParseAddr(l.DstIP); err == nil && Public(addr) && w.ByIP[addr] == nil {
 			public[l.DstIP] = true
 			continue
 		}
 		peer := label(l.DstIP)
-		f.Outbound = append(f.Outbound, fmt.Sprintf("%s:%d ← %s", peer, l.DstPort, cmp.Or(l.Process, "?")))
+		target := fmt.Sprintf("%s:%d", peer, l.DstPort)
+		if l.Process != "" && !slices.Contains(procs[target], l.Process) {
+			procs[target] = append(procs[target], l.Process)
+		} else if procs[target] == nil {
+			procs[target] = []string{}
+		}
 		f.Peers = append(f.Peers, peer)
+	}
+	for target, names := range procs {
+		slices.Sort(names)
+		f.Outbound = append(f.Outbound, target+" ← "+cmp.Or(strings.Join(names, ", "), "?"))
 	}
 	f.PublicDestinations = len(public)
 	in, err := db.AssetLink.Query().Where(assetlink.DstIPIn(a.IPAddrs...), assetlink.LastSeenGT(since)).All(ctx)

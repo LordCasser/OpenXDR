@@ -70,11 +70,11 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
                 return;
             }
             // 进程没注册过（早于 agent 启动）就现场登记，保证事件一定挂得上 GUID
-            let guid = {
+            let (guid, name, exe) = {
                 let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
-                match reg.guid_of(pid) {
-                    Some(g) => g,
-                    None => reg.register(pid, None).0,
+                match reg.known(pid) {
+                    Some(k) => (k.guid, Some(k.name), k.exe),
+                    None => (reg.register(pid, None).0, None, None),
                 }
             };
             sink.send(netwatch::conn_event(
@@ -82,6 +82,8 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
                 &ConnInfo {
                     pid,
                     guid: Some(guid),
+                    name,
+                    exe,
                     src,
                     sport,
                     dst,

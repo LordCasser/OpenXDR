@@ -12,6 +12,7 @@ type conn struct {
 	src, dst netip.Addr
 	port     int
 	proto    string
+	process  string
 }
 
 // connOf 从网络事件取出两端。agent 与 sensor 的事件体同一约定：src_endpoint / dst_endpoint。
@@ -25,6 +26,9 @@ func connOf(raw json.RawMessage, tuple string) (conn, bool) {
 			IP   string `json:"ip"`
 			Port int    `json:"port"`
 		} `json:"dst_endpoint"`
+		Process struct {
+			Name string `json:"name"`
+		} `json:"process"`
 	}
 	if json.Unmarshal(raw, &body) != nil {
 		return conn{}, false
@@ -38,7 +42,7 @@ func connOf(raw json.RawMessage, tuple string) (conn, bool) {
 	if p, _, ok := strings.Cut(tuple, ":"); ok && (p == "tcp" || p == "udp") {
 		proto = p
 	}
-	return conn{src.Unmap(), dst.Unmap(), body.Dst.Port, proto}, true
+	return conn{src.Unmap(), dst.Unmap(), body.Dst.Port, proto, clean(body.Process.Name, 64)}, true
 }
 
 // dependency 这条连接算不算资产间的依赖。own 是上报 agent 所在资产的地址，sensor 事件为空。

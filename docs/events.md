@@ -138,9 +138,13 @@ Kernel-Network `netwatch_win.rs`，订阅 TcpConnect 事件 12，端口为网络
   "connection_info": { "direction": "outbound", "protocol_name": "tcp" },
   "src_endpoint": { "ip": "...", "port": 51234 },
   "dst_endpoint": { "ip": "...", "port": 443 },
-  "process": { "pid": 1234, "uid": "<进程 GUID>" }
+  "process": { "pid": 1234, "uid": "<进程 GUID>", "name": "curl", "file": { "path": "/usr/bin/curl" } }
 }
 ```
+
+`process.name` / `process.file.path` 取自进程注册表（Linux 注册表没有名字时现读
+`/proc/<pid>/comm`），拿不到就省略。早于 agent 启动的长驻进程没有启动事件可回查，
+资产图谱的依赖边靠这两个字段知道是哪个进程发起的连接。
 
 **sensor 会话**（server 侧归一化，`grpcsvc/sensor.go:168-214`）——带流量统计：
 

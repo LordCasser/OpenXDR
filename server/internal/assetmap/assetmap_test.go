@@ -107,8 +107,8 @@ func TestDependencyFiltersNoise(t *testing.T) {
 }
 
 func TestConnOf(t *testing.T) {
-	c, ok := connOf(json.RawMessage(`{"src_endpoint":{"ip":"10.0.0.1","port":5000},"dst_endpoint":{"ip":"::ffff:10.0.0.2","port":5432}}`), "udp:10.0.0.1:5000>10.0.0.2:5432")
-	if !ok || c.proto != "udp" || c.dst != netip.MustParseAddr("10.0.0.2") || c.port != 5432 {
+	c, ok := connOf(json.RawMessage(`{"src_endpoint":{"ip":"10.0.0.1","port":5000},"dst_endpoint":{"ip":"::ffff:10.0.0.2","port":5432},"process":{"pid":7,"name":"psql"}}`), "udp:10.0.0.1:5000>10.0.0.2:5432")
+	if !ok || c.proto != "udp" || c.dst != netip.MustParseAddr("10.0.0.2") || c.port != 5432 || c.process != "psql" {
 		t.Fatalf("%+v %v", c, ok)
 	}
 	if _, ok := connOf(json.RawMessage(`{"dst_endpoint":{"ip":"10.0.0.2","port":0}}`), ""); ok {

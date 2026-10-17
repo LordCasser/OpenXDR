@@ -248,15 +248,27 @@ fn to_conn_event(
     {
         return None;
     }
-    let guid = registry
+    let known = registry
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .guid_of(ev.pid);
+        .known(ev.pid);
+    // 注册表没登记名字的（极少数），连接发生时进程还在，现读 comm
+    let name = known
+        .as_ref()
+        .map(|k| k.name.clone())
+        .filter(|n| !n.is_empty())
+        .or_else(|| {
+            std::fs::read_to_string(format!("/proc/{}/comm", ev.pid))
+                .ok()
+                .map(|s| s.trim_end().to_string())
+        });
     Some(netwatch::conn_event(
         agent_id,
         &ConnInfo {
             pid: ev.pid,
-            guid,
+            guid: known.as_ref().map(|k| k.guid),
+            exe: known.and_then(|k| k.exe),
+            name,
             src: ip_of(ev.family, &ev.saddr),
             sport: ev.sport,
             dst,

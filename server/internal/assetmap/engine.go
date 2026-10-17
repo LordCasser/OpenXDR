@@ -144,8 +144,9 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		if !ok || !dependency(c, ownIPs) {
 			continue
 		}
-		process := ""
-		if ev.ProcessGUID != nil {
+		// 新版 agent 随连接带进程名；旧版只有 GUID，回查同一进程的启动事件
+		process := c.process
+		if process == "" && ev.ProcessGUID != nil {
 			process = names[*ev.ProcessGUID]
 		}
 		k := linkKey{c.src.String(), c.dst.String(), c.port, c.proto, process}
