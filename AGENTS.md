@@ -3,9 +3,9 @@
 开源 XDR 平台：EDR + SIEM + 全流量分析，AI 驱动降噪。核心理念："一万条告警进，三个真事件出"。
 
 本文面向接手本仓库的 AI 编码代理，汇总架构、构建、约定与验证方式。更详细的设计见
-`README.md`（使用与配置）、`docs/`（文档系统，从 `docs/README.md` 索引进入：
+`docs/deployment.md`（部署、使用与配置）、`docs/`（文档系统，从 `docs/README.md` 索引进入：
 架构 / 采集端详解 / 事件模型 / 检测链路 / REST API / 路线图）。注意 `ARCH.md` 是**目标架构讨论稿**，描述的是演进方向
-（如 Redis/MQ、多网关），不代表当前实现——当前实现以代码和 `README.md` 为准。
+（如 Redis/MQ、多网关），不代表当前实现——当前实现以代码和 `docs/` 为准。
 
 ## 架构与运行时
 
@@ -103,7 +103,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `correlate`：按实体把告警关联成 incident 事件图
 - `ueba`：首次出现检测（先学习后告警）
 - `triage`：旧 AI 研判引擎（带只读调查工具逐个研判 incident）
-- `piruntime` / `agentchat`：Pi 子进程、会话消息、exec/query/report 与 POST SSE
+- `piruntime` / `agentchat`：Pi 子进程、会话消息、exec/query/report 与后台运行、停止
 - `commandgate`：人工与 AI exec 的组权限、命令名单、阻塞审批与审计
 - `schedule` / `report`：`tasks/*.yml` 预设任务按组定时拉起 Pi 会话（系统身份），报告 HTML/PDF 渲染
 - `response`：响应处置（结束进程 / 主机隔离），含自动响应钩子
@@ -120,7 +120,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 ## 开发约定
 
 - **语言**：代码注释、日志消息、文档均用简体中文；标识符与提交信息遵循各目录现状。
-- **配置**：server 全部走环境变量（`getenv`/`getenvInt`，见 `main.go` 与 README 配置表），
+- **配置**：server 全部走环境变量（`getenv`/`getenvInt`，见 `main.go` 与 `docs/deployment.md` 配置表），
   均有默认值，不加配置文件。
 - **失败策略贯穿全项目**：拿不准就拒绝或降级，绝不静默产出错误数据——
   Sigma 规则用了未实现的修饰符直接拒绝加载而不是降级匹配；Windows 规则不在

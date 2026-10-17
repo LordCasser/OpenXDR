@@ -79,7 +79,7 @@ hosts:
 | `ENROLL_SSH_ENABLED` | `false` | 显式开启使用保存凭据进行 SSH 安装 |
 | `ENROLL_PUBLIC_URL` | 空 | 主机可访问的可信 HTTPS 控制台地址，用于下载 Agent 和证书注册 |
 | `ENROLL_GRPC_URL` | 空 | Agent 可访问的 gRPC 地址；生产使用 mTLS |
-| `TLS_CA_KEY_FILE` | 空 | mTLS 签发密钥，参见 README 在线接入配置 |
+| `TLS_CA_KEY_FILE` | 空 | mTLS 签发密钥，参见 [部署与使用手册](deployment.md#添加主机) |
 | `AGENT_DIST_DIR` | 空 | 各平台 Agent 安装包目录 |
 
 SSH 纳管要求 mTLS 在线签发可用。Linux 需要 root，或具有免交互 sudo 权限的账号。Windows 需要已启用 OpenSSH、

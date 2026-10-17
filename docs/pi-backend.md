@@ -33,7 +33,8 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 | `GET /api/agent-sessions?groupId=...` | — | 组 viewer；最近 100 个会话 |
 | `GET /api/agent-sessions/{id}` | — | 组 viewer；单个会话状态与元数据 |
 | `GET /api/agent-sessions/{id}/messages?afterSeq=0` | — | 组 viewer；seq 升序，每页最多 1000 条，下一页传最后一条 seq |
-| `POST /api/agent-sessions/{id}/messages` | `{prompt}` | 发起人且仍为组 analyst；POST SSE |
+| `POST /api/agent-sessions/{id}/messages` | `{prompt}` | 发起人且仍为组 analyst，会话须为 idle；在后台开跑，返回 202 + `{id}` |
+| `POST /api/agent-sessions/{id}/cancel` | — | 发起人或组 admin；写入停止请求，返回 204 |
 | `GET /api/agent-reports?groupId=...` | — | 组 viewer；最近 100 个原始 Markdown 报告 |
 | `GET /api/agent-reports/{id}` | — | 组 viewer；报告实体 |
 | `GET /api/commands/{id}` | — | 资产所属组 viewer；未分组资产仅全局 admin，可查询迟到回执 |
@@ -43,21 +44,16 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 | `GET /api/approvals?groupId=...` | — | 组 admin；最近 100 个审批（含终态） |
 | `POST /api/approvals/{id}/decision` | `{approve:true或false}` | 组 admin；原子决定，返回 204，重复/过期返回 409 |
 
-SSE 用 fetch 读取 POST 响应，不能直接用浏览器 EventSource：
+对话在服务端后台运行，与发起请求的连接无关：前端切页、关闭浏览器都不影响。
+前端轮询 `GET /api/agent-sessions/{id}` 看 `status`（running → idle/failed），
+用 `afterSeq` 增量拉取消息。停止请求写入 `cancel_requested_at`，运行所在节点每 2 秒检查一次，
+命中后取消本轮，未完成的工具调用补写结果消息，会话回到 idle 可继续追问。
 
-- `session`：`{"id":"..."}`。
-- `pi`：runner 原始事件；其中 `type=event` 的 `event` 是 Pi 事件，
-  `message_update` 用于逐字显示，`tool_execution_start/end` 用于工具卡片。
-- `heartbeat`：每 15 秒保活；代理不要缓存流。
-- `done`：`{Response,StopReason,Turns}`，只有数据库终态保存成功后发送。
-- `error`：`{"error":"..."}`，流开始后的失败通过此事件报告。
-
-`pi` 内部的 `result` 仅表示模型结束；前端必须等待外层 `done`。
 `StopReason=length/max_turns` 表示截断/轮数耗尽，不能展示为完整巡检成功。
 轮数耗尽（`max_turns`）时服务端先在同一会话上带全部历史续一次收尾（最多 4 次调用）：
 两种会话都只留 `report`：对话会话要求直接用文字总结、不再调用工具，任务会话要求提交报告；未覆盖的检查项标「未验证」。
 不能一个工具都不给：历史里有工具调用时 pi-ai 会发空的 `tools` 数组，vLLM 等端点直接 400。收尾消息照常入库。
-客户端断开会终止推理与审批等待，已下发的命令不会因此撤销。
+停止只终止推理与审批等待，已下发的命令不会因此撤销。
 同一会话只允许一个 running 请求；失败会话不自动重试，需检查命令记录后另建会话。
 进程异常退出导致遗留 running 状态时，不自动恢复或重放主机操作。
 

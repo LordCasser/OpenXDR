@@ -12,3 +12,7 @@ dist/
 /runtime/
 /certs/
 __pycache__/
+
+# 本地工具与私有笔记
+.claude/
+TODO-*.md
