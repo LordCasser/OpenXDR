@@ -105,7 +105,7 @@ func TestSessionHistoryAndReports(t *testing.T) {
 	}
 }
 
-// 对话轮数耗尽：带全部历史续一次不给工具的收尾，会话正常回到 idle。
+// 对话轮数耗尽：带全部历史续一次只留 report 的收尾（不能给空工具列表，vLLM 会拒），会话正常回到 idle。
 func TestChatWrapUp(t *testing.T) {
 	ctx, db := testdb.New(t)
 	group := db.Group.Create().SetName("g").SaveX(ctx)
@@ -114,7 +114,7 @@ func TestChatWrapUp(t *testing.T) {
 	calls := 0
 	service := &Service{DB: db, Runtime: fakeRunner{func(ctx context.Context, r piruntime.Request, h piruntime.Handler, o piruntime.Observer) (*piruntime.Result, error) {
 		calls++
-		if calls == 2 && (len(r.Tools) != 0 || r.MaxTurns != wrapUpTurns || len(r.Messages) != 2 || !strings.Contains(r.Prompt, "未验证")) {
+		if calls == 2 && (len(r.Tools) != 1 || r.Tools[0].Name != "report" || !strings.Contains(r.Prompt, "不要再调用工具") || r.MaxTurns != wrapUpTurns || len(r.Messages) != 2 || !strings.Contains(r.Prompt, "未验证")) {
 			t.Errorf("收尾请求不符：工具 %v 轮数 %d 历史 %d", r.Tools, r.MaxTurns, len(r.Messages))
 		}
 		for _, message := range []string{`{"role":"user","content":"检查","timestamp":1}`, `{"role":"assistant","content":[{"type":"text","text":"小结"}],"stopReason":"stop"}`} {

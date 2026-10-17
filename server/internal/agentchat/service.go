@@ -306,10 +306,10 @@ func (s *Service) wrapUp(ctx context.Context, session *ent.AgentSession, request
 	if err != nil {
 		return nil, err
 	}
-	request.Messages, request.MaxTurns, request.Tools = messages, wrapUpTurns, nil
-	request.Prompt = wrapUpPrompt + "直接用文字给出最终总结。"
+	// 两种会话都只留 report：pi-ai 在历史有工具调用时会发空的 tools 数组，vLLM 直接 400，所以不能一个都不给
+	request.Messages, request.MaxTurns, request.Tools = messages, wrapUpTurns, []piruntime.Tool{reportTool}
+	request.Prompt = wrapUpPrompt + "直接用文字给出最终总结，不要再调用工具。"
 	if session.Kind == "task" {
-		request.Tools = []piruntime.Tool{reportTool}
 		request.Prompt = wrapUpPrompt + "必须调用 report 提交最终报告。"
 	}
 	return s.Runtime.Run(ctx, request, handle, record)
