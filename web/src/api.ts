@@ -727,7 +727,7 @@ export interface AssetMap { nodes: MapNode[]; edges: MapEdge[] }
 
 export interface PortService { name: string; category: string; risk: 'high' | 'medium' | 'low' }
 export interface ExposedService {
-  assetId: string; hostname: string; zone: ZoneRef; level: ExposureLevel; proto: string; addr: string; port: number
+  assetId: string; hostname: string; zone: ZoneRef; level: ExposureLevel; proto: string; addrs: string[]; port: number
   process?: string; service: PortService; criticality?: number; score: number; peers: string[] | null; peerCount: number; fromPublic: boolean
 }
 export interface BlindSpot { ip: string; zone: ZoneRef; ports: string[]; accessed: string[]; seenBy: string[]; count: number; lastSeen: string }

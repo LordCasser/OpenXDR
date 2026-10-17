@@ -56,7 +56,7 @@ export function AttackSurfacePage() {
             <Alert type="info" showIcon title={t('surfNoInventory', { n: s.summary.noInventory.length, hosts: s.summary.noInventory.slice(0, 8).join('、') })} />
           )}
           <Card title={t('exposuresTitle')} extra={<Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('portGuessHint')}</Typography.Text>} styles={{ body: { padding: 0 } }}>
-            <Table<ExposedService> rowKey={e => `${e.assetId}/${e.proto}/${e.addr}/${e.port}`} loading={query.isPending} dataSource={s?.exposures ?? []}
+            <Table<ExposedService> rowKey={e => `${e.assetId}/${e.proto}/${e.port}`} loading={query.isPending} dataSource={s?.exposures ?? []}
               scroll={{ x: 1100 }} pagination={{ pageSize: 20, hideOnSinglePage: true }}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               columns={[
@@ -73,7 +73,7 @@ export function AttackSurfacePage() {
                 { title: t('zoneLabel'), width: 120, render: (_, e) => <ZoneTag zone={e.zone} /> },
                 { title: t('criticality'), dataIndex: 'criticality', width: 110, render: v => <CritTag value={v} /> },
                 { title: t('listenProcess'), dataIndex: 'process', width: 130, render: v => v ?? '-' },
-                { title: t('thBind'), dataIndex: 'addr', width: 130, render: v => <span className="mono">{v}</span> },
+                { title: t('thBind'), dataIndex: 'addrs', width: 150, render: (v: string[]) => <span className="mono">{v.join(', ')}</span> },
                 { title: t('thPeers'), render: (_, e) => e.peerCount === 0 ? '-' : (
                   <Tooltip title={(e.peers ?? []).join(', ')}>
                     <span>{(e.peers ?? []).slice(0, 3).join(', ')}{e.peerCount > 3 && ` +${e.peerCount - 3}`}</span>

@@ -148,7 +148,7 @@ func testGroup(t *testing.T) *Group {
 	now := time.Now()
 	crit := 5
 	web := &ent.Asset{ID: uuid.New(), Hostname: "web-01", GroupID: &gid, IPAddrs: []string{"10.0.0.1", "203.0.113.10"}, LastSeen: now, InventoryAt: &now,
-		Listening:     json.RawMessage(`[{"proto":"tcp","addr":"0.0.0.0","port":443,"process":"nginx"},{"proto":"tcp","addr":"127.0.0.1","port":6379}]`),
+		Listening:     json.RawMessage(`[{"proto":"tcp","addr":"0.0.0.0","port":443,"process":"nginx"},{"proto":"tcp","addr":"::","port":443,"process":"nginx"},{"proto":"tcp","addr":"127.0.0.1","port":6379}]`),
 		RelationNotes: map[string]string{"db-01": "读写业务库"}}
 	db := &ent.Asset{ID: uuid.New(), Hostname: "db-01", GroupID: &gid, IPAddrs: []string{"10.0.0.2"}, LastSeen: now, InventoryAt: &now, Criticality: &crit,
 		Listening: json.RawMessage(`[{"proto":"tcp","addr":"0.0.0.0","port":5432,"process":"postgres"}]`)}
@@ -202,7 +202,10 @@ func TestGraph(t *testing.T) {
 func TestSurface(t *testing.T) {
 	s := testGroup(t).Surface()
 	if len(s.Exposures) != 2 {
-		t.Fatalf("回环监听不算暴露面: %+v", s.Exposures)
+		t.Fatalf("回环监听不算暴露面，双栈合成一条: %+v", s.Exposures)
+	}
+	if got := s.Exposures[0].Addrs; len(got) != 2 {
+		t.Fatalf("双栈地址并列: %v", got)
 	}
 	top := s.Exposures[0]
 	if top.Hostname != "web-01" || top.Level != ExposureInternet || !top.FromPublic || top.Peers[0] != "198.51.100.7" {

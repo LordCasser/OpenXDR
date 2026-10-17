@@ -19,7 +19,7 @@ type ExposedService struct {
 	Zone        Zone      `json:"zone"`
 	Level       string    `json:"level"`
 	Proto       string    `json:"proto"`
-	Addr        string    `json:"addr"`
+	Addrs       []string  `json:"addrs"`
 	Port        int       `json:"port"`
 	Process     string    `json:"process,omitempty"`
 	Service     Service   `json:"service"`
@@ -133,34 +133,50 @@ func (g *Group) Surface() Surface {
 		}
 		ips := parseIPs(a.IPAddrs)
 		z, assetLevel := ZoneOf(a, g.Zones)
+		// 同一端口常同时绑在 0.0.0.0 和 :: 上（双栈），合成一条，地址并列
+		type key struct {
+			proto string
+			port  int
+		}
+		var order []key
+		groups := map[key][]Listener{}
 		for _, l := range listenersOf(a) {
 			if l.Loopback() {
 				continue
 			}
+			k := key{l.Proto, l.Port}
+			if groups[k] == nil {
+				order = append(order, k)
+			}
+			groups[k] = append(groups[k], l)
+		}
+		for _, k := range order {
 			level := assetLevel
-			addr, _ := netip.ParseAddr(l.Addr)
-			if Public(addr) {
-				level = ExposureInternet
-			}
-			// 通配地址上的服务，本机任一地址收到的连接都算它的访问来源
-			bound := []netip.Addr{addr.Unmap()}
-			if addr.IsUnspecified() {
-				bound = ips
-			}
+			e := ExposedService{AssetID: a.ID, Hostname: a.Hostname, Zone: z, Proto: k.proto, Port: k.port, Criticality: a.Criticality}
 			seen := map[string]bool{}
-			fromPublic := false
-			for _, ip := range bound {
-				k := service{ip, l.Port}
-				for p := range peers[k] {
-					seen[p] = true
+			for _, l := range groups[k] {
+				e.Addrs = append(e.Addrs, l.Addr)
+				e.Process = cmp.Or(e.Process, l.Process)
+				addr, _ := netip.ParseAddr(l.Addr)
+				if Public(addr) {
+					level = ExposureInternet
 				}
-				fromPublic = fromPublic || public[k]
+				// 通配地址上的服务，本机任一地址收到的连接都算它的访问来源
+				bound := []netip.Addr{addr.Unmap()}
+				if addr.IsUnspecified() {
+					bound = ips
+				}
+				for _, ip := range bound {
+					sk := service{ip, k.port}
+					for p := range peers[sk] {
+						seen[p] = true
+					}
+					e.FromPublic = e.FromPublic || public[sk]
+				}
 			}
-			svc := ServiceOf(l.Proto, l.Port)
-			e := ExposedService{AssetID: a.ID, Hostname: a.Hostname, Zone: z, Level: level,
-				Proto: l.Proto, Addr: l.Addr, Port: l.Port, Process: l.Process, Service: svc,
-				Criticality: a.Criticality, Score: Score(level, svc.Risk, a.Criticality),
-				PeerCount: len(seen), FromPublic: fromPublic}
+			e.Level, e.Service = level, ServiceOf(k.proto, k.port)
+			e.Score = Score(level, e.Service.Risk, a.Criticality)
+			e.PeerCount = len(seen)
 			for p := range seen {
 				e.Peers = append(e.Peers, p)
 			}
@@ -175,7 +191,7 @@ func (g *Group) Surface() Surface {
 			default:
 				s.Summary.Internal++
 			}
-			if svc.Risk == "high" && level != ExposureInternal {
+			if e.Service.Risk == "high" && level != ExposureInternal {
 				s.Summary.High++
 			}
 		}
