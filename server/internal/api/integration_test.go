@@ -202,6 +202,62 @@ func TestAPIIncidentsPaging(t *testing.T) {
 	}
 }
 
+// status=review 与 stats.reviewIncidents 同一口径：未结案，且 AI 没判良性或最高级别达到高危。
+func TestAPIIncidentsReview(t *testing.T) {
+	ctx, client := testdb.New(t)
+	cases := []struct {
+		status, verdict string
+		severity        int16
+		review          bool
+	}{
+		{"open", "", 1, true},
+		{"triaged", `{"verdict":"suspicious"}`, 1, true},
+		{"triaged", `{"verdict":"benign"}`, 3, false},
+		{"triaged", `{"verdict":"benign"}`, 4, true},
+		{"open", `{"confidence":3}`, 1, true},
+		{"closed", `{"verdict":"malicious"}`, 5, false},
+	}
+	want := map[uuid.UUID]bool{}
+	for _, c := range cases {
+		create := client.Incident.Create().SetStatus(c.status).SetGraph(json.RawMessage(`{}`))
+		if c.verdict != "" {
+			create.SetAiVerdict(json.RawMessage(c.verdict))
+		}
+		inc := create.SaveX(ctx)
+		client.Alert.Create().SetTs(time.Now()).SetRuleID("r").SetSeverity(1).SetIncidentID(inc.ID).SaveX(ctx)
+		client.Alert.Create().SetTs(time.Now()).SetRuleID("r").SetSeverity(c.severity).SetIncidentID(inc.ID).SaveX(ctx)
+		if c.review {
+			want[inc.ID] = true
+		}
+	}
+	ts := httptest.NewServer(asAdmin(Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)))
+	t.Cleanup(ts.Close)
+
+	resp, body := get(t, ts, "/api/incidents?status=review")
+	var got []incidentSummary
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) || resp.Header.Get("X-Total-Count") != "4" {
+		t.Fatalf("需复核应为 4 个，得到 %d 个，总数 %s", len(got), resp.Header.Get("X-Total-Count"))
+	}
+	for _, inc := range got {
+		if !want[inc.ID] {
+			t.Errorf("%s 不该进复核清单", inc.ID)
+		}
+	}
+	_, body = get(t, ts, "/api/stats")
+	var stats struct {
+		ReviewIncidents int `json:"reviewIncidents"`
+	}
+	if err := json.Unmarshal(body, &stats); err != nil {
+		t.Fatal(err)
+	}
+	if stats.ReviewIncidents != 4 {
+		t.Errorf("reviewIncidents 应为 4，得到 %d", stats.ReviewIncidents)
+	}
+}
+
 // GET /api/incidents/{id} 返回图、告警明细、规则标题与事件原文。
 func TestAPIGetIncidentDetail(t *testing.T) {
 	ts, incID := seed(t)

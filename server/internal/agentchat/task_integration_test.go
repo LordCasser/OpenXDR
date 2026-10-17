@@ -5,9 +5,13 @@ package agentchat
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	"openxdr/server/ent"
+	"openxdr/server/ent/report"
+	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/piruntime"
 	"openxdr/server/internal/schedule"
@@ -57,6 +61,53 @@ func TestRunTask(t *testing.T) {
 			}
 			if got := db.AgentSession.GetX(ctx, session.ID); got.Status != c.wantStatus {
 				t.Errorf("会话状态应为 %s，得到 %s", c.wantStatus, got.Status)
+			}
+		})
+	}
+}
+
+// 轮数耗尽：在同一会话上带全部历史续一次只给 report 的收尾，交了报告就算成功；收尾仍耗尽则失败。
+func TestRunTaskWrapUp(t *testing.T) {
+	ctx, db := testdb.New(t)
+	group := db.Group.Create().SetName("g").SaveX(ctx)
+	db.Asset.Create().SetHostname("h").SetGroupID(group.ID).SaveX(ctx)
+	for _, c := range []struct {
+		name, wrapStop, wantStatus string
+	}{{"收尾成功", "stop", "succeeded"}, {"收尾仍耗尽", "max_turns", "failed"}} {
+		t.Run(c.name, func(t *testing.T) {
+			session := db.AgentSession.Create().SetKind("task").SetGroupID(group.ID).
+				SetInitiator(commandgate.SystemActor).SetModel("m").SaveX(ctx)
+			calls := 0
+			service := &Service{DB: db, Runtime: fakeRunner{func(ctx context.Context, r piruntime.Request, h piruntime.Handler, o piruntime.Observer) (*piruntime.Result, error) {
+				calls++
+				msg := `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"好"}]}}`
+				if err := o(ctx, piruntime.Event{Type: "event", Event: json.RawMessage(msg)}); err != nil {
+					return nil, err
+				}
+				if calls == 1 {
+					return &piruntime.Result{StopReason: "max_turns"}, nil
+				}
+				if len(r.Tools) != 1 || r.Tools[0].Name != "report" || r.MaxTurns != wrapUpTurns || len(r.Messages) != 1 || !strings.Contains(r.Prompt, "report") {
+					t.Errorf("收尾请求不符：工具 %v 轮数 %d 历史 %d 提示 %q", r.Tools, r.MaxTurns, len(r.Messages), r.Prompt)
+				}
+				if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 部分未验证"}`)); err != nil {
+					return nil, err
+				}
+				return &piruntime.Result{StopReason: c.wrapStop}, nil
+			}}}
+			err := service.RunTask(ctx, schedule.Job{Session: session, Prompt: "巡检", ApprovalTimeout: time.Minute})
+			if (err == nil) != (c.wantStatus == "succeeded") || calls != 2 {
+				t.Errorf("返回值不符：%v，调用 %d 次", err, calls)
+			}
+			if got := db.AgentSession.GetX(ctx, session.ID); got.Status != c.wantStatus {
+				t.Errorf("会话状态应为 %s，得到 %s", c.wantStatus, got.Status)
+			}
+			seqs := db.SessionMessage.Query().Where(sessionmessage.SessionIDEQ(session.ID)).Order(ent.Asc(sessionmessage.FieldSeq)).Select(sessionmessage.FieldSeq).IntsX(ctx)
+			if len(seqs) != 2 || seqs[0] != 1 || seqs[1] != 2 {
+				t.Errorf("收尾消息应接着编号入库：%v", seqs)
+			}
+			if n := db.Report.Query().Where(report.SessionIDEQ(session.ID)).CountX(ctx); n != 1 {
+				t.Errorf("报告应保存 1 份，得到 %d", n)
 			}
 		})
 	}

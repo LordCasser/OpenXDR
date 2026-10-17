@@ -103,6 +103,41 @@ func TestSessionHistoryAndReports(t *testing.T) {
 		t.Fatal("不能续写其他人的会话")
 	}
 }
+
+// 对话轮数耗尽：带全部历史续一次不给工具的收尾，会话正常回到 idle。
+func TestChatWrapUp(t *testing.T) {
+	ctx, db := testdb.New(t)
+	group := db.Group.Create().SetName("g").SaveX(ctx)
+	user := db.User.Create().SetUsername("a").SetPasswordHash("unused").SetRole("admin").SaveX(ctx)
+	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SetTitle("").SaveX(ctx)
+	calls := 0
+	service := &Service{DB: db, Runtime: fakeRunner{func(ctx context.Context, r piruntime.Request, h piruntime.Handler, o piruntime.Observer) (*piruntime.Result, error) {
+		calls++
+		if calls == 2 && (len(r.Tools) != 0 || r.MaxTurns != wrapUpTurns || len(r.Messages) != 2 || !strings.Contains(r.Prompt, "未验证")) {
+			t.Errorf("收尾请求不符：工具 %v 轮数 %d 历史 %d", r.Tools, r.MaxTurns, len(r.Messages))
+		}
+		for _, message := range []string{`{"role":"user","content":"检查","timestamp":1}`, `{"role":"assistant","content":[{"type":"text","text":"小结"}],"stopReason":"stop"}`} {
+			if err := o(ctx, piruntime.Event{Type: "event", Event: json.RawMessage(`{"type":"message_end","message":` + message + `}`)}); err != nil {
+				return nil, err
+			}
+		}
+		if calls == 1 {
+			return &piruntime.Result{StopReason: "max_turns"}, nil
+		}
+		return &piruntime.Result{Response: "小结", StopReason: "stop"}, nil
+	}}}
+	result, err := service.Chat(ctx, session.ID, user, "检查", nil)
+	if err != nil || calls != 2 || result.StopReason != "stop" {
+		t.Fatalf("收尾后应正常结束：%v %+v，调用 %d 次", err, result, calls)
+	}
+	if got := db.AgentSession.GetX(ctx, session.ID); got.Status != "idle" || got.Error != nil {
+		t.Fatalf("会话应回到 idle：%+v", got)
+	}
+	if n := db.SessionMessage.Query().CountX(ctx); n != 4 {
+		t.Fatalf("收尾消息应入库，共 4 条，得到 %d", n)
+	}
+}
+
 func TestConcurrentSessionAndFailure(t *testing.T) {
 	ctx, db := testdb.New(t)
 	user := db.User.Create().SetUsername("a").SetPasswordHash("unused").SetRole("admin").SaveX(ctx)

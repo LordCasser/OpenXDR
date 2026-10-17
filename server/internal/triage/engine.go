@@ -16,6 +16,7 @@ import (
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/predicate"
+	"openxdr/server/internal/review"
 )
 
 const systemPrompt = `你是资深安全分析师，负责研判 XDR 平台聚合出的安全事件。
@@ -217,6 +218,8 @@ func (e *Engine) appendCaseHistory(ctx context.Context, sb *strings.Builder, inc
 		Where(
 			incident.IDNEQ(inc.ID),
 			incident.StatusIn("closed", "false_positive"),
+			// 系统自动结案只是复述 AI 自己的结论，不能当人工案例喂回来自我强化
+			incident.Or(incident.ResolvedByIsNil(), incident.ResolvedByNEQ(review.ClosedBy)),
 			incident.HasAlertsWith(alert.Or(related...), alert.TsGTE(time.Now().AddDate(0, 0, -90))),
 		).
 		Order(ent.Desc(incident.FieldCreatedAt)).

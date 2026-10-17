@@ -16,14 +16,14 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/incidents?status=&assetId=&limit=&offset=` | incident 列表（按创建时间倒序），含派生严重度、告警数与 `groupId`（第一条有资产的告警所在资产的组，无则 null）；`status` 另支持 `unresolved`（= open + triaged）；`limit` 默认 50、范围 1..500，`offset` 默认 0；响应头 `X-Total-Count` 为分页前的匹配总数；`assetId` 筛涉及该主机的事件 |
+| GET | `/api/incidents?status=&assetId=&limit=&offset=` | incident 列表（按创建时间倒序），含派生严重度、告警数与 `groupId`（第一条有资产的告警所在资产的组，无则 null）；`status` 另支持 `unresolved`（= open + triaged）与 `review`（需人工复核：未结案，且 AI 未判良性或最高告警级别 ≥ 4，与 Webhook 推送同一口径）；`limit` 默认 50、范围 1..500，`offset` 默认 0；响应头 `X-Total-Count` 为分页前的匹配总数；`assetId` 筛涉及该主机的事件 |
 | GET | `/api/incidents/{id}` | 详情：实体图、告警明细（含原始事件）、AI verdict、`groupId` |
 | POST | `/api/incidents/{id}/status` | `{"status":"open\|closed\|false_positive","note":"…"}`；closed 为属实已处置、false_positive 为误报或良性，两者必须写 `note`（1–2000 字），记录结案人与时间并作为案例喂回研判；改回 open 清掉结案信息 |
 | GET | `/api/findings?status=` | 运维待办（巡检 AI 登记，按组裁剪，最近 500 条），含主机名、首次与最近发现时间 |
 | POST | `/api/findings/{id}/status` | `{"status":"open\|resolved\|ignored","note":"…"}`，需组内 analyst；resolved / ignored 必须写原因，忽略原因会交给巡检 AI，之后不再登记 |
 | GET | `/api/incidents/{id}/report` | 事件报告（Markdown 附件下载）：判定、攻击链、涉及实体、告警时间线、处置记录、处置建议 |
 | GET | `/api/events` | 原始事件检索，参数见下 |
-| GET | `/api/stats` | 概览：24h 降噪漏斗、告警趋势、按级别的告警分布（`alertsBySeverity`）、Top 规则、资产在线率 |
+| GET | `/api/stats` | 概览：24h 降噪漏斗、告警趋势、按级别的告警分布（`alertsBySeverity`）、Top 规则、资产在线率；`reviewIncidents` 为需人工复核的事件数（口径同 `status=review`） |
 | GET | `/api/rules` | 引擎当前加载的规则（热重载后即时反映），含数据源覆盖标记与 ATT&CK 标签 |
 | GET | `/api/attack` | ATT&CK 覆盖矩阵：按杀伤链顺序的战术列与技术格，含未打标签、无数据源的规则数 |
 

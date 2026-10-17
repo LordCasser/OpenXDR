@@ -10,6 +10,7 @@ import (
 	entasset "openxdr/server/ent/asset"
 	entevent "openxdr/server/ent/event"
 	entincident "openxdr/server/ent/incident"
+	"openxdr/server/internal/review"
 )
 
 // 与前端资产清单的在线判定保持一致：5 分钟内有心跳算在线
@@ -28,9 +29,11 @@ type topRule struct {
 
 type statsResponse struct {
 	// 降噪漏斗：原始事件 → 去重后告警 → 待处理事件
-	Events24h         int            `json:"events24h"`
-	Alerts24h         int            `json:"alerts24h"`
-	OpenIncidents     int            `json:"openIncidents"`
+	Events24h     int `json:"events24h"`
+	Alerts24h     int `json:"alerts24h"`
+	OpenIncidents int `json:"openIncidents"`
+	// 未结案中需人工复核的：AI 没判良性，或最高级别达到高危（与通知推送同口径）
+	ReviewIncidents   int            `json:"reviewIncidents"`
 	IncidentsByStatus map[string]int `json:"incidentsByStatus"`
 	AlertTrend        []trendBucket  `json:"alertTrend"`
 	TopRules          []topRule      `json:"topRules"`
@@ -78,6 +81,10 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 			out.IncidentsByStatus[s.Status] = s.Count
 		}
 		out.OpenIncidents = out.IncidentsByStatus["open"] + out.IncidentsByStatus["triaged"]
+		if out.ReviewIncidents, err = db.Incident.Query().Where(s.incident()...).Where(review.Needed()).Count(ctx); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		// 24h 告警：一次取回 ts 与 count，趋势分桶在内存里做。
 		// 告警是去重后的产物，量级与事件表差着窗口倍数，直接拉没有压力。

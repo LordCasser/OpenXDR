@@ -17,7 +17,8 @@ var _ schedule.Runner = (*Service)(nil)
 
 // RunTask 以系统身份跑一次定时任务会话，实现 schedule.Runner。会话由调度器建好；
 // 这里只认 kind=task、initiator=system 且仍在 running 的会话。
-// 截断、轮数耗尽或没交报告都算失败：巡检不完整不能当成"一切正常"。
+// 轮数耗尽时先续一次只带 report 的收尾；截断、收尾后仍未结束或没交报告都算失败：
+// 巡检不完整不能当成"一切正常"。
 func (s *Service) RunTask(ctx context.Context, job schedule.Job) (retErr error) {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout())
 	defer cancel()
@@ -45,15 +46,21 @@ func (s *Service) RunTask(ctx context.Context, job schedule.Job) (retErr error) 
 	}
 	seq := 0
 	who := commandgate.Request{System: true, ApprovalTimeout: job.ApprovalTimeout}
-	result, err := s.Runtime.Run(ctx, request, func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	handle := func(ctx context.Context, name string, args json.RawMessage) (string, error) {
 		// 每次调用重读会话，避免用拉起时的旧快照判权
 		current, err := s.DB.AgentSession.Get(ctx, session.ID)
 		if err != nil {
 			return "", err
 		}
 		return s.tool(ctx, current, who, name, args)
-	}, s.recorder(session.ID, &seq, nil))
+	}
+	record := s.recorder(session.ID, &seq, nil)
+	result, err := s.Runtime.Run(ctx, request, handle, record)
 	if err != nil {
+		return err
+	}
+	// 轮数耗尽先收尾一次，收尾仍没正常结束或没交报告才算失败
+	if result, err = s.wrapUp(ctx, session, request, result, handle, record); err != nil {
 		return err
 	}
 	if result.StopReason != "stop" {
