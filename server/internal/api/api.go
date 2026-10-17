@@ -23,6 +23,7 @@ import (
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
+	"openxdr/server/internal/review"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
 )
@@ -108,6 +109,9 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 		case "unresolved":
 			// 待处置：引擎已研判但分析师还没结案的也算
 			q = q.Where(incident.StatusIn("open", "triaged"))
+		case "review":
+			// 需人工复核：与通知推送同一口径
+			q = q.Where(review.Needed())
 		default:
 			q = q.Where(incident.StatusEQ(status))
 		}

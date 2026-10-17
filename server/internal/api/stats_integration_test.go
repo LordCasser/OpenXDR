@@ -18,6 +18,7 @@ func TestAPIStats(t *testing.T) {
 		Events24h         int            `json:"events24h"`
 		Alerts24h         int            `json:"alerts24h"`
 		OpenIncidents     int            `json:"openIncidents"`
+		ReviewIncidents   int            `json:"reviewIncidents"`
 		IncidentsByStatus map[string]int `json:"incidentsByStatus"`
 		AlertTrend        []struct {
 			Count int `json:"count"`
@@ -34,8 +35,8 @@ func TestAPIStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if s.Events24h != 1 || s.Alerts24h != 1 || s.OpenIncidents != 1 {
-		t.Errorf("漏斗计数不对：events=%d alerts=%d open=%d", s.Events24h, s.Alerts24h, s.OpenIncidents)
+	if s.Events24h != 1 || s.Alerts24h != 1 || s.OpenIncidents != 1 || s.ReviewIncidents != 1 {
+		t.Errorf("漏斗计数不对：events=%d alerts=%d open=%d review=%d", s.Events24h, s.Alerts24h, s.OpenIncidents, s.ReviewIncidents)
 	}
 	if s.IncidentsByStatus["open"] != 1 {
 		t.Errorf("状态分布不对：%v", s.IncidentsByStatus)

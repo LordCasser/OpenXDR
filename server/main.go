@@ -117,6 +117,11 @@ func main() {
 		Interval:  time.Duration(getenvInt("RETENTION_INTERVAL_MINUTES", 60)) * time.Minute,
 	}
 	go cluster.RunLeader(ctx, db, "janitor", janitorEngine.Run)
+	// 低危良性事件放久了自动按误报结案；0 关闭。Run 返回会被租约循环立刻重拉，关闭时干脆不启动
+	if days := getenvInt("AUTO_CLOSE_BENIGN_DAYS", 7); days > 0 {
+		autoClose := &janitor.AutoClose{DB: client, Days: days, Interval: time.Hour}
+		go cluster.RunLeader(ctx, db, "auto-close-benign", autoClose.Run)
+	}
 
 	hub := response.NewHub(client, os.Getenv("RESPONSE_ENABLED") == "true")
 	allowlist := isolationAllowlist()

@@ -405,6 +405,7 @@ server 全部通过环境变量配置，均有默认值：
 | `AUTO_RESPONSE_EXEMPT` | 空 | 逗号分隔的主机名，绝不自动隔离 |
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测的按资产学习期 |
 | `RETENTION_DAYS` | `30` | 原始事件保留天数，0 表示不清理。被告警引用的证据事件不受影响 |
+| `AUTO_CLOSE_BENIGN_DAYS` | `7` | 未结案事件 AI 判良性、最高级别低于 4（高危）且创建超过 N 天时，每小时由系统按 `false_positive` 自动结案并记审计；0 表示关闭 |
 
 ## 技术栈
 

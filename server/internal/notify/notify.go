@@ -21,10 +21,8 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/incident"
+	"openxdr/server/internal/review"
 )
-
-// reviewSeverity 及以上的事件即使 AI 判良性也推送
-const reviewSeverity = 4
 
 type Notifier struct {
 	DB       *ent.Client
@@ -125,7 +123,7 @@ func (n *Notifier) decide(inc *ent.Incident, severity int16) (bool, string) {
 	}
 	var v verdict
 	_ = json.Unmarshal(inc.AiVerdict, &v)
-	if v.Verdict == "benign" && severity < reviewSeverity {
+	if v.Verdict == "benign" && severity < review.Severity {
 		return false, "AI 判定良性"
 	}
 	return true, ""
