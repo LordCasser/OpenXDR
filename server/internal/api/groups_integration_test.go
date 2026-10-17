@@ -34,7 +34,7 @@ func (f *fakeQueries) Drop(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// 建组即带默认只读名单并开通查询身份；删组连名单与查询身份一起回收。
+// 建组即带默认高风险名单并开通查询身份；删组连名单与查询身份一起回收。
 func TestGroupLifecycleSeedsAndCleansUp(t *testing.T) {
 	ctx, client := testdb.New(t)
 	queries := &fakeQueries{}
@@ -51,9 +51,9 @@ func TestGroupLifecycleSeedsAndCleansUp(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&g); err != nil {
 		t.Fatal(err)
 	}
-	n := client.CommandPolicy.Query().Where(commandpolicy.GroupIDEQ(g.ID), commandpolicy.OriginEQ("ai"), commandpolicy.ModeEQ("allow")).CountX(ctx)
-	if n != len(commandgate.DefaultAIAllow) {
-		t.Errorf("新组应带 %d 条默认名单，实际 %d", len(commandgate.DefaultAIAllow), n)
+	n := client.CommandPolicy.Query().Where(commandpolicy.GroupIDEQ(g.ID), commandpolicy.OriginEQ("ai"), commandpolicy.ModeEQ("deny")).CountX(ctx)
+	if n != len(commandgate.DefaultAIDeny) {
+		t.Errorf("新组应带 %d 条默认名单，实际 %d", len(commandgate.DefaultAIDeny), n)
 	}
 	if len(queries.ensured) != 1 || queries.ensured[0] != g.ID {
 		t.Errorf("建组应开通查询身份：%v", queries.ensured)

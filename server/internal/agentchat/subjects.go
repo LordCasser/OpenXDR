@@ -16,7 +16,7 @@ import (
 )
 
 // subjectsPrompt 会话绑定了事件或待办时追加的说明；结案留给人，因为结案备注会作为人工案例喂回研判。
-const subjectsPrompt = "subjects 是用户从界面交给你处理的事件或待办，平台每轮按库里的当前状态提供：围绕它们调查、核实并处置，需要执行的命令照常走名单与审批。" +
+const subjectsPrompt = "subjects 是用户从界面交给你处理的事件或待办，平台每轮按库里的当前状态提供：围绕它们调查、核实并处置，需要执行的命令照常直接下发，高风险操作照常等组管理员批准。" +
 	"事件由人在界面上结案，你在结尾按事件逐个给出结案建议（属实已处置 / 误报或良性，附理由）；待办处理好并复查确认后，用 track 标 resolved（host 与 key 取 subject 里的值）。"
 
 type subjectAlert struct {

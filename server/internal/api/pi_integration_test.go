@@ -84,7 +84,7 @@ func TestPiGroupAPI(t *testing.T) {
 		}
 	}
 	w = request("POST", "/api/command-policies", `{"groupId":"`+group.ID.String()+`","origin":"ai","pattern":"whoami"}`)
-	if w.Code != 201 {
+	if w.Code != 201 || !strings.Contains(w.Body.String(), `"mode":"deny"`) {
 		t.Fatalf("创建名单: %d %s", w.Code, w.Body.String())
 	}
 	// 发消息只把会话切到 running 就返回，运行在后台跑完

@@ -59,13 +59,9 @@ func mapCommandPolicy(mux *http.ServeMux, db *ent.Client, gate *commandgate.Gate
 			http.Error(w, "origin 必须为 ai 或 human", 400)
 			return
 		}
-		if _, err := commandgate.Match(body.Pattern, ""); err != nil {
+		if _, err := commandgate.Search(body.Pattern, ""); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
-		}
-		mode := commandpolicy.ModeAllow
-		if body.Origin == "human" {
-			mode = commandpolicy.ModeDeny
 		}
 		tx, err := db.Tx(r.Context())
 		if err != nil {
@@ -73,7 +69,7 @@ func mapCommandPolicy(mux *http.ServeMux, db *ent.Client, gate *commandgate.Gate
 			return
 		}
 		defer tx.Rollback()
-		row, err := tx.CommandPolicy.Create().SetGroupID(body.GroupID).SetOrigin(commandpolicy.Origin(body.Origin)).SetMode(mode).SetPattern(body.Pattern).Save(r.Context())
+		row, err := tx.CommandPolicy.Create().SetGroupID(body.GroupID).SetOrigin(commandpolicy.Origin(body.Origin)).SetMode(commandpolicy.ModeDeny).SetPattern(body.Pattern).Save(r.Context())
 		if err == nil {
 			err = tx.AuditLog.Create().SetUsername(auth.From(r.Context()).Username).SetAction("command_policy_created").SetTarget(row.ID.String()).SetDetail(body.Origin + ": " + body.Pattern).SetRemoteAddr(r.RemoteAddr).Exec(r.Context())
 		}
