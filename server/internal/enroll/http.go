@@ -73,3 +73,11 @@ func (s *Service) Public(dist *Dist) http.Handler {
 	})
 	return mux
 }
+
+// InstallScript 返回平台维护的安装脚本，远程纳管不接受文档提供的脚本内容。
+func InstallScript(os string) string {
+	if os == "windows" {
+		return string(installPs1)
+	}
+	return string(installSh)
+}

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { assignAsset, fetchAssets, unassignAsset, type Asset } from '../api'
 import { useSession } from '../app/session'
+import { ImportHostsModal } from '../components/ImportHostsModal'
 import { AddHostModal } from '../components/AddHostModal'
 import { fmtTime } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
@@ -22,10 +23,12 @@ export function AssetsPage() {
   const [q, setQ] = useState('')
   const [groupFilter, setGroupFilter] = useState<string>('')
   const [adding, setAdding] = useState(false)
+  const [importing, setImporting] = useState(false)
   // 组 admin 才能为本组签发接入令牌
   const canAdd = groups.some(g => g.role === 'admin')
   const { data, isPending } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
 
+  const imported = (a: Asset) => !a.agentId && Date.parse(a.lastSeen) === 0
   const online = (a: Asset) => Date.now() - Date.parse(a.lastSeen) < STALE_MS
   const rows = (data ?? []).filter(a =>
     (!q || a.hostname.toLowerCase().includes(q.toLowerCase()) || a.ipAddrs?.some(ip => ip.includes(q))) &&
@@ -50,7 +53,8 @@ export function AssetsPage() {
 
   return (
     <Page title={t('navAssets')} subtitle={t('assetsSummary', { total, online: up })}
-      extra={canAdd && <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>{t('addHost')}</Button>}>
+      extra={canAdd && <Space wrap><Button onClick={() => setImporting(true)}>{t('hostImport')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>{t('addHost')}</Button></Space>}>
+      <ImportHostsModal open={importing} onClose={() => setImporting(false)} />
       <AddHostModal open={adding} onClose={() => setAdding(false)} />
       <FilterCard
         filters={
@@ -69,7 +73,7 @@ export function AssetsPage() {
             {
               title: t('thStatus'), width: 100,
               // 已发过失联通知的标红：这是要人去处理的，不只是暂时没数据
-              render: (_, a) => a.silentSince
+              render: (_, a) => imported(a) ? <Badge status="default" text={t('hostNotEnrolled')} /> : a.silentSince
                 ? <Tooltip title={t('silentSince', { time: fmtTime(a.silentSince) })}><Badge status="error" text={t('silent')} /></Tooltip>
                 : <Badge status={online(a) ? 'success' : 'default'} text={t(online(a) ? 'online' : 'stale')} />,
             },
@@ -82,8 +86,8 @@ export function AssetsPage() {
                 ? <Select size="small" style={{ width: 170 }} value={v ?? UNGROUPED} options={groupOptions} onChange={g => move(a, g)} />
                 : groups.find(g => g.id === v)?.name ?? <Tag>{t('ungrouped')}</Tag>,
             },
-            { title: t('thSource'), dataIndex: 'agentId', width: 90, render: v => <Tag>{v ? 'agent' : t('sourceLog')}</Tag> },
-            { title: t('thLastSeen'), dataIndex: 'lastSeen', width: 180, render: fmtTime, sorter: (a, b) => a.lastSeen.localeCompare(b.lastSeen) },
+            { title: t('thSource'), dataIndex: 'agentId', width: 90, render: (v, a) => <Tag>{v ? 'agent' : t(imported(a) ? 'hostImportedSource' : 'sourceLog')}</Tag> },
+            { title: t('thLastSeen'), dataIndex: 'lastSeen', width: 180, render: (v, a) => imported(a) ? '—' : fmtTime(v), sorter: (a, b) => a.lastSeen.localeCompare(b.lastSeen) },
           ]}
         />
       </FilterCard>

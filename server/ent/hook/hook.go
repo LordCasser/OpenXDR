@@ -140,6 +140,18 @@ func (f GroupMemberFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GroupMemberMutation", m)
 }
 
+// The HostCredentialFunc type is an adapter to allow the use of ordinary
+// function as HostCredential mutator.
+type HostCredentialFunc func(context.Context, *ent.HostCredentialMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f HostCredentialFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.HostCredentialMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.HostCredentialMutation", m)
+}
+
 // The IncidentFunc type is an adapter to allow the use of ordinary
 // function as Incident mutator.
 type IncidentFunc func(context.Context, *ent.IncidentMutation) (ent.Value, error)

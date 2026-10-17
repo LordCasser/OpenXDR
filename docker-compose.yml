@@ -76,6 +76,10 @@ services:
       # 采信 X-Forwarded-For 的上游（逗号分隔的地址或网段），填 web 容器所在网段与前置反向代理；
       # 留空则不还原，登录退避与审计看到的都是 web 容器的地址
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      # 文档中的登录凭据独立加密保存；HA 节点必须使用同一密钥
+      HOST_CREDENTIAL_KEY: ${HOST_CREDENTIAL_KEY:-}
+      ENROLL_PUBLIC_URL: ${ENROLL_PUBLIC_URL:-}
+      ENROLL_SSH_ENABLED: ${ENROLL_SSH_ENABLED:-false}
     volumes:
       - ./rules:/rules:ro
       - ./tasks:/tasks:ro

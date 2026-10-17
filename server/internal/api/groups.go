@@ -16,6 +16,7 @@ import (
 	"openxdr/server/ent/commandpolicy"
 	entgroup "openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
+	"openxdr/server/ent/hostcredential"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/commandgate"
@@ -120,6 +121,9 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 			return
 		}
 		err := withTx(r, db, func(tx *ent.Tx) error {
+			if _, err := tx.HostCredential.Delete().Where(hostcredential.GroupIDEQ(g.ID)).Exec(r.Context()); err != nil {
+				return err
+			}
 			if err := tx.Asset.Update().Where(entasset.GroupIDEQ(g.ID)).ClearGroupID().Exec(r.Context()); err != nil {
 				return err
 			}
@@ -231,7 +235,14 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 		if !ok {
 			return
 		}
-		if err := db.Asset.UpdateOneID(a.ID).SetGroupID(g.ID).Exec(r.Context()); err != nil {
+		if err := withTx(r, db, func(tx *ent.Tx) error {
+			if a.GroupID == nil || *a.GroupID != g.ID {
+				if _, err := tx.HostCredential.Delete().Where(hostcredential.AssetIDEQ(a.ID)).Exec(r.Context()); err != nil {
+					return err
+				}
+			}
+			return tx.Asset.UpdateOneID(a.ID).SetGroupID(g.ID).Exec(r.Context())
+		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -249,10 +260,16 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 			return
 		}
 		// 只移出本组的资产，防止拿错组 id 把别组的主机踢成未分组
-		n, err := db.Asset.Update().
-			Where(entasset.IDEQ(a.ID), entasset.GroupIDEQ(g.ID)).
-			ClearGroupID().
-			Save(r.Context())
+		n := 0
+		err := withTx(r, db, func(tx *ent.Tx) error {
+			var err error
+			n, err = tx.Asset.Update().Where(entasset.IDEQ(a.ID), entasset.GroupIDEQ(g.ID)).ClearGroupID().Save(r.Context())
+			if err != nil || n == 0 {
+				return err
+			}
+			_, err = tx.HostCredential.Delete().Where(hostcredential.AssetIDEQ(a.ID)).Exec(r.Context())
+			return err
+		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

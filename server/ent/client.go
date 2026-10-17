@@ -22,6 +22,7 @@ import (
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
+	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/processbaseline"
@@ -68,6 +69,8 @@ type Client struct {
 	Group *GroupClient
 	// GroupMember is the client for interacting with the GroupMember builders.
 	GroupMember *GroupMemberClient
+	// HostCredential is the client for interacting with the HostCredential builders.
+	HostCredential *HostCredentialClient
 	// Incident is the client for interacting with the Incident builders.
 	Incident *IncidentClient
 	// Intel is the client for interacting with the Intel builders.
@@ -112,6 +115,7 @@ func (c *Client) init() {
 	c.Event = NewEventClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupMember = NewGroupMemberClient(c.config)
+	c.HostCredential = NewHostCredentialClient(c.config)
 	c.Incident = NewIncidentClient(c.config)
 	c.Intel = NewIntelClient(c.config)
 	c.ProcessBaseline = NewProcessBaselineClient(c.config)
@@ -226,6 +230,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Event:           NewEventClient(cfg),
 		Group:           NewGroupClient(cfg),
 		GroupMember:     NewGroupMemberClient(cfg),
+		HostCredential:  NewHostCredentialClient(cfg),
 		Incident:        NewIncidentClient(cfg),
 		Intel:           NewIntelClient(cfg),
 		ProcessBaseline: NewProcessBaselineClient(cfg),
@@ -267,6 +272,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Event:           NewEventClient(cfg),
 		Group:           NewGroupClient(cfg),
 		GroupMember:     NewGroupMemberClient(cfg),
+		HostCredential:  NewHostCredentialClient(cfg),
 		Incident:        NewIncidentClient(cfg),
 		Intel:           NewIntelClient(cfg),
 		ProcessBaseline: NewProcessBaselineClient(cfg),
@@ -308,9 +314,9 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
-		c.CommandPolicy, c.EnrollToken, c.Event, c.Group, c.GroupMember, c.Incident,
-		c.Intel, c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
-		c.Suppression, c.Task, c.TaskRun, c.User,
+		c.CommandPolicy, c.EnrollToken, c.Event, c.Group, c.GroupMember,
+		c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline, c.Report, c.Session,
+		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -321,9 +327,9 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
-		c.CommandPolicy, c.EnrollToken, c.Event, c.Group, c.GroupMember, c.Incident,
-		c.Intel, c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
-		c.Suppression, c.Task, c.TaskRun, c.User,
+		c.CommandPolicy, c.EnrollToken, c.Event, c.Group, c.GroupMember,
+		c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline, c.Report, c.Session,
+		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -354,6 +360,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Group.mutate(ctx, m)
 	case *GroupMemberMutation:
 		return c.GroupMember.mutate(ctx, m)
+	case *HostCredentialMutation:
+		return c.HostCredential.mutate(ctx, m)
 	case *IncidentMutation:
 		return c.Incident.mutate(ctx, m)
 	case *IntelMutation:
@@ -1988,6 +1996,139 @@ func (c *GroupMemberClient) mutate(ctx context.Context, m *GroupMemberMutation) 
 	}
 }
 
+// HostCredentialClient is a client for the HostCredential schema.
+type HostCredentialClient struct {
+	config
+}
+
+// NewHostCredentialClient returns a client for the HostCredential from the given config.
+func NewHostCredentialClient(c config) *HostCredentialClient {
+	return &HostCredentialClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `hostcredential.Hooks(f(g(h())))`.
+func (c *HostCredentialClient) Use(hooks ...Hook) {
+	c.hooks.HostCredential = append(c.hooks.HostCredential, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `hostcredential.Intercept(f(g(h())))`.
+func (c *HostCredentialClient) Intercept(interceptors ...Interceptor) {
+	c.inters.HostCredential = append(c.inters.HostCredential, interceptors...)
+}
+
+// Create returns a builder for creating a HostCredential entity.
+func (c *HostCredentialClient) Create() *HostCredentialCreate {
+	mutation := newHostCredentialMutation(c.config, OpCreate)
+	return &HostCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of HostCredential entities.
+func (c *HostCredentialClient) CreateBulk(builders ...*HostCredentialCreate) *HostCredentialCreateBulk {
+	return &HostCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *HostCredentialClient) MapCreateBulk(slice any, setFunc func(*HostCredentialCreate, int)) *HostCredentialCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &HostCredentialCreateBulk{err: fmt.Errorf("calling to HostCredentialClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*HostCredentialCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &HostCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for HostCredential.
+func (c *HostCredentialClient) Update() *HostCredentialUpdate {
+	mutation := newHostCredentialMutation(c.config, OpUpdate)
+	return &HostCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *HostCredentialClient) UpdateOne(_m *HostCredential) *HostCredentialUpdateOne {
+	mutation := newHostCredentialMutation(c.config, OpUpdateOne, withHostCredential(_m))
+	return &HostCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *HostCredentialClient) UpdateOneID(id uuid.UUID) *HostCredentialUpdateOne {
+	mutation := newHostCredentialMutation(c.config, OpUpdateOne, withHostCredentialID(id))
+	return &HostCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for HostCredential.
+func (c *HostCredentialClient) Delete() *HostCredentialDelete {
+	mutation := newHostCredentialMutation(c.config, OpDelete)
+	return &HostCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *HostCredentialClient) DeleteOne(_m *HostCredential) *HostCredentialDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *HostCredentialClient) DeleteOneID(id uuid.UUID) *HostCredentialDeleteOne {
+	builder := c.Delete().Where(hostcredential.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &HostCredentialDeleteOne{builder}
+}
+
+// Query returns a query builder for HostCredential.
+func (c *HostCredentialClient) Query() *HostCredentialQuery {
+	return &HostCredentialQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeHostCredential},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a HostCredential entity by its id.
+func (c *HostCredentialClient) Get(ctx context.Context, id uuid.UUID) (*HostCredential, error) {
+	return c.Query().Where(hostcredential.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *HostCredentialClient) GetX(ctx context.Context, id uuid.UUID) *HostCredential {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *HostCredentialClient) Hooks() []Hook {
+	return c.hooks.HostCredential
+}
+
+// Interceptors returns the client interceptors.
+func (c *HostCredentialClient) Interceptors() []Interceptor {
+	return c.inters.HostCredential
+}
+
+func (c *HostCredentialClient) mutate(ctx context.Context, m *HostCredentialMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&HostCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&HostCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&HostCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&HostCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown HostCredential mutation op: %q", m.Op())
+	}
+}
+
 // IncidentClient is a client for the Incident schema.
 type IncidentClient struct {
 	config
@@ -3471,14 +3612,14 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 type (
 	hooks struct {
 		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy,
-		EnrollToken, Event, Group, GroupMember, Incident, Intel, ProcessBaseline,
-		Report, Session, SessionMessage, Setting, Suppression, Task, TaskRun,
-		User []ent.Hook
+		EnrollToken, Event, Group, GroupMember, HostCredential, Incident, Intel,
+		ProcessBaseline, Report, Session, SessionMessage, Setting, Suppression, Task,
+		TaskRun, User []ent.Hook
 	}
 	inters struct {
 		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy,
-		EnrollToken, Event, Group, GroupMember, Incident, Intel, ProcessBaseline,
-		Report, Session, SessionMessage, Setting, Suppression, Task, TaskRun,
-		User []ent.Interceptor
+		EnrollToken, Event, Group, GroupMember, HostCredential, Incident, Intel,
+		ProcessBaseline, Report, Session, SessionMessage, Setting, Suppression, Task,
+		TaskRun, User []ent.Interceptor
 	}
 )

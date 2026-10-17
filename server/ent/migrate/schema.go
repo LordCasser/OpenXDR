@@ -355,6 +355,33 @@ var (
 			},
 		},
 	}
+	// HostCredentialsColumns holds the columns for the "host_credentials" table.
+	HostCredentialsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "asset_id", Type: field.TypeUUID, Unique: true},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "address", Type: field.TypeString},
+		{Name: "port", Type: field.TypeInt, Default: 22},
+		{Name: "username", Type: field.TypeString},
+		{Name: "kind", Type: field.TypeString},
+		{Name: "host_key", Type: field.TypeString, Default: ""},
+		{Name: "sealed", Type: field.TypeBytes},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "lease_until", Type: field.TypeTime},
+	}
+	// HostCredentialsTable holds the schema information for the "host_credentials" table.
+	HostCredentialsTable = &schema.Table{
+		Name:       "host_credentials",
+		Columns:    HostCredentialsColumns,
+		PrimaryKey: []*schema.Column{HostCredentialsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "hostcredential_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{HostCredentialsColumns[2]},
+			},
+		},
+	}
 	// IncidentsColumns holds the columns for the "incidents" table.
 	IncidentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -607,6 +634,7 @@ var (
 		EventsTable,
 		GroupsTable,
 		GroupMembersTable,
+		HostCredentialsTable,
 		IncidentsTable,
 		IntelsTable,
 		ProcessBaselinesTable,

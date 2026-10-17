@@ -14,6 +14,7 @@ import (
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
+	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/processbaseline"
@@ -189,6 +190,28 @@ func init() {
 	groupmemberDescID := groupmemberFields[0].Descriptor()
 	// groupmember.DefaultID holds the default value on creation for the id field.
 	groupmember.DefaultID = groupmemberDescID.Default.(func() uuid.UUID)
+	hostcredentialFields := schema.HostCredential{}.Fields()
+	_ = hostcredentialFields
+	// hostcredentialDescPort is the schema descriptor for port field.
+	hostcredentialDescPort := hostcredentialFields[4].Descriptor()
+	// hostcredential.DefaultPort holds the default value on creation for the port field.
+	hostcredential.DefaultPort = hostcredentialDescPort.Default.(int)
+	// hostcredentialDescHostKey is the schema descriptor for host_key field.
+	hostcredentialDescHostKey := hostcredentialFields[7].Descriptor()
+	// hostcredential.DefaultHostKey holds the default value on creation for the host_key field.
+	hostcredential.DefaultHostKey = hostcredentialDescHostKey.Default.(string)
+	// hostcredentialDescCreatedAt is the schema descriptor for created_at field.
+	hostcredentialDescCreatedAt := hostcredentialFields[9].Descriptor()
+	// hostcredential.DefaultCreatedAt holds the default value on creation for the created_at field.
+	hostcredential.DefaultCreatedAt = hostcredentialDescCreatedAt.Default.(func() time.Time)
+	// hostcredentialDescLeaseUntil is the schema descriptor for lease_until field.
+	hostcredentialDescLeaseUntil := hostcredentialFields[10].Descriptor()
+	// hostcredential.DefaultLeaseUntil holds the default value on creation for the lease_until field.
+	hostcredential.DefaultLeaseUntil = hostcredentialDescLeaseUntil.Default.(func() time.Time)
+	// hostcredentialDescID is the schema descriptor for id field.
+	hostcredentialDescID := hostcredentialFields[0].Descriptor()
+	// hostcredential.DefaultID holds the default value on creation for the id field.
+	hostcredential.DefaultID = hostcredentialDescID.Default.(func() uuid.UUID)
 	incidentFields := schema.Incident{}.Fields()
 	_ = incidentFields
 	// incidentDescCreatedAt is the schema descriptor for created_at field.

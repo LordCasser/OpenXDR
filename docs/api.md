@@ -102,6 +102,8 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 ## 主机接入
 
+文档导入、凭据管理和 SSH 纳管接口见 [文档导入与主机纳管](host-enrollment.md#api)。
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/enroll-tokens/status` | 在线接入是否可用：`{enabled, reason, platforms}`，`reason` 说明缺什么配置 |

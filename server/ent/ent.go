@@ -17,6 +17,7 @@ import (
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
+	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/processbaseline"
@@ -105,6 +106,7 @@ func checkColumn(t, c string) error {
 			event.Table:           event.ValidColumn,
 			group.Table:           group.ValidColumn,
 			groupmember.Table:     groupmember.ValidColumn,
+			hostcredential.Table:  hostcredential.ValidColumn,
 			incident.Table:        incident.ValidColumn,
 			intel.Table:           intel.ValidColumn,
 			processbaseline.Table: processbaseline.ValidColumn,

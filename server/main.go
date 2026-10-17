@@ -32,6 +32,7 @@ import (
 	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/grpcsvc"
+	"openxdr/server/internal/hostimport"
 	"openxdr/server/internal/ingest"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/janitor"
@@ -297,7 +298,16 @@ func main() {
 	if reason := enrollSvc.Disabled(); reason != "" {
 		slog.Warn("主机在线接入未启用", "reason", reason)
 	}
+	var credentialVault *hostimport.Vault
+	if key := os.Getenv("HOST_CREDENTIAL_KEY"); key != "" {
+		credentialVault, err = hostimport.NewVault(key)
+		if err != nil {
+			slog.Error("凭据加密配置无效")
+			os.Exit(1)
+		}
+	}
 	routes := http.NewServeMux()
+	routes.Handle("/api/host-import/", api.HostImports(&hostimport.Service{DB: client, Vault: credentialVault}, enrollSvc, os.Getenv("ENROLL_PUBLIC_URL"), getenv("ENROLL_SSH_ENABLED", "false") == "true"))
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook))
 	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
 	routes.Handle("/api/enroll-tokens", enrollTokens)

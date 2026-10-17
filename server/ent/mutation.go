@@ -18,6 +18,7 @@ import (
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
+	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/predicate"
@@ -58,6 +59,7 @@ const (
 	TypeEvent           = "Event"
 	TypeGroup           = "Group"
 	TypeGroupMember     = "GroupMember"
+	TypeHostCredential  = "HostCredential"
 	TypeIncident        = "Incident"
 	TypeIntel           = "Intel"
 	TypeProcessBaseline = "ProcessBaseline"
@@ -9783,6 +9785,860 @@ func (m *GroupMemberMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *GroupMemberMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown GroupMember edge %s", name)
+}
+
+// HostCredentialMutation represents an operation that mutates the HostCredential nodes in the graph.
+type HostCredentialMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	asset_id      *uuid.UUID
+	group_id      *uuid.UUID
+	address       *string
+	port          *int
+	addport       *int
+	username      *string
+	kind          *string
+	host_key      *string
+	sealed        *[]byte
+	created_at    *time.Time
+	lease_until   *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*HostCredential, error)
+	predicates    []predicate.HostCredential
+}
+
+var _ ent.Mutation = (*HostCredentialMutation)(nil)
+
+// hostcredentialOption allows management of the mutation configuration using functional options.
+type hostcredentialOption func(*HostCredentialMutation)
+
+// newHostCredentialMutation creates new mutation for the HostCredential entity.
+func newHostCredentialMutation(c config, op Op, opts ...hostcredentialOption) *HostCredentialMutation {
+	m := &HostCredentialMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeHostCredential,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withHostCredentialID sets the ID field of the mutation.
+func withHostCredentialID(id uuid.UUID) hostcredentialOption {
+	return func(m *HostCredentialMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *HostCredential
+		)
+		m.oldValue = func(ctx context.Context) (*HostCredential, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().HostCredential.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withHostCredential sets the old HostCredential of the mutation.
+func withHostCredential(node *HostCredential) hostcredentialOption {
+	return func(m *HostCredentialMutation) {
+		m.oldValue = func(context.Context) (*HostCredential, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m HostCredentialMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m HostCredentialMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of HostCredential entities.
+func (m *HostCredentialMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *HostCredentialMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *HostCredentialMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().HostCredential.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetAssetID sets the "asset_id" field.
+func (m *HostCredentialMutation) SetAssetID(u uuid.UUID) {
+	m.asset_id = &u
+}
+
+// AssetID returns the value of the "asset_id" field in the mutation.
+func (m *HostCredentialMutation) AssetID() (r uuid.UUID, exists bool) {
+	v := m.asset_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssetID returns the old "asset_id" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldAssetID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssetID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssetID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssetID: %w", err)
+	}
+	return oldValue.AssetID, nil
+}
+
+// ResetAssetID resets all changes to the "asset_id" field.
+func (m *HostCredentialMutation) ResetAssetID() {
+	m.asset_id = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *HostCredentialMutation) SetGroupID(u uuid.UUID) {
+	m.group_id = &u
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *HostCredentialMutation) GroupID() (r uuid.UUID, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldGroupID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *HostCredentialMutation) ResetGroupID() {
+	m.group_id = nil
+}
+
+// SetAddress sets the "address" field.
+func (m *HostCredentialMutation) SetAddress(s string) {
+	m.address = &s
+}
+
+// Address returns the value of the "address" field in the mutation.
+func (m *HostCredentialMutation) Address() (r string, exists bool) {
+	v := m.address
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddress returns the old "address" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldAddress(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddress is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddress requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddress: %w", err)
+	}
+	return oldValue.Address, nil
+}
+
+// ResetAddress resets all changes to the "address" field.
+func (m *HostCredentialMutation) ResetAddress() {
+	m.address = nil
+}
+
+// SetPort sets the "port" field.
+func (m *HostCredentialMutation) SetPort(i int) {
+	m.port = &i
+	m.addport = nil
+}
+
+// Port returns the value of the "port" field in the mutation.
+func (m *HostCredentialMutation) Port() (r int, exists bool) {
+	v := m.port
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPort returns the old "port" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldPort(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPort is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPort requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPort: %w", err)
+	}
+	return oldValue.Port, nil
+}
+
+// AddPort adds i to the "port" field.
+func (m *HostCredentialMutation) AddPort(i int) {
+	if m.addport != nil {
+		*m.addport += i
+	} else {
+		m.addport = &i
+	}
+}
+
+// AddedPort returns the value that was added to the "port" field in this mutation.
+func (m *HostCredentialMutation) AddedPort() (r int, exists bool) {
+	v := m.addport
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPort resets all changes to the "port" field.
+func (m *HostCredentialMutation) ResetPort() {
+	m.port = nil
+	m.addport = nil
+}
+
+// SetUsername sets the "username" field.
+func (m *HostCredentialMutation) SetUsername(s string) {
+	m.username = &s
+}
+
+// Username returns the value of the "username" field in the mutation.
+func (m *HostCredentialMutation) Username() (r string, exists bool) {
+	v := m.username
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsername returns the old "username" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldUsername(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsername is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsername requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsername: %w", err)
+	}
+	return oldValue.Username, nil
+}
+
+// ResetUsername resets all changes to the "username" field.
+func (m *HostCredentialMutation) ResetUsername() {
+	m.username = nil
+}
+
+// SetKind sets the "kind" field.
+func (m *HostCredentialMutation) SetKind(s string) {
+	m.kind = &s
+}
+
+// Kind returns the value of the "kind" field in the mutation.
+func (m *HostCredentialMutation) Kind() (r string, exists bool) {
+	v := m.kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKind returns the old "kind" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldKind(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKind: %w", err)
+	}
+	return oldValue.Kind, nil
+}
+
+// ResetKind resets all changes to the "kind" field.
+func (m *HostCredentialMutation) ResetKind() {
+	m.kind = nil
+}
+
+// SetHostKey sets the "host_key" field.
+func (m *HostCredentialMutation) SetHostKey(s string) {
+	m.host_key = &s
+}
+
+// HostKey returns the value of the "host_key" field in the mutation.
+func (m *HostCredentialMutation) HostKey() (r string, exists bool) {
+	v := m.host_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHostKey returns the old "host_key" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldHostKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHostKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHostKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHostKey: %w", err)
+	}
+	return oldValue.HostKey, nil
+}
+
+// ResetHostKey resets all changes to the "host_key" field.
+func (m *HostCredentialMutation) ResetHostKey() {
+	m.host_key = nil
+}
+
+// SetSealed sets the "sealed" field.
+func (m *HostCredentialMutation) SetSealed(b []byte) {
+	m.sealed = &b
+}
+
+// Sealed returns the value of the "sealed" field in the mutation.
+func (m *HostCredentialMutation) Sealed() (r []byte, exists bool) {
+	v := m.sealed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSealed returns the old "sealed" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldSealed(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSealed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSealed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSealed: %w", err)
+	}
+	return oldValue.Sealed, nil
+}
+
+// ResetSealed resets all changes to the "sealed" field.
+func (m *HostCredentialMutation) ResetSealed() {
+	m.sealed = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *HostCredentialMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *HostCredentialMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *HostCredentialMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetLeaseUntil sets the "lease_until" field.
+func (m *HostCredentialMutation) SetLeaseUntil(t time.Time) {
+	m.lease_until = &t
+}
+
+// LeaseUntil returns the value of the "lease_until" field in the mutation.
+func (m *HostCredentialMutation) LeaseUntil() (r time.Time, exists bool) {
+	v := m.lease_until
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseUntil returns the old "lease_until" field's value of the HostCredential entity.
+// If the HostCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostCredentialMutation) OldLeaseUntil(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseUntil is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseUntil requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseUntil: %w", err)
+	}
+	return oldValue.LeaseUntil, nil
+}
+
+// ResetLeaseUntil resets all changes to the "lease_until" field.
+func (m *HostCredentialMutation) ResetLeaseUntil() {
+	m.lease_until = nil
+}
+
+// Where appends a list predicates to the HostCredentialMutation builder.
+func (m *HostCredentialMutation) Where(ps ...predicate.HostCredential) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the HostCredentialMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *HostCredentialMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.HostCredential, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *HostCredentialMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *HostCredentialMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (HostCredential).
+func (m *HostCredentialMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *HostCredentialMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.asset_id != nil {
+		fields = append(fields, hostcredential.FieldAssetID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, hostcredential.FieldGroupID)
+	}
+	if m.address != nil {
+		fields = append(fields, hostcredential.FieldAddress)
+	}
+	if m.port != nil {
+		fields = append(fields, hostcredential.FieldPort)
+	}
+	if m.username != nil {
+		fields = append(fields, hostcredential.FieldUsername)
+	}
+	if m.kind != nil {
+		fields = append(fields, hostcredential.FieldKind)
+	}
+	if m.host_key != nil {
+		fields = append(fields, hostcredential.FieldHostKey)
+	}
+	if m.sealed != nil {
+		fields = append(fields, hostcredential.FieldSealed)
+	}
+	if m.created_at != nil {
+		fields = append(fields, hostcredential.FieldCreatedAt)
+	}
+	if m.lease_until != nil {
+		fields = append(fields, hostcredential.FieldLeaseUntil)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *HostCredentialMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case hostcredential.FieldAssetID:
+		return m.AssetID()
+	case hostcredential.FieldGroupID:
+		return m.GroupID()
+	case hostcredential.FieldAddress:
+		return m.Address()
+	case hostcredential.FieldPort:
+		return m.Port()
+	case hostcredential.FieldUsername:
+		return m.Username()
+	case hostcredential.FieldKind:
+		return m.Kind()
+	case hostcredential.FieldHostKey:
+		return m.HostKey()
+	case hostcredential.FieldSealed:
+		return m.Sealed()
+	case hostcredential.FieldCreatedAt:
+		return m.CreatedAt()
+	case hostcredential.FieldLeaseUntil:
+		return m.LeaseUntil()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *HostCredentialMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case hostcredential.FieldAssetID:
+		return m.OldAssetID(ctx)
+	case hostcredential.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case hostcredential.FieldAddress:
+		return m.OldAddress(ctx)
+	case hostcredential.FieldPort:
+		return m.OldPort(ctx)
+	case hostcredential.FieldUsername:
+		return m.OldUsername(ctx)
+	case hostcredential.FieldKind:
+		return m.OldKind(ctx)
+	case hostcredential.FieldHostKey:
+		return m.OldHostKey(ctx)
+	case hostcredential.FieldSealed:
+		return m.OldSealed(ctx)
+	case hostcredential.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case hostcredential.FieldLeaseUntil:
+		return m.OldLeaseUntil(ctx)
+	}
+	return nil, fmt.Errorf("unknown HostCredential field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *HostCredentialMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case hostcredential.FieldAssetID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssetID(v)
+		return nil
+	case hostcredential.FieldGroupID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case hostcredential.FieldAddress:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddress(v)
+		return nil
+	case hostcredential.FieldPort:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPort(v)
+		return nil
+	case hostcredential.FieldUsername:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsername(v)
+		return nil
+	case hostcredential.FieldKind:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKind(v)
+		return nil
+	case hostcredential.FieldHostKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHostKey(v)
+		return nil
+	case hostcredential.FieldSealed:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSealed(v)
+		return nil
+	case hostcredential.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case hostcredential.FieldLeaseUntil:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseUntil(v)
+		return nil
+	}
+	return fmt.Errorf("unknown HostCredential field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *HostCredentialMutation) AddedFields() []string {
+	var fields []string
+	if m.addport != nil {
+		fields = append(fields, hostcredential.FieldPort)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *HostCredentialMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case hostcredential.FieldPort:
+		return m.AddedPort()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *HostCredentialMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case hostcredential.FieldPort:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPort(v)
+		return nil
+	}
+	return fmt.Errorf("unknown HostCredential numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *HostCredentialMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *HostCredentialMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *HostCredentialMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown HostCredential nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *HostCredentialMutation) ResetField(name string) error {
+	switch name {
+	case hostcredential.FieldAssetID:
+		m.ResetAssetID()
+		return nil
+	case hostcredential.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case hostcredential.FieldAddress:
+		m.ResetAddress()
+		return nil
+	case hostcredential.FieldPort:
+		m.ResetPort()
+		return nil
+	case hostcredential.FieldUsername:
+		m.ResetUsername()
+		return nil
+	case hostcredential.FieldKind:
+		m.ResetKind()
+		return nil
+	case hostcredential.FieldHostKey:
+		m.ResetHostKey()
+		return nil
+	case hostcredential.FieldSealed:
+		m.ResetSealed()
+		return nil
+	case hostcredential.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case hostcredential.FieldLeaseUntil:
+		m.ResetLeaseUntil()
+		return nil
+	}
+	return fmt.Errorf("unknown HostCredential field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *HostCredentialMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *HostCredentialMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *HostCredentialMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *HostCredentialMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *HostCredentialMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *HostCredentialMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *HostCredentialMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown HostCredential unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *HostCredentialMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown HostCredential edge %s", name)
 }
 
 // IncidentMutation represents an operation that mutates the Incident nodes in the graph.

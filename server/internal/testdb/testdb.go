@@ -47,6 +47,7 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 	t.Helper()
 	dels := []func(context.Context) (int, error){
+		func(ctx context.Context) (int, error) { return c.HostCredential.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.TaskRun.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Task.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Approval.Delete().Exec(ctx) },

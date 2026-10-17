@@ -639,3 +639,32 @@ export interface AgentConfig {
 export const fetchAgentConfig = (assetId: string) => get<AgentConfig>(`/api/assets/${assetId}/config`)
 export const saveAgentConfig = async (assetId: string, cfg: AgentConfig): Promise<AgentConfig> =>
   (await send('PUT', `/api/assets/${assetId}/config`, cfg)).json()
+
+export interface ImportedHost {
+  hostname: string; address: string; os: string; port: number; username: string
+  kind: 'none' | 'password' | 'private_key'; hostKey: string
+}
+export interface HostImportPreview { digest: string; hosts: ImportedHost[] }
+export interface HostCredential extends ImportedHost { id: string; assetId: string }
+export const fetchHostImportStatus = () => get<{ credentialStorage: boolean; sshEnrollment: boolean }>('/api/host-import/status')
+export const fetchHostCredentials = (groupId: string) => get<HostCredential[]>(`/api/host-import/credentials?groupId=${encodeURIComponent(groupId)}`)
+export async function previewHostImport(groupId: string, document: string): Promise<HostImportPreview> {
+  const r = await post('/api/host-import/preview', { groupId, document })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+export async function commitHostImport(groupId: string, document: string, digest: string): Promise<{ assetIds: string[] }> {
+  const r = await post('/api/host-import/commit', { groupId, document, digest })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+export async function enrollHostCredential(id: string, fingerprint: string): Promise<{ status: string; message: string }> {
+  const r = await post(`/api/host-import/credentials/${id}/enroll`, { fingerprint })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+export async function deleteHostCredential(id: string): Promise<void> {
+  const r = await fetch(`/api/host-import/credentials/${id}`, { method: 'DELETE' })
+  check(r)
+  if (!r.ok) throw new Error(await r.text())
+}

@@ -110,6 +110,10 @@ docker compose up -d
 
 ### 添加主机
 
+已有运维文档时，可从资产页「从文档导入」识别主机地址、账号密码或私钥，预览确认后
+按组保存资产和加密凭据，再单独发起 SSH 纳管。格式、权限和配置见
+[文档导入与主机纳管](docs/host-enrollment.md)。
+
 在控制台「资产 → 添加主机」选好组，复制安装命令到被监控主机上执行：
 
 ```bash
@@ -377,6 +381,9 @@ server 全部通过环境变量配置，均有默认值：
 | `INTEL_RELOAD_SECONDS` | `30` | 威胁情报重载与命中计数回写周期 |
 | `WEBHOOK_MIN_SEVERITY` | `0` | 低于该级别的事件不推送（1 信息 ~ 5 严重），0 表示全推。控制台保存过通知配置后以控制台为准 |
 | `AGENT_SILENT_MINUTES` | `10` | agent 指令通道超过该时长没有心跳即判失联并通知，恢复时再通知一次 |
+| `HOST_CREDENTIAL_KEY` | 空 | 文档导入凭据的 AES-256-GCM 密钥，base64 编码 32 字节；HA 节点必须一致 |
+| `ENROLL_SSH_ENABLED` | `false` | 允许组管理员使用保存凭据进行 SSH 纳管 |
+| `ENROLL_PUBLIC_URL` | 空 | 被纳管主机可访问的可信 HTTPS 控制台地址 |
 | `ENROLL_GRPC_URL` | 空（不启用在线接入） | 写进 agent 配置的 gRPC 地址，主机上必须能访问 |
 | `TLS_CA_KEY_FILE` | 空 | CA 私钥，开了 mTLS 时在线接入用它签发主机证书 |
 | `AGENT_DIST_DIR` | 空 | agent 安装包目录，供安装脚本下载，也是在线 agent 自动升级的目标版本 |
