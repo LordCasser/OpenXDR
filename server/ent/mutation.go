@@ -91,6 +91,8 @@ type AgentSessionMutation struct {
 	error          *string
 	finished_at    *time.Time
 	run_expires_at *time.Time
+	subjects       *[]string
+	appendsubjects []string
 	clearedFields  map[string]struct{}
 	done           bool
 	oldValue       func(context.Context) (*AgentSession, error)
@@ -613,6 +615,71 @@ func (m *AgentSessionMutation) ResetRunExpiresAt() {
 	delete(m.clearedFields, agentsession.FieldRunExpiresAt)
 }
 
+// SetSubjects sets the "subjects" field.
+func (m *AgentSessionMutation) SetSubjects(s []string) {
+	m.subjects = &s
+	m.appendsubjects = nil
+}
+
+// Subjects returns the value of the "subjects" field in the mutation.
+func (m *AgentSessionMutation) Subjects() (r []string, exists bool) {
+	v := m.subjects
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubjects returns the old "subjects" field's value of the AgentSession entity.
+// If the AgentSession object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AgentSessionMutation) OldSubjects(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubjects is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubjects requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubjects: %w", err)
+	}
+	return oldValue.Subjects, nil
+}
+
+// AppendSubjects adds s to the "subjects" field.
+func (m *AgentSessionMutation) AppendSubjects(s []string) {
+	m.appendsubjects = append(m.appendsubjects, s...)
+}
+
+// AppendedSubjects returns the list of values that were appended to the "subjects" field in this mutation.
+func (m *AgentSessionMutation) AppendedSubjects() ([]string, bool) {
+	if len(m.appendsubjects) == 0 {
+		return nil, false
+	}
+	return m.appendsubjects, true
+}
+
+// ClearSubjects clears the value of the "subjects" field.
+func (m *AgentSessionMutation) ClearSubjects() {
+	m.subjects = nil
+	m.appendsubjects = nil
+	m.clearedFields[agentsession.FieldSubjects] = struct{}{}
+}
+
+// SubjectsCleared returns if the "subjects" field was cleared in this mutation.
+func (m *AgentSessionMutation) SubjectsCleared() bool {
+	_, ok := m.clearedFields[agentsession.FieldSubjects]
+	return ok
+}
+
+// ResetSubjects resets all changes to the "subjects" field.
+func (m *AgentSessionMutation) ResetSubjects() {
+	m.subjects = nil
+	m.appendsubjects = nil
+	delete(m.clearedFields, agentsession.FieldSubjects)
+}
+
 // Where appends a list predicates to the AgentSessionMutation builder.
 func (m *AgentSessionMutation) Where(ps ...predicate.AgentSession) {
 	m.predicates = append(m.predicates, ps...)
@@ -647,7 +714,7 @@ func (m *AgentSessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AgentSessionMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, agentsession.FieldCreatedAt)
 	}
@@ -678,6 +745,9 @@ func (m *AgentSessionMutation) Fields() []string {
 	if m.run_expires_at != nil {
 		fields = append(fields, agentsession.FieldRunExpiresAt)
 	}
+	if m.subjects != nil {
+		fields = append(fields, agentsession.FieldSubjects)
+	}
 	return fields
 }
 
@@ -706,6 +776,8 @@ func (m *AgentSessionMutation) Field(name string) (ent.Value, bool) {
 		return m.FinishedAt()
 	case agentsession.FieldRunExpiresAt:
 		return m.RunExpiresAt()
+	case agentsession.FieldSubjects:
+		return m.Subjects()
 	}
 	return nil, false
 }
@@ -735,6 +807,8 @@ func (m *AgentSessionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldFinishedAt(ctx)
 	case agentsession.FieldRunExpiresAt:
 		return m.OldRunExpiresAt(ctx)
+	case agentsession.FieldSubjects:
+		return m.OldSubjects(ctx)
 	}
 	return nil, fmt.Errorf("unknown AgentSession field %s", name)
 }
@@ -814,6 +888,13 @@ func (m *AgentSessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRunExpiresAt(v)
 		return nil
+	case agentsession.FieldSubjects:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubjects(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AgentSession field %s", name)
 }
@@ -856,6 +937,9 @@ func (m *AgentSessionMutation) ClearedFields() []string {
 	if m.FieldCleared(agentsession.FieldRunExpiresAt) {
 		fields = append(fields, agentsession.FieldRunExpiresAt)
 	}
+	if m.FieldCleared(agentsession.FieldSubjects) {
+		fields = append(fields, agentsession.FieldSubjects)
+	}
 	return fields
 }
 
@@ -881,6 +965,9 @@ func (m *AgentSessionMutation) ClearField(name string) error {
 		return nil
 	case agentsession.FieldRunExpiresAt:
 		m.ClearRunExpiresAt()
+		return nil
+	case agentsession.FieldSubjects:
+		m.ClearSubjects()
 		return nil
 	}
 	return fmt.Errorf("unknown AgentSession nullable field %s", name)
@@ -919,6 +1006,9 @@ func (m *AgentSessionMutation) ResetField(name string) error {
 		return nil
 	case agentsession.FieldRunExpiresAt:
 		m.ResetRunExpiresAt()
+		return nil
+	case agentsession.FieldSubjects:
+		m.ResetSubjects()
 		return nil
 	}
 	return fmt.Errorf("unknown AgentSession field %s", name)

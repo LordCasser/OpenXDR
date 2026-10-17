@@ -12,6 +12,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 )
@@ -193,6 +194,24 @@ func (_u *AgentSessionUpdate) ClearRunExpiresAt() *AgentSessionUpdate {
 	return _u
 }
 
+// SetSubjects sets the "subjects" field.
+func (_u *AgentSessionUpdate) SetSubjects(v []string) *AgentSessionUpdate {
+	_u.mutation.SetSubjects(v)
+	return _u
+}
+
+// AppendSubjects appends value to the "subjects" field.
+func (_u *AgentSessionUpdate) AppendSubjects(v []string) *AgentSessionUpdate {
+	_u.mutation.AppendSubjects(v)
+	return _u
+}
+
+// ClearSubjects clears the value of the "subjects" field.
+func (_u *AgentSessionUpdate) ClearSubjects() *AgentSessionUpdate {
+	_u.mutation.ClearSubjects()
+	return _u
+}
+
 // Mutation returns the AgentSessionMutation object of the builder.
 func (_u *AgentSessionUpdate) Mutation() *AgentSessionMutation {
 	return _u.mutation
@@ -275,6 +294,17 @@ func (_u *AgentSessionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.RunExpiresAtCleared() {
 		_spec.ClearField(agentsession.FieldRunExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Subjects(); ok {
+		_spec.SetField(agentsession.FieldSubjects, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedSubjects(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, agentsession.FieldSubjects, value)
+		})
+	}
+	if _u.mutation.SubjectsCleared() {
+		_spec.ClearField(agentsession.FieldSubjects, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -460,6 +490,24 @@ func (_u *AgentSessionUpdateOne) ClearRunExpiresAt() *AgentSessionUpdateOne {
 	return _u
 }
 
+// SetSubjects sets the "subjects" field.
+func (_u *AgentSessionUpdateOne) SetSubjects(v []string) *AgentSessionUpdateOne {
+	_u.mutation.SetSubjects(v)
+	return _u
+}
+
+// AppendSubjects appends value to the "subjects" field.
+func (_u *AgentSessionUpdateOne) AppendSubjects(v []string) *AgentSessionUpdateOne {
+	_u.mutation.AppendSubjects(v)
+	return _u
+}
+
+// ClearSubjects clears the value of the "subjects" field.
+func (_u *AgentSessionUpdateOne) ClearSubjects() *AgentSessionUpdateOne {
+	_u.mutation.ClearSubjects()
+	return _u
+}
+
 // Mutation returns the AgentSessionMutation object of the builder.
 func (_u *AgentSessionUpdateOne) Mutation() *AgentSessionMutation {
 	return _u.mutation
@@ -572,6 +620,17 @@ func (_u *AgentSessionUpdateOne) sqlSave(ctx context.Context) (_node *AgentSessi
 	}
 	if _u.mutation.RunExpiresAtCleared() {
 		_spec.ClearField(agentsession.FieldRunExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Subjects(); ok {
+		_spec.SetField(agentsession.FieldSubjects, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedSubjects(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, agentsession.FieldSubjects, value)
+		})
+	}
+	if _u.mutation.SubjectsCleared() {
+		_spec.ClearField(agentsession.FieldSubjects, field.TypeJSON)
 	}
 	_node = &AgentSession{config: _u.config}
 	_spec.Assign = _node.assignValues

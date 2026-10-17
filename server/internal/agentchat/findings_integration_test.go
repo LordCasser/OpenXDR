@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 
 	"openxdr/server/ent/finding"
 	"openxdr/server/internal/commandgate"
@@ -107,6 +110,18 @@ func TestTrackFindings(t *testing.T) {
 	if !strings.Contains(r.SystemPrompt, `"open_findings":[{"host":"`+host.ID.String()+`","hostname":"pve2","key":"disk-full"`) ||
 		!strings.Contains(r.SystemPrompt, `"ignored_findings":[{`) || !strings.Contains(r.SystemPrompt, "计划下线") {
 		t.Errorf("待办数据缺失：%s", r.SystemPrompt)
+	}
+	// 交给 AI 的会话：绑定对象的当前状态随系统提示交给模型
+	inc := db.Incident.Create().SetStatus("triaged").SetTitle("反弹 shell @ pve2").SetGraph([]byte(`{}`)).SaveX(ctx)
+	db.Alert.Create().SetTs(time.Now()).SetRuleID("r").SetSeverity(5).SetAssetID(host.ID).SetIncidentID(inc.ID).SaveX(ctx)
+	bound := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator("a").SetModel("m").SetStatus("idle").
+		SetSubjects([]string{"incident:" + inc.ID.String(), "finding:" + uuid.NewString()}).SaveX(ctx)
+	r, err = s.request(context.Background(), bound, "处理", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.SystemPrompt, `"subjects":[{`) || !strings.Contains(r.SystemPrompt, "反弹 shell @ pve2") || !strings.Contains(r.SystemPrompt, "结案建议") {
+		t.Errorf("绑定对象未进系统提示：%s", r.SystemPrompt)
 	}
 	if n := db.Finding.Query().Where(finding.StatusEQ("open")).CountX(ctx); n != 1 {
 		t.Errorf("应只有一条遗留：%d", n)

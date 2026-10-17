@@ -33,6 +33,8 @@ func (AgentSession) Fields() []ent.Field {
 		field.Time("finished_at").Optional().Nillable(),
 		// 固定执行期限加清理宽限；过期后只标失败，不重放命令。
 		field.Time("run_expires_at").Optional().Nillable(),
+		// 从事件或待办「交给 AI」时绑定的对象：incident:<id> / finding:<id>，同组、最多 10 个
+		field.Strings("subjects").Optional(),
 	}
 }
 

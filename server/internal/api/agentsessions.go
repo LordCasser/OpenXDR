@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"openxdr/server/ent"
 	"openxdr/server/ent/agentsession"
+	"openxdr/server/ent/finding"
 	"openxdr/server/ent/report"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/internal/agentchat"
@@ -27,8 +29,9 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 			return
 		}
 		var body struct {
-			GroupID uuid.UUID `json:"groupId"`
-			Title   string    `json:"title"`
+			GroupID  uuid.UUID `json:"groupId"`
+			Title    string    `json:"title"`
+			Subjects []string  `json:"subjects"`
 		}
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body) != nil || len(body.Title) > 200 {
 			http.Error(w, "请求无效", 400)
@@ -37,7 +40,15 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 		if !requireGroup(w, r, db, body.GroupID, "analyst") {
 			return
 		}
-		session, err := db.AgentSession.Create().SetKind("chat").SetGroupID(body.GroupID).SetInitiator(auth.From(r.Context()).Username).SetModel(service.Model).SetTitle(body.Title).SetStatus("idle").Save(r.Context())
+		if err := checkSubjects(r.Context(), db, body.GroupID, body.Subjects); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		create := db.AgentSession.Create().SetKind("chat").SetGroupID(body.GroupID).SetInitiator(auth.From(r.Context()).Username).SetModel(service.Model).SetTitle(body.Title).SetStatus("idle")
+		if len(body.Subjects) > 0 {
+			create.SetSubjects(body.Subjects)
+		}
+		session, err := create.Save(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -204,4 +215,46 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 		}
 		writeJSON(w, row)
 	})
+}
+
+// checkSubjects 「交给 AI」绑定的对象：incident:<id> 或 finding:<id>，最多 10 个，必须都属于会话所在组。
+// 组内角色已在调用前检查过，这里只防把别组的事件塞进本组会话。
+func checkSubjects(ctx context.Context, db *ent.Client, group uuid.UUID, subjects []string) error {
+	if len(subjects) > 10 {
+		return errors.New("一次最多交给 AI 10 条")
+	}
+	var incidents, findings []uuid.UUID
+	for _, s := range subjects {
+		kind, raw, _ := strings.Cut(s, ":")
+		id, err := uuid.Parse(raw)
+		if err != nil || (kind != "incident" && kind != "finding") {
+			return fmt.Errorf("无效的对象 %q", s)
+		}
+		if kind == "incident" {
+			incidents = append(incidents, id)
+		} else {
+			findings = append(findings, id)
+		}
+	}
+	if len(incidents) > 0 {
+		groups, err := incidentGroups(ctx, db, incidents)
+		if err != nil {
+			return err
+		}
+		for _, id := range incidents {
+			if g := groups[id]; g == nil || *g != group {
+				return errors.New("所选事件不都属于当前组")
+			}
+		}
+	}
+	if len(findings) > 0 {
+		n, err := db.Finding.Query().Where(finding.IDIn(findings...), finding.GroupIDEQ(group)).Count(ctx)
+		if err != nil {
+			return err
+		}
+		if n != len(findings) {
+			return errors.New("所选待办不都属于当前组")
+		}
+	}
+	return nil
 }

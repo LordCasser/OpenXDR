@@ -59,6 +59,30 @@ func TestPiGroupAPI(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &session); err != nil {
 		t.Fatal(err)
 	}
+
+	// 交给 AI：绑定对象必须都属于本组，格式不对或跨组都拒绝
+	mine := db.Asset.Create().SetHostname("h1").SetGroupID(group.ID).SaveX(ctx)
+	theirs := db.Asset.Create().SetHostname("h2").SetGroupID(other.ID).SaveX(ctx)
+	incOf := func(asset uuid.UUID) uuid.UUID {
+		inc := db.Incident.Create().SetStatus("triaged").SetGraph(json.RawMessage(`{}`)).SaveX(ctx)
+		db.Alert.Create().SetTs(time.Now()).SetRuleID("r").SetSeverity(3).SetAssetID(asset).SetIncidentID(inc.ID).SaveX(ctx)
+		return inc.ID
+	}
+	myInc, theirInc := incOf(mine.ID), incOf(theirs.ID)
+	myFinding := db.Finding.Create().SetGroupID(group.ID).SetAssetID(mine.ID).SetKey("k").SetTitle("t").SaveX(ctx)
+	for body, want := range map[string]int{
+		`"incident:` + theirInc.String() + `"`:                                      400,
+		`"bogus:` + myInc.String() + `"`:                                            400,
+		`"incident:` + myInc.String() + `","finding:` + myFinding.ID.String() + `"`: 201,
+	} {
+		w := request("POST", "/api/agent-sessions", `{"groupId":"`+group.ID.String()+`","subjects":[`+body+`]}`)
+		if w.Code != want {
+			t.Errorf("subjects %s: 期望 %d，得到 %d %s", body, want, w.Code, w.Body.String())
+		}
+		if want == 201 && !strings.Contains(w.Body.String(), `"subjects":["incident:`+myInc.String()) {
+			t.Errorf("subjects 未保存：%s", w.Body.String())
+		}
+	}
 	w = request("POST", "/api/command-policies", `{"groupId":"`+group.ID.String()+`","origin":"ai","pattern":"whoami"}`)
 	if w.Code != 201 {
 		t.Fatalf("创建名单: %d %s", w.Code, w.Body.String())

@@ -129,6 +129,12 @@ func (_c *AgentSessionCreate) SetNillableRunExpiresAt(v *time.Time) *AgentSessio
 	return _c
 }
 
+// SetSubjects sets the "subjects" field.
+func (_c *AgentSessionCreate) SetSubjects(v []string) *AgentSessionCreate {
+	_c.mutation.SetSubjects(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AgentSessionCreate) SetID(v uuid.UUID) *AgentSessionCreate {
 	_c.mutation.SetID(v)
@@ -286,6 +292,10 @@ func (_c *AgentSessionCreate) createSpec() (*AgentSession, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.RunExpiresAt(); ok {
 		_spec.SetField(agentsession.FieldRunExpiresAt, field.TypeTime, value)
 		_node.RunExpiresAt = &value
+	}
+	if value, ok := _c.mutation.Subjects(); ok {
+		_spec.SetField(agentsession.FieldSubjects, field.TypeJSON, value)
+		_node.Subjects = value
 	}
 	return _node, _spec
 }

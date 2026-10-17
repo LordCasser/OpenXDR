@@ -695,6 +695,16 @@ func RunExpiresAtNotNil() predicate.AgentSession {
 	return predicate.AgentSession(sql.FieldNotNull(FieldRunExpiresAt))
 }
 
+// SubjectsIsNil applies the IsNil predicate on the "subjects" field.
+func SubjectsIsNil() predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldIsNull(FieldSubjects))
+}
+
+// SubjectsNotNil applies the NotNil predicate on the "subjects" field.
+func SubjectsNotNil() predicate.AgentSession {
+	return predicate.AgentSession(sql.FieldNotNull(FieldSubjects))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.AgentSession) predicate.AgentSession {
 	return predicate.AgentSession(sql.AndPredicates(predicates...))

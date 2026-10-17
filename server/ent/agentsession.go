@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"openxdr/server/ent/agentsession"
 	"strings"
@@ -38,6 +39,8 @@ type AgentSession struct {
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 	// RunExpiresAt holds the value of the "run_expires_at" field.
 	RunExpiresAt *time.Time `json:"run_expires_at,omitempty"`
+	// Subjects holds the value of the "subjects" field.
+	Subjects     []string `json:"subjects,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -46,6 +49,8 @@ func (*AgentSession) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case agentsession.FieldSubjects:
+			values[i] = new([]byte)
 		case agentsession.FieldKind, agentsession.FieldInitiator, agentsession.FieldModel, agentsession.FieldTitle, agentsession.FieldStatus, agentsession.FieldError:
 			values[i] = new(sql.NullString)
 		case agentsession.FieldCreatedAt, agentsession.FieldFinishedAt, agentsession.FieldRunExpiresAt:
@@ -137,6 +142,14 @@ func (_m *AgentSession) assignValues(columns []string, values []any) error {
 				_m.RunExpiresAt = new(time.Time)
 				*_m.RunExpiresAt = value.Time
 			}
+		case agentsession.FieldSubjects:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field subjects", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Subjects); err != nil {
+					return fmt.Errorf("unmarshal field subjects: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -210,6 +223,9 @@ func (_m *AgentSession) String() string {
 		builder.WriteString("run_expires_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("subjects=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Subjects))
 	builder.WriteByte(')')
 	return builder.String()
 }

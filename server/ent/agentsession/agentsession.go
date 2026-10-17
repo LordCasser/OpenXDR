@@ -34,6 +34,8 @@ const (
 	FieldFinishedAt = "finished_at"
 	// FieldRunExpiresAt holds the string denoting the run_expires_at field in the database.
 	FieldRunExpiresAt = "run_expires_at"
+	// FieldSubjects holds the string denoting the subjects field in the database.
+	FieldSubjects = "subjects"
 	// Table holds the table name of the agentsession in the database.
 	Table = "agent_sessions"
 )
@@ -51,6 +53,7 @@ var Columns = []string{
 	FieldError,
 	FieldFinishedAt,
 	FieldRunExpiresAt,
+	FieldSubjects,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

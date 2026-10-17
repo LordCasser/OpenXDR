@@ -29,7 +29,7 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 
 | 接口 | 请求 | 权限与响应 |
 |---|---|---|
-| `POST /api/agent-sessions` | `{groupId,title?}` | 组 analyst；创建 idle 会话，返回 201 + 实体 |
+| `POST /api/agent-sessions` | `{groupId,title?,subjects?}` | 组 analyst；创建 idle 会话，返回 201 + 实体。`subjects` 是「交给 AI」绑定的对象，`incident:<id>` 或 `finding:<id>`，最多 10 个且必须都属于该组；绑定后每轮把这些对象的当前状态（事件含研判与最要紧的 10 条告警及证据）放进系统提示，事件仍由人结案，AI 只给结案建议 |
 | `GET /api/agent-sessions?groupId=...` | — | 组 viewer；最近 100 个会话 |
 | `GET /api/agent-sessions/{id}` | — | 组 viewer；单个会话状态与元数据 |
 | `GET /api/agent-sessions/{id}/messages?afterSeq=0` | — | 组 viewer；seq 升序，每页最多 1000 条，下一页传最后一条 seq |
