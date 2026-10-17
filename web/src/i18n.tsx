@@ -470,6 +470,18 @@ const zh = {
   formatDingtalk: '钉钉',
   formatFeishu: '飞书',
   formatWecom: '企业微信',
+  // 日志检索摘要
+  thSummary: '摘要',
+  evLaunch: '启动',
+  evExit: '退出',
+  evExitCode: '（退出码 {n}）',
+  evCreate: '创建',
+  evUpdate: '修改',
+  evDelete: '删除',
+  evLoad: '加载',
+  evUnload: '卸载',
+  evLoginOk: '登录成功',
+  evLoginFail: '登录失败',
 }
 
 export type MsgKey = keyof typeof zh
@@ -922,6 +934,17 @@ const en = {
   formatDingtalk: 'DingTalk',
   formatFeishu: 'Feishu',
   formatWecom: 'WeCom',
+  thSummary: 'Summary',
+  evLaunch: 'Started',
+  evExit: 'Exited',
+  evExitCode: '(exit code {n})',
+  evCreate: 'Created',
+  evUpdate: 'Modified',
+  evDelete: 'Deleted',
+  evLoad: 'Loaded',
+  evUnload: 'Unloaded',
+  evLoginOk: 'Login succeeded',
+  evLoginFail: 'Login failed',
 } satisfies Record<MsgKey, string>
 
 const dicts = { zh, en }

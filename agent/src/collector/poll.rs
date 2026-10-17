@@ -24,8 +24,9 @@ pub async fn run(agent_id: String, tx: EventSink) {
 
     // 已存在的进程先登记，之后它们派生的子进程才能找到父
     let mut registry = ProcessRegistry::default();
-    for pid in &known {
-        registry.seed(pid.as_u32());
+    for (pid, proc) in sys.processes() {
+        let exe = proc.exe().map(|p| p.to_string_lossy().into_owned());
+        registry.seed(pid.as_u32(), &proc.name().to_string_lossy(), exe.as_deref());
     }
 
     loop {
@@ -61,13 +62,14 @@ pub async fn run(agent_id: String, tx: EventSink) {
                 },
             );
 
-            if !tx.send(event) {
+            if let Some(event) = event
+                && !tx.send(event)
+            {
                 return; // 上报端已断开，本采集任务随之退出
             }
         }
 
-        // 消失的 pid 即进程退出。进程已退场，除 pid 外无从补全，
-        // 其余字段留空；GUID 走注册表复用启动时的映射
+        // 消失的 pid 即进程退出。进程已退场，名字与路径从启动时的登记补上
         for pid in gone {
             let event = process_event(
                 &agent_id,
@@ -78,7 +80,9 @@ pub async fn run(agent_id: String, tx: EventSink) {
                     ..Default::default()
                 },
             );
-            if !tx.send(event) {
+            if let Some(event) = event
+                && !tx.send(event)
+            {
                 return;
             }
         }
@@ -128,9 +132,9 @@ mod tests {
         assert!(gone.is_empty());
     }
 
-    /// 退出事件只有 pid：GUID 复用启动时的登记，activity_id=2。
+    /// 退出时只剩 pid：GUID、名字与路径都复用启动时的登记，activity_id=2。
     #[test]
-    fn gone_pid_yields_bare_terminate_event() {
+    fn gone_pid_reuses_launch_identity() {
         let mut reg = ProcessRegistry::default();
         let launch = process_event(
             "agent-1",
@@ -139,9 +143,11 @@ mod tests {
             ProcessInfo {
                 pid: 42,
                 name: "bash",
+                exe: Some("/usr/bin/bash"),
                 ..Default::default()
             },
-        );
+        )
+        .unwrap();
         let exit = process_event(
             "agent-1",
             &mut reg,
@@ -150,12 +156,30 @@ mod tests {
                 pid: 42,
                 ..Default::default()
             },
-        );
+        )
+        .unwrap();
         assert_eq!(exit.process_guid, launch.process_guid);
         let v: serde_json::Value = serde_json::from_str(&exit.raw_json).unwrap();
         assert_eq!(v["activity_id"], 2);
         assert_eq!(v["process"]["pid"], 42);
-        assert_eq!(v["process"]["name"], "");
+        assert_eq!(v["process"]["name"], "bash");
+        assert_eq!(v["process"]["file"]["path"], "/usr/bin/bash");
         assert!(v["process"]["exit_code"].is_null());
+    }
+
+    /// 没见过启动、也不在快照里的进程退出：配不上启动事件，说不出是谁，不上报。
+    #[test]
+    fn unknown_exit_is_dropped() {
+        let mut reg = ProcessRegistry::default();
+        let exit = process_event(
+            "agent-1",
+            &mut reg,
+            ACTIVITY_TERMINATE,
+            ProcessInfo {
+                pid: 4242,
+                ..Default::default()
+            },
+        );
+        assert!(exit.is_none());
     }
 }

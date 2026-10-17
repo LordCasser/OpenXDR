@@ -45,7 +45,7 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
                 let ppid: Option<u32> = parser.try_parse("ParentProcessID").ok();
                 // 事件里没有命令行和用户名，现场从进程句柄补
                 let (cmd_line, username) = inspect::describe(pid);
-                cb_tx.send(process_event(
+                let event = process_event(
                     &cb_agent_id,
                     &mut reg,
                     ACTIVITY_LAUNCH,
@@ -58,11 +58,14 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
                         username,
                         ..Default::default()
                     },
-                ));
+                );
+                if let Some(event) = event {
+                    cb_tx.send(event);
+                }
             } else {
                 // Stop：进程已退出，句柄多半开不到，命令行和用户名留空；
                 // GUID 走注册表复用启动时的映射
-                cb_tx.send(process_event(
+                if let Some(event) = process_event(
                     &cb_agent_id,
                     &mut reg,
                     ACTIVITY_TERMINATE,
@@ -72,7 +75,9 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
                         exe: Some(&image),
                         ..Default::default()
                     },
-                ));
+                ) {
+                    cb_tx.send(event);
+                }
             }
         })
         .build();
@@ -138,8 +143,9 @@ pub(crate) fn seeded_registry() -> ProcessRegistry {
     let mut sys = System::new();
     sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     let mut registry = ProcessRegistry::default();
-    for pid in sys.processes().keys() {
-        registry.seed(pid.as_u32());
+    for (pid, proc) in sys.processes() {
+        let exe = proc.exe().map(|p| p.to_string_lossy().into_owned());
+        registry.seed(pid.as_u32(), &proc.name().to_string_lossy(), exe.as_deref());
     }
     registry
 }

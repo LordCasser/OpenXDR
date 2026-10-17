@@ -76,10 +76,14 @@ pub fn sched_process_exit(ctx: TracePointContext) -> u32 {
 }
 
 fn try_exit(ctx: &TracePointContext) -> Result<(), i64> {
+    // sched_process_exit 每个线程退出都会触发，只有主线程（tid == tgid）退出才是进程退出
+    let pid_tgid = bpf_get_current_pid_tgid();
+    let tgid = (pid_tgid >> 32) as u32;
+    if pid_tgid as u32 != tgid {
+        return Ok(());
+    }
     // 退出事件只需 pid：血缘与进程细节由用户态注册表补全
-    let event = ExitEvent {
-        pid: (bpf_get_current_pid_tgid() >> 32) as u32,
-    };
+    let event = ExitEvent { pid: tgid };
     EXITS.output(ctx, &event, 0);
     Ok(())
 }

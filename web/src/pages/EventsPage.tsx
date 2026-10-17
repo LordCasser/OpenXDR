@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { Input, Select, Space, Table, Typography } from 'antd'
+import { Input, Select, Space, Table, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
-import { searchEvents, type EventRow } from '../api'
+import { fetchAssets, searchEvents, type EventRow } from '../api'
 import { HostLink } from '../components/HostLink'
+import { eventSummary } from '../components/eventSummary'
 import { CLASS_KEY, fmtTime } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
 import { useI18n } from '../i18n'
@@ -11,8 +12,9 @@ import { useI18n } from '../i18n'
 export function EventsPage() {
   const { t } = useI18n()
   const [draft, setDraft] = useState('')
-  const [filter, setFilter] = useState({ q: '', source: '', classUid: 0, hours: 24 })
+  const [filter, setFilter] = useState({ q: '', source: '', classUid: 0, hours: 24, assetId: '' })
   const { data, isFetching } = useQuery({ queryKey: ['events', filter], queryFn: () => searchEvents(filter) })
+  const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
 
   return (
     <Page title={t('navEvents')} subtitle={t('eventsSubtitle')}>
@@ -26,6 +28,14 @@ export function EventsPage() {
               value={draft}
               onChange={e => setDraft(e.target.value)}
               onSearch={q => setFilter(f => ({ ...f, q }))}
+            />
+            <Select
+              style={{ width: 160 }}
+              showSearch
+              optionFilterProp="label"
+              value={filter.assetId}
+              onChange={assetId => setFilter(f => ({ ...f, assetId }))}
+              options={[{ value: '', label: t('allHosts') }, ...(assets.data ?? []).map(a => ({ value: a.id, label: a.hostname }))]}
             />
             <Select
               style={{ width: 140 }}
@@ -57,12 +67,17 @@ export function EventsPage() {
           pagination={{ pageSize: 50, hideOnSinglePage: true }}
           expandable={{ expandedRowRender: r => <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre> }}
           columns={[
-            { title: t('thTime'), dataIndex: 'ts', render: fmtTime, width: 180 },
-            { title: t('thClass'), dataIndex: 'classUid', width: 110, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v) },
-            { title: t('thSource'), dataIndex: 'source', width: 90 },
-            { title: t('thHostname'), dataIndex: 'assetId', width: 160, render: v => <HostLink id={v} /> },
-            { title: t('thUser'), dataIndex: 'username', width: 140, render: v => v ?? '-' },
-            { title: t('thConn'), dataIndex: 'connTuple', ellipsis: true, render: v => <span className="mono">{v ?? '-'}</span> },
+            { title: t('thTime'), dataIndex: 'ts', render: fmtTime, width: 170 },
+            { title: t('thClass'), dataIndex: 'classUid', width: 100, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v) },
+            { title: t('thHostname'), dataIndex: 'assetId', width: 130, render: v => <HostLink id={v} /> },
+            {
+              title: t('thSummary'), key: 'summary', ellipsis: { showTitle: false },
+              render: (_, r) => {
+                const text = eventSummary(r.classUid, r.raw, t) || r.connTuple || '-'
+                return <Tooltip placement="topLeft" title={text}><span className="mono">{text}</span></Tooltip>
+              },
+            },
+            { title: t('thUser'), dataIndex: 'username', width: 110, render: v => v || '-' },
           ]}
         />
       </FilterCard>

@@ -88,7 +88,9 @@ fn pump(sock: Socket, agent_id: String, tx: EventSink) {
                     exit_code: d.exit_code,
                 },
             );
-            if !tx.send(event) {
+            if let Some(event) = event
+                && !tx.send(event)
+            {
                 return; // 上报端已断开
             }
         }
@@ -135,13 +137,16 @@ fn parse_events(buf: &[u8]) -> Vec<ProcEvent> {
                 ppid: Some(u32::from_ne_bytes(data[0..4].try_into().unwrap())),
                 exit_code: None,
             }),
-            // exit: process_pid, process_tgid, exit_code, exit_signal
-            PROC_EVENT_EXIT if data.len() >= 16 => events.push(ProcEvent {
-                what,
-                pid: u32::from_ne_bytes(data[0..4].try_into().unwrap()),
-                ppid: None,
-                exit_code: Some(u32::from_ne_bytes(data[8..12].try_into().unwrap())),
-            }),
+            // exit: process_pid, process_tgid, exit_code, exit_signal。
+            // 每个线程退出都会来一条，只有主线程（pid == tgid）退出才是进程退出
+            PROC_EVENT_EXIT if data.len() >= 16 && data[0..4] == data[4..8] => {
+                events.push(ProcEvent {
+                    what,
+                    pid: u32::from_ne_bytes(data[0..4].try_into().unwrap()),
+                    ppid: None,
+                    exit_code: Some(u32::from_ne_bytes(data[8..12].try_into().unwrap())),
+                })
+            }
             _ => {}
         }
 
@@ -318,6 +323,10 @@ mod tests {
         assert_eq!(events[0].what, PROC_EVENT_EXIT);
         assert_eq!(events[0].pid, 1234);
         assert_eq!(events[0].exit_code, Some(9));
+
+        // 非主线程退出（pid != tgid）不是进程退出
+        data[0..4].copy_from_slice(&1240u32.to_ne_bytes());
+        assert!(parse_events(&build_msg(PROC_EVENT_EXIT, &data)).is_empty());
     }
 
     /// exec 报文不带退出码，pid 取自 process_pid。

@@ -205,7 +205,11 @@ fn seeded_registry() -> ProcessRegistry {
             .flatten()
             .filter_map(|e| e.file_name().to_string_lossy().parse::<u32>().ok())
         {
-            registry.seed(pid);
+            let name = std::fs::read_to_string(format!("/proc/{pid}/comm")).unwrap_or_default();
+            let exe = std::fs::read_link(format!("/proc/{pid}/exe"))
+                .ok()
+                .map(|p| p.to_string_lossy().into_owned());
+            registry.seed(pid, name.trim_end(), exe.as_deref());
         }
     }
     registry
@@ -269,7 +273,7 @@ fn process_event(
     registry: &mut ProcessRegistry,
     activity: u32,
     info: ProcessInfo<'_>,
-) -> AgentEvent {
+) -> Option<AgentEvent> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let ProcessInfo {
@@ -282,13 +286,25 @@ fn process_event(
         exit_code,
     } = info;
 
-    let (guid, parent_guid) = if activity == ACTIVITY_TERMINATE {
-        match registry.guid_of(pid) {
-            Some(g) => (g, ppid.and_then(|p| registry.guid_of(p))),
-            None => registry.register(pid, ppid),
-        }
+    // 退出事件只认见过的进程，名字与路径从启动时的登记补上；没见过的退出
+    // 配不上启动事件、也说不出是谁，只是噪声
+    let known;
+    let (guid, parent_guid, name, exe) = if activity == ACTIVITY_TERMINATE {
+        known = registry.known(pid)?;
+        (
+            known.guid,
+            ppid.and_then(|p| registry.guid_of(p)),
+            if name.is_empty() {
+                known.name.as_str()
+            } else {
+                name
+            },
+            exe.or(known.exe.as_deref()),
+        )
     } else {
-        registry.register(pid, ppid)
+        let (guid, parent) = registry.register(pid, ppid);
+        registry.describe(pid, name, exe);
+        (guid, parent, name, exe)
     };
     let raw = serde_json::json!({
         "activity_id": activity,
@@ -306,7 +322,7 @@ fn process_event(
         },
     });
 
-    AgentEvent {
+    Some(AgentEvent {
         agent_id: agent_id.to_string(),
         ts_unix_ns: SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -319,7 +335,7 @@ fn process_event(
         conn_tuple: String::new(),
         raw_json: raw.to_string(),
         dropped_events: 0, // 由 EventSink 在发送时填当前累计值
-    }
+    })
 }
 
 #[cfg(test)]
@@ -343,7 +359,8 @@ mod tests {
                 username: "u".to_string(),
                 ..Default::default()
             },
-        );
+        )
+        .unwrap();
         let child = process_event(
             "agent-1",
             &mut reg,
@@ -357,7 +374,8 @@ mod tests {
                 username: "u".to_string(),
                 ..Default::default()
             },
-        );
+        )
+        .unwrap();
         assert_eq!(
             parent.process_guid, child.parent_process_guid,
             "子进程应连到父进程 GUID"
@@ -383,7 +401,8 @@ mod tests {
                 username: "u".to_string(),
                 ..Default::default()
             },
-        );
+        )
+        .unwrap();
         assert!(
             evt.parent_process_guid.is_empty(),
             "父未登记时 parent GUID 应为空"
@@ -414,7 +433,8 @@ mod tests {
                 username: "root".to_string(),
                 ..Default::default()
             },
-        );
+        )
+        .unwrap();
         let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
         assert_eq!(v["activity_id"], 1);
         assert_eq!(v["process"]["uid"], evt.process_guid);
@@ -443,7 +463,8 @@ mod tests {
                 username: "u".to_string(),
                 ..Default::default()
             },
-        );
+        )
+        .unwrap();
         let exit = process_event(
             "agent-1",
             &mut reg,
@@ -454,7 +475,8 @@ mod tests {
                 exit_code: Some(137),
                 ..Default::default()
             },
-        );
+        )
+        .unwrap();
         assert_eq!(exit.process_guid, launch.process_guid);
         let v: Value = serde_json::from_str(&exit.raw_json).unwrap();
         assert_eq!(v["activity_id"], 2);
@@ -463,10 +485,12 @@ mod tests {
         assert_eq!(v["process"]["uid"], launch.process_guid);
     }
 
-    /// 进程早于 agent 启动时注册表里没有映射，退出事件退化为正常登记。
+    /// 早于 agent 启动的进程由快照登记，退出时照样报出名字；
+    /// 快照里也没有的 pid（线程、或启动事件丢了）退出不上报。
     #[test]
-    fn process_event_terminate_unknown_pid() {
+    fn process_event_terminate_seeded_and_unknown() {
         let mut reg = ProcessRegistry::default();
+        reg.seed(555, "cron", Some("/usr/sbin/cron"));
         let exit = process_event(
             "agent-1",
             &mut reg,
@@ -475,13 +499,20 @@ mod tests {
                 pid: 555,
                 ..Default::default()
             },
-        );
-        assert!(!exit.process_guid.is_empty());
+        )
+        .unwrap();
         let v: Value = serde_json::from_str(&exit.raw_json).unwrap();
         assert_eq!(v["activity_id"], 2);
+        assert_eq!(v["process"]["name"], "cron");
         assert!(
             v["process"]["exit_code"].is_null(),
             "拿不到退出码时应为 null"
         );
+
+        let unknown = ProcessInfo {
+            pid: 556,
+            ..Default::default()
+        };
+        assert!(process_event("agent-1", &mut reg, ACTIVITY_TERMINATE, unknown).is_none());
     }
 }

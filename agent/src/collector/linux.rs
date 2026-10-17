@@ -119,7 +119,9 @@ async fn run_ebpf(
                         let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
                         to_agent_event(&agent_id, &mut reg, &ev)
                     };
-                    if !tx.send(event) {
+                    if let Some(event) = event
+                        && !tx.send(event)
+                    {
                         return;
                     }
                 }
@@ -149,7 +151,9 @@ async fn run_ebpf(
                         let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
                         to_exit_event(&agent_id, &mut reg, &ev)
                     };
-                    if !tx.send(event) {
+                    if let Some(event) = event
+                        && !tx.send(event)
+                    {
                         return;
                     }
                 }
@@ -269,7 +273,11 @@ fn ip_of(family: u16, bytes: &[u8; 16]) -> IpAddr {
     }
 }
 
-fn to_agent_event(agent_id: &str, registry: &mut ProcessRegistry, ev: &ExecEvent) -> AgentEvent {
+fn to_agent_event(
+    agent_id: &str,
+    registry: &mut ProcessRegistry,
+    ev: &ExecEvent,
+) -> Option<AgentEvent> {
     let name = cstr(&ev.comm);
     let exe = cstr(&ev.filename);
     // exec 瞬间从 /proc 补充命令行和父进程；短命进程可能已退场，拿不到就算了
@@ -307,8 +315,12 @@ fn to_agent_event(agent_id: &str, registry: &mut ProcessRegistry, ev: &ExecEvent
 }
 
 /// 退出事件只有 pid 可查（tracepoint 触发时进程已在退出途中），
-/// 其余字段留空；GUID 走注册表复用启动时的映射。
-fn to_exit_event(agent_id: &str, registry: &mut ProcessRegistry, ev: &ExitEvent) -> AgentEvent {
+/// 名字、路径与 GUID 走注册表复用启动时的登记。
+fn to_exit_event(
+    agent_id: &str,
+    registry: &mut ProcessRegistry,
+    ev: &ExitEvent,
+) -> Option<AgentEvent> {
     process_event(
         agent_id,
         registry,

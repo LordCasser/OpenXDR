@@ -17,6 +17,16 @@ pub struct ProcessRegistry {
 struct Entry {
     guid: Uuid,
     seq: u64,
+    // 启动时记下名字与路径：退出探针触发时进程已在退出途中，只剩 pid 可查
+    name: String,
+    exe: Option<String>,
+}
+
+/// 注册表里记得的进程身份，退出事件靠它说清是谁退出了。
+pub struct Known {
+    pub guid: Uuid,
+    pub name: String,
+    pub exe: Option<String>,
 }
 
 impl ProcessRegistry {
@@ -29,7 +39,15 @@ impl ProcessRegistry {
         self.seq += 1;
         let seq = self.seq;
         // pid 复用时新条目直接覆盖旧的，这正是我们要的语义
-        self.guids.insert(pid, Entry { guid, seq });
+        self.guids.insert(
+            pid,
+            Entry {
+                guid,
+                seq,
+                name: String::new(),
+                exe: None,
+            },
+        );
 
         if self.guids.len() > MAX_ENTRIES {
             let cutoff = seq.saturating_sub(MAX_ENTRIES as u64 / 2);
@@ -38,9 +56,28 @@ impl ProcessRegistry {
         (guid, parent)
     }
 
-    /// 预登记已存在的进程（agent 启动时的进程表快照），让后续子进程能找到父。
-    pub fn seed(&mut self, pid: u32) {
+    /// 预登记已存在的进程（agent 启动时的进程表快照），让后续子进程能找到父，
+    /// 它们退出时也能报出名字。
+    pub fn seed(&mut self, pid: u32, name: &str, exe: Option<&str>) {
         self.register(pid, None);
+        self.describe(pid, name, exe);
+    }
+
+    /// 记下进程的名字与路径。
+    pub fn describe(&mut self, pid: u32, name: &str, exe: Option<&str>) {
+        if let Some(e) = self.guids.get_mut(&pid) {
+            e.name = name.to_string();
+            e.exe = exe.map(str::to_string);
+        }
+    }
+
+    /// 查 pid 当前登记的身份。查不到说明既没见过它启动、也不在启动快照里。
+    pub fn known(&self, pid: u32) -> Option<Known> {
+        self.guids.get(&pid).map(|e| Known {
+            guid: e.guid,
+            name: e.name.clone(),
+            exe: e.exe.clone(),
+        })
     }
 
     /// 查 pid 当前的 GUID，未登记返回 None。网络事件靠它挂进进程血缘，
@@ -89,14 +126,20 @@ mod tests {
         assert_eq!(parent_of_child, Some(fresh), "子进程应连到复用后的新 GUID");
     }
 
-    /// seed 等价于预登记，让后续子进程能追溯。
+    /// seed 等价于预登记，让后续子进程能追溯，并记住名字与路径。
     #[test]
     fn seed_pregisters() {
         let mut reg = ProcessRegistry::default();
-        reg.seed(7);
+        reg.seed(7, "sshd", Some("/usr/sbin/sshd"));
         let (child, parent) = reg.register(8, Some(7));
         assert!(parent.is_some());
         assert_ne!(child, parent.unwrap());
+        let known = reg.known(7).unwrap();
+        assert_eq!(
+            (known.name.as_str(), known.exe.as_deref()),
+            ("sshd", Some("/usr/sbin/sshd"))
+        );
+        assert!(reg.known(9).is_none());
     }
 
     /// 每次 register 分配独立 GUID。
