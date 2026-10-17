@@ -248,14 +248,21 @@ fn ino_init(targets: &[String]) -> io::Result<(RawFd, HashMap<i32, WatchEntry>)>
     Ok((fd, watched))
 }
 
-/// 给 root 及其限深内的子目录全部挂上 watch。
-fn ino_add_tree(fd: RawFd, root: &str, max_depth: usize, watched: &mut HashMap<i32, WatchEntry>) {
+/// 给 root 及其限深内的子目录全部挂上 watch，返回这次新挂上的目录。
+fn ino_add_tree(
+    fd: RawFd,
+    root: &str,
+    max_depth: usize,
+    watched: &mut HashMap<i32, WatchEntry>,
+) -> Vec<String> {
+    let mut fresh = Vec::new();
     for dir in collect_subdirs(root, max_depth) {
         let Ok(c) = std::ffi::CString::new(dir.as_str()) else {
             continue;
         };
         let wd = unsafe { libc::inotify_add_watch(fd, c.as_ptr(), EVENT_MASK) };
-        if wd >= 0 {
+        if wd >= 0 && !watched.contains_key(&wd) {
+            fresh.push(dir.clone());
             watched.insert(
                 wd,
                 WatchEntry {
@@ -265,6 +272,7 @@ fn ino_add_tree(fd: RawFd, root: &str, max_depth: usize, watched: &mut HashMap<i
             );
         }
     }
+    fresh
 }
 
 /// 给单个文件挂 watch（shell rc 等单文件目标）。
@@ -309,8 +317,12 @@ fn ino_run(
             return;
         }
         if last_rescan.elapsed() >= TARGET_RESCAN_INTERVAL {
-            ino_reconcile(fd, &roots, &mut watched);
+            let fresh = ino_reconcile(fd, &roots, &mut watched);
             last_rescan = Instant::now();
+            if !backfill(&fresh, agent_id, sink) {
+                unsafe { libc::close(fd) };
+                return;
+            }
         }
         if prc == 0 {
             continue;
@@ -362,7 +374,11 @@ fn ino_run(
                     && let Some(d) = rel_depth(&roots, &path)
                     && d <= MAX_DEPTH
                 {
-                    ino_add_tree(fd, &path, MAX_DEPTH - d, &mut watched);
+                    let fresh = ino_add_tree(fd, &path, MAX_DEPTH - d, &mut watched);
+                    if !backfill(&fresh, agent_id, sink) {
+                        unsafe { libc::close(fd) };
+                        return;
+                    }
                 }
                 continue;
             }
@@ -374,9 +390,14 @@ fn ino_run(
     }
 }
 
-/// 给启动时不存在、删除后重建的目标根补挂 watch。已存在的根不重复添加，
+/// 给启动时不存在、删除后重建的目标根补挂 watch，返回新挂上的目录。已存在的根不重复添加，
 /// 子目录仍由事件驱动的动态补挂负责。
-fn ino_reconcile(fd: RawFd, roots: &[String], watched: &mut HashMap<i32, WatchEntry>) {
+fn ino_reconcile(
+    fd: RawFd,
+    roots: &[String],
+    watched: &mut HashMap<i32, WatchEntry>,
+) -> Vec<String> {
+    let mut fresh = Vec::new();
     for root in roots {
         if watched.values().any(|entry| entry.path == *root) {
             continue;
@@ -384,9 +405,10 @@ fn ino_reconcile(fd: RawFd, roots: &[String], watched: &mut HashMap<i32, WatchEn
         if std::path::Path::new(root).is_file() {
             ino_add_file(fd, root, watched);
         } else if std::path::Path::new(root).is_dir() {
-            ino_add_tree(fd, root, MAX_DEPTH, watched);
+            fresh.extend(ino_add_tree(fd, root, MAX_DEPTH, watched));
         }
     }
+    fresh
 }
 
 /// inotify mask -> OCSF File Activity：1 Create / 3 Update / 4 Delete
@@ -425,7 +447,7 @@ fn fa_setup(targets: &[String]) -> io::Result<(FaState, usize)> {
         if std::path::Path::new(root).is_file() {
             n += fa_mark_file(fd, root, &mut marked);
         } else {
-            n += fa_mark_tree(fd, root, MAX_DEPTH, &mut marked);
+            n += fa_mark_tree(fd, root, MAX_DEPTH, &mut marked).len();
         }
     }
     if n == 0 {
@@ -443,9 +465,14 @@ fn fa_setup(targets: &[String]) -> io::Result<(FaState, usize)> {
     Ok((st, n))
 }
 
-/// 给 root 及其限深内的子目录全部打上 mark，返回成功数。
-fn fa_mark_tree(fd: RawFd, root: &str, max_depth: usize, marked: &mut HashSet<String>) -> usize {
-    let mut n = 0;
+/// 给 root 及其限深内的子目录全部打上 mark，返回这次新打上的目录。
+fn fa_mark_tree(
+    fd: RawFd,
+    root: &str,
+    max_depth: usize,
+    marked: &mut HashSet<String>,
+) -> Vec<String> {
+    let mut fresh = Vec::new();
     for dir in collect_subdirs(root, max_depth) {
         if marked.contains(&dir) {
             continue;
@@ -463,11 +490,11 @@ fn fa_mark_tree(fd: RawFd, root: &str, max_depth: usize, marked: &mut HashSet<St
             )
         };
         if rc == 0 {
-            marked.insert(dir);
-            n += 1;
+            marked.insert(dir.clone());
+            fresh.push(dir);
         }
     }
-    n
+    fresh
 }
 
 /// 给单个文件打 mark（shell rc 等单文件目标），成功返回 1。
@@ -498,15 +525,18 @@ fn fa_mark_file(fd: RawFd, path: &str, marked: &mut HashSet<String>) -> usize {
     }
 }
 
-fn fa_reconcile(st: &mut FaState) {
+/// 补标消失又出现的目标，返回新打上 mark 的目录。
+fn fa_reconcile(st: &mut FaState) -> Vec<String> {
     st.marked.retain(|path| std::path::Path::new(path).exists());
+    let mut fresh = Vec::new();
     for root in st.roots.clone() {
         if std::path::Path::new(&root).is_file() {
             fa_mark_file(st.fd, &root, &mut st.marked);
         } else if std::path::Path::new(&root).is_dir() {
-            fa_mark_tree(st.fd, &root, MAX_DEPTH, &mut st.marked);
+            fresh.extend(fa_mark_tree(st.fd, &root, MAX_DEPTH, &mut st.marked));
         }
     }
+    fresh
 }
 
 /// 一条解析后的 fanotify 事件。FID 模式下 fd 恒为 FAN_NOFD，路径靠 fid 还原。
@@ -700,8 +730,12 @@ fn fa_run(mut st: FaState, agent_id: &str, sink: &EventSink) {
             break;
         }
         if last_rescan.elapsed() >= TARGET_RESCAN_INTERVAL {
-            fa_reconcile(&mut st);
+            let fresh = fa_reconcile(&mut st);
             last_rescan = Instant::now();
+            if !backfill(&fresh, agent_id, sink) {
+                fa_close(st);
+                return;
+            }
         }
         if prc == 0 {
             continue;
@@ -740,7 +774,11 @@ fn fa_run(mut st: FaState, agent_id: &str, sink: &EventSink) {
                 && let Some(d) = rel_depth(&st.roots, &path)
                 && d <= MAX_DEPTH
             {
-                fa_mark_tree(st.fd, &path, MAX_DEPTH - d, &mut st.marked);
+                let fresh = fa_mark_tree(st.fd, &path, MAX_DEPTH - d, &mut st.marked);
+                if !backfill(&fresh, agent_id, sink) {
+                    fa_close(st);
+                    return;
+                }
             }
             let activity = fa_activity(ev.mask);
             // pid <= 0 是内核侧事件，没有可回填的肇事者
@@ -766,6 +804,25 @@ fn fa_close(st: FaState) {
 }
 
 // ---------------- 事件组装 ----------------
+
+/// 新挂上的目录里已有的文件补报为新建。目录是启动后才出现的（攻击者 `mkdir -p ~/.ssh`
+/// 紧接着写公钥），挂上之前写进去的文件不会再有事件，不补就永远漏了。
+/// 只对补挂的目录做；启动时已有的文件是基线，不上报。拿不到肇事进程，只报路径。
+fn backfill(dirs: &[String], agent_id: &str, sink: &EventSink) -> bool {
+    for dir in dirs {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            if e.file_type().is_ok_and(|t| t.is_file())
+                && !sink.send(file_event(agent_id, &e.path().to_string_lossy(), 1))
+            {
+                return false;
+            }
+        }
+    }
+    true
+}
 
 /// inotify 路径的事件：只有路径与动作，没有进程上下文。
 fn file_event(agent_id: &str, path: &str, activity: u8) -> AgentEvent {
@@ -883,6 +940,35 @@ mod tests {
             v["file"]["path"],
             dir.join("sub").join("evil.sh").to_str().unwrap()
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // 攻击者 mkdir -p ~/.ssh 紧接着写公钥：文件落地时目录还没挂上，靠补挂时补报
+    #[test]
+    fn backfills_files_written_before_late_root_is_watched() {
+        let dir = temp_root("late-race");
+        let existing = dir.join("existing");
+        let late = dir.join("late");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&existing).unwrap();
+        let targets = vec![
+            existing.to_string_lossy().into_owned(),
+            late.to_string_lossy().into_owned(),
+        ];
+
+        let (fd, watched) = ino_init(&targets).unwrap();
+        let (sink, mut rx) = test_sink();
+        std::thread::spawn(move || ino_run(fd, watched, targets, "agent-t", &sink));
+
+        std::fs::create_dir(&late).unwrap();
+        let payload = late.join("authorized_keys");
+        std::fs::write(&payload, b"ssh-ed25519 AAAA").unwrap();
+
+        let ev = rx.blocking_recv().expect("挂上之前写进去的文件应补报");
+        let v: serde_json::Value = serde_json::from_str(&ev.raw_json).unwrap();
+        assert_eq!(v["file"]["path"], payload.to_str().unwrap());
+        assert_eq!(v["activity_id"], 1);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
