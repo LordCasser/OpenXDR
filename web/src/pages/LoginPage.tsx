@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { login } from '../api'
 import { Logo } from '../components/Logo'
 import { useI18n, type MsgKey } from '../i18n'
+import { errText } from '../components/format'
 
 const POINTS: MsgKey[] = ['loginPoint1', 'loginPoint2', 'loginPoint3']
 
@@ -24,7 +25,7 @@ export function LoginPage() {
       client.removeQueries({ predicate: query => query.queryKey[0] !== 'me' })
       client.setQueryData(['me'], me)
     } catch (e) {
-      setError(String(e))
+      setError(errText(e, t))
     } finally {
       setBusy(false)
     }

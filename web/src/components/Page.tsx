@@ -27,8 +27,8 @@ export function Page({ title, subtitle, extra, crumb, children }: {
       <Breadcrumb items={items} style={{ marginBottom: 8 }} />
       <Flex justify="space-between" align="flex-start" gap={16} wrap className="page-head">
         <div>
-          <Typography.Title level={4} style={{ margin: 0 }}>{title}</Typography.Title>
-          {subtitle && <Typography.Text type="secondary">{subtitle}</Typography.Text>}
+          <Typography.Title level={4} className="page-title">{title}</Typography.Title>
+          {subtitle && <Typography.Text type="secondary" className="page-subtitle">{subtitle}</Typography.Text>}
         </div>
         {extra && <Flex gap={8} wrap>{extra}</Flex>}
       </Flex>

@@ -3,17 +3,17 @@ import {
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Col, Empty, Flex, Form, Input, Modal, Radio, Row, Segmented, Space, Spin, Tag, Typography, theme,
+  Alert, App, Button, Card, Col, Empty, Flex, Form, Input, Modal, Radio, Result, Row, Segmented, Space, Spin, Tag, Typography, theme,
 } from 'antd'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import {
-  createAgentSession, decideApproval, fetchAgentSessions, fetchApprovals, fetchAssets, fetchSessionMessages,
+  createAgentSession, decideApproval, fetchAgentSession, fetchAgentSessions, fetchApprovals, fetchAssets, fetchSessionMessages,
   sendSessionMessage, type AgentSession, type Approval, type PiMessage,
 } from '../api'
 import { useSession } from '../app/session'
 import { ChatConversation, textOf, type ChatRow } from '../components/ChatConversation'
-import { SessionStatusTag, fmtTime } from '../components/format'
+import { SessionStatusTag, fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
 // 常用提问模板：空会话时给出，点了只是填进输入框，发不发由人决定
@@ -55,7 +55,7 @@ function InlineApprovals({ rows, hosts, onDecided }: { rows: Approval[]; hosts: 
   const { modal, message } = App.useApp()
   const decide = (a: Approval, approve: boolean) => {
     const host = hosts[a.asset_id] ?? a.asset_id
-    const go = () => decideApproval(a.id, approve).then(onDecided).catch(e => message.error(String(e)))
+    const go = () => decideApproval(a.id, approve).then(onDecided).catch(e => message.error(errText(e, t)))
     if (!approve) return go()
     modal.confirm({
       title: t(a.dry_run ? 'apConfirmDryTitle' : 'apConfirmLiveTitle', { host }),
@@ -97,7 +97,7 @@ function NewSessionModal({ open, onClose, onCreated }: { open: boolean; onClose:
       onCreated(await createAgentSession({ groupId: group.id, title: v.title?.trim() || undefined, dryRun: v.mode !== 'live' }))
       form.resetFields()
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     } finally {
       setBusy(false)
     }
@@ -130,7 +130,7 @@ function NewSessionModal({ open, onClose, onCreated }: { open: boolean; onClose:
 // AI 助手：平台主入口。左侧会话、右侧对话；会话绑定当前组
 export function ChatPage() {
   const { t } = useI18n()
-  const { me, group, groups, setGroupId } = useSession()
+  const { me, group, setGroupId } = useSession()
   const { sessionId } = useParams()
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
@@ -155,7 +155,14 @@ export function ChatPage() {
     queryFn: () => fetchAgentSessions(group!.id),
     enabled: !!group,
   })
-  const session = sessions.data?.find(s => s.id === sessionId)
+  // 会话按 id 直接取：列表只有最近 100 个，通知与报告里的旧链接靠它才打得开；运行中轮询状态
+  const current = useQuery({
+    queryKey: ['session', sessionId],
+    queryFn: () => fetchAgentSession(sessionId!),
+    enabled: !!sessionId,
+    refetchInterval: q => (q.state.data?.status === 'running' && !busy ? 3_000 : false),
+  })
+  const session = current.data
   const isRunning = busy || session?.status === 'running'
   const shown = (sessions.data ?? []).filter(s =>
     (!kind || s.kind === kind) && (!search || (s.title ?? '').toLowerCase().includes(search.toLowerCase())),
@@ -182,20 +189,22 @@ export function ChatPage() {
   })
   const inline = approvals.data?.filter(a => a.status === 'pending' && a.session_id === sessionId) ?? []
 
-  // 通知链接里的会话可能在别的组：逐组找，找到就切过去
+  // 打开别组的会话链接时跟到它的组；之后用户在顶栏换组，就回到新组的会话列表
+  const synced = useRef<string | null>(null)
   useEffect(() => {
-    if (!sessionId || !sessions.data || session) return
-    let stale = false
-    ;(async () => {
-      for (const g of groups) {
-        if (g.id === group?.id) continue
-        const list = await fetchAgentSessions(g.id).catch(() => [])
-        if (stale) return
-        if (list.some(s => s.id === sessionId)) return setGroupId(g.id)
-      }
-    })()
-    return () => { stale = true }
-  }, [sessionId, sessions.data, session, groups, group, setGroupId])
+    if (!session) return
+    if (synced.current !== session.id) {
+      synced.current = session.id
+      if (session.group_id !== group?.id) setGroupId(session.group_id)
+      return
+    }
+    if (group && group.id !== session.group_id) navigate('/chat')
+  }, [session, group, setGroupId, navigate])
+
+  // 会话跑完（含定时任务）列表里的状态标签跟着刷新
+  useEffect(() => {
+    if (session && session.status !== 'running') client.invalidateQueries({ queryKey: ['sessions', session.group_id] })
+  }, [session?.status, session?.group_id, client, session])
 
   // 从资产详情"一键排查"或模板进来时带 ?prompt=，填进输入框后从地址栏拿掉
   useEffect(() => {
@@ -224,7 +233,7 @@ export function ChatPage() {
       client.invalidateQueries({ queryKey: ['sessions', group.id] })
       navigate(`/chat/${s.id}?prompt=${encodeURIComponent(text)}`)
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     }
   }
 
@@ -249,10 +258,11 @@ export function ChatPage() {
         }
       }, ctl.signal)
     } catch (e) {
-      if (!ctl.signal.aborted) setError(String(e))
+      if (!ctl.signal.aborted) setError(errText(e, t))
     } finally {
       // 以库里的完整历史为准，流里拼出来的只是过程
       await client.invalidateQueries({ queryKey: ['messages', session.id] })
+      await client.invalidateQueries({ queryKey: ['session', session.id] })
       await client.invalidateQueries({ queryKey: ['sessions', group?.id] })
       setLive(null)
       setPending(null)
@@ -289,7 +299,7 @@ export function ChatPage() {
             options={[{ value: '', label: t('all') }, { value: 'chat', label: t('chatSession') }, { value: 'task', label: t('taskSession') }]} />
         </div>
         <div style={{ overflow: 'auto', flex: 1 }}>
-          {sessions.isError && <Alert type="error" showIcon title={String(sessions.error)} />}
+          {sessions.isError && <Alert type="error" showIcon title={errText(sessions.error, t)} />}
           {sessions.isPending && <Spin style={{ display: 'block', margin: 24 }} />}
           {sessions.data && shown.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noSessions')} />}
           {shown.map(s => (
@@ -325,7 +335,9 @@ export function ChatPage() {
         )}
         extra={session && <Typography.Text type="secondary">{session.initiator} · {session.model}</Typography.Text>}
       >
-        {!session ? (
+        {sessionId && current.isError ? (
+          <Result status="warning" title={t('sessionGone')} subTitle={errText(current.error, t)} extra={<Button onClick={() => navigate('/chat')}>{t('backToList')}</Button>} />
+        ) : sessionId && !session ? <Spin style={{ margin: 'auto' }} /> : !session ? (
           <Flex vertical align="center" gap={20} className="chat-welcome">
             <RobotOutlined style={{ fontSize: 48, color: token.colorPrimary }} />
             <div style={{ textAlign: 'center' }}>
@@ -338,7 +350,7 @@ export function ChatPage() {
           <>
             <div className="chat-log">
               {messages.isPending && <Spin />}
-              {messages.isError && <Alert type="error" showIcon title={String(messages.error)} />}
+              {messages.isError && <Alert type="error" showIcon title={errText(messages.error, t)} />}
               {messages.isSuccess && rows.length === 0 && canSend && (
                 <Flex vertical align="center" gap={16} className="chat-welcome">
                   <Typography.Text type="secondary">{t('templatesHint')}</Typography.Text>
@@ -347,6 +359,7 @@ export function ChatPage() {
               )}
               <ChatConversation rows={rows} hosts={hosts} />
               <InlineApprovals rows={inline} hosts={hosts} onDecided={() => approvals.refetch()} />
+              {isRunning && !isGroupAdmin && <Alert className="chat-indent" type="info" showIcon title={t('chatNeedsApprover')} />}
               {busy && !lastIsAssistant && (
                 <Space className="chat-indent" style={{ color: token.colorTextSecondary }}><Spin size="small" />{t('thinking')}</Space>
               )}

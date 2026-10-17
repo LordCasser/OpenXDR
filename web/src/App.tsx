@@ -53,6 +53,8 @@ const router = createBrowserRouter([
     hydrateFallbackElement: <Spin fullscreen />,
     children: [
       { index: true, element: <Home /> },
+      // 已登录再访问登录页（书签、后退）直接回首页
+      { path: 'login', element: <Navigate to="/" replace /> },
       { path: 'chat', ...page(() => import('./pages/ChatPage'), 'ChatPage') },
       { path: 'chat/:sessionId', ...page(() => import('./pages/ChatPage'), 'ChatPage') },
       { path: 'overview', ...page(() => import('./pages/OverviewPage'), 'OverviewPage') },

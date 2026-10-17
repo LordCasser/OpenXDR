@@ -3,8 +3,9 @@ import { App, Button, Card, Popconfirm, Table, Tag, Tooltip } from 'antd'
 import { deleteSuppression, fetchSuppressions, type Suppression } from '../api'
 import { useSession } from '../app/session'
 import { Page } from '../components/Page'
-import { fmtTime } from '../components/format'
+import { fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
+import { LoadError } from '../components/LoadError'
 
 // 抑制规则：最怕被遗忘——列出压掉的次数，让长期无人过问的抑制显形
 export function SuppressionsPage() {
@@ -12,21 +13,21 @@ export function SuppressionsPage() {
   const { message } = App.useApp()
   const client = useQueryClient()
   const { canWrite } = useSession()
-  const { data, isPending } = useQuery({ queryKey: ['suppressions'], queryFn: fetchSuppressions })
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['suppressions'], queryFn: fetchSuppressions })
 
   const revoke = async (id: string) => {
     try {
       await deleteSuppression(id)
       await client.invalidateQueries({ queryKey: ['suppressions'] })
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     }
   }
 
   return (
     <Page title={t('navSuppressions')} subtitle={t('suppressionsSubtitle')}>
       <Card styles={{ body: { padding: 0 } }}>
-        <Table<Suppression>
+        {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<Suppression>
           rowKey="id"
           loading={isPending}
           dataSource={data ?? []}
@@ -51,7 +52,7 @@ export function SuppressionsPage() {
                 }]
               : []),
           ]}
-        />
+        />}
       </Card>
     </Page>
   )

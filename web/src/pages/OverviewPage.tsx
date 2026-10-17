@@ -1,34 +1,76 @@
 import {
-  AlertOutlined, ArrowRightOutlined, CheckCircleOutlined, CloudServerOutlined, FileTextOutlined, FilterOutlined,
-  WarningOutlined,
+  AlertOutlined, ArrowRightOutlined, CheckCircleOutlined, CloudServerOutlined, FileTextOutlined, RightOutlined, ToolOutlined,
 } from '@ant-design/icons'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Badge, Card, Col, Empty, Flex, Progress, Row, Segmented, Space, Statistic, Table, Tag, Typography, theme } from 'antd'
+import { Card, Col, Empty, Flex, Row, Segmented, Space, Table, Typography, theme } from 'antd'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { fetchAgentReports, fetchApprovals, fetchAssets, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks } from '../api'
+import { fetchAgentReports, fetchApprovals, fetchAssets, fetchFindings, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks } from '../api'
 import { useSession } from '../app/session'
+import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
-import { BarList, ColumnChart, SEVERITY_COLOR, useSeriesColor } from '../components/charts'
-import { IncidentStatusTag, SessionStatusTag, SeverityTag, fmtTime } from '../components/format'
+import { BarList, ColumnChart, SEVERITY_COLOR, compact, useSeriesColor } from '../components/charts'
+import { HostStateBadge, IncidentStatusTag, SessionStatusTag, SeverityTag, fmtTime, hostState } from '../components/format'
 import { useI18n } from '../i18n'
 
-const STALE_MS = 5 * 60_000
-
-// KPI 卡：标签 · 数值 · 一句说明；数值用正文墨色，状态靠图标 + 文字
-function Kpi({ icon, title, value, suffix, foot, to }: { icon: ReactNode; title: string; value: number; suffix?: ReactNode; foot?: ReactNode; to?: string }) {
+// 降噪漏斗：产品的核心叙事"一万条进，三个出"。三级同为 24 小时口径，箭头上标每一级压掉的比例
+function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: number; incidents: number; foot: ReactNode }) {
+  const { t } = useI18n()
   const { token } = theme.useToken()
-  const body = (
-    <Card size="small" hoverable={!!to} styles={{ body: { padding: 20 } }} style={{ height: '100%' }}>
-      <Space size={8} style={{ color: token.colorTextSecondary }}>{icon}<span>{title}</span></Space>
-      <Statistic value={value} suffix={suffix} styles={{ content: { fontSize: 30, fontWeight: 600, marginTop: 6 } }} />
-      <div style={{ marginTop: 6, minHeight: 22 }}>{foot}</div>
+  const stages = [
+    { label: t('funnelEvents'), value: events, to: '/events' },
+    { label: t('funnelAlerts'), value: alerts },
+    { label: t('unresolvedIncidents'), value: incidents, to: '/incidents' },
+  ]
+  const squeeze = (from: number, to: number) => (from ? ((1 - to / from) * 100).toFixed(from > 1000 ? 2 : 1) : '-')
+  return (
+    <Card title={t('funnelTitle')} style={{ height: '100%' }}>
+      <div className="funnel">
+        {stages.flatMap((s, i) => [
+          ...(i > 0 ? [
+            <div key={`a${i}`} className="funnel-arrow" style={{ color: token.colorTextTertiary }}>
+              <RightOutlined />
+              <span>{t('funnelSqueeze', { p: squeeze(stages[i - 1].value, s.value) })}</span>
+            </div>,
+          ] : []),
+          <div key={s.label} className="funnel-stage" style={{ background: i === 2 ? token.colorPrimaryBg : token.colorFillQuaternary }}>
+            <Typography.Text type="secondary">{s.label}</Typography.Text>
+            <div className="funnel-value" style={{ color: i === 2 ? token.colorPrimary : token.colorText }}>
+              {s.to ? <Link to={s.to} style={{ color: 'inherit' }}>{compact(s.value)}</Link> : compact(s.value)}
+            </div>
+          </div>,
+        ])}
+      </div>
+      <div className="funnel-foot">{foot}</div>
     </Card>
   )
-  return to ? <Link to={to}>{body}</Link> : body
 }
 
-// AI 运营：最近任务运行与报告、待审批，体现"纳管即安全"的持续巡检
+// 需要人处理的事：每项一个入口，全部清零时给一句定心话
+function ActionCenter({ items }: { items: { icon: ReactNode; label: string; count: number; to: string; color: string }[] }) {
+  const { t } = useI18n()
+  const { token } = theme.useToken()
+  const pending = items.filter(i => i.count > 0)
+  return (
+    <Card title={t('actionCenter')} style={{ height: '100%' }} styles={{ body: { padding: '8px 12px' } }}>
+      {items.map(i => (
+        <Link key={i.to} to={i.to} className="action-row">
+          <span className="action-icon" style={{ color: i.count ? i.color : token.colorTextQuaternary, background: i.count ? `${i.color}1a` : token.colorFillQuaternary }}>{i.icon}</span>
+          <Typography.Text style={{ flex: 1 }}>{i.label}</Typography.Text>
+          <span className="action-count" style={{ color: i.count ? token.colorText : token.colorTextQuaternary }}>{i.count}</span>
+          <RightOutlined style={{ color: token.colorTextQuaternary, fontSize: 12 }} />
+        </Link>
+      ))}
+      {pending.length === 0 && (
+        <Flex align="center" gap={6} style={{ padding: '10px 8px 4px', color: token.colorSuccess }}>
+          <CheckCircleOutlined />{t('allClear')}
+        </Flex>
+      )}
+    </Card>
+  )
+}
+
+// AI 运营：最近任务运行与报告，体现"纳管即运维"的持续巡检
 function AiOps() {
   const { t } = useI18n()
   const { group } = useSession()
@@ -73,7 +115,7 @@ function AiOps() {
   )
 }
 
-// 态势总览：顶部 KPI 回答"今天挡掉多少噪声、还剩几件事"，下面是趋势、分布与待办
+// 态势总览：先回答"今天挡掉多少噪声、还剩几件事要我处理"，再看趋势、分布与明细
 export function OverviewPage() {
   const { t } = useI18n()
   const { token } = theme.useToken()
@@ -81,14 +123,13 @@ export function OverviewPage() {
   const series = useSeriesColor()
   const [trendView, setTrendView] = useState<'chart' | 'table'>('chart')
   const stats = useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 30_000, placeholderData: keepPreviousData })
-  const incidents = useQuery({ queryKey: ['incidents', 'open'], queryFn: () => fetchIncidents('open'), refetchInterval: 30_000 })
+  const incidents = useQuery({ queryKey: ['incidents', 'unresolved', 'overview'], queryFn: () => fetchIncidents({ status: 'unresolved', limit: 6 }), refetchInterval: 30_000 })
+  const findings = useQuery({ queryKey: ['findings', 'open'], queryFn: () => fetchFindings('open'), refetchInterval: 60_000 })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
   const isGroupAdmin = group?.role === 'admin'
   const approvals = useQuery({ queryKey: ['approvals', group?.id], queryFn: () => fetchApprovals(group!.id), enabled: !!group && isGroupAdmin, refetchInterval: 10_000 })
   const s = stats.data
-  const pending = approvals.data?.filter(a => a.status === 'pending').length ?? 0
-  const offline = (assets.data ?? []).filter(a => Date.now() - Date.parse(a.lastSeen) >= STALE_MS)
-  const reduction = s && s.events24h ? 1 - s.openIncidents / s.events24h : null
+  const offline = (assets.data ?? []).filter(a => ['silent', 'stale'].includes(hostState(a)))
   const sevItems = [5, 4, 3, 2, 1].map(n => ({
     key: String(n),
     label: <SeverityTag value={n} />,
@@ -97,31 +138,27 @@ export function OverviewPage() {
   }))
   const hourOf = (iso: string) => new Date(iso).getHours()
 
+  if (stats.isError && !s) return <Page title={t('navOverview')}><LoadError error={stats.error} onRetry={() => stats.refetch()} /></Page>
+
   return (
     <Page title={t('navOverview')} subtitle={t('overviewSubtitle')}>
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} xl={isGroupAdmin ? 5 : 6}>
-          <Kpi icon={<FilterOutlined />} title={t('funnelEvents')} value={s?.events24h ?? 0} to="/events"
-            foot={reduction !== null && <Typography.Text type="secondary">{t('noiseReduction', { p: (reduction * 100).toFixed(reduction > 0.999 ? 2 : 1) })}</Typography.Text>} />
+        <Col xs={24} xl={16}>
+          <Funnel events={s?.events24h ?? 0} alerts={s?.alerts24h ?? 0} incidents={s?.openIncidents ?? 0}
+            foot={[
+              t('footRules', { n: s?.topRules.length ?? 0 }),
+              t('footCritical', { n: (s?.alertsBySeverity?.[5] ?? 0) + (s?.alertsBySeverity?.[4] ?? 0) }),
+              t('footHosts', { up: s?.assetsOnline ?? 0, total: s?.assetsTotal ?? 0 }),
+            ].map(x => <Typography.Text key={x} type="secondary">{x}</Typography.Text>)} />
         </Col>
-        <Col xs={24} sm={12} xl={isGroupAdmin ? 5 : 6}>
-          <Kpi icon={<AlertOutlined />} title={t('funnelAlerts')} value={s?.alerts24h ?? 0}
-            foot={<Typography.Text type="secondary">{t('topRuleCount', { n: s?.topRules.length ?? 0 })}</Typography.Text>} />
+        <Col xs={24} xl={8}>
+          <ActionCenter items={[
+            { icon: <AlertOutlined />, label: t('unresolvedIncidents'), count: s?.openIncidents ?? 0, to: '/incidents', color: token.colorError },
+            { icon: <ToolOutlined />, label: t('navFindings'), count: findings.data?.length ?? 0, to: '/findings', color: token.colorWarning },
+            ...(isGroupAdmin ? [{ icon: <CheckCircleOutlined />, label: t('navApprovals'), count: approvals.data?.filter(a => a.status === 'pending').length ?? 0, to: '/approvals', color: token.colorPrimary }] : []),
+            { icon: <CloudServerOutlined />, label: t('offlineHosts'), count: offline.length, to: '/assets', color: token.colorError },
+          ]} />
         </Col>
-        <Col xs={24} sm={12} xl={isGroupAdmin ? 5 : 6}>
-          <Kpi icon={<WarningOutlined />} title={t('funnelIncidents')} value={s?.openIncidents ?? 0} to="/incidents?status=open"
-            foot={s?.openIncidents ? <Tag color="warning" icon={<WarningOutlined />}>{t('needsAction')}</Tag> : <Tag color="success" icon={<CheckCircleOutlined />}>{t('allClear')}</Tag>} />
-        </Col>
-        <Col xs={24} sm={12} xl={isGroupAdmin ? 5 : 6}>
-          <Kpi icon={<CloudServerOutlined />} title={t('assetsOnline')} value={s?.assetsOnline ?? 0} suffix={<span style={{ fontSize: 16, color: token.colorTextTertiary }}>/ {s?.assetsTotal ?? 0}</span>} to="/assets"
-            foot={<Progress percent={s?.assetsTotal ? Math.round((s.assetsOnline / s.assetsTotal) * 100) : 0} size="small" strokeColor={series} showInfo={false} />} />
-        </Col>
-        {isGroupAdmin && (
-          <Col xs={24} sm={12} xl={4}>
-            <Kpi icon={<CheckCircleOutlined />} title={t('navApprovals')} value={pending} to="/approvals"
-              foot={<Typography.Text type="secondary">{t('approvalsOfGroup', { name: group.name })}</Typography.Text>} />
-          </Col>
-        )}
 
         <Col xs={24} xl={16}>
           <Card title={t('alertTrend24h')} style={{ height: '100%' }}
@@ -149,22 +186,24 @@ export function OverviewPage() {
         </Col>
 
         <Col xs={24} xl={16}>
-          <Card title={t('openIncidents')} extra={<Link to="/incidents">{t('viewAll')}</Link>} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
-            <Table
-              size="small"
-              rowKey="id"
-              loading={incidents.isPending}
-              dataSource={(incidents.data ?? []).slice(0, 6)}
-              pagination={false}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIncidents')} /> }}
-              columns={[
-                { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
-                { title: t('thTitle'), dataIndex: 'title', ellipsis: true, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
-                { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
-                { title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
-                { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
-              ]}
-            />
+          <Card title={t('unresolvedIncidents')} extra={<Link to="/incidents">{t('viewAll')}</Link>} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
+            {incidents.isError ? <LoadError error={incidents.error} onRetry={() => incidents.refetch()} /> : (
+              <Table
+                size="small"
+                rowKey="id"
+                loading={incidents.isPending}
+                dataSource={incidents.data?.items ?? []}
+                pagination={false}
+                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIncidents')} /> }}
+                columns={[
+                  { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
+                  { title: t('thTitle'), dataIndex: 'title', ellipsis: true, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
+                  { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
+                  { title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
+                  { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
+                ]}
+              />
+            )}
           </Card>
         </Col>
         <Col xs={24} xl={8}>
@@ -186,7 +225,7 @@ export function OverviewPage() {
               <div className="mini-list">
                 {offline.slice(0, 6).map(a => (
                   <Flex key={a.id} justify="space-between" className="mini-row">
-                    <Link to={`/assets/${a.id}`}><Badge status="default" text={a.hostname} /></Link>
+                    <Space><Link to={`/assets/${a.id}`}>{a.hostname}</Link><HostStateBadge asset={a} /></Space>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('lastSeenAt', { time: fmtTime(a.lastSeen) })}</Typography.Text>
                   </Flex>
                 ))}
@@ -198,4 +237,3 @@ export function OverviewPage() {
     </Page>
   )
 }
-

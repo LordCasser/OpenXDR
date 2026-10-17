@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { fetchNotifySettings, saveNotifySettings, testNotifySettings, type NotifySettings } from '../api'
 import { Page } from '../components/Page'
 import { useI18n } from '../i18n'
+import { errText } from '../components/format'
 
 // 系统设置：目前只有通知。出口只有一个——IM 群，填地址、点测试、保存
 export function SettingsPage() {
@@ -20,12 +21,12 @@ export function SettingsPage() {
   const save = useMutation({
     mutationFn: (v: NotifySettings) => saveNotifySettings(v),
     onSuccess: () => message.success(t('notifySaved')),
-    onError: e => message.error(String(e)),
+    onError: e => message.error(errText(e, t)),
   })
   const test = useMutation({
     mutationFn: (v: NotifySettings) => testNotifySettings(v),
     onSuccess: () => message.success(t('notifyTestOk')),
-    onError: e => message.error(String(e)),
+    onError: e => message.error(errText(e, t)),
   })
 
   const formats = [

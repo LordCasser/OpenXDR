@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Collapse, Empty, Flex, List, Modal, Select, Space, Tabs, Tag, Typography } from 'antd'
+import { Alert, App, Button, Collapse, Empty, Flex, List, Modal, Select, Space, Tabs, Tag, Typography, Popconfirm } from 'antd'
 import { useState } from 'react'
 import { createEnrollToken, fetchEnrollStatus, fetchEnrollTokens, revokeEnrollToken, type EnrollToken } from '../api'
 import { useSession } from '../app/session'
 import { useI18n } from '../i18n'
-import { fmtTime } from './format'
+import { fmtTime, errText } from './format'
 
 // 安装命令里的控制台地址就是用户现在访问的这个，主机必须能访问到它
 function commands(token: string) {
@@ -30,7 +30,9 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
   const client = useQueryClient()
   const { groups, group } = useSession()
   const adminGroups = groups.filter(g => g.role === 'admin')
-  const [groupId, setGroupId] = useState<string | undefined>(group?.role === 'admin' ? group.id : adminGroups[0]?.id)
+  // 组列表可能晚于弹窗挂载才到：没选过就跟着默认组走
+  const [picked, setGroupId] = useState<string>()
+  const groupId = picked ?? (group?.role === 'admin' ? group.id : adminGroups[0]?.id)
   const [days, setDays] = useState(7)
   const [issued, setIssued] = useState<EnrollToken>()
 
@@ -42,12 +44,12 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
       setIssued(tok)
       client.invalidateQueries({ queryKey: ['enroll-tokens'] })
     },
-    onError: e => message.error(String(e)),
+    onError: e => message.error(errText(e, t)),
   })
   const revoke = useMutation({
     mutationFn: revokeEnrollToken,
     onSuccess: () => client.invalidateQueries({ queryKey: ['enroll-tokens'] }),
-    onError: e => message.error(String(e)),
+    onError: e => message.error(errText(e, t)),
   })
 
   const close = () => {
@@ -58,7 +60,9 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
   const tokenState = (tok: EnrollToken) =>
     tok.revoked ? <Tag>{t('tokenRevoked')}</Tag>
       : Date.parse(tok.expiresAt) < Date.now() ? <Tag>{t('tokenExpired')}</Tag>
-        : <Button size="small" danger type="link" onClick={() => revoke.mutate(tok.id)}>{t('revoke')}</Button>
+        : <Popconfirm title={t('revokeTokenConfirm')} okButtonProps={{ danger: true }} onConfirm={() => revoke.mutate(tok.id)}>
+          <Button size="small" danger type="link">{t('revoke')}</Button>
+        </Popconfirm>
 
   return (
     <Modal title={t('addHost')} open={open} onCancel={close} footer={null} width={720} destroyOnHidden>

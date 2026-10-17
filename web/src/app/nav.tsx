@@ -11,6 +11,8 @@ export interface NavItem {
   key: MsgKey
   icon: ReactNode
   admin?: boolean
+  // 只有某个组的 admin 才用得上（审批只给组 admin）
+  groupAdmin?: boolean
 }
 
 export interface NavGroup {
@@ -37,7 +39,7 @@ export const NAV: (NavItem | NavGroup)[] = [
     items: [
       { path: '/reports', key: 'navReports', icon: <FileTextOutlined /> },
       { path: '/tasks', key: 'navTasks', icon: <ClockCircleOutlined /> },
-      { path: '/approvals', key: 'navApprovals', icon: <CheckCircleOutlined /> },
+      { path: '/approvals', key: 'navApprovals', icon: <CheckCircleOutlined />, groupAdmin: true },
     ],
   },
   {

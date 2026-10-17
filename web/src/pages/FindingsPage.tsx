@@ -6,8 +6,9 @@ import { fetchFindings, setFindingStatus, type FindingRow } from '../api'
 import { useCanAct, useSession } from '../app/session'
 import { HostLink } from '../components/HostLink'
 import { FilterCard, Page } from '../components/Page'
+import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
-import { fmtTime } from '../components/format'
+import { fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
 const SEVERITY: Record<FindingRow['severity'], { key: MsgKey; color: string }> = {
@@ -33,20 +34,23 @@ export function FindingsPage() {
   const [params, setParams] = useSearchParams()
   const status = params.get('status') ?? 'open'
   const [acting, setActing] = useState<{ row: FindingRow; next: 'resolved' | 'ignored' } | null>(null)
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['findings', status],
     queryFn: () => fetchFindings(status === 'all' ? undefined : status),
     refetchInterval: 30_000,
   })
 
+  // 返回是否成功：弹窗靠它决定关不关、原因留不留
   const change = async (row: FindingRow, next: string, note?: string) => {
     try {
       await setFindingStatus(row.id, next, note)
-      setActing(null)
-      client.invalidateQueries({ queryKey: ['findings'] })
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
+      return false
     }
+    setActing(null)
+    client.invalidateQueries({ queryKey: ['findings'] })
+    return true
   }
 
   return (
@@ -63,7 +67,7 @@ export function FindingsPage() {
           />
         }
       >
-        <Table<FindingRow>
+        {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<FindingRow>
           rowKey="id"
           loading={isPending}
           dataSource={data ?? []}
@@ -73,14 +77,14 @@ export function FindingsPage() {
           columns={[
             { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: (v: FindingRow['severity']) => <Tag color={SEVERITY[v]?.color}>{t(SEVERITY[v]?.key ?? 'sev1')}</Tag> },
             { title: t('thTitle'), dataIndex: 'title', render: (v, f) => <Space orientation="vertical" size={0}><span>{v}</span><Typography.Text type="secondary" className="mono" style={{ fontSize: 12 }}>{f.key}</Typography.Text></Space> },
-            { title: t('thHostname'), dataIndex: 'assetId', width: 140, render: v => <HostLink id={v} /> },
+            { title: t('thHostname'), dataIndex: 'assetId', width: 140, render: (v, f) => <HostLink id={v} fallback={f.hostname} /> },
             { title: t('group'), dataIndex: 'groupId', width: 120, render: v => groups.find(g => g.id === v)?.name ?? v.slice(0, 8) },
             { title: t('thFirstSeen'), dataIndex: 'firstSeen', width: 170, render: fmtTime },
             { title: t('thLastConfirmed'), dataIndex: 'lastSeen', width: 170, render: fmtTime },
             {
               title: t('thStatus'), dataIndex: 'status', width: 110,
               render: (v: FindingRow['status'], f) => (
-                <Tooltip title={f.note && `${f.resolvedBy ?? ''}：${f.note}`}>
+                <Tooltip title={f.note && t('noteBy', { who: f.resolvedBy ?? '', note: f.note })}>
                   <Tag color={STATUS[v].color}>{t(STATUS[v].key)}</Tag>
                 </Tooltip>
               ),
@@ -97,14 +101,14 @@ export function FindingsPage() {
               ),
             },
           ]}
-        />
+        />}
       </FilterCard>
       <ResolveModal
         open={!!acting}
         title={`${t(acting?.next === 'ignored' ? 'findingIgnoreTitle' : 'findingResolveTitle')} · ${acting?.row.title ?? ''}`}
         hint={t(acting?.next === 'ignored' ? 'findingIgnoreHint' : 'findingResolveHint')}
         onCancel={() => setActing(null)}
-        onSubmit={note => change(acting!.row, acting!.next, note)}
+        onSubmit={async note => { if (!await change(acting!.row, acting!.next, note)) throw new Error() }}
       />
     </Page>
   )

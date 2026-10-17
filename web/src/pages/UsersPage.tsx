@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { createUser, deleteUser, fetchUsers, resetUserPassword, type UserRow } from '../api'
 import { useSession } from '../app/session'
 import { Page } from '../components/Page'
-import { ROLE_KEY, fmtTime } from '../components/format'
+import { ROLE_KEY, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
 const ROLE_COLOR: Record<string, string> = { admin: 'red', analyst: 'blue', viewer: 'default' }
@@ -26,9 +26,11 @@ export function UsersPage() {
       await fn()
       if (ok) message.success(ok)
       await client.invalidateQueries({ queryKey: ['users'] })
+      // 删号会清掉组成员记录
+      client.invalidateQueries({ queryKey: ['members'] })
       return true
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
       return false
     }
   }

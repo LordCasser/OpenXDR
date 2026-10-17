@@ -7,12 +7,12 @@ import {
   type GroupRow, type MemberRow,
 } from '../api'
 import { Page } from '../components/Page'
-import { ROLE_KEY, fmtTime } from '../components/format'
+import { ROLE_KEY, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
 function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void }) {
   const { t } = useI18n()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const client = useQueryClient()
   const [newUser, setNewUser] = useState<string>()
   const [newRole, setNewRole] = useState('analyst')
@@ -24,7 +24,7 @@ function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void 
     try {
       await fn()
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     }
     client.invalidateQueries({ queryKey: ['members', group.id] })
     client.invalidateQueries({ queryKey: ['assets'] })
@@ -34,14 +34,17 @@ function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void 
   const candidates = users.filter(u => !members.data?.some(m => m.userId === u.id))
   const inGroup = assets.filter(a => a.groupId === group.id).map(a => a.id)
 
-  // 穿梭框：右侧即本组资产。移入归组（会离开原组），移出退回未分组
+  // 穿梭框：右侧即本组资产。移入归组（会离开原组），移出退回未分组。从别的组拉过来先确认
   const moveAssets = (_: React.Key[], direction: 'left' | 'right', keys: React.Key[]) => {
-    void run(async () => {
+    const go = () => run(async () => {
       for (const id of keys.map(String)) {
         if (direction === 'right') await assignAsset(group.id, id)
         else await unassignAsset(group.id, id)
       }
     })
+    const taken = direction === 'right' ? assets.filter(a => keys.includes(a.id) && a.groupId && a.groupId !== group.id) : []
+    if (!taken.length) return void go()
+    modal.confirm({ title: t('regroupConfirm', { host: taken.map(a => a.hostname).join('、') }), content: t('regroupLeaveMany'), onOk: go })
   }
 
   return (
@@ -116,9 +119,11 @@ export function GroupsPage() {
     try {
       await fn()
       await client.invalidateQueries({ queryKey: ['groups'] })
+      // 删组会把资产退回未分组，资产页的组列要跟着变
+      client.invalidateQueries({ queryKey: ['assets'] })
       return true
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
       return false
     }
   }

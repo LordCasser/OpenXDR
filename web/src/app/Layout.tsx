@@ -49,7 +49,8 @@ export function Layout() {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('siderCollapsed') === '1')
 
-  const visible = (x: { admin?: boolean }) => !x.admin || isAdmin
+  const isGroupAdmin = isAdmin || groups.some(g => g.role === 'admin')
+  const visible = (x: { admin?: boolean; groupAdmin?: boolean }) => (!x.admin || isAdmin) && (!x.groupAdmin || isGroupAdmin)
   const toItem = (n: NavItem) => ({ key: n.path, icon: n.icon, label: t(n.key) })
   // 收起时分组标题挤不下，换成分隔线
   type Item = NonNullable<MenuProps['items']>[number]
@@ -70,12 +71,12 @@ export function Layout() {
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
       {wide ? (
-        <AntLayout.Sider theme="light" width={220} collapsed={collapsed}
-          style={{ borderRight: `1px solid ${token.colorBorderSecondary}`, position: 'sticky', top: 0, height: '100dvh', overflow: 'auto' }}>
-          <Link className="brand" to="/chat" aria-label="OpenXDR">
+        <AntLayout.Sider theme="dark" width={224} collapsed={collapsed}
+          style={{ position: 'sticky', top: 0, height: '100dvh', overflow: 'auto' }}>
+          <Link className="brand brand-dark" to="/chat" aria-label="OpenXDR">
             <Logo />{!collapsed && <span className="brand-name">OpenXDR</span>}
           </Link>
-          <Menu mode="inline" selectedKeys={[selected]} items={items} onClick={e => navigate(e.key)} style={{ borderInlineEnd: 'none' }} />
+          <Menu theme="dark" mode="inline" selectedKeys={[selected]} items={items} onClick={e => navigate(e.key)} style={{ borderInlineEnd: 'none' }} />
         </AntLayout.Sider>
       ) : (
         <Drawer title={<Space><Logo /><span>OpenXDR</span></Space>} placement="left" size={280}

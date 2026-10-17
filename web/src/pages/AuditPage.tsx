@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { Input, Table, Tag } from 'antd'
+import { Alert, Input, Table, Tag } from 'antd'
 import { useState } from 'react'
 import { fetchAudit, type AuditRow } from '../api'
+import { LoadError } from '../components/LoadError'
 import { FilterCard, Page } from '../components/Page'
 import { fmtTime } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
@@ -40,22 +41,33 @@ const ACTION: Record<string, { key: MsgKey; color?: string }> = {
   host_enrolled: { key: 'actHostEnrolled', color: 'geekblue' },
   intel_feeds_updated: { key: 'actIntelFeedsUpdated' },
   intel_feeds_synced: { key: 'actIntelFeedsSynced' },
+  agent_config_set: { key: 'actAgentConfigSet', color: 'geekblue' },
+  hosts_imported: { key: 'actHostsImported', color: 'geekblue' },
+  host_credential_deleted: { key: 'actHostCredentialDeleted', color: 'geekblue' },
+  host_enrollment_installed: { key: 'actHostEnrollmentInstalled', color: 'geekblue' },
+  host_enrollment_started: { key: 'actHostEnrollmentStarted', color: 'geekblue' },
+  host_enrollment_unconfirmed: { key: 'actHostEnrollmentUnconfirmed', color: 'orange' },
+  intel_created: { key: 'actIntelCreated' },
+  intel_deleted: { key: 'actIntelDeleted' },
+  intel_imported: { key: 'actIntelImported' },
+  login_throttled: { key: 'actLoginThrottled', color: 'red' },
 }
 
 export function AuditPage() {
   const { t } = useI18n()
   const [q, setQ] = useState('')
-  const { data, isPending } = useQuery({ queryKey: ['audit'], queryFn: fetchAudit })
-  const rows = (data ?? []).filter(a => !q || [a.username, a.action, a.target, a.detail].some(s => s?.toLowerCase().includes(q.toLowerCase())))
+  // 关键词在后端全量匹配，不只筛已加载的这一页
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['audit', q], queryFn: () => fetchAudit(q) })
 
   return (
     <Page title={t('navAudit')} subtitle={t('auditSubtitle')}>
       <FilterCard filters={<Input.Search allowClear style={{ width: 300 }} placeholder={t('auditSearchHint')} onSearch={setQ} onChange={e => !e.target.value && setQ('')} />}>
-        <Table<AuditRow>
+        {data?.truncated && <Alert type="info" banner showIcon title={t('listTruncated', { n: data.items.length })} />}
+        {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<AuditRow>
           size="small"
           rowKey="id"
           loading={isPending}
-          dataSource={rows}
+          dataSource={data?.items ?? []}
           pagination={{ pageSize: 50, hideOnSinglePage: true }}
           columns={[
             { title: t('thTime'), dataIndex: 'ts', width: 180, render: fmtTime },
@@ -65,7 +77,7 @@ export function AuditPage() {
             { title: t('thDetail'), dataIndex: 'detail', ellipsis: true, render: v => v ?? '-' },
             { title: t('thIP2'), dataIndex: 'remoteAddr', width: 150 },
           ]}
-        />
+        />}
       </FilterCard>
     </Page>
   )

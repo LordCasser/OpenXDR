@@ -2,24 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Empty, Space, Switch, Tag, Typography } from 'antd'
 import { useState } from 'react'
 import { fetchCommands, issueCommand } from '../api'
-import { useI18n, type MsgKey } from '../i18n'
-import { fmtTime } from './format'
-
-const STATUS: Record<string, { key: MsgKey; color: string }> = {
-  pending: { key: 'cmdPending', color: 'default' },
-  sent: { key: 'cmdSent', color: 'processing' },
-  succeeded: { key: 'cmdSucceeded', color: 'success' },
-  failed: { key: 'cmdFailed', color: 'error' },
-  unsupported: { key: 'cmdUnsupported', color: 'warning' },
-  unknown: { key: 'cmdUnknown', color: 'warning' },
-}
-
-const KIND: Record<string, MsgKey> = {
-  kill_process: 'killProcess',
-  isolate_host: 'isolateHost',
-  unisolate_host: 'unisolateHost',
-  exec: 'execCommand',
-}
+import { useI18n } from '../i18n'
+import { CommandStatusTag, commandKind, fmtTime, errText } from './format'
 
 // 响应处置：默认演练，真执行必须先打开开关并二次确认，避免手滑隔离生产主机
 export function ResponsePanel({ incidentId, assetId, canAct }: { incidentId: string; assetId: string | null; canAct: boolean }) {
@@ -38,14 +22,14 @@ export function ResponsePanel({ incidentId, assetId, canAct }: { incidentId: str
         await issueCommand({ kind, assetId, incidentId, dryRun: !live })
         message.success(t(live ? 'cmdIssuedLive' : 'cmdIssuedDry'))
       } catch (e) {
-        message.error(String(e))
+        message.error(errText(e, t))
       } finally {
         setBusy(false)
         client.invalidateQueries({ queryKey: ['commands', incidentId] })
       }
     }
     if (!live) return go()
-    modal.confirm({ title: t('confirmLive', { kind: t(KIND[kind]) }), okButtonProps: { danger: true }, onOk: go })
+    modal.confirm({ title: t('confirmLive', { kind: commandKind(kind, t) }), okButtonProps: { danger: true }, onOk: go })
   }
 
   return (
@@ -73,9 +57,9 @@ export function ResponsePanel({ incidentId, assetId, canAct }: { incidentId: str
               {history.data!.map(c => (
                 <div key={c.id} className="cmd-item">
                   <Space size={6} wrap>
-                    <Typography.Text strong>{KIND[c.kind] ? t(KIND[c.kind]) : c.kind}</Typography.Text>
+                    <Typography.Text strong>{commandKind(c.kind, t)}</Typography.Text>
                     <Tag color={c.dryRun ? 'default' : 'red'}>{t(c.dryRun ? 'dryRun' : 'liveRun')}</Tag>
-                    <Tag color={STATUS[c.status]?.color}>{STATUS[c.status] ? t(STATUS[c.status].key) : c.status}</Tag>
+                    <CommandStatusTag value={c.status} />
                   </Space>
                   <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
                     {fmtTime(c.createdAt)}{c.issuedBy ? ` · ${c.issuedBy}` : ''}

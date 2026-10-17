@@ -7,7 +7,7 @@ import { createPolicy, decideApproval, deletePolicy, fetchApprovals, fetchAssets
 import { useSession } from '../app/session'
 import { HostLink } from '../components/HostLink'
 import { Page } from '../components/Page'
-import { fmtTime } from '../components/format'
+import { fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
 const STATUS: Record<Approval['status'], { key: MsgKey; color: string }> = {
@@ -30,7 +30,7 @@ function PolicyCard({ groupId, origin, rows }: { groupId: string; origin: 'ai' |
       await fn()
       await client.invalidateQueries({ queryKey: ['policies', groupId] })
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     }
   }
   const add = () => run(async () => { await createPolicy(groupId, origin, pattern.trim()); setPattern('') })
@@ -85,7 +85,7 @@ export function ApprovalsPage() {
   if (!isGroupAdmin) return <Result status="403" title="403" subTitle={t('groupAdminOnly', { name: group.name })} />
 
   const decide = (a: Approval, approve: boolean) => {
-    const go = () => decideApproval(a.id, approve).then(() => approvals.refetch()).catch(e => message.error(String(e)))
+    const go = () => decideApproval(a.id, approve).then(() => approvals.refetch()).catch(e => message.error(errText(e, t)))
     if (!approve) return go()
     modal.confirm({
       title: t(a.dry_run ? 'apConfirmDryTitle' : 'apConfirmLiveTitle', { host: hosts[a.asset_id] ?? a.asset_id }),

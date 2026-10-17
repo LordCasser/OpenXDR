@@ -2,7 +2,7 @@ import { Form, Input, Modal, Typography } from 'antd'
 import { useState } from 'react'
 import { useI18n } from '../i18n'
 
-// 结案与处理待办共用：必须写明原因，备注会作为案例交给 AI
+// 结案与处理待办共用：必须写明原因，备注会作为案例交给 AI。onSubmit 失败时应抛出，弹窗与备注保留
 export function ResolveModal({ open, title, hint, onCancel, onSubmit }: {
   open: boolean
   title: string
@@ -18,6 +18,8 @@ export function ResolveModal({ open, title, hint, onCancel, onSubmit }: {
     try {
       await onSubmit(note.trim())
       form.resetFields()
+    } catch {
+      // 调用方已提示失败原因；保留备注，改完可以直接再提交
     } finally {
       setBusy(false)
     }

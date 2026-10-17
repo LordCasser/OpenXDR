@@ -7,8 +7,9 @@ import { downloadAgentPdf, fetchAgentReports, reportHtmlUrl, type AgentReport } 
 import { useSession } from '../app/session'
 import { Markdown } from '../components/Markdown'
 import { Page } from '../components/Page'
-import { fmtTime } from '../components/format'
+import { fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
+import { LoadError } from '../components/LoadError'
 
 // 报告中心：Pi 会话（含定时巡检）提交的报告，按当前组列出
 export function ReportsPage() {
@@ -16,19 +17,19 @@ export function ReportsPage() {
   const { message } = App.useApp()
   const { group } = useSession()
   const [preview, setPreview] = useState<AgentReport | null>(null)
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['reports', group?.id],
     queryFn: () => fetchAgentReports(group!.id),
     enabled: !!group,
     refetchInterval: 30_000,
   })
-  const pdf = (r: AgentReport) => downloadAgentPdf(r).catch(e => message.error(String(e)))
+  const pdf = (r: AgentReport) => downloadAgentPdf(r).catch(e => message.error(errText(e, t)))
 
   if (!group) return <Empty style={{ marginTop: 120 }} description={t('noGroupsHint')} />
   return (
     <Page title={t('navReports')} subtitle={t('reportsSubtitle', { name: group.name })}>
       <Card styles={{ body: { padding: 0 } }}>
-        <Table<AgentReport>
+        {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<AgentReport>
           rowKey="id"
           loading={isPending}
           dataSource={data ?? []}
@@ -48,7 +49,7 @@ export function ReportsPage() {
               ),
             },
           ]}
-        />
+        />}
       </Card>
       <Drawer
         size={760}

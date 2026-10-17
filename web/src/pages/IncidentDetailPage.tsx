@@ -3,16 +3,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Col, Descriptions, Result, Row, Skeleton, Space, Table, Typography } from 'antd'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { downloadReport, fetchAssets, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
+import { HttpError, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
 import { useCanActIn, useSession } from '../app/session'
 import { HostLink } from '../components/HostLink'
 import { IncidentGraph } from '../components/IncidentGraph'
+import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
 import { ResolveModal } from '../components/ResolveModal'
 import { SuppressModal } from '../components/SuppressModal'
 import { VerdictCard } from '../components/VerdictCard'
-import { IncidentStatusTag, SeverityTag, fmtTime } from '../components/format'
+import { IncidentStatusTag, SeverityTag, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
 export function IncidentDetailPage() {
@@ -24,26 +25,28 @@ export function IncidentDetailPage() {
   const { groups } = useSession()
   const [suppressing, setSuppressing] = useState(false)
   const [resolving, setResolving] = useState<'closed' | 'false_positive' | null>(null)
-  const { data: inc, isPending, error } = useQuery({ queryKey: ['incident', id], queryFn: () => fetchIncident(id!), refetchInterval: 15_000 })
-  const { data: assets = [] } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
-  const asset = assets.find(a => a.id === inc?.assetId)
-  const canAct = useCanActIn(asset?.groupId)
+  const { data: inc, isPending, error, refetch } = useQuery({ queryKey: ['incident', id], queryFn: () => fetchIncident(id!), refetchInterval: 15_000 })
+  const canAct = useCanActIn(inc?.groupId)
 
   if (isPending) return <Skeleton active paragraph={{ rows: 12 }} style={{ marginTop: 24 }} />
-  if (error || !inc) {
+  if (error instanceof HttpError && error.status === 404) {
     return <Result status="404" title={t('incidentNotFound')} extra={<Button onClick={() => navigate('/incidents')}>{t('backToList')}</Button>} />
   }
+  if (error || !inc) return <LoadError error={error} onRetry={() => refetch()} />
 
+  // 返回是否成功：结案弹窗靠它决定关不关、备注留不留
   const changeStatus = async (status: string, note?: string) => {
     try {
       await setIncidentStatus(inc.id, status, note)
-      setResolving(null)
-      await client.invalidateQueries({ queryKey: ['incident', id] })
-      client.invalidateQueries({ queryKey: ['incidents'] })
-      if (status === 'false_positive') setSuppressing(true)
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
+      return false
     }
+    setResolving(null)
+    await client.invalidateQueries({ queryKey: ['incident', id] })
+    client.invalidateQueries({ queryKey: ['incidents'] })
+    if (status === 'false_positive') setSuppressing(true)
+    return true
   }
   const done = inc.status === 'closed' || inc.status === 'false_positive'
 
@@ -54,7 +57,7 @@ export function IncidentDetailPage() {
       extra={
         <>
           {/* 只读角色也能导报告：写汇报不是处置动作 */}
-          <Button icon={<DownloadOutlined />} onClick={() => downloadReport(inc.id, inc.title).catch(e => message.error(String(e)))}>{t('exportReport')}</Button>
+          <Button icon={<DownloadOutlined />} onClick={() => downloadReport(inc.id, inc.title).catch(e => message.error(errText(e, t)))}>{t('exportReport')}</Button>
           {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('close')}</Button>}
           {canAct && !done && <Button danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>}
           {canAct && done && <Button onClick={() => changeStatus('open')}>{t('reopen')}</Button>}
@@ -94,7 +97,7 @@ export function IncidentDetailPage() {
                 <Descriptions.Item label={t('thCreatedAt')}>{fmtTime(inc.createdAt)}</Descriptions.Item>
                 <Descriptions.Item label={t('thAlerts')}>{inc.alerts.length}</Descriptions.Item>
                 <Descriptions.Item label={t('thHostname')}><HostLink id={inc.assetId} /></Descriptions.Item>
-                <Descriptions.Item label={t('group')}>{groups.find(g => g.id === asset?.groupId)?.name ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label={t('group')}>{groups.find(g => g.id === inc.groupId)?.name ?? '-'}</Descriptions.Item>
                 {inc.resolvedAt && <Descriptions.Item label={t('resolution')}>{inc.resolution}</Descriptions.Item>}
                 {inc.resolvedAt && <Descriptions.Item label={t('resolvedBy')}>{inc.resolvedBy} · {fmtTime(inc.resolvedAt)}</Descriptions.Item>}
               </Descriptions>
@@ -108,7 +111,7 @@ export function IncidentDetailPage() {
         title={t(resolving === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')}
         hint={t('resolveHint')}
         onCancel={() => setResolving(null)}
-        onSubmit={note => changeStatus(resolving!, note)}
+        onSubmit={async note => { if (!await changeStatus(resolving!, note)) throw new Error() }}
       />
       <SuppressModal open={suppressing} alerts={inc.alerts} assetId={inc.assetId} onClose={() => setSuppressing(false)} />
     </Page>

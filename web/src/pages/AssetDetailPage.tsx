@@ -1,20 +1,37 @@
 import { ArrowLeftOutlined, RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Badge, Button, Card, Col, Descriptions, Empty, Form, Result, Row, Select, Skeleton, Space, Switch, Table, Tabs, Tag, Tooltip,
-  Typography,
+  Alert, App, Button, Card, Col, Descriptions, Empty, Form, Result, Row, Select, Skeleton, Space, Switch, Table, Tabs, Tag, Typography,
+  theme,
 } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
-  createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchIncidents, saveAgentConfig, searchEvents, type AgentConfig,
+  createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchFindings, fetchIncidents, saveAgentConfig, searchEvents,
+  type AgentConfig, type FindingRow,
 } from '../api'
 import { useCanActIn, useSession } from '../app/session'
+import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
-import { CLASS_KEY, IncidentStatusTag, SeverityTag, fmtTime } from '../components/format'
+import { eventSummary } from '../components/eventSummary'
+import {
+  CLASS_KEY, CommandStatusTag, HostStateBadge, IncidentStatusTag, SeverityTag, commandKind, errText, fmtTime,
+} from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
-const STALE_MS = 5 * 60_000
+const FINDING_SEVERITY: Record<FindingRow['severity'], number> = { info: 1, low: 2, medium: 3, high: 4 }
+const INCIDENT_PAGE = 10
+
+// 详情页顶部的小指标：标签在上、数值在下，可点进对应标签页
+function Stat({ label, value, tone, onClick }: { label: string; value: ReactNode; tone?: string; onClick?: () => void }) {
+  const { token } = theme.useToken()
+  return (
+    <Card size="small" hoverable={!!onClick} onClick={onClick} styles={{ body: { padding: '14px 18px' } }}>
+      <Typography.Text type="secondary" style={{ fontSize: 13 }}>{label}</Typography.Text>
+      <div style={{ fontSize: 24, fontWeight: 600, marginTop: 2, color: tone ?? token.colorText, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    </Card>
+  )
+}
 const SWITCHES: { name: keyof AgentConfig; key: MsgKey }[] = [
   { name: 'collectFiles', key: 'cfgFiles' },
   { name: 'collectAuth', key: 'cfgAuth' },
@@ -47,7 +64,7 @@ function ConfigTab({ assetId, canEdit }: { assetId: string; canEdit: boolean }) 
       await saveAgentConfig(assetId, cfg)
       message.success(t('cfgSaved'))
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     } finally {
       setSaving(false)
     }
@@ -76,24 +93,37 @@ function ConfigTab({ assetId, canEdit }: { assetId: string; canEdit: boolean }) 
 
 export function AssetDetailPage() {
   const { t } = useI18n()
+  const { token } = theme.useToken()
   const { id } = useParams()
   const navigate = useNavigate()
   const client = useQueryClient()
   const { message } = App.useApp()
   const { groups } = useSession()
   const [starting, setStarting] = useState(false)
+  const [tab, setTab] = useState('incidents')
+  const [incPage, setIncPage] = useState(1)
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
   const asset = assets.data?.find(a => a.id === id)
   const canAct = useCanActIn(asset?.groupId)
-  const incidents = useQuery({ queryKey: ['incidents', 'asset', id], queryFn: () => fetchIncidents(undefined, id), enabled: !!asset })
+  const incidents = useQuery({
+    queryKey: ['incidents', 'asset', id, incPage],
+    queryFn: () => fetchIncidents({ assetId: id, limit: INCIDENT_PAGE, offset: (incPage - 1) * INCIDENT_PAGE }),
+    enabled: !!asset,
+  })
+  const unresolved = useQuery({ queryKey: ['incidents', 'asset', id, 'unresolved'], queryFn: () => fetchIncidents({ assetId: id, status: 'unresolved', limit: 1 }), enabled: !!asset })
+  const findings = useQuery({ queryKey: ['findings', 'all'], queryFn: () => fetchFindings(), enabled: !!asset, select: fs => fs.filter(f => f.assetId === id) })
   const events = useQuery({ queryKey: ['events', 'asset', id], queryFn: () => searchEvents({ assetId: id, hours: 168 }), enabled: !!asset })
   const commands = useQuery({ queryKey: ['commands', 'asset', id], queryFn: () => fetchCommands({ assetId: id! }), enabled: !!asset })
 
   if (assets.isPending) return <Skeleton active style={{ marginTop: 24 }} />
+  if (assets.isError) return <LoadError error={assets.error} onRetry={() => assets.refetch()} />
   if (!asset) return <Result status="404" title={t('assetNotFound')} extra={<Button onClick={() => navigate('/assets')}>{t('backToList')}</Button>} />
 
-  const online = Date.now() - Date.parse(asset.lastSeen) < STALE_MS
   const group = groups.find(g => g.id === asset.groupId)
+  // 对话只看组内角色（后端同口径），全局只读的组内分析师也能发起排查
+  const canChat = group?.role === 'admin' || group?.role === 'analyst'
+  const openFindings = (findings.data ?? []).filter(f => f.status === 'open')
+  const eventCount = events.data ? `${events.data.items.length}${events.data.truncated ? '+' : ''}` : '-'
 
   // 一键排查：在主机所在组新建对话（默认演练），把主机名预填进提问
   const investigate = async () => {
@@ -104,7 +134,7 @@ export function AssetDetailPage() {
       client.invalidateQueries({ queryKey: ['sessions', asset.groupId] })
       navigate(`/chat/${s.id}?prompt=${encodeURIComponent(t('investigatePrompt', { host: asset.hostname }))}`)
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     } finally {
       setStarting(false)
     }
@@ -113,57 +143,75 @@ export function AssetDetailPage() {
   return (
     <Page
       crumb={asset.hostname}
-      title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')} />{asset.hostname}{asset.silentSince
-        ? <Tooltip title={t('silentSince', { time: fmtTime(asset.silentSince) })}><Badge status="error" text={t('silent')} /></Tooltip>
-        : <Badge status={online ? 'success' : 'default'} text={t(online ? 'online' : 'stale')} />}</Space>}
-      extra={canAct && asset.groupId && <Button type="primary" icon={<RobotOutlined />} loading={starting} onClick={investigate}>{t('investigateHost')}</Button>}
+      title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')} />{asset.hostname}<HostStateBadge asset={asset} /></Space>}
+      subtitle={[asset.os, asset.ipAddrs?.join(', '), group?.name ?? t('ungrouped')].filter(Boolean).join(' · ')}
+      extra={canChat && asset.groupId && <Button type="primary" icon={<RobotOutlined />} loading={starting} onClick={investigate}>{t('investigateHost')}</Button>}
     >
       <Row gutter={[16, 16]}>
-        <Col span={24}>
-          <Card>
-            <Descriptions column={{ xs: 1, md: 2, xl: 4 }} size="small">
-              <Descriptions.Item label="OS">{asset.os ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('thIP')}>{asset.ipAddrs?.join(', ') ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('group')}>{group?.name ?? <Tag>{t('ungrouped')}</Tag>}</Descriptions.Item>
-              <Descriptions.Item label={t('thSource')}>{asset.agentId ? 'agent' : t('sourceLog')}</Descriptions.Item>
-              <Descriptions.Item label={t('firstSeen')}>{fmtTime(asset.firstSeen)}</Descriptions.Item>
-              <Descriptions.Item label={t('thLastSeen')}>{fmtTime(asset.lastSeen)}</Descriptions.Item>
-              <Descriptions.Item label={t('agentVersion')}>{asset.agentVersion ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="Agent ID">{asset.agentId ? <Typography.Text className="mono" copyable style={{ fontSize: 12 }}>{asset.agentId}</Typography.Text> : '-'}</Descriptions.Item>
-              <Descriptions.Item label="ID"><Typography.Text className="mono" copyable style={{ fontSize: 12 }}>{asset.id}</Typography.Text></Descriptions.Item>
-            </Descriptions>
-          </Card>
+        <Col xs={12} xl={6}>
+          <Stat label={t('unresolvedIncidents')} value={unresolved.data?.total ?? '-'} tone={unresolved.data?.total ? token.colorError : undefined} onClick={() => setTab('incidents')} />
         </Col>
-        <Col span={24}>
-          <Card>
+        <Col xs={12} xl={6}>
+          <Stat label={t('navFindings')} value={findings.data ? openFindings.length : '-'} tone={openFindings.length ? token.colorWarning : undefined} onClick={() => setTab('findings')} />
+        </Col>
+        <Col xs={12} xl={6}>
+          <Stat label={t('tabEvents')} value={eventCount} onClick={() => setTab('events')} />
+        </Col>
+        <Col xs={12} xl={6}>
+          <Stat label={t('thLastSeen')} value={<span style={{ fontSize: 17 }}>{asset.agentId ? fmtTime(asset.lastSeen).slice(5) : '—'}</span>} />
+        </Col>
+
+        <Col xs={24} xl={17}>
+          <Card styles={{ body: { paddingTop: 4 } }}>
             <Tabs
+              activeKey={tab}
+              onChange={setTab}
               items={[
                 {
                   key: 'incidents',
-                  label: t('tabIncidents', { n: incidents.data?.length ?? 0 }),
-                  children: (
-                    <Table size="small" rowKey="id" loading={incidents.isPending} dataSource={incidents.data ?? []} pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                  label: t('tabIncidents', { n: incidents.data?.total ?? 0 }),
+                  children: incidents.isError ? <LoadError error={incidents.error} onRetry={() => incidents.refetch()} /> : (
+                    <Table size="small" rowKey="id" loading={incidents.isPending} dataSource={incidents.data?.items ?? []}
+                      pagination={{ current: incPage, pageSize: INCIDENT_PAGE, total: incidents.data?.total, hideOnSinglePage: true, onChange: setIncPage }}
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIncidents')} /> }}
                       columns={[
                         { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
-                        { title: t('thTitle'), dataIndex: 'title', render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
+                        { title: t('thTitle'), dataIndex: 'title', ellipsis: true, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
                         { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
                       ]} />
                   ),
                 },
                 {
+                  key: 'findings',
+                  label: t('tabFindings', { n: openFindings.length }),
+                  children: (
+                    <Table size="small" rowKey="id" loading={findings.isPending} dataSource={findings.data ?? []} pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                      locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noFindings')} /> }}
+                      expandable={{ expandedRowRender: f => <pre className="tooltip-pre">{f.detail || '-'}</pre> }}
+                      columns={[
+                        { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={FINDING_SEVERITY[v as FindingRow['severity']]} /> },
+                        { title: t('thTitle'), dataIndex: 'title', ellipsis: true },
+                        { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <Tag>{t(FINDING_STATUS_KEY[v as FindingRow['status']])}</Tag> },
+                        { title: t('thLastConfirmed'), dataIndex: 'lastSeen', width: 170, render: fmtTime },
+                      ]} />
+                  ),
+                },
+                {
                   key: 'events',
                   label: t('tabEvents'),
-                  children: (
-                    <Table size="small" rowKey="id" loading={events.isPending} dataSource={events.data ?? []} pagination={{ pageSize: 20, hideOnSinglePage: true }}
-                      expandable={{ expandedRowRender: r => <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre> }}
-                      columns={[
-                        { title: t('thTime'), dataIndex: 'ts', render: fmtTime, width: 170 },
-                        { title: t('thClass'), dataIndex: 'classUid', width: 110, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v) },
-                        { title: t('thUser'), dataIndex: 'username', width: 160, render: v => v ?? '-' },
-                        { title: t('thDetail'), dataIndex: 'raw', ellipsis: true, render: v => <span className="mono">{JSON.stringify(v)}</span> },
-                      ]} />
+                  children: events.isError ? <LoadError error={events.error} onRetry={() => events.refetch()} /> : (
+                    <>
+                      {events.data?.truncated && <Alert type="info" showIcon title={t('listTruncated', { n: events.data.items.length })} style={{ marginBottom: 12 }} />}
+                      <Table size="small" rowKey="id" loading={events.isPending} dataSource={events.data?.items ?? []} pagination={{ pageSize: 20, hideOnSinglePage: true }}
+                        expandable={{ expandedRowRender: r => <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre> }}
+                        columns={[
+                          { title: t('thTime'), dataIndex: 'ts', render: fmtTime, width: 170 },
+                          { title: t('thClass'), dataIndex: 'classUid', width: 90, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v) },
+                          { title: t('thDetail'), ellipsis: true, render: (_, r) => <span className="mono">{eventSummary(r.classUid, r.raw, t) || r.connTuple || '-'}</span> },
+                          { title: t('thUser'), dataIndex: 'username', width: 120, render: v => v ?? '-' },
+                        ]} />
+                    </>
                   ),
                 },
                 {
@@ -174,10 +222,10 @@ export function AssetDetailPage() {
                       locale={{ emptyText: t('noCommands') }}
                       columns={[
                         { title: t('thTime'), dataIndex: 'createdAt', render: fmtTime, width: 170 },
-                        { title: t('thAction'), dataIndex: 'kind', width: 120 },
+                        { title: t('thAction'), dataIndex: 'kind', width: 120, render: v => commandKind(v, t) },
                         { title: t('thMode'), dataIndex: 'dryRun', width: 90, render: d => <Tag color={d ? 'default' : 'red'}>{t(d ? 'dryRun' : 'liveRun')}</Tag> },
-                        { title: t('thStatus'), dataIndex: 'status', width: 100 },
-                        { title: t('thCreatedBy'), dataIndex: 'issuedBy', width: 120 },
+                        { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <CommandStatusTag value={v} /> },
+                        { title: t('thCreatedBy'), dataIndex: 'issuedBy', width: 110 },
                         { title: t('thResult'), dataIndex: 'detail', ellipsis: true },
                       ]} />
                   ),
@@ -187,7 +235,24 @@ export function AssetDetailPage() {
             />
           </Card>
         </Col>
+        <Col xs={24} xl={7}>
+          <Card title={t('hostInfo')}>
+            <Descriptions column={1} size="small">
+              <Descriptions.Item label="OS">{asset.os ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('thIP')}>{asset.ipAddrs?.join(', ') ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('group')}>{group?.name ?? <Tag>{t('ungrouped')}</Tag>}</Descriptions.Item>
+              <Descriptions.Item label={t('thSource')}>{asset.agentId ? 'agent' : t('sourceLog')}</Descriptions.Item>
+              <Descriptions.Item label={t('agentVersion')}>{asset.agentVersion ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('firstSeen')}>{fmtTime(asset.firstSeen)}</Descriptions.Item>
+              <Descriptions.Item label={t('thLastSeen')}>{asset.agentId ? fmtTime(asset.lastSeen) : '—'}</Descriptions.Item>
+              <Descriptions.Item label="Agent ID">{asset.agentId ? <Typography.Text className="mono" copyable ellipsis style={{ fontSize: 12, maxWidth: 200 }}>{asset.agentId}</Typography.Text> : '-'}</Descriptions.Item>
+              <Descriptions.Item label="ID"><Typography.Text className="mono" copyable ellipsis style={{ fontSize: 12, maxWidth: 200 }}>{asset.id}</Typography.Text></Descriptions.Item>
+            </Descriptions>
+          </Card>
+        </Col>
       </Row>
     </Page>
   )
 }
+
+const FINDING_STATUS_KEY: Record<FindingRow['status'], MsgKey> = { open: 'findingOpen', resolved: 'findingResolved', ignored: 'findingIgnored' }

@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { deleteIntel, fetchIntel, fetchIntelFeeds, importIntel, saveIntelFeeds, syncIntelFeeds, type IntelFeeds, type IntelRow } from '../api'
 import { useSession } from '../app/session'
 import { Page } from '../components/Page'
-import { SeverityTag, fmtTime } from '../components/format'
+import { SeverityTag, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
 // 情报订阅：开关即时生效（开的马上拉、关的马上清），命中过的订阅情报直接列出来
@@ -20,9 +20,9 @@ function FeedsCard() {
     mutationFn: ({ id, on }: { id: string; on: boolean }) =>
       saveIntelFeeds((data?.feeds ?? []).filter(f => (f.id === id ? on : f.enabled)).map(f => f.id)),
     onSuccess: done,
-    onError: e => message.error(String(e)),
+    onError: e => message.error(errText(e, t)),
   })
-  const sync = useMutation({ mutationFn: syncIntelFeeds, onSuccess: done, onError: e => message.error(String(e)) })
+  const sync = useMutation({ mutationFn: syncIntelFeeds, onSuccess: done, onError: e => message.error(errText(e, t)) })
 
   return (
     <Card
@@ -92,12 +92,12 @@ export function IntelPage() {
       form.resetFields()
       refresh()
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     } finally {
       setBusy(false)
     }
   }
-  const revoke = (id: string) => deleteIntel(id).then(refresh).catch(e => message.error(String(e)))
+  const revoke = (id: string) => deleteIntel(id).then(refresh).catch(e => message.error(errText(e, t)))
 
   return (
     <Page

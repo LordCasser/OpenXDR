@@ -6,7 +6,7 @@ import { Link } from 'react-router'
 import { fetchTaskRuns, fetchTasks, runTask, updateTask, type TaskRow, type TaskRunRow } from '../api'
 import { useSession } from '../app/session'
 import { Page } from '../components/Page'
-import { SessionStatusTag, fmtTime } from '../components/format'
+import { SessionStatusTag, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
 function Runs({ task }: { task: TaskRow }) {
@@ -49,7 +49,7 @@ export function TasksPage() {
       await client.invalidateQueries({ queryKey: ['tasks'] })
       return true
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
       return false
     }
   }
@@ -60,7 +60,7 @@ export function TasksPage() {
       message.success(t('taskRunQueued'))
       await client.invalidateQueries({ queryKey: ['taskRuns', id] })
     } catch (e) {
-      message.error(String(e))
+      message.error(errText(e, t))
     }
   }
 

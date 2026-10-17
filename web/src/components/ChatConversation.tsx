@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { downloadAgentPdf, reportHtmlUrl, type AgentReport, type ContentPart, type PiMessage } from '../api'
 import { useI18n } from '../i18n'
 import { Markdown } from './Markdown'
-import { fmtTime } from './format'
+import { fmtTime, errText } from './format'
 
 export interface ChatRow {
   message: PiMessage
@@ -30,6 +30,7 @@ function reportIdOf(r?: ToolResult) {
 }
 
 function ReportDrawer({ call, result, onClose }: { call: ToolCallPart | null; result?: ToolResult; onClose: () => void }) {
+  const { t } = useI18n()
   const { message } = App.useApp()
   const id = reportIdOf(result)
   const title = String(call?.arguments.title ?? '')
@@ -38,7 +39,7 @@ function ReportDrawer({ call, result, onClose }: { call: ToolCallPart | null; re
       extra={id && (
         <Space>
           <Button icon={<ExportOutlined />} onClick={() => window.open(reportHtmlUrl(id), '_blank', 'noopener')}>HTML</Button>
-          <Button icon={<FilePdfOutlined />} onClick={() => downloadAgentPdf({ id, title } as AgentReport).catch(e => message.error(String(e)))}>PDF</Button>
+          <Button icon={<FilePdfOutlined />} onClick={() => downloadAgentPdf({ id, title } as AgentReport).catch(e => message.error(errText(e, t)))}>PDF</Button>
         </Space>
       )}>
       {call && <Markdown text={String(call.arguments.markdown ?? '')} />}

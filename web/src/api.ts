@@ -34,6 +34,8 @@ export interface IncidentSummary {
   aiVerdict: Verdict | null
   alertCount: number
   severity: number
+  // 告警主机所在组，逐行判断能否处置
+  groupId: string | null
   // 结案：谁、何时、为什么
   resolution: string | null
   resolvedBy: string | null
@@ -60,15 +62,43 @@ export interface IncidentDetail extends Omit<IncidentSummary, 'alertCount'> {
 // 会话失效时抛出，App 捕获后切回登录页
 export class Unauthorized extends Error {}
 
+// 接口报错：保留状态码与后端给的说明，界面按状态码选文案（见 components/format errText）
+export class HttpError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
 function check(r: Response) {
   if (r.status === 401) throw new Unauthorized()
+}
+
+async function fail(r: Response): Promise<never> {
+  throw new HttpError(r.status, (await r.text()).trim() || r.statusText)
 }
 
 async function get<T>(url: string): Promise<T> {
   const r = await fetch(url)
   check(r)
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+  if (!r.ok) await fail(r)
   return r.json()
+}
+
+// 列表接口：后端会截断（limit），总数走 X-Total-Count、截断走 X-Truncated，界面据此提示而不是假装看全了
+export interface Page<T> {
+  items: T[]
+  total?: number
+  truncated: boolean
+}
+
+async function list<T>(url: string): Promise<Page<T>> {
+  const r = await fetch(url)
+  check(r)
+  if (!r.ok) await fail(r)
+  const total = r.headers.get('X-Total-Count')
+  return { items: await r.json(), total: total === null ? undefined : Number(total), truncated: r.headers.get('X-Truncated') === '1' }
 }
 
 async function post(url: string, body?: unknown): Promise<Response> {
@@ -94,17 +124,20 @@ export async function login(username: string, password: string): Promise<Me> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   })
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r.json()
 }
 
 export const logout = () => post('/api/logout')
 
-export const fetchIncidents = (status?: string, assetId?: string) => {
+// status 可取 unresolved（open + triaged，未人工结案）；按 offset/limit 翻页，total 是筛选后的总数
+export const fetchIncidents = (params: { status?: string; assetId?: string; limit?: number; offset?: number } = {}) => {
   const qs = new URLSearchParams()
-  if (status) qs.set('status', status)
-  if (assetId) qs.set('assetId', assetId)
-  return get<IncidentSummary[]>(`/api/incidents?${qs}`)
+  if (params.status) qs.set('status', params.status)
+  if (params.assetId) qs.set('assetId', params.assetId)
+  qs.set('limit', String(params.limit ?? 50))
+  if (params.offset) qs.set('offset', String(params.offset))
+  return list<IncidentSummary>(`/api/incidents?${qs}`)
 }
 
 export const fetchIncident = (id: string) => get<IncidentDetail>(`/api/incidents/${id}`)
@@ -112,7 +145,7 @@ export const fetchIncident = (id: string) => get<IncidentDetail>(`/api/incidents
 // 结案（closed / false_positive）必须带结论备注，改回 open 不用
 export async function setIncidentStatus(id: string, status: string, note?: string): Promise<void> {
   const r = await post(`/api/incidents/${id}/status`, { status, note })
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
+  if (!r.ok) await fail(r)
 }
 
 // 运维待办：巡检 AI 登记与复查；人标已处理或忽略（须写原因，忽略原因会告诉 AI）
@@ -142,7 +175,7 @@ export const setFindingStatus = (id: string, status: string, note?: string) =>
 export async function downloadReport(id: string, title: string | null): Promise<void> {
   const r = await fetch(`/api/incidents/${id}/report`)
   check(r)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   const url = URL.createObjectURL(await r.blob())
   const a = document.createElement('a')
   a.href = url
@@ -175,7 +208,7 @@ export async function issueCommand(body: {
   dryRun: boolean
 }): Promise<CommandRow> {
   const r = await post('/api/commands', body)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r.json()
 }
 
@@ -217,14 +250,14 @@ export async function createSuppression(body: {
   expiresInDays?: number
 }): Promise<Suppression> {
   const r = await post('/api/suppressions', body)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r.json()
 }
 
 export async function deleteSuppression(id: string): Promise<void> {
   const r = await fetch(`/api/suppressions/${id}`, { method: 'DELETE' })
   check(r)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
 }
 
 export interface Stats {
@@ -267,7 +300,7 @@ export const searchEvents = (params: {
   if (params.hours)
     qs.set('from', new Date(Date.now() - params.hours * 3_600_000).toISOString())
   qs.set('limit', '200')
-  return get<EventRow[]>(`/api/events?${qs}`)
+  return list<EventRow>(`/api/events?${qs}`)
 }
 
 export interface AttackCoverage {
@@ -338,14 +371,14 @@ export async function importIntel(body: {
   expiresInDays?: number
 }): Promise<{ imported: number; skipped: number }> {
   const r = await post('/api/intel/import', body)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r.json()
 }
 
 export async function deleteIntel(id: string): Promise<void> {
   const r = await fetch(`/api/intel/${id}`, { method: 'DELETE' })
   check(r)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
 }
 
 export interface UserRow {
@@ -363,19 +396,19 @@ export async function createUser(body: {
   role: string
 }): Promise<UserRow> {
   const r = await post('/api/users', body)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r.json()
 }
 
 export async function deleteUser(id: string): Promise<void> {
   const r = await fetch(`/api/users/${id}`, { method: 'DELETE' })
   check(r)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
 }
 
 export async function resetUserPassword(id: string, password: string): Promise<void> {
   const r = await post(`/api/users/${id}/password`, { password })
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
 }
 
 export interface AuditRow {
@@ -388,7 +421,8 @@ export interface AuditRow {
   remoteAddr: string
 }
 
-export const fetchAudit = () => get<AuditRow[]>('/api/audit')
+// 关键词在后端匹配（用户、动作、对象、详情），最多返回最近 500 条
+export const fetchAudit = (q?: string) => list<AuditRow>(`/api/audit${q ? `?q=${encodeURIComponent(q)}` : ''}`)
 
 // 资产组：组是纳管与授权单位，role 为当前用户在组内的有效角色
 export interface GroupRow {
@@ -412,7 +446,7 @@ async function send(method: string, url: string, body?: unknown): Promise<Respon
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   check(r)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r
 }
 
@@ -500,6 +534,9 @@ export interface SessionMessage {
 export const fetchAgentSessions = (groupId: string) =>
   get<AgentSession[]>(`/api/agent-sessions?groupId=${groupId}`)
 
+// 列表只有最近 100 个，深链接必须按 id 直接取
+export const fetchAgentSession = (id: string) => get<AgentSession>(`/api/agent-sessions/${id}`)
+
 export const createAgentSession = async (body: {
   groupId: string
   title?: string
@@ -537,7 +574,7 @@ export async function sendSessionMessage(
     signal,
   })
   check(r)
-  if (!r.ok || !r.body) throw new Error(await r.text())
+  if (!r.ok || !r.body) return fail(r)
   const reader = r.body.pipeThrough(new TextDecoderStream()).getReader()
   let buf = ''
   for (;;) {
@@ -613,7 +650,7 @@ export const reportHtmlUrl = (id: string) => `/api/agent-reports/${id}/html`
 export async function downloadAgentPdf(r: AgentReport): Promise<void> {
   const resp = await fetch(`/api/agent-reports/${r.id}/pdf`)
   check(resp)
-  if (!resp.ok) throw new Error(await resp.text())
+  if (!resp.ok) await fail(resp)
   const url = URL.createObjectURL(await resp.blob())
   const a = document.createElement('a')
   a.href = url
@@ -677,21 +714,21 @@ export const fetchHostImportStatus = () => get<{ credentialStorage: boolean; ssh
 export const fetchHostCredentials = (groupId: string) => get<HostCredential[]>(`/api/host-import/credentials?groupId=${encodeURIComponent(groupId)}`)
 export async function previewHostImport(groupId: string, document: string): Promise<HostImportPreview> {
   const r = await post('/api/host-import/preview', { groupId, document })
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r.json()
 }
 export async function commitHostImport(groupId: string, document: string, digest: string): Promise<{ assetIds: string[] }> {
   const r = await post('/api/host-import/commit', { groupId, document, digest })
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r.json()
 }
 export async function enrollHostCredential(id: string, fingerprint: string): Promise<{ status: string; message: string }> {
   const r = await post(`/api/host-import/credentials/${id}/enroll`, { fingerprint })
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
   return r.json()
 }
 export async function deleteHostCredential(id: string): Promise<void> {
   const r = await fetch(`/api/host-import/credentials/${id}`, { method: 'DELETE' })
   check(r)
-  if (!r.ok) throw new Error(await r.text())
+  if (!r.ok) await fail(r)
 }
