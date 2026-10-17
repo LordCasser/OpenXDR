@@ -50,3 +50,12 @@ func TestCommandOutputBoundedWithoutChangingReceipt(t *testing.T) {
 		t.Fatal("短输出不应截断或填充")
 	}
 }
+
+func TestTurnBudget(t *testing.T) {
+	cases := [][3]int{{0, 0, 32}, {2, 7, 32}, {2, 20, 56}, {50, 40, 256}}
+	for _, c := range cases {
+		if got := turnBudget(c[0], c[1]); got != c[2] {
+			t.Errorf("turnBudget(%d, %d) = %d, want %d", c[0], c[1], got, c[2])
+		}
+	}
+}

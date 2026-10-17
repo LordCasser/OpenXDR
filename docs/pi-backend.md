@@ -20,7 +20,7 @@
 Pi 不注册内置文件和 shell 工具，平台只暴露 exec/report，以及已配置组的 query。
 没有新增对外工具执行端口，身份、组、来源和 dry-run 均由 Go 绑定，模型不能修改。
 每轮上下文包含本组最多 200 台资产的 UUID、主机名和 OS；超出会标注截断。
-每轮最多 32 次模型调用，每次输出最多 8192 token。exec 送入模型的 stdout/stderr 各最多 16 KiB，截断标记为 `truncated=true`，Command 记录仍保留原始回执。GLM 显式关闭模板 thinking。未实现费用预算或自动历史压缩。
+每轮最多「组内主机数 × 免审批命令数 + 16」次模型调用（32–256），每次输出最多 8192 token。exec 送入模型的 stdout/stderr 各最多 16 KiB，截断标记为 `truncated=true`，Command 记录仍保留原始回执。GLM 显式关闭模板 thinking。未实现费用预算或自动历史压缩。
 
 ## 前端接口
 
