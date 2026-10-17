@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Input, Select, Space, Table, Tooltip, Typography } from 'antd'
+import { Alert, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchAssets, searchEvents, type EventRow } from '../api'
@@ -21,6 +21,8 @@ export function EventsPage() {
     classUid: Number(params.get('classUid') ?? 0),
     hours: Number(params.get('hours') ?? 24),
     assetId: params.get('assetId') ?? '',
+    from: params.get('from') ?? '',
+    to: params.get('to') ?? '',
   }
   const setFilter = (patch: Partial<typeof filter>) => {
     const next = { ...filter, ...patch }
@@ -63,12 +65,16 @@ export function EventsPage() {
               onChange={source => setFilter({ source })}
               options={[{ value: '', label: t('allSources') }, ...['agent', 'sensor', 'syslog'].map(s => ({ value: s, label: s }))]}
             />
-            <Select
+            {filter.from ? (
+              <Tag closable color="blue" onClose={() => setFilter({ from: '', to: '' })} style={{ padding: '4px 8px' }}>
+                {fmtTime(filter.from)} ~ {filter.to ? fmtTime(filter.to).slice(11) : t('now')}
+              </Tag>
+            ) : <Select
               style={{ width: 140 }}
               value={filter.hours}
               onChange={hours => setFilter({ hours })}
               options={[1, 6, 24, 72, 168].map(n => ({ value: n, label: t('lastHours', { n }) }))}
-            />
+            />}
           </Space>
         }
         extra={<Typography.Text type="secondary">{t('eventCount', { n: data ? `${data.items.length}${data.truncated ? '+' : ''}` : 0 })}</Typography.Text>}
@@ -89,7 +95,11 @@ export function EventsPage() {
               title: t('thSummary'), key: 'summary', ellipsis: { showTitle: false },
               render: (_, r) => {
                 const text = eventSummary(r.classUid, r.raw, t) || r.connTuple || '-'
-                return <Tooltip placement="topLeft" title={text}><span className="mono">{text}</span></Tooltip>
+                return (
+                  <Typography.Text className="mono" copyable={{ text }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ width: '100%' }}>
+                    {text}
+                  </Typography.Text>
+                )
               },
             },
             { title: t('thUser'), dataIndex: 'username', width: 110, render: v => v || '-' },

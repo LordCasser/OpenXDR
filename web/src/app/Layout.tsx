@@ -1,16 +1,17 @@
 import {
-  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined, TranslationOutlined, UserOutlined,
+  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SunOutlined, TranslationOutlined, UserOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout as AntLayout, Menu, Select, Space, Tag, Tooltip, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { fetchApprovals } from '../api'
 import { ROLE_KEY } from '../components/format'
 import { useI18n } from '../i18n'
 import { Logo } from '../components/Logo'
+import { CommandPalette } from './CommandPalette'
 import { NAV, type NavItem } from './nav'
 import { useSession } from './session'
 import { useTheme } from './theme'
@@ -48,6 +49,20 @@ export function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('siderCollapsed') === '1')
+  const [palette, setPalette] = useState(false)
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform)
+
+  // Ctrl/⌘+K 在任何页面打开命令面板
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPalette(p => !p)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const isGroupAdmin = isAdmin || groups.some(g => g.role === 'admin')
   const visible = (x: { admin?: boolean; groupAdmin?: boolean }) => (!x.admin || isAdmin) && (!x.groupAdmin || isGroupAdmin)
@@ -113,6 +128,11 @@ export function Layout() {
             />
           </Space>
           <div style={{ flex: 1 }} />
+          {wide ? (
+            <Button className="search-trigger" icon={<SearchOutlined />} onClick={() => setPalette(true)}>
+              <span>{t('paletteTrigger')}</span><kbd>{mac ? '⌘' : 'Ctrl'} K</kbd>
+            </Button>
+          ) : <Button type="text" aria-label={t('paletteTrigger')} icon={<SearchOutlined />} onClick={() => setPalette(true)} />}
           <ApprovalBell />
           <Tooltip title={dark ? t('lightMode') : t('darkMode')}>
             <Button type="text" aria-label={dark ? t('lightMode') : t('darkMode')} icon={dark ? <SunOutlined /> : <MoonOutlined />} onClick={toggle} />
@@ -137,6 +157,7 @@ export function Layout() {
         <AntLayout.Content className="app-content">
           <Outlet />
         </AntLayout.Content>
+        <CommandPalette open={palette} onClose={() => setPalette(false)} />
       </AntLayout>
     </AntLayout>
   )

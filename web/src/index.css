@@ -94,6 +94,21 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .mini-row { padding: 6px 0; border-bottom: 1px solid var(--ant-color-border-secondary); }
 .mini-row:last-child { border-bottom: none; }
 
+/* 命令面板与顶栏搜索入口 */
+.search-trigger { width: 240px; display: inline-flex; align-items: center; color: var(--ant-color-text-tertiary); }
+.search-trigger > span:nth-child(2) { flex: 1; text-align: left; }
+kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4px; margin: 0 2px;
+  border: 1px solid var(--ant-color-border); background: var(--ant-color-fill-quaternary); color: var(--ant-color-text-secondary); }
+.palette-input.ant-input-affix-wrapper, .palette-input.ant-input-affix-wrapper:focus-within { border-width: 0 0 1px !important; border-radius: 0; box-shadow: none !important; }
+.palette-list { max-height: 420px; overflow-y: auto; padding: 6px 0; }
+.palette-section { font-size: 12px; color: var(--ant-color-text-tertiary); padding: 8px 16px 4px; }
+.palette-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; margin: 0 6px; border-radius: 6px; }
+.palette-foot { display: flex; gap: 18px; padding: 8px 16px; font-size: 12px; }
+
+/* 列表行内操作：悬停整行时才完全显出，平时不抢视线 */
+.row-actions { opacity: .55; transition: opacity .15s; }
+.ant-table-row:hover .row-actions { opacity: 1; }
+
 /* 研判结论：顶部结论条 + 处置建议编号清单 */
 .verdict-band { padding: 18px 24px; border-left: 4px solid; border-radius: 8px 8px 0 0; }
 .action-list { margin: 0; padding: 0; list-style: none; counter-reset: act; }

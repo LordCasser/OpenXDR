@@ -2,7 +2,7 @@ import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Col, Descriptions, Result, Row, Skeleton, Space, Table, Typography } from 'antd'
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { HttpError, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
 import { useCanActIn, useSession } from '../app/session'
 import { HostLink } from '../components/HostLink'
@@ -75,13 +75,29 @@ export function IncidentDetailPage() {
                 rowKey="id"
                 dataSource={inc.alerts}
                 pagination={{ pageSize: 20, hideOnSinglePage: true }}
-                expandable={{ expandedRowRender: a => <pre className="json-block">{a.event ? JSON.stringify(a.event, null, 2) : t('noRawEvent')}</pre> }}
+                expandable={{ expandedRowRender: a => a.event ? (
+                  <>
+                    <Typography.Text copyable={{ text: JSON.stringify(a.event, null, 2) }} type="secondary" style={{ fontSize: 12 }}>{t('rawEvent')}</Typography.Text>
+                    <pre className="json-block">{JSON.stringify(a.event, null, 2)}</pre>
+                  </>
+                ) : t('noRawEvent') }}
                 columns={[
                   { title: t('thFirst'), dataIndex: 'ts', render: fmtTime, width: 170 },
                   { title: t('thLast'), dataIndex: 'lastTs', render: fmtTime, width: 170 },
                   { title: t('thRule'), dataIndex: 'ruleTitle', render: (v, a) => v ?? a.ruleId, ellipsis: true },
                   { title: t('thSeverity'), dataIndex: 'severity', render: v => <SeverityTag value={v} />, width: 90 },
-                  { title: t('thCount'), dataIndex: 'count', align: 'right', width: 80 },
+                  { title: t('thCount'), dataIndex: 'count', align: 'right', width: 70 },
+                  {
+                    // 前后各 10 分钟的原始日志：判断告警之前发生了什么、之后有没有后续
+                    title: '', width: 90,
+                    render: (_, a) => inc.assetId && (
+                      <Link className="row-actions" to={`/events?${new URLSearchParams({
+                        assetId: inc.assetId,
+                        from: new Date(Date.parse(a.ts) - 600_000).toISOString(),
+                        to: new Date(Date.parse(a.lastTs ?? a.ts) + 600_000).toISOString(),
+                      })}`}>{t('logContext')}</Link>
+                    ),
+                  },
                 ]}
               />
             </Card>

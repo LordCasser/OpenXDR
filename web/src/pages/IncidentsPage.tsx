@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { fetchIncidents, setIncidentStatus, type IncidentSummary } from '../api'
 import { useCanAct, useSession } from '../app/session'
+import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
-import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, fmtTime, incidentStatusKey } from '../components/format'
+import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
 import { useI18n, type MsgKey } from '../i18n'
 
@@ -65,9 +66,10 @@ export function IncidentsPage() {
   return (
     <Page title={t('navIncidents')} subtitle={t('incidentsSubtitle')}>
       <FilterCard
-        extra={anyActable && (
+        extra={(
           <Space>
-            <Button size="small" onClick={() => setSelected(rows.filter(r => actable(r) && r.aiVerdict?.verdict === 'benign').map(r => r.id))}>{t('selectBenign')}</Button>
+            <Refreshed at={query.dataUpdatedAt} fetching={query.isFetching} onRefresh={() => query.refetch()} />
+            {anyActable && <Button size="small" onClick={() => setSelected(rows.filter(r => actable(r) && r.aiVerdict?.verdict === 'benign').map(r => r.id))}>{t('selectBenign')}</Button>}
             {selected.length > 0 && (
               <>
                 <Typography.Text type="secondary">{t('batchSelected', { n: selected.length })}</Typography.Text>
@@ -94,6 +96,7 @@ export function IncidentsPage() {
             rowKey="id"
             loading={query.isPending}
             dataSource={rows}
+            locale={{ emptyText: <EmptyHint title={t(status === 'unresolved' ? 'noUnresolved' : 'noIncidents')} hint={status === 'unresolved' ? t('noUnresolvedHint') : undefined} /> }}
             pagination={{
               current: page, pageSize: PAGE_SIZE, total: query.data?.total ?? rows.length,
               hideOnSinglePage: true, showSizeChanger: false, onChange: p => go({ page: p }),
@@ -122,7 +125,17 @@ export function IncidentsPage() {
                 },
               },
               { title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
-              { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
+              { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
+              ...(anyActable ? [{
+                title: '', width: 120,
+                // 单条处理不用先勾选：直接点，弹窗写结论
+                render: (_: unknown, r: IncidentSummary) => actable(r) && (
+                  <Space size={0} className="row-actions">
+                    <Button type="link" size="small" onClick={() => { setSelected([r.id]); setResolving('closed') }}>{t('close')}</Button>
+                    <Button type="link" size="small" danger onClick={() => { setSelected([r.id]); setResolving('false_positive') }}>{t('markFpShort')}</Button>
+                  </Space>
+                ),
+              }] : []),
             ]}
           />
         )}

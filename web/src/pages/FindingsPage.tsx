@@ -6,9 +6,10 @@ import { fetchFindings, setFindingStatus, type FindingRow } from '../api'
 import { useCanAct, useSession } from '../app/session'
 import { HostLink } from '../components/HostLink'
 import { FilterCard, Page } from '../components/Page'
+import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
-import { fmtTime, errText } from '../components/format'
+import { errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
 const SEVERITY: Record<FindingRow['severity'], { key: MsgKey; color: string }> = {
@@ -34,7 +35,7 @@ export function FindingsPage() {
   const [params, setParams] = useSearchParams()
   const status = params.get('status') ?? 'open'
   const [acting, setActing] = useState<{ row: FindingRow; next: 'resolved' | 'ignored' } | null>(null)
-  const { data, isPending, isError, error, refetch } = useQuery({
+  const { data, isPending, isError, error, refetch, dataUpdatedAt, isFetching } = useQuery({
     queryKey: ['findings', status],
     queryFn: () => fetchFindings(status === 'all' ? undefined : status),
     refetchInterval: 30_000,
@@ -56,6 +57,7 @@ export function FindingsPage() {
   return (
     <Page title={t('navFindings')} subtitle={t('findingsSubtitle')}>
       <FilterCard
+        extra={<Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} />}
         filters={
           <Segmented
             value={status}
@@ -72,15 +74,15 @@ export function FindingsPage() {
           loading={isPending}
           dataSource={data ?? []}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
-          locale={{ emptyText: t('noFindings') }}
+          locale={{ emptyText: <EmptyHint title={t('noFindings')} hint={t('noFindingsHint')} action={<Link to="/tasks">{t('goTasks')}</Link>} /> }}
           expandable={{ expandedRowRender: f => <pre className="tooltip-pre">{f.detail || '-'}</pre> }}
           columns={[
             { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: (v: FindingRow['severity']) => <Tag color={SEVERITY[v]?.color}>{t(SEVERITY[v]?.key ?? 'sev1')}</Tag> },
             { title: t('thTitle'), dataIndex: 'title', render: (v, f) => <Space orientation="vertical" size={0}><span>{v}</span><Typography.Text type="secondary" className="mono" style={{ fontSize: 12 }}>{f.key}</Typography.Text></Space> },
             { title: t('thHostname'), dataIndex: 'assetId', width: 140, render: (v, f) => <HostLink id={v} fallback={f.hostname} /> },
             { title: t('group'), dataIndex: 'groupId', width: 120, render: v => groups.find(g => g.id === v)?.name ?? v.slice(0, 8) },
-            { title: t('thFirstSeen'), dataIndex: 'firstSeen', width: 170, render: fmtTime },
-            { title: t('thLastConfirmed'), dataIndex: 'lastSeen', width: 170, render: fmtTime },
+            { title: t('thFirstSeen'), dataIndex: 'firstSeen', width: 110, render: v => <Ago iso={v} /> },
+            { title: t('thLastConfirmed'), dataIndex: 'lastSeen', width: 110, render: v => <Ago iso={v} /> },
             {
               title: t('thStatus'), dataIndex: 'status', width: 110,
               render: (v: FindingRow['status'], f) => (
