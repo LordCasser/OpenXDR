@@ -553,55 +553,12 @@ export const createAgentSession = async (body: {
 export const fetchSessionMessages = (id: string) =>
   get<SessionMessage[]>(`/api/agent-sessions/${id}/messages`)
 
-// 流式事件：pi 为 runner 原始事件；done / error 才是本轮的终态
-export type ChatEvent =
-  | { event: 'pi'; data: { type: string; event?: PiEvent } }
-  | { event: 'done'; data: { StopReason: string } }
-  | { event: 'error'; data: { error: string } }
-  | { event: 'session' | 'heartbeat'; data: unknown }
+// 发消息只是让后台开跑：会话切到 running 就返回，运行不随页面走；进度靠轮询会话与消息
+export const startSessionMessage = (id: string, prompt: string) =>
+  send('POST', `/api/agent-sessions/${id}/messages`, { prompt })
 
-export interface PiEvent {
-  type: string
-  message?: PiMessage
-  toolName?: string
-  toolCallId?: string
-}
-
-// POST SSE：EventSource 只支持 GET，只能自己读流按空行切帧
-export async function sendSessionMessage(
-  id: string,
-  prompt: string,
-  onEvent: (e: ChatEvent) => void,
-  signal?: AbortSignal,
-): Promise<void> {
-  const r = await fetch(`/api/agent-sessions/${id}/messages`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-    signal,
-  })
-  check(r)
-  if (!r.ok || !r.body) return fail(r)
-  const reader = r.body.pipeThrough(new TextDecoderStream()).getReader()
-  let buf = ''
-  for (;;) {
-    const { value, done } = await reader.read()
-    if (done) return
-    buf += value
-    let i
-    while ((i = buf.indexOf('\n\n')) >= 0) {
-      const frame = buf.slice(0, i)
-      buf = buf.slice(i + 2)
-      let event = 'message'
-      let data = ''
-      for (const line of frame.split('\n')) {
-        if (line.startsWith('event: ')) event = line.slice(7)
-        else if (line.startsWith('data: ')) data += line.slice(6)
-      }
-      onEvent({ event, data: data ? JSON.parse(data) : null } as ChatEvent)
-    }
-  }
-}
+// 停止：写一条停止请求，后台运行所在节点几秒内收手，会话回到空闲可以接着问
+export const cancelSession = (id: string) => send('POST', `/api/agent-sessions/${id}/cancel`)
 
 // 审批与命令名单（组 admin）。实体字段 snake_case
 export interface Approval {

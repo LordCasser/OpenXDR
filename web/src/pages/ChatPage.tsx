@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import {
   createAgentSession, decideApproval, fetchAgentSession, fetchAgentSessions, fetchApprovals, fetchAssets, fetchSessionMessages,
-  sendSessionMessage, type AgentSession, type Approval, type PiMessage,
+  startSessionMessage, cancelSession, type AgentSession, type Approval, type PiMessage,
 } from '../api'
 import { useSession } from '../app/session'
 import { ChatConversation, textOf, type ChatRow } from '../components/ChatConversation'
@@ -132,12 +132,9 @@ export function ChatPage() {
   const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
-  // 流式中的消息：message_update 给的是累积的完整消息，直接替换
-  const [live, setLive] = useState<PiMessage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [kind, setKind] = useState<'' | 'chat' | 'task'>('')
-  const abort = useRef<AbortController | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
 
@@ -151,7 +148,8 @@ export function ChatPage() {
     queryKey: ['session', sessionId],
     queryFn: () => fetchAgentSession(sessionId!),
     enabled: !!sessionId,
-    refetchInterval: q => (q.state.data?.status === 'running' && !busy ? 3_000 : false),
+    // 运行在后台：跑着的时候勤看一眼，任何页面切回来都能看到最新进度
+    refetchInterval: q => (q.state.data?.status === 'running' ? 1_500 : false),
   })
   const session = current.data
   const isRunning = busy || session?.status === 'running'
@@ -179,7 +177,7 @@ export function ChatPage() {
     queryKey: ['messages', sessionId],
     queryFn: () => fetchSessionMessages(sessionId!).then(ms => ms.map((m): ChatRow => ({ message: m.content, at: m.created_at }))),
     enabled: !!session,
-    refetchInterval: session?.status === 'running' && !busy ? 3_000 : false,
+    refetchInterval: session?.status === 'running' ? 1_500 : false,
   })
   const { data: hosts = {} } = useQuery({
     queryKey: ['assets'],
@@ -228,13 +226,12 @@ export function ChatPage() {
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'end' })
-  }, [messages.data, live, pending, inline.length])
-
-  // 切会话或离开页面就中止流：后端随之取消推理与审批等待
-  useEffect(() => () => abort.current?.abort(), [sessionId])
+  }, [messages.data, pending, inline.length])
 
   const canChat = group?.role === 'admin' || group?.role === 'analyst'
   const canSend = !!session && canChat && session.initiator === me.username && session.status === 'idle' && !busy
+  // 停止：发起人或组管理员；只是写停止请求，后台几秒内收手
+  const canStop = !!session && isRunning && (session.initiator === me.username || group?.role === 'admin')
 
   // 没选会话时点模板：直接新建一个会话，把模板填进去
   const startWith = async (text: string) => {
@@ -248,6 +245,7 @@ export function ChatPage() {
     }
   }
 
+  // 发出去就交给后台：会话切到 running 后由轮询跟进度，离开页面不影响
   const submit = async (override?: string) => {
     const text = (override ?? prompt).trim()
     if (!session || !text) return
@@ -255,29 +253,25 @@ export function ChatPage() {
     setBusy(true)
     setError(null)
     setPending(text)
-    const ctl = new AbortController()
-    abort.current = ctl
     try {
-      await sendSessionMessage(session.id, text, e => {
-        if (e.event === 'error') setError(e.data.error)
-        if (e.event !== 'pi' || e.data.type !== 'event' || !e.data.event) return
-        const ev = e.data.event
-        if (ev.type === 'message_update' && ev.message) setLive(ev.message)
-        if (ev.type === 'message_end') {
-          setLive(null)
-          client.invalidateQueries({ queryKey: ['messages', session.id] })
-        }
-      }, ctl.signal)
+      await startSessionMessage(session.id, text)
     } catch (e) {
-      if (!ctl.signal.aborted) setError(errText(e, t))
-    } finally {
-      // 以库里的完整历史为准，流里拼出来的只是过程
-      await client.invalidateQueries({ queryKey: ['messages', session.id] })
-      await client.invalidateQueries({ queryKey: ['session', session.id] })
-      await client.invalidateQueries({ queryKey: ['sessions', group?.id] })
-      setLive(null)
+      setError(errText(e, t))
       setPending(null)
+    } finally {
+      await client.invalidateQueries({ queryKey: ['session', session.id] })
+      client.invalidateQueries({ queryKey: ['sessions', group?.id] })
       setBusy(false)
+    }
+  }
+
+  const stop = async () => {
+    if (!session) return
+    try {
+      await cancelSession(session.id)
+      message.info(t('stopRequested'))
+    } catch (e) {
+      message.error(errText(e, t))
     }
   }
 
@@ -288,15 +282,16 @@ export function ChatPage() {
     void submit(autoSend)
   }, [autoSend, canSend]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 换会话时清掉上一个会话还没落库的占位消息
+  useEffect(() => setPending(null), [sessionId])
+
   const history = messages.data ?? []
   // 首条 user 消息入库前先占位，避免发出去的话"消失"一下
   const showPending = pending && !history.some(r => r.message.role === 'user' && textOf(r.message.content) === pending)
   const rows: ChatRow[] = [
     ...history,
     ...(showPending ? [{ message: { role: 'user', content: pending } as PiMessage }] : []),
-    ...(live ? [{ message: live }] : []),
   ]
-  const lastIsAssistant = rows.at(-1)?.message.role === 'assistant'
 
   if (!group) {
     return <Empty style={{ marginTop: 120 }} description={t('noGroupsHint')} />
@@ -392,7 +387,7 @@ export function ChatPage() {
               <ChatConversation rows={rows} hosts={hosts} />
               <InlineApprovals rows={inline} hosts={hosts} onDecided={() => approvals.refetch()} />
               {isRunning && !isGroupAdmin && <Alert className="chat-indent" type="info" showIcon title={t('chatNeedsApprover')} />}
-              {busy && !lastIsAssistant && (
+              {isRunning && (
                 <Space className="chat-indent" style={{ color: token.colorTextSecondary }}><Spin size="small" />{t('thinking')}</Space>
               )}
               {session.error && <Alert className="chat-indent" type="error" showIcon title={session.error} />}
@@ -406,7 +401,7 @@ export function ChatPage() {
                 value={prompt}
                 disabled={!canSend}
                 autoSize={{ minRows: 2, maxRows: 8 }}
-                placeholder={canSend ? t('chatPlaceholder') : busy ? t('thinking') : t('chatReadonly')}
+                placeholder={canSend ? t('chatPlaceholder') : isRunning ? t('runningInBackground') : t('chatReadonly')}
                 onChange={e => setPrompt(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -415,8 +410,8 @@ export function ChatPage() {
                   }
                 }}
               />
-              {busy ? (
-                <Button danger icon={<StopOutlined />} onClick={() => abort.current?.abort()}>{t('stop')}</Button>
+              {canStop ? (
+                <Button danger icon={<StopOutlined />} onClick={stop}>{t('stop')}</Button>
               ) : (
                 <Button type="primary" icon={<SendOutlined />} disabled={!canSend || !prompt.trim()} onClick={() => submit()}>{t('send')}</Button>
               )}
