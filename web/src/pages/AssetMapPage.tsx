@@ -36,10 +36,13 @@ export function AssetMapPage() {
   const { t } = useI18n()
   const { group, isAdmin, canWrite } = useSession()
   const [search, setSearch] = useState('')
-  const [showDiscovered, setShowDiscovered] = useState(true)
+  // 未纳管地址多时默认收起，首屏先看清已纳管资产之间的关系；null 表示还没手动切过
+  const [discoveredChoice, setShowDiscovered] = useState<boolean | null>(null)
   const [showInternet, setShowInternet] = useState(true)
   const [selected, setSelected] = useState<Selection>(null)
   const query = useQuery({ queryKey: ['assetMap', group?.id], queryFn: () => fetchAssetMap(group!.id), enabled: !!group, refetchInterval: 60_000 })
+  const discoveredCount = query.data?.nodes.filter(n => n.kind === 'discovered' || n.kind === 'managed').length ?? 0
+  const showDiscovered = discoveredChoice ?? discoveredCount <= 20
 
   // 开关只影响画面，不改数据：去掉的节点连同它的边一起隐藏
   const graph = useMemo<AssetMap | undefined>(() => {
@@ -60,7 +63,7 @@ export function AssetMapPage() {
           <Space wrap>
             <Input.Search allowClear placeholder={t('mapSearch')} aria-label={t('mapSearch')} style={{ width: 240, maxWidth: '100%' }}
               value={search} onChange={e => setSearch(e.target.value)} />
-            <Space size={6}><Switch size="small" checked={showDiscovered} onChange={setShowDiscovered} aria-label={t('mapShowDiscovered')} />{t('mapShowDiscovered')}</Space>
+            <Space size={6}><Switch size="small" checked={showDiscovered} onChange={setShowDiscovered} aria-label={t('mapShowDiscovered')} />{t('mapShowDiscovered')}{discoveredCount > 0 && ` (${discoveredCount})`}</Space>
             <Space size={6}><Switch size="small" checked={showInternet} onChange={setShowInternet} aria-label={t('mapShowInternet')} />{t('mapShowInternet')}</Space>
           </Space>
           <Legend />
