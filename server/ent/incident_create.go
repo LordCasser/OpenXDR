@@ -91,6 +91,48 @@ func (_c *IncidentCreate) SetNillableNotifiedAt(v *time.Time) *IncidentCreate {
 	return _c
 }
 
+// SetResolution sets the "resolution" field.
+func (_c *IncidentCreate) SetResolution(v string) *IncidentCreate {
+	_c.mutation.SetResolution(v)
+	return _c
+}
+
+// SetNillableResolution sets the "resolution" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableResolution(v *string) *IncidentCreate {
+	if v != nil {
+		_c.SetResolution(*v)
+	}
+	return _c
+}
+
+// SetResolvedBy sets the "resolved_by" field.
+func (_c *IncidentCreate) SetResolvedBy(v string) *IncidentCreate {
+	_c.mutation.SetResolvedBy(v)
+	return _c
+}
+
+// SetNillableResolvedBy sets the "resolved_by" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableResolvedBy(v *string) *IncidentCreate {
+	if v != nil {
+		_c.SetResolvedBy(*v)
+	}
+	return _c
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (_c *IncidentCreate) SetResolvedAt(v time.Time) *IncidentCreate {
+	_c.mutation.SetResolvedAt(v)
+	return _c
+}
+
+// SetNillableResolvedAt sets the "resolved_at" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableResolvedAt(v *time.Time) *IncidentCreate {
+	if v != nil {
+		_c.SetResolvedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *IncidentCreate) SetID(v uuid.UUID) *IncidentCreate {
 	_c.mutation.SetID(v)
@@ -238,6 +280,18 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.NotifiedAt(); ok {
 		_spec.SetField(incident.FieldNotifiedAt, field.TypeTime, value)
 		_node.NotifiedAt = &value
+	}
+	if value, ok := _c.mutation.Resolution(); ok {
+		_spec.SetField(incident.FieldResolution, field.TypeString, value)
+		_node.Resolution = &value
+	}
+	if value, ok := _c.mutation.ResolvedBy(); ok {
+		_spec.SetField(incident.FieldResolvedBy, field.TypeString, value)
+		_node.ResolvedBy = &value
+	}
+	if value, ok := _c.mutation.ResolvedAt(); ok {
+		_spec.SetField(incident.FieldResolvedAt, field.TypeTime, value)
+		_node.ResolvedAt = &value
 	}
 	if nodes := _c.mutation.AlertsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

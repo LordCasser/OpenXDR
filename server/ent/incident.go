@@ -31,6 +31,12 @@ type Incident struct {
 	Title *string `json:"title,omitempty"`
 	// NotifiedAt holds the value of the "notified_at" field.
 	NotifiedAt *time.Time `json:"notified_at,omitempty"`
+	// Resolution holds the value of the "resolution" field.
+	Resolution *string `json:"resolution,omitempty"`
+	// ResolvedBy holds the value of the "resolved_by" field.
+	ResolvedBy *string `json:"resolved_by,omitempty"`
+	// ResolvedAt holds the value of the "resolved_at" field.
+	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the IncidentQuery when eager-loading is set.
 	Edges        IncidentEdges `json:"edges"`
@@ -62,9 +68,9 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case incident.FieldGraph, incident.FieldAiVerdict:
 			values[i] = new([]byte)
-		case incident.FieldStatus, incident.FieldTitle:
+		case incident.FieldStatus, incident.FieldTitle, incident.FieldResolution, incident.FieldResolvedBy:
 			values[i] = new(sql.NullString)
-		case incident.FieldCreatedAt, incident.FieldNotifiedAt:
+		case incident.FieldCreatedAt, incident.FieldNotifiedAt, incident.FieldResolvedAt:
 			values[i] = new(sql.NullTime)
 		case incident.FieldID:
 			values[i] = new(uuid.UUID)
@@ -131,6 +137,27 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				_m.NotifiedAt = new(time.Time)
 				*_m.NotifiedAt = value.Time
 			}
+		case incident.FieldResolution:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field resolution", values[i])
+			} else if value.Valid {
+				_m.Resolution = new(string)
+				*_m.Resolution = value.String
+			}
+		case incident.FieldResolvedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field resolved_by", values[i])
+			} else if value.Valid {
+				_m.ResolvedBy = new(string)
+				*_m.ResolvedBy = value.String
+			}
+		case incident.FieldResolvedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field resolved_at", values[i])
+			} else if value.Valid {
+				_m.ResolvedAt = new(time.Time)
+				*_m.ResolvedAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -191,6 +218,21 @@ func (_m *Incident) String() string {
 	builder.WriteString(", ")
 	if v := _m.NotifiedAt; v != nil {
 		builder.WriteString("notified_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.Resolution; v != nil {
+		builder.WriteString("resolution=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ResolvedBy; v != nil {
+		builder.WriteString("resolved_by=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ResolvedAt; v != nil {
+		builder.WriteString("resolved_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')

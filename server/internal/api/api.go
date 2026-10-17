@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -15,6 +17,7 @@ import (
 	"openxdr/server/ent/incident"
 	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/audit"
+	"openxdr/server/internal/auth"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
@@ -34,6 +37,10 @@ type incidentSummary struct {
 	AlertCount int             `json:"alertCount"`
 	// 派生自告警的最高级别，列表按轻重着色用
 	Severity int16 `json:"severity"`
+	// 结案信息：谁、何时、为什么
+	Resolution *string    `json:"resolution"`
+	ResolvedBy *string    `json:"resolvedBy"`
+	ResolvedAt *time.Time `json:"resolvedAt"`
 }
 
 type alertRow struct {
@@ -197,6 +204,7 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 		})
 	})
 
+	// 结案必须写结论备注：closed 属实已处置，false_positive 误报或良性；备注会作为案例喂回研判
 	mux.HandleFunc("POST /api/incidents/{id}/status", func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
@@ -205,15 +213,27 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 		}
 		var body struct {
 			Status string `json:"status"`
+			Note   string `json:"note"`
 		}
 		if json.NewDecoder(r.Body).Decode(&body) != nil || !slices.Contains(analystStatuses, body.Status) {
 			http.Error(w, "status 必须是 open / closed / false_positive", http.StatusBadRequest)
 			return
 		}
+		note := strings.TrimSpace(body.Note)
+		if body.Status != "open" && (note == "" || utf8.RuneCountInString(note) > 2000) {
+			http.Error(w, "结案须写明结论备注（1–2000 字）", http.StatusBadRequest)
+			return
+		}
 		if !incidentVisible(w, r, db, id, "analyst") {
 			return
 		}
-		err = db.Incident.UpdateOneID(id).SetStatus(body.Status).Exec(r.Context())
+		u := db.Incident.UpdateOneID(id).SetStatus(body.Status)
+		if body.Status == "open" {
+			u.ClearResolution().ClearResolvedBy().ClearResolvedAt()
+		} else {
+			u.SetResolution(note).SetResolvedBy(auth.From(r.Context()).Username).SetResolvedAt(time.Now())
+		}
+		err = u.Exec(r.Context())
 		if ent.IsNotFound(err) {
 			http.NotFound(w, r)
 			return
@@ -222,7 +242,7 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		audit.Log(r.Context(), db, r, "incident_status", id.String(), body.Status)
+		audit.Log(r.Context(), db, r, "incident_status", id.String(), strings.TrimSpace(body.Status+" "+note))
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -263,7 +283,7 @@ func summarize(inc *ent.Incident, alertCount int, severity int16) incidentSummar
 	return incidentSummary{
 		ID: inc.ID, CreatedAt: inc.CreatedAt, Status: inc.Status,
 		Title: inc.Title, AiVerdict: inc.AiVerdict, AlertCount: alertCount,
-		Severity: severity,
+		Severity: severity, Resolution: inc.Resolution, ResolvedBy: inc.ResolvedBy, ResolvedAt: inc.ResolvedAt,
 	}
 }
 

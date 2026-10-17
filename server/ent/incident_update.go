@@ -130,6 +130,66 @@ func (_u *IncidentUpdate) ClearNotifiedAt() *IncidentUpdate {
 	return _u
 }
 
+// SetResolution sets the "resolution" field.
+func (_u *IncidentUpdate) SetResolution(v string) *IncidentUpdate {
+	_u.mutation.SetResolution(v)
+	return _u
+}
+
+// SetNillableResolution sets the "resolution" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableResolution(v *string) *IncidentUpdate {
+	if v != nil {
+		_u.SetResolution(*v)
+	}
+	return _u
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (_u *IncidentUpdate) ClearResolution() *IncidentUpdate {
+	_u.mutation.ClearResolution()
+	return _u
+}
+
+// SetResolvedBy sets the "resolved_by" field.
+func (_u *IncidentUpdate) SetResolvedBy(v string) *IncidentUpdate {
+	_u.mutation.SetResolvedBy(v)
+	return _u
+}
+
+// SetNillableResolvedBy sets the "resolved_by" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableResolvedBy(v *string) *IncidentUpdate {
+	if v != nil {
+		_u.SetResolvedBy(*v)
+	}
+	return _u
+}
+
+// ClearResolvedBy clears the value of the "resolved_by" field.
+func (_u *IncidentUpdate) ClearResolvedBy() *IncidentUpdate {
+	_u.mutation.ClearResolvedBy()
+	return _u
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (_u *IncidentUpdate) SetResolvedAt(v time.Time) *IncidentUpdate {
+	_u.mutation.SetResolvedAt(v)
+	return _u
+}
+
+// SetNillableResolvedAt sets the "resolved_at" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableResolvedAt(v *time.Time) *IncidentUpdate {
+	if v != nil {
+		_u.SetResolvedAt(*v)
+	}
+	return _u
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (_u *IncidentUpdate) ClearResolvedAt() *IncidentUpdate {
+	_u.mutation.ClearResolvedAt()
+	return _u
+}
+
 // AddAlertIDs adds the "alerts" edge to the Alert entity by IDs.
 func (_u *IncidentUpdate) AddAlertIDs(ids ...uuid.UUID) *IncidentUpdate {
 	_u.mutation.AddAlertIDs(ids...)
@@ -243,6 +303,24 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.NotifiedAtCleared() {
 		_spec.ClearField(incident.FieldNotifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Resolution(); ok {
+		_spec.SetField(incident.FieldResolution, field.TypeString, value)
+	}
+	if _u.mutation.ResolutionCleared() {
+		_spec.ClearField(incident.FieldResolution, field.TypeString)
+	}
+	if value, ok := _u.mutation.ResolvedBy(); ok {
+		_spec.SetField(incident.FieldResolvedBy, field.TypeString, value)
+	}
+	if _u.mutation.ResolvedByCleared() {
+		_spec.ClearField(incident.FieldResolvedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.ResolvedAt(); ok {
+		_spec.SetField(incident.FieldResolvedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ResolvedAtCleared() {
+		_spec.ClearField(incident.FieldResolvedAt, field.TypeTime)
 	}
 	if _u.mutation.AlertsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -407,6 +485,66 @@ func (_u *IncidentUpdateOne) ClearNotifiedAt() *IncidentUpdateOne {
 	return _u
 }
 
+// SetResolution sets the "resolution" field.
+func (_u *IncidentUpdateOne) SetResolution(v string) *IncidentUpdateOne {
+	_u.mutation.SetResolution(v)
+	return _u
+}
+
+// SetNillableResolution sets the "resolution" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableResolution(v *string) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetResolution(*v)
+	}
+	return _u
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (_u *IncidentUpdateOne) ClearResolution() *IncidentUpdateOne {
+	_u.mutation.ClearResolution()
+	return _u
+}
+
+// SetResolvedBy sets the "resolved_by" field.
+func (_u *IncidentUpdateOne) SetResolvedBy(v string) *IncidentUpdateOne {
+	_u.mutation.SetResolvedBy(v)
+	return _u
+}
+
+// SetNillableResolvedBy sets the "resolved_by" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableResolvedBy(v *string) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetResolvedBy(*v)
+	}
+	return _u
+}
+
+// ClearResolvedBy clears the value of the "resolved_by" field.
+func (_u *IncidentUpdateOne) ClearResolvedBy() *IncidentUpdateOne {
+	_u.mutation.ClearResolvedBy()
+	return _u
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (_u *IncidentUpdateOne) SetResolvedAt(v time.Time) *IncidentUpdateOne {
+	_u.mutation.SetResolvedAt(v)
+	return _u
+}
+
+// SetNillableResolvedAt sets the "resolved_at" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableResolvedAt(v *time.Time) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetResolvedAt(*v)
+	}
+	return _u
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (_u *IncidentUpdateOne) ClearResolvedAt() *IncidentUpdateOne {
+	_u.mutation.ClearResolvedAt()
+	return _u
+}
+
 // AddAlertIDs adds the "alerts" edge to the Alert entity by IDs.
 func (_u *IncidentUpdateOne) AddAlertIDs(ids ...uuid.UUID) *IncidentUpdateOne {
 	_u.mutation.AddAlertIDs(ids...)
@@ -550,6 +688,24 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if _u.mutation.NotifiedAtCleared() {
 		_spec.ClearField(incident.FieldNotifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Resolution(); ok {
+		_spec.SetField(incident.FieldResolution, field.TypeString, value)
+	}
+	if _u.mutation.ResolutionCleared() {
+		_spec.ClearField(incident.FieldResolution, field.TypeString)
+	}
+	if value, ok := _u.mutation.ResolvedBy(); ok {
+		_spec.SetField(incident.FieldResolvedBy, field.TypeString, value)
+	}
+	if _u.mutation.ResolvedByCleared() {
+		_spec.ClearField(incident.FieldResolvedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.ResolvedAt(); ok {
+		_spec.SetField(incident.FieldResolvedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ResolvedAtCleared() {
+		_spec.ClearField(incident.FieldResolvedAt, field.TypeTime)
 	}
 	if _u.mutation.AlertsCleared() {
 		edge := &sqlgraph.EdgeSpec{

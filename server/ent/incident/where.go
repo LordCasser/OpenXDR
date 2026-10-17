@@ -76,6 +76,21 @@ func NotifiedAt(v time.Time) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldNotifiedAt, v))
 }
 
+// Resolution applies equality check predicate on the "resolution" field. It's identical to ResolutionEQ.
+func Resolution(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldResolution, v))
+}
+
+// ResolvedBy applies equality check predicate on the "resolved_by" field. It's identical to ResolvedByEQ.
+func ResolvedBy(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldResolvedBy, v))
+}
+
+// ResolvedAt applies equality check predicate on the "resolved_at" field. It's identical to ResolvedAtEQ.
+func ResolvedAt(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldResolvedAt, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldCreatedAt, v))
@@ -314,6 +329,206 @@ func NotifiedAtIsNil() predicate.Incident {
 // NotifiedAtNotNil applies the NotNil predicate on the "notified_at" field.
 func NotifiedAtNotNil() predicate.Incident {
 	return predicate.Incident(sql.FieldNotNull(FieldNotifiedAt))
+}
+
+// ResolutionEQ applies the EQ predicate on the "resolution" field.
+func ResolutionEQ(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldResolution, v))
+}
+
+// ResolutionNEQ applies the NEQ predicate on the "resolution" field.
+func ResolutionNEQ(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldResolution, v))
+}
+
+// ResolutionIn applies the In predicate on the "resolution" field.
+func ResolutionIn(vs ...string) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldResolution, vs...))
+}
+
+// ResolutionNotIn applies the NotIn predicate on the "resolution" field.
+func ResolutionNotIn(vs ...string) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldResolution, vs...))
+}
+
+// ResolutionGT applies the GT predicate on the "resolution" field.
+func ResolutionGT(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldResolution, v))
+}
+
+// ResolutionGTE applies the GTE predicate on the "resolution" field.
+func ResolutionGTE(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldResolution, v))
+}
+
+// ResolutionLT applies the LT predicate on the "resolution" field.
+func ResolutionLT(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldResolution, v))
+}
+
+// ResolutionLTE applies the LTE predicate on the "resolution" field.
+func ResolutionLTE(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldResolution, v))
+}
+
+// ResolutionContains applies the Contains predicate on the "resolution" field.
+func ResolutionContains(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldContains(FieldResolution, v))
+}
+
+// ResolutionHasPrefix applies the HasPrefix predicate on the "resolution" field.
+func ResolutionHasPrefix(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldHasPrefix(FieldResolution, v))
+}
+
+// ResolutionHasSuffix applies the HasSuffix predicate on the "resolution" field.
+func ResolutionHasSuffix(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldHasSuffix(FieldResolution, v))
+}
+
+// ResolutionIsNil applies the IsNil predicate on the "resolution" field.
+func ResolutionIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldResolution))
+}
+
+// ResolutionNotNil applies the NotNil predicate on the "resolution" field.
+func ResolutionNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldResolution))
+}
+
+// ResolutionEqualFold applies the EqualFold predicate on the "resolution" field.
+func ResolutionEqualFold(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEqualFold(FieldResolution, v))
+}
+
+// ResolutionContainsFold applies the ContainsFold predicate on the "resolution" field.
+func ResolutionContainsFold(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldContainsFold(FieldResolution, v))
+}
+
+// ResolvedByEQ applies the EQ predicate on the "resolved_by" field.
+func ResolvedByEQ(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldResolvedBy, v))
+}
+
+// ResolvedByNEQ applies the NEQ predicate on the "resolved_by" field.
+func ResolvedByNEQ(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldResolvedBy, v))
+}
+
+// ResolvedByIn applies the In predicate on the "resolved_by" field.
+func ResolvedByIn(vs ...string) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldResolvedBy, vs...))
+}
+
+// ResolvedByNotIn applies the NotIn predicate on the "resolved_by" field.
+func ResolvedByNotIn(vs ...string) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldResolvedBy, vs...))
+}
+
+// ResolvedByGT applies the GT predicate on the "resolved_by" field.
+func ResolvedByGT(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldResolvedBy, v))
+}
+
+// ResolvedByGTE applies the GTE predicate on the "resolved_by" field.
+func ResolvedByGTE(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldResolvedBy, v))
+}
+
+// ResolvedByLT applies the LT predicate on the "resolved_by" field.
+func ResolvedByLT(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldResolvedBy, v))
+}
+
+// ResolvedByLTE applies the LTE predicate on the "resolved_by" field.
+func ResolvedByLTE(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldResolvedBy, v))
+}
+
+// ResolvedByContains applies the Contains predicate on the "resolved_by" field.
+func ResolvedByContains(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldContains(FieldResolvedBy, v))
+}
+
+// ResolvedByHasPrefix applies the HasPrefix predicate on the "resolved_by" field.
+func ResolvedByHasPrefix(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldHasPrefix(FieldResolvedBy, v))
+}
+
+// ResolvedByHasSuffix applies the HasSuffix predicate on the "resolved_by" field.
+func ResolvedByHasSuffix(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldHasSuffix(FieldResolvedBy, v))
+}
+
+// ResolvedByIsNil applies the IsNil predicate on the "resolved_by" field.
+func ResolvedByIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldResolvedBy))
+}
+
+// ResolvedByNotNil applies the NotNil predicate on the "resolved_by" field.
+func ResolvedByNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldResolvedBy))
+}
+
+// ResolvedByEqualFold applies the EqualFold predicate on the "resolved_by" field.
+func ResolvedByEqualFold(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEqualFold(FieldResolvedBy, v))
+}
+
+// ResolvedByContainsFold applies the ContainsFold predicate on the "resolved_by" field.
+func ResolvedByContainsFold(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldContainsFold(FieldResolvedBy, v))
+}
+
+// ResolvedAtEQ applies the EQ predicate on the "resolved_at" field.
+func ResolvedAtEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldResolvedAt, v))
+}
+
+// ResolvedAtNEQ applies the NEQ predicate on the "resolved_at" field.
+func ResolvedAtNEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldResolvedAt, v))
+}
+
+// ResolvedAtIn applies the In predicate on the "resolved_at" field.
+func ResolvedAtIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldResolvedAt, vs...))
+}
+
+// ResolvedAtNotIn applies the NotIn predicate on the "resolved_at" field.
+func ResolvedAtNotIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldResolvedAt, vs...))
+}
+
+// ResolvedAtGT applies the GT predicate on the "resolved_at" field.
+func ResolvedAtGT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldResolvedAt, v))
+}
+
+// ResolvedAtGTE applies the GTE predicate on the "resolved_at" field.
+func ResolvedAtGTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldResolvedAt, v))
+}
+
+// ResolvedAtLT applies the LT predicate on the "resolved_at" field.
+func ResolvedAtLT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldResolvedAt, v))
+}
+
+// ResolvedAtLTE applies the LTE predicate on the "resolved_at" field.
+func ResolvedAtLTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldResolvedAt, v))
+}
+
+// ResolvedAtIsNil applies the IsNil predicate on the "resolved_at" field.
+func ResolvedAtIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldResolvedAt))
+}
+
+// ResolvedAtNotNil applies the NotNil predicate on the "resolved_at" field.
+func ResolvedAtNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldResolvedAt))
 }
 
 // HasAlerts applies the HasEdge predicate on the "alerts" edge.

@@ -15,6 +15,7 @@ import (
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
+	"openxdr/server/ent/finding"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/hostcredential"
@@ -104,6 +105,7 @@ func checkColumn(t, c string) error {
 			commandpolicy.Table:   commandpolicy.ValidColumn,
 			enrolltoken.Table:     enrolltoken.ValidColumn,
 			event.Table:           event.ValidColumn,
+			finding.Table:         finding.ValidColumn,
 			group.Table:           group.ValidColumn,
 			groupmember.Table:     groupmember.ValidColumn,
 			hostcredential.Table:  hostcredential.ValidColumn,

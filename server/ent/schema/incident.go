@@ -26,6 +26,10 @@ func (Incident) Fields() []ent.Field {
 		field.String("title").Optional().Nillable(),
 		// webhook 投递标记：非空表示已推送（或按策略静默跳过），空则待投递
 		field.Time("notified_at").Optional().Nillable(),
+		// 结案：closed 表示属实已处置，false_positive 表示误报或良性；备注会作为案例喂回研判
+		field.Text("resolution").Optional().Nillable(),
+		field.String("resolved_by").Optional().Nillable(),
+		field.Time("resolved_at").Optional().Nillable(),
 	}
 }
 

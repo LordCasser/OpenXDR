@@ -16,6 +16,7 @@ import (
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
+	"openxdr/server/ent/finding"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/hostcredential"
@@ -57,6 +58,7 @@ const (
 	TypeCommandPolicy   = "CommandPolicy"
 	TypeEnrollToken     = "EnrollToken"
 	TypeEvent           = "Event"
+	TypeFinding         = "Finding"
 	TypeGroup           = "Group"
 	TypeGroupMember     = "GroupMember"
 	TypeHostCredential  = "HostCredential"
@@ -8885,6 +8887,1065 @@ func (m *EventMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Event edge %s", name)
 }
 
+// FindingMutation represents an operation that mutates the Finding nodes in the graph.
+type FindingMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	group_id      *uuid.UUID
+	asset_id      *uuid.UUID
+	key           *string
+	title         *string
+	detail        *string
+	severity      *string
+	status        *string
+	first_seen    *time.Time
+	last_seen     *time.Time
+	session_id    *uuid.UUID
+	resolved_at   *time.Time
+	resolved_by   *string
+	note          *string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*Finding, error)
+	predicates    []predicate.Finding
+}
+
+var _ ent.Mutation = (*FindingMutation)(nil)
+
+// findingOption allows management of the mutation configuration using functional options.
+type findingOption func(*FindingMutation)
+
+// newFindingMutation creates new mutation for the Finding entity.
+func newFindingMutation(c config, op Op, opts ...findingOption) *FindingMutation {
+	m := &FindingMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeFinding,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withFindingID sets the ID field of the mutation.
+func withFindingID(id uuid.UUID) findingOption {
+	return func(m *FindingMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Finding
+		)
+		m.oldValue = func(ctx context.Context) (*Finding, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Finding.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withFinding sets the old Finding of the mutation.
+func withFinding(node *Finding) findingOption {
+	return func(m *FindingMutation) {
+		m.oldValue = func(context.Context) (*Finding, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m FindingMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m FindingMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Finding entities.
+func (m *FindingMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *FindingMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *FindingMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Finding.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *FindingMutation) SetGroupID(u uuid.UUID) {
+	m.group_id = &u
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *FindingMutation) GroupID() (r uuid.UUID, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldGroupID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *FindingMutation) ResetGroupID() {
+	m.group_id = nil
+}
+
+// SetAssetID sets the "asset_id" field.
+func (m *FindingMutation) SetAssetID(u uuid.UUID) {
+	m.asset_id = &u
+}
+
+// AssetID returns the value of the "asset_id" field in the mutation.
+func (m *FindingMutation) AssetID() (r uuid.UUID, exists bool) {
+	v := m.asset_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssetID returns the old "asset_id" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldAssetID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssetID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssetID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssetID: %w", err)
+	}
+	return oldValue.AssetID, nil
+}
+
+// ResetAssetID resets all changes to the "asset_id" field.
+func (m *FindingMutation) ResetAssetID() {
+	m.asset_id = nil
+}
+
+// SetKey sets the "key" field.
+func (m *FindingMutation) SetKey(s string) {
+	m.key = &s
+}
+
+// Key returns the value of the "key" field in the mutation.
+func (m *FindingMutation) Key() (r string, exists bool) {
+	v := m.key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKey returns the old "key" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKey: %w", err)
+	}
+	return oldValue.Key, nil
+}
+
+// ResetKey resets all changes to the "key" field.
+func (m *FindingMutation) ResetKey() {
+	m.key = nil
+}
+
+// SetTitle sets the "title" field.
+func (m *FindingMutation) SetTitle(s string) {
+	m.title = &s
+}
+
+// Title returns the value of the "title" field in the mutation.
+func (m *FindingMutation) Title() (r string, exists bool) {
+	v := m.title
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTitle returns the old "title" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldTitle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTitle is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTitle requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
+	}
+	return oldValue.Title, nil
+}
+
+// ResetTitle resets all changes to the "title" field.
+func (m *FindingMutation) ResetTitle() {
+	m.title = nil
+}
+
+// SetDetail sets the "detail" field.
+func (m *FindingMutation) SetDetail(s string) {
+	m.detail = &s
+}
+
+// Detail returns the value of the "detail" field in the mutation.
+func (m *FindingMutation) Detail() (r string, exists bool) {
+	v := m.detail
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDetail returns the old "detail" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldDetail(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDetail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDetail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDetail: %w", err)
+	}
+	return oldValue.Detail, nil
+}
+
+// ResetDetail resets all changes to the "detail" field.
+func (m *FindingMutation) ResetDetail() {
+	m.detail = nil
+}
+
+// SetSeverity sets the "severity" field.
+func (m *FindingMutation) SetSeverity(s string) {
+	m.severity = &s
+}
+
+// Severity returns the value of the "severity" field in the mutation.
+func (m *FindingMutation) Severity() (r string, exists bool) {
+	v := m.severity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSeverity returns the old "severity" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldSeverity(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSeverity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSeverity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSeverity: %w", err)
+	}
+	return oldValue.Severity, nil
+}
+
+// ResetSeverity resets all changes to the "severity" field.
+func (m *FindingMutation) ResetSeverity() {
+	m.severity = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *FindingMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *FindingMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *FindingMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetFirstSeen sets the "first_seen" field.
+func (m *FindingMutation) SetFirstSeen(t time.Time) {
+	m.first_seen = &t
+}
+
+// FirstSeen returns the value of the "first_seen" field in the mutation.
+func (m *FindingMutation) FirstSeen() (r time.Time, exists bool) {
+	v := m.first_seen
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFirstSeen returns the old "first_seen" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldFirstSeen(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFirstSeen is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFirstSeen requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFirstSeen: %w", err)
+	}
+	return oldValue.FirstSeen, nil
+}
+
+// ResetFirstSeen resets all changes to the "first_seen" field.
+func (m *FindingMutation) ResetFirstSeen() {
+	m.first_seen = nil
+}
+
+// SetLastSeen sets the "last_seen" field.
+func (m *FindingMutation) SetLastSeen(t time.Time) {
+	m.last_seen = &t
+}
+
+// LastSeen returns the value of the "last_seen" field in the mutation.
+func (m *FindingMutation) LastSeen() (r time.Time, exists bool) {
+	v := m.last_seen
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastSeen returns the old "last_seen" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldLastSeen(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastSeen is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastSeen requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastSeen: %w", err)
+	}
+	return oldValue.LastSeen, nil
+}
+
+// ResetLastSeen resets all changes to the "last_seen" field.
+func (m *FindingMutation) ResetLastSeen() {
+	m.last_seen = nil
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *FindingMutation) SetSessionID(u uuid.UUID) {
+	m.session_id = &u
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *FindingMutation) SessionID() (r uuid.UUID, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldSessionID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (m *FindingMutation) ClearSessionID() {
+	m.session_id = nil
+	m.clearedFields[finding.FieldSessionID] = struct{}{}
+}
+
+// SessionIDCleared returns if the "session_id" field was cleared in this mutation.
+func (m *FindingMutation) SessionIDCleared() bool {
+	_, ok := m.clearedFields[finding.FieldSessionID]
+	return ok
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *FindingMutation) ResetSessionID() {
+	m.session_id = nil
+	delete(m.clearedFields, finding.FieldSessionID)
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (m *FindingMutation) SetResolvedAt(t time.Time) {
+	m.resolved_at = &t
+}
+
+// ResolvedAt returns the value of the "resolved_at" field in the mutation.
+func (m *FindingMutation) ResolvedAt() (r time.Time, exists bool) {
+	v := m.resolved_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolvedAt returns the old "resolved_at" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldResolvedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolvedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolvedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolvedAt: %w", err)
+	}
+	return oldValue.ResolvedAt, nil
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (m *FindingMutation) ClearResolvedAt() {
+	m.resolved_at = nil
+	m.clearedFields[finding.FieldResolvedAt] = struct{}{}
+}
+
+// ResolvedAtCleared returns if the "resolved_at" field was cleared in this mutation.
+func (m *FindingMutation) ResolvedAtCleared() bool {
+	_, ok := m.clearedFields[finding.FieldResolvedAt]
+	return ok
+}
+
+// ResetResolvedAt resets all changes to the "resolved_at" field.
+func (m *FindingMutation) ResetResolvedAt() {
+	m.resolved_at = nil
+	delete(m.clearedFields, finding.FieldResolvedAt)
+}
+
+// SetResolvedBy sets the "resolved_by" field.
+func (m *FindingMutation) SetResolvedBy(s string) {
+	m.resolved_by = &s
+}
+
+// ResolvedBy returns the value of the "resolved_by" field in the mutation.
+func (m *FindingMutation) ResolvedBy() (r string, exists bool) {
+	v := m.resolved_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolvedBy returns the old "resolved_by" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldResolvedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolvedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolvedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolvedBy: %w", err)
+	}
+	return oldValue.ResolvedBy, nil
+}
+
+// ClearResolvedBy clears the value of the "resolved_by" field.
+func (m *FindingMutation) ClearResolvedBy() {
+	m.resolved_by = nil
+	m.clearedFields[finding.FieldResolvedBy] = struct{}{}
+}
+
+// ResolvedByCleared returns if the "resolved_by" field was cleared in this mutation.
+func (m *FindingMutation) ResolvedByCleared() bool {
+	_, ok := m.clearedFields[finding.FieldResolvedBy]
+	return ok
+}
+
+// ResetResolvedBy resets all changes to the "resolved_by" field.
+func (m *FindingMutation) ResetResolvedBy() {
+	m.resolved_by = nil
+	delete(m.clearedFields, finding.FieldResolvedBy)
+}
+
+// SetNote sets the "note" field.
+func (m *FindingMutation) SetNote(s string) {
+	m.note = &s
+}
+
+// Note returns the value of the "note" field in the mutation.
+func (m *FindingMutation) Note() (r string, exists bool) {
+	v := m.note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNote returns the old "note" field's value of the Finding entity.
+// If the Finding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FindingMutation) OldNote(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNote: %w", err)
+	}
+	return oldValue.Note, nil
+}
+
+// ClearNote clears the value of the "note" field.
+func (m *FindingMutation) ClearNote() {
+	m.note = nil
+	m.clearedFields[finding.FieldNote] = struct{}{}
+}
+
+// NoteCleared returns if the "note" field was cleared in this mutation.
+func (m *FindingMutation) NoteCleared() bool {
+	_, ok := m.clearedFields[finding.FieldNote]
+	return ok
+}
+
+// ResetNote resets all changes to the "note" field.
+func (m *FindingMutation) ResetNote() {
+	m.note = nil
+	delete(m.clearedFields, finding.FieldNote)
+}
+
+// Where appends a list predicates to the FindingMutation builder.
+func (m *FindingMutation) Where(ps ...predicate.Finding) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the FindingMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *FindingMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Finding, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *FindingMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *FindingMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Finding).
+func (m *FindingMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *FindingMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.group_id != nil {
+		fields = append(fields, finding.FieldGroupID)
+	}
+	if m.asset_id != nil {
+		fields = append(fields, finding.FieldAssetID)
+	}
+	if m.key != nil {
+		fields = append(fields, finding.FieldKey)
+	}
+	if m.title != nil {
+		fields = append(fields, finding.FieldTitle)
+	}
+	if m.detail != nil {
+		fields = append(fields, finding.FieldDetail)
+	}
+	if m.severity != nil {
+		fields = append(fields, finding.FieldSeverity)
+	}
+	if m.status != nil {
+		fields = append(fields, finding.FieldStatus)
+	}
+	if m.first_seen != nil {
+		fields = append(fields, finding.FieldFirstSeen)
+	}
+	if m.last_seen != nil {
+		fields = append(fields, finding.FieldLastSeen)
+	}
+	if m.session_id != nil {
+		fields = append(fields, finding.FieldSessionID)
+	}
+	if m.resolved_at != nil {
+		fields = append(fields, finding.FieldResolvedAt)
+	}
+	if m.resolved_by != nil {
+		fields = append(fields, finding.FieldResolvedBy)
+	}
+	if m.note != nil {
+		fields = append(fields, finding.FieldNote)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *FindingMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case finding.FieldGroupID:
+		return m.GroupID()
+	case finding.FieldAssetID:
+		return m.AssetID()
+	case finding.FieldKey:
+		return m.Key()
+	case finding.FieldTitle:
+		return m.Title()
+	case finding.FieldDetail:
+		return m.Detail()
+	case finding.FieldSeverity:
+		return m.Severity()
+	case finding.FieldStatus:
+		return m.Status()
+	case finding.FieldFirstSeen:
+		return m.FirstSeen()
+	case finding.FieldLastSeen:
+		return m.LastSeen()
+	case finding.FieldSessionID:
+		return m.SessionID()
+	case finding.FieldResolvedAt:
+		return m.ResolvedAt()
+	case finding.FieldResolvedBy:
+		return m.ResolvedBy()
+	case finding.FieldNote:
+		return m.Note()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *FindingMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case finding.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case finding.FieldAssetID:
+		return m.OldAssetID(ctx)
+	case finding.FieldKey:
+		return m.OldKey(ctx)
+	case finding.FieldTitle:
+		return m.OldTitle(ctx)
+	case finding.FieldDetail:
+		return m.OldDetail(ctx)
+	case finding.FieldSeverity:
+		return m.OldSeverity(ctx)
+	case finding.FieldStatus:
+		return m.OldStatus(ctx)
+	case finding.FieldFirstSeen:
+		return m.OldFirstSeen(ctx)
+	case finding.FieldLastSeen:
+		return m.OldLastSeen(ctx)
+	case finding.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case finding.FieldResolvedAt:
+		return m.OldResolvedAt(ctx)
+	case finding.FieldResolvedBy:
+		return m.OldResolvedBy(ctx)
+	case finding.FieldNote:
+		return m.OldNote(ctx)
+	}
+	return nil, fmt.Errorf("unknown Finding field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *FindingMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case finding.FieldGroupID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case finding.FieldAssetID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssetID(v)
+		return nil
+	case finding.FieldKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKey(v)
+		return nil
+	case finding.FieldTitle:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTitle(v)
+		return nil
+	case finding.FieldDetail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDetail(v)
+		return nil
+	case finding.FieldSeverity:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSeverity(v)
+		return nil
+	case finding.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case finding.FieldFirstSeen:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFirstSeen(v)
+		return nil
+	case finding.FieldLastSeen:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastSeen(v)
+		return nil
+	case finding.FieldSessionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case finding.FieldResolvedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolvedAt(v)
+		return nil
+	case finding.FieldResolvedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolvedBy(v)
+		return nil
+	case finding.FieldNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNote(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Finding field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *FindingMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *FindingMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *FindingMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Finding numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *FindingMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(finding.FieldSessionID) {
+		fields = append(fields, finding.FieldSessionID)
+	}
+	if m.FieldCleared(finding.FieldResolvedAt) {
+		fields = append(fields, finding.FieldResolvedAt)
+	}
+	if m.FieldCleared(finding.FieldResolvedBy) {
+		fields = append(fields, finding.FieldResolvedBy)
+	}
+	if m.FieldCleared(finding.FieldNote) {
+		fields = append(fields, finding.FieldNote)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *FindingMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *FindingMutation) ClearField(name string) error {
+	switch name {
+	case finding.FieldSessionID:
+		m.ClearSessionID()
+		return nil
+	case finding.FieldResolvedAt:
+		m.ClearResolvedAt()
+		return nil
+	case finding.FieldResolvedBy:
+		m.ClearResolvedBy()
+		return nil
+	case finding.FieldNote:
+		m.ClearNote()
+		return nil
+	}
+	return fmt.Errorf("unknown Finding nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *FindingMutation) ResetField(name string) error {
+	switch name {
+	case finding.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case finding.FieldAssetID:
+		m.ResetAssetID()
+		return nil
+	case finding.FieldKey:
+		m.ResetKey()
+		return nil
+	case finding.FieldTitle:
+		m.ResetTitle()
+		return nil
+	case finding.FieldDetail:
+		m.ResetDetail()
+		return nil
+	case finding.FieldSeverity:
+		m.ResetSeverity()
+		return nil
+	case finding.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case finding.FieldFirstSeen:
+		m.ResetFirstSeen()
+		return nil
+	case finding.FieldLastSeen:
+		m.ResetLastSeen()
+		return nil
+	case finding.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case finding.FieldResolvedAt:
+		m.ResetResolvedAt()
+		return nil
+	case finding.FieldResolvedBy:
+		m.ResetResolvedBy()
+		return nil
+	case finding.FieldNote:
+		m.ResetNote()
+		return nil
+	}
+	return fmt.Errorf("unknown Finding field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *FindingMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *FindingMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *FindingMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *FindingMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *FindingMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *FindingMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *FindingMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown Finding unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *FindingMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown Finding edge %s", name)
+}
+
 // GroupMutation represents an operation that mutates the Group nodes in the graph.
 type GroupMutation struct {
 	config
@@ -10655,6 +11716,9 @@ type IncidentMutation struct {
 	appendai_verdict json.RawMessage
 	title            *string
 	notified_at      *time.Time
+	resolution       *string
+	resolved_by      *string
+	resolved_at      *time.Time
 	clearedFields    map[string]struct{}
 	alerts           map[uuid.UUID]struct{}
 	removedalerts    map[uuid.UUID]struct{}
@@ -11054,6 +12118,153 @@ func (m *IncidentMutation) ResetNotifiedAt() {
 	delete(m.clearedFields, incident.FieldNotifiedAt)
 }
 
+// SetResolution sets the "resolution" field.
+func (m *IncidentMutation) SetResolution(s string) {
+	m.resolution = &s
+}
+
+// Resolution returns the value of the "resolution" field in the mutation.
+func (m *IncidentMutation) Resolution() (r string, exists bool) {
+	v := m.resolution
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolution returns the old "resolution" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldResolution(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolution is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolution requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolution: %w", err)
+	}
+	return oldValue.Resolution, nil
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (m *IncidentMutation) ClearResolution() {
+	m.resolution = nil
+	m.clearedFields[incident.FieldResolution] = struct{}{}
+}
+
+// ResolutionCleared returns if the "resolution" field was cleared in this mutation.
+func (m *IncidentMutation) ResolutionCleared() bool {
+	_, ok := m.clearedFields[incident.FieldResolution]
+	return ok
+}
+
+// ResetResolution resets all changes to the "resolution" field.
+func (m *IncidentMutation) ResetResolution() {
+	m.resolution = nil
+	delete(m.clearedFields, incident.FieldResolution)
+}
+
+// SetResolvedBy sets the "resolved_by" field.
+func (m *IncidentMutation) SetResolvedBy(s string) {
+	m.resolved_by = &s
+}
+
+// ResolvedBy returns the value of the "resolved_by" field in the mutation.
+func (m *IncidentMutation) ResolvedBy() (r string, exists bool) {
+	v := m.resolved_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolvedBy returns the old "resolved_by" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldResolvedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolvedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolvedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolvedBy: %w", err)
+	}
+	return oldValue.ResolvedBy, nil
+}
+
+// ClearResolvedBy clears the value of the "resolved_by" field.
+func (m *IncidentMutation) ClearResolvedBy() {
+	m.resolved_by = nil
+	m.clearedFields[incident.FieldResolvedBy] = struct{}{}
+}
+
+// ResolvedByCleared returns if the "resolved_by" field was cleared in this mutation.
+func (m *IncidentMutation) ResolvedByCleared() bool {
+	_, ok := m.clearedFields[incident.FieldResolvedBy]
+	return ok
+}
+
+// ResetResolvedBy resets all changes to the "resolved_by" field.
+func (m *IncidentMutation) ResetResolvedBy() {
+	m.resolved_by = nil
+	delete(m.clearedFields, incident.FieldResolvedBy)
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (m *IncidentMutation) SetResolvedAt(t time.Time) {
+	m.resolved_at = &t
+}
+
+// ResolvedAt returns the value of the "resolved_at" field in the mutation.
+func (m *IncidentMutation) ResolvedAt() (r time.Time, exists bool) {
+	v := m.resolved_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolvedAt returns the old "resolved_at" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldResolvedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolvedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolvedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolvedAt: %w", err)
+	}
+	return oldValue.ResolvedAt, nil
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (m *IncidentMutation) ClearResolvedAt() {
+	m.resolved_at = nil
+	m.clearedFields[incident.FieldResolvedAt] = struct{}{}
+}
+
+// ResolvedAtCleared returns if the "resolved_at" field was cleared in this mutation.
+func (m *IncidentMutation) ResolvedAtCleared() bool {
+	_, ok := m.clearedFields[incident.FieldResolvedAt]
+	return ok
+}
+
+// ResetResolvedAt resets all changes to the "resolved_at" field.
+func (m *IncidentMutation) ResetResolvedAt() {
+	m.resolved_at = nil
+	delete(m.clearedFields, incident.FieldResolvedAt)
+}
+
 // AddAlertIDs adds the "alerts" edge to the Alert entity by ids.
 func (m *IncidentMutation) AddAlertIDs(ids ...uuid.UUID) {
 	if m.alerts == nil {
@@ -11142,7 +12353,7 @@ func (m *IncidentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 9)
 	if m.created_at != nil {
 		fields = append(fields, incident.FieldCreatedAt)
 	}
@@ -11160,6 +12371,15 @@ func (m *IncidentMutation) Fields() []string {
 	}
 	if m.notified_at != nil {
 		fields = append(fields, incident.FieldNotifiedAt)
+	}
+	if m.resolution != nil {
+		fields = append(fields, incident.FieldResolution)
+	}
+	if m.resolved_by != nil {
+		fields = append(fields, incident.FieldResolvedBy)
+	}
+	if m.resolved_at != nil {
+		fields = append(fields, incident.FieldResolvedAt)
 	}
 	return fields
 }
@@ -11181,6 +12401,12 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 		return m.Title()
 	case incident.FieldNotifiedAt:
 		return m.NotifiedAt()
+	case incident.FieldResolution:
+		return m.Resolution()
+	case incident.FieldResolvedBy:
+		return m.ResolvedBy()
+	case incident.FieldResolvedAt:
+		return m.ResolvedAt()
 	}
 	return nil, false
 }
@@ -11202,6 +12428,12 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTitle(ctx)
 	case incident.FieldNotifiedAt:
 		return m.OldNotifiedAt(ctx)
+	case incident.FieldResolution:
+		return m.OldResolution(ctx)
+	case incident.FieldResolvedBy:
+		return m.OldResolvedBy(ctx)
+	case incident.FieldResolvedAt:
+		return m.OldResolvedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Incident field %s", name)
 }
@@ -11253,6 +12485,27 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetNotifiedAt(v)
 		return nil
+	case incident.FieldResolution:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolution(v)
+		return nil
+	case incident.FieldResolvedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolvedBy(v)
+		return nil
+	case incident.FieldResolvedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolvedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Incident field %s", name)
 }
@@ -11292,6 +12545,15 @@ func (m *IncidentMutation) ClearedFields() []string {
 	if m.FieldCleared(incident.FieldNotifiedAt) {
 		fields = append(fields, incident.FieldNotifiedAt)
 	}
+	if m.FieldCleared(incident.FieldResolution) {
+		fields = append(fields, incident.FieldResolution)
+	}
+	if m.FieldCleared(incident.FieldResolvedBy) {
+		fields = append(fields, incident.FieldResolvedBy)
+	}
+	if m.FieldCleared(incident.FieldResolvedAt) {
+		fields = append(fields, incident.FieldResolvedAt)
+	}
 	return fields
 }
 
@@ -11314,6 +12576,15 @@ func (m *IncidentMutation) ClearField(name string) error {
 		return nil
 	case incident.FieldNotifiedAt:
 		m.ClearNotifiedAt()
+		return nil
+	case incident.FieldResolution:
+		m.ClearResolution()
+		return nil
+	case incident.FieldResolvedBy:
+		m.ClearResolvedBy()
+		return nil
+	case incident.FieldResolvedAt:
+		m.ClearResolvedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Incident nullable field %s", name)
@@ -11340,6 +12611,15 @@ func (m *IncidentMutation) ResetField(name string) error {
 		return nil
 	case incident.FieldNotifiedAt:
 		m.ResetNotifiedAt()
+		return nil
+	case incident.FieldResolution:
+		m.ResetResolution()
+		return nil
+	case incident.FieldResolvedBy:
+		m.ResetResolvedBy()
+		return nil
+	case incident.FieldResolvedAt:
+		m.ResetResolvedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Incident field %s", name)

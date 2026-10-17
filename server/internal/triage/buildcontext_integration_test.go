@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"openxdr/server/internal/testdb"
 )
 
@@ -67,62 +69,55 @@ func TestBuildContext(t *testing.T) {
 	}
 }
 
-// 同规则的历史误报案例应回流进上下文；无案例时不加该段落。
-func TestBuildContextFalsePositiveHistory(t *testing.T) {
+// 同规则或同主机的人工结案回流进上下文，带 AI 当时的判断与备注；无关事件不出现。
+func TestBuildContextCaseHistory(t *testing.T) {
 	ctx, client := testdb.New(t)
 	now := time.Now()
+	host := client.Asset.Create().SetHostname("h1").SaveX(ctx)
+	other := client.Asset.Create().SetHostname("h2").SaveX(ctx)
+	mk := func(status, title, verdict, note, rule string, asset uuid.UUID) {
+		c := client.Incident.Create().SetStatus(status).SetTitle(title).SetGraph(json.RawMessage(`{}`))
+		if verdict != "" {
+			c.SetAiVerdict(json.RawMessage(`{"verdict":"` + verdict + `"}`))
+		}
+		if note != "" {
+			c.SetResolution(note)
+		}
+		inc := c.SaveX(ctx)
+		client.Alert.Create().SetTs(now.Add(-24 * time.Hour)).SetRuleID(rule).SetSeverity(3).
+			SetAssetID(asset).SetIncidentID(inc.ID).SaveX(ctx)
+	}
+	mk("false_positive", "扫描器噪声", "malicious", "运维巡检脚本", "r-noisy", other.ID)
+	mk("closed", "同机真入侵", "benign", "已确认被植入后门并重装", "r-other", host.ID)
+	mk("triaged", "未结案的", "benign", "", "r-noisy", host.ID)
+	mk("closed", "无关事件", "", "", "r-unrelated", other.ID)
 
-	// 历史：r-noisy 所在 incident 被判误报
-	fpTitle := "扫描器噪声"
-	fpInc, err := client.Incident.Create().
-		SetStatus("false_positive").SetTitle(fpTitle).
-		SetGraph(json.RawMessage(`{}`)).Save(ctx)
+	inc := client.Incident.Create().SetStatus("open").SetTitle("新事件").SetGraph(json.RawMessage(`{}`)).SaveX(ctx)
+	client.Alert.Create().SetTs(now).SetRuleID("r-noisy").SetSeverity(3).SetAssetID(host.ID).SetIncidentID(inc.ID).SaveX(ctx)
+
+	out, err := (&Engine{DB: client}).buildContext(ctx, inc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Alert.Create().
-		SetTs(now.Add(-24 * time.Hour)).SetRuleID("r-noisy").SetSeverity(3).
-		SetIncidentID(fpInc.ID).Save(ctx); err != nil {
-		t.Fatal(err)
+	for _, want := range []string{"历史结案参考", "「扫描器噪声」：AI 判 malicious，人工结案为误报或良性。备注：运维巡检脚本",
+		"「同机真入侵」：AI 判 benign，人工结案为属实已处置。备注：已确认被植入后门并重装"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("上下文缺少 %q：\n%s", want, out)
+		}
+	}
+	for _, bad := range []string{"未结案的", "无关事件", "「新事件」："} {
+		if strings.Contains(out, bad) {
+			t.Errorf("不该出现 %q：\n%s", bad, out)
+		}
 	}
 
-	// 当前：同一规则的新 incident
-	inc, err := client.Incident.Create().
-		SetStatus("open").SetTitle("新事件").SetGraph(json.RawMessage(`{}`)).Save(ctx)
+	lone := client.Incident.Create().SetStatus("open").SetTitle("另一事件").SetGraph(json.RawMessage(`{}`)).SaveX(ctx)
+	client.Alert.Create().SetTs(now).SetRuleID("r-clean").SetSeverity(3).SetIncidentID(lone.ID).SaveX(ctx)
+	out2, err := (&Engine{DB: client}).buildContext(ctx, lone)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Alert.Create().
-		SetTs(now).SetRuleID("r-noisy").SetSeverity(3).
-		SetIncidentID(inc.ID).Save(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	e := &Engine{DB: client}
-	out, err := e.buildContext(ctx, inc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "历史误报参考") || !strings.Contains(out, fpTitle) {
-		t.Errorf("上下文应包含历史误报案例：\n%s", out)
-	}
-
-	// 无历史案例的规则不该出现该段落
-	inc2, err := client.Incident.Create().
-		SetStatus("open").SetTitle("另一事件").SetGraph(json.RawMessage(`{}`)).Save(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := client.Alert.Create().
-		SetTs(now).SetRuleID("r-clean").SetSeverity(3).
-		SetIncidentID(inc2.ID).Save(ctx); err != nil {
-		t.Fatal(err)
-	}
-	out2, err := e.buildContext(ctx, inc2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(out2, "历史误报参考") {
-		t.Errorf("无案例时不该有误报参考段落：\n%s", out2)
+	if strings.Contains(out2, "历史结案参考") {
+		t.Errorf("无案例时不该有该段落：\n%s", out2)
 	}
 }

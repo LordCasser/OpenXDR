@@ -33,6 +33,9 @@ type EnrollToken func(*sql.Selector)
 // Event is the predicate function for event builders.
 type Event func(*sql.Selector)
 
+// Finding is the predicate function for finding builders.
+type Finding func(*sql.Selector)
+
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 

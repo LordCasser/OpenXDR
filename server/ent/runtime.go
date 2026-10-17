@@ -12,6 +12,7 @@ import (
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
+	"openxdr/server/ent/finding"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/hostcredential"
@@ -174,6 +175,40 @@ func init() {
 	eventDescID := eventFields[0].Descriptor()
 	// event.DefaultID holds the default value on creation for the id field.
 	event.DefaultID = eventDescID.Default.(func() uuid.UUID)
+	findingFields := schema.Finding{}.Fields()
+	_ = findingFields
+	// findingDescKey is the schema descriptor for key field.
+	findingDescKey := findingFields[3].Descriptor()
+	// finding.KeyValidator is a validator for the "key" field. It is called by the builders before save.
+	finding.KeyValidator = findingDescKey.Validators[0].(func(string) error)
+	// findingDescTitle is the schema descriptor for title field.
+	findingDescTitle := findingFields[4].Descriptor()
+	// finding.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	finding.TitleValidator = findingDescTitle.Validators[0].(func(string) error)
+	// findingDescDetail is the schema descriptor for detail field.
+	findingDescDetail := findingFields[5].Descriptor()
+	// finding.DefaultDetail holds the default value on creation for the detail field.
+	finding.DefaultDetail = findingDescDetail.Default.(string)
+	// findingDescSeverity is the schema descriptor for severity field.
+	findingDescSeverity := findingFields[6].Descriptor()
+	// finding.DefaultSeverity holds the default value on creation for the severity field.
+	finding.DefaultSeverity = findingDescSeverity.Default.(string)
+	// findingDescStatus is the schema descriptor for status field.
+	findingDescStatus := findingFields[7].Descriptor()
+	// finding.DefaultStatus holds the default value on creation for the status field.
+	finding.DefaultStatus = findingDescStatus.Default.(string)
+	// findingDescFirstSeen is the schema descriptor for first_seen field.
+	findingDescFirstSeen := findingFields[8].Descriptor()
+	// finding.DefaultFirstSeen holds the default value on creation for the first_seen field.
+	finding.DefaultFirstSeen = findingDescFirstSeen.Default.(func() time.Time)
+	// findingDescLastSeen is the schema descriptor for last_seen field.
+	findingDescLastSeen := findingFields[9].Descriptor()
+	// finding.DefaultLastSeen holds the default value on creation for the last_seen field.
+	finding.DefaultLastSeen = findingDescLastSeen.Default.(func() time.Time)
+	// findingDescID is the schema descriptor for id field.
+	findingDescID := findingFields[0].Descriptor()
+	// finding.DefaultID holds the default value on creation for the id field.
+	finding.DefaultID = findingDescID.Default.(func() uuid.UUID)
 	groupFields := schema.Group{}.Fields()
 	_ = groupFields
 	// groupDescCreatedAt is the schema descriptor for created_at field.

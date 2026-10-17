@@ -15,6 +15,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/incident"
+	"openxdr/server/ent/predicate"
 )
 
 const systemPrompt = `你是资深安全分析师，负责研判 XDR 平台聚合出的安全事件。
@@ -193,59 +194,67 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 		fmt.Fprintf(&sb, "- [%s] severity=%d count=%d rule=%s event=%s\n",
 			a.Ts.Format("15:04:05"), a.Severity, a.Count, rule, raw)
 	}
-	e.appendFalsePositiveHistory(ctx, &sb, alerts)
+	e.appendCaseHistory(ctx, &sb, inc, alerts)
 	return sb.String(), nil
 }
 
-// appendFalsePositiveHistory 把分析师的历史判断喂回模型：同样规则最近被
-// 人工判为误报的案例。人的反馈是最贵的信号，不用等于白扔。
-func (e *Engine) appendFalsePositiveHistory(ctx context.Context, sb *strings.Builder, alerts []*ent.Alert) {
-	ruleIDs := make([]string, 0, len(alerts))
+// appendCaseHistory 把分析师的结案喂回模型：同规则或同主机、近 90 天人工结过案的事件，
+// 连同当时 AI 的判断与结案备注。人的结论是最贵的信号；AI 与人不一致的案例最有用。
+func (e *Engine) appendCaseHistory(ctx context.Context, sb *strings.Builder, inc *ent.Incident, alerts []*ent.Alert) {
+	var related []predicate.Alert
+	ruleIDs, assetIDs := []string{}, []uuid.UUID{}
 	for _, a := range alerts {
 		ruleIDs = append(ruleIDs, a.RuleID)
+		if a.AssetID != nil {
+			assetIDs = append(assetIDs, *a.AssetID)
+		}
 	}
-	fpAlerts, err := e.DB.Alert.Query().
+	related = append(related, alert.RuleIDIn(ruleIDs...))
+	if len(assetIDs) > 0 {
+		related = append(related, alert.AssetIDIn(assetIDs...))
+	}
+	cases, err := e.DB.Incident.Query().
 		Where(
-			alert.RuleIDIn(ruleIDs...),
-			alert.TsGTE(time.Now().AddDate(0, 0, -90)),
-			alert.HasIncidentWith(incident.StatusEQ("false_positive")),
+			incident.IDNEQ(inc.ID),
+			incident.StatusIn("closed", "false_positive"),
+			incident.HasAlertsWith(alert.Or(related...), alert.TsGTE(time.Now().AddDate(0, 0, -90))),
 		).
-		WithIncident().
-		Order(ent.Desc(alert.FieldTs)).
-		Limit(20).
+		Order(ent.Desc(incident.FieldCreatedAt)).
+		Limit(8).
 		All(ctx)
-	if err != nil || len(fpAlerts) == 0 {
+	if err != nil || len(cases) == 0 {
 		return
 	}
+	sb.WriteString("## 历史结案参考（同规则或同主机，分析师的人工结论；仅供权衡，本次证据不同则不适用）\n")
+	for _, c := range cases {
+		title, note := "", "无备注"
+		if c.Title != nil {
+			title = *c.Title
+		}
+		if c.Resolution != nil {
+			note = excerpt(*c.Resolution, 200)
+		}
+		var v struct {
+			Verdict string `json:"verdict"`
+		}
+		_ = json.Unmarshal(c.AiVerdict, &v)
+		if v.Verdict == "" {
+			v.Verdict = "未研判"
+		}
+		outcome := "误报或良性"
+		if c.Status == "closed" {
+			outcome = "属实已处置"
+		}
+		fmt.Fprintf(sb, "- %s「%s」：AI 判 %s，人工结案为%s。备注：%s\n",
+			c.CreatedAt.Format("2006-01-02"), title, v.Verdict, outcome, note)
+	}
+}
 
-	seen := map[string]bool{}
-	var lines []string
-	for _, a := range fpAlerts {
-		if a.Edges.Incident == nil || len(lines) >= 5 {
-			continue
-		}
-		rule := a.RuleID
-		if e.Rules != nil {
-			if title := e.Rules.TitleOf(a.RuleID); title != "" {
-				rule = title
-			}
-		}
-		caseTitle := ""
-		if t := a.Edges.Incident.Title; t != nil {
-			caseTitle = *t
-		}
-		key := rule + "|" + caseTitle
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		lines = append(lines, fmt.Sprintf("- 规则「%s」曾于 %s 被分析师判为误报（案例: %s）",
-			rule, a.Ts.Format("2006-01-02"), caseTitle))
+// excerpt 按字符截断，案例备注只取要点
+func excerpt(s string, n int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= n {
+		return string(r)
 	}
-	if len(lines) == 0 {
-		return
-	}
-	sb.WriteString("## 历史误报参考（分析师人工判断，仅供权衡，本次证据不同则不适用）\n")
-	sb.WriteString(strings.Join(lines, "\n"))
-	sb.WriteString("\n")
+	return string(r[:n]) + "…"
 }

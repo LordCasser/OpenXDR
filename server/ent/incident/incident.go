@@ -27,6 +27,12 @@ const (
 	FieldTitle = "title"
 	// FieldNotifiedAt holds the string denoting the notified_at field in the database.
 	FieldNotifiedAt = "notified_at"
+	// FieldResolution holds the string denoting the resolution field in the database.
+	FieldResolution = "resolution"
+	// FieldResolvedBy holds the string denoting the resolved_by field in the database.
+	FieldResolvedBy = "resolved_by"
+	// FieldResolvedAt holds the string denoting the resolved_at field in the database.
+	FieldResolvedAt = "resolved_at"
 	// EdgeAlerts holds the string denoting the alerts edge name in mutations.
 	EdgeAlerts = "alerts"
 	// Table holds the table name of the incident in the database.
@@ -49,6 +55,9 @@ var Columns = []string{
 	FieldAiVerdict,
 	FieldTitle,
 	FieldNotifiedAt,
+	FieldResolution,
+	FieldResolvedBy,
+	FieldResolvedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -96,6 +105,21 @@ func ByTitle(opts ...sql.OrderTermOption) OrderOption {
 // ByNotifiedAt orders the results by the notified_at field.
 func ByNotifiedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotifiedAt, opts...).ToFunc()
+}
+
+// ByResolution orders the results by the resolution field.
+func ByResolution(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldResolution, opts...).ToFunc()
+}
+
+// ByResolvedBy orders the results by the resolved_by field.
+func ByResolvedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldResolvedBy, opts...).ToFunc()
+}
+
+// ByResolvedAt orders the results by the resolved_at field.
+func ByResolvedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldResolvedAt, opts...).ToFunc()
 }
 
 // ByAlertsCount orders the results by alerts count.

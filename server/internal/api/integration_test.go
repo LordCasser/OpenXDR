@@ -167,7 +167,16 @@ func TestAPIStatusUpdate(t *testing.T) {
 		t.Errorf("非法状态应 400，得到 %d", resp.StatusCode)
 	}
 
-	resp2, err := postJSON(ts, "/api/incidents/"+incID.String()+"/status", `{"status":"closed"}`)
+	bare, err := postJSON(ts, "/api/incidents/"+incID.String()+"/status", `{"status":"closed","note":"  "}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bare.Body.Close()
+	if bare.StatusCode != 400 {
+		t.Errorf("结案不写备注应 400，得到 %d", bare.StatusCode)
+	}
+
+	resp2, err := postJSON(ts, "/api/incidents/"+incID.String()+"/status", `{"status":"closed","note":"已隔离并重装"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,8 +184,20 @@ func TestAPIStatusUpdate(t *testing.T) {
 	if resp2.StatusCode != 204 {
 		t.Errorf("合法状态应 204，得到 %d", resp2.StatusCode)
 	}
+	_, raw := get(t, ts, "/api/incidents/"+incID.String())
+	if body := string(raw); !strings.Contains(body, `"resolution":"已隔离并重装"`) || !strings.Contains(body, `"resolvedBy":`) {
+		t.Errorf("结案信息未落库：%s", raw)
+	}
+	reopen, err := postJSON(ts, "/api/incidents/"+incID.String()+"/status", `{"status":"open"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopen.Body.Close()
+	if _, raw = get(t, ts, "/api/incidents/"+incID.String()); reopen.StatusCode != 204 || !strings.Contains(string(raw), `"resolution":null`) {
+		t.Errorf("重开应清掉结案信息：%d %s", reopen.StatusCode, raw)
+	}
 
-	resp3, err := postJSON(ts, "/api/incidents/"+uuid.New().String()+"/status", `{"status":"closed"}`)
+	resp3, err := postJSON(ts, "/api/incidents/"+uuid.New().String()+"/status", `{"status":"closed","note":"x"}`)
 	if err != nil {
 		t.Fatal(err)
 	}

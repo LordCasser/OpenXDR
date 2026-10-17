@@ -317,6 +317,41 @@ var (
 			},
 		},
 	}
+	// FindingsColumns holds the columns for the "findings" table.
+	FindingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "asset_id", Type: field.TypeUUID},
+		{Name: "key", Type: field.TypeString, Size: 64},
+		{Name: "title", Type: field.TypeString, Size: 200},
+		{Name: "detail", Type: field.TypeString, Size: 2147483647, Default: ""},
+		{Name: "severity", Type: field.TypeString, Default: "low"},
+		{Name: "status", Type: field.TypeString, Default: "open"},
+		{Name: "first_seen", Type: field.TypeTime},
+		{Name: "last_seen", Type: field.TypeTime},
+		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "resolved_at", Type: field.TypeTime, Nullable: true},
+		{Name: "resolved_by", Type: field.TypeString, Nullable: true},
+		{Name: "note", Type: field.TypeString, Nullable: true, Size: 2147483647},
+	}
+	// FindingsTable holds the schema information for the "findings" table.
+	FindingsTable = &schema.Table{
+		Name:       "findings",
+		Columns:    FindingsColumns,
+		PrimaryKey: []*schema.Column{FindingsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "finding_group_id_asset_id_key",
+				Unique:  true,
+				Columns: []*schema.Column{FindingsColumns[1], FindingsColumns[2], FindingsColumns[3]},
+			},
+			{
+				Name:    "finding_group_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{FindingsColumns[1], FindingsColumns[7]},
+			},
+		},
+	}
 	// GroupsColumns holds the columns for the "groups" table.
 	GroupsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -391,6 +426,9 @@ var (
 		{Name: "ai_verdict", Type: field.TypeJSON, Nullable: true},
 		{Name: "title", Type: field.TypeString, Nullable: true},
 		{Name: "notified_at", Type: field.TypeTime, Nullable: true},
+		{Name: "resolution", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "resolved_by", Type: field.TypeString, Nullable: true},
+		{Name: "resolved_at", Type: field.TypeTime, Nullable: true},
 	}
 	// IncidentsTable holds the schema information for the "incidents" table.
 	IncidentsTable = &schema.Table{
@@ -633,6 +671,7 @@ var (
 		CommandPoliciesTable,
 		EnrollTokensTable,
 		EventsTable,
+		FindingsTable,
 		GroupsTable,
 		GroupMembersTable,
 		HostCredentialsTable,

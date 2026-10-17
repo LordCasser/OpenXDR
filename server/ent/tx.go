@@ -30,6 +30,8 @@ type Tx struct {
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
+	// Finding is the client for interacting with the Finding builders.
+	Finding *FindingClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// GroupMember is the client for interacting with the GroupMember builders.
@@ -198,6 +200,7 @@ func (tx *Tx) init() {
 	tx.CommandPolicy = NewCommandPolicyClient(tx.config)
 	tx.EnrollToken = NewEnrollTokenClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
+	tx.Finding = NewFindingClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupMember = NewGroupMemberClient(tx.config)
 	tx.HostCredential = NewHostCredentialClient(tx.config)

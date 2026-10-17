@@ -20,6 +20,7 @@ import (
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
+	"openxdr/server/ent/finding"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/hostcredential"
@@ -65,6 +66,8 @@ type Client struct {
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
+	// Finding is the client for interacting with the Finding builders.
+	Finding *FindingClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// GroupMember is the client for interacting with the GroupMember builders.
@@ -113,6 +116,7 @@ func (c *Client) init() {
 	c.CommandPolicy = NewCommandPolicyClient(c.config)
 	c.EnrollToken = NewEnrollTokenClient(c.config)
 	c.Event = NewEventClient(c.config)
+	c.Finding = NewFindingClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupMember = NewGroupMemberClient(c.config)
 	c.HostCredential = NewHostCredentialClient(c.config)
@@ -228,6 +232,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CommandPolicy:   NewCommandPolicyClient(cfg),
 		EnrollToken:     NewEnrollTokenClient(cfg),
 		Event:           NewEventClient(cfg),
+		Finding:         NewFindingClient(cfg),
 		Group:           NewGroupClient(cfg),
 		GroupMember:     NewGroupMemberClient(cfg),
 		HostCredential:  NewHostCredentialClient(cfg),
@@ -270,6 +275,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CommandPolicy:   NewCommandPolicyClient(cfg),
 		EnrollToken:     NewEnrollTokenClient(cfg),
 		Event:           NewEventClient(cfg),
+		Finding:         NewFindingClient(cfg),
 		Group:           NewGroupClient(cfg),
 		GroupMember:     NewGroupMemberClient(cfg),
 		HostCredential:  NewHostCredentialClient(cfg),
@@ -314,7 +320,7 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
-		c.CommandPolicy, c.EnrollToken, c.Event, c.Group, c.GroupMember,
+		c.CommandPolicy, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
 		c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline, c.Report, c.Session,
 		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User,
 	} {
@@ -327,7 +333,7 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AuditLog, c.Command,
-		c.CommandPolicy, c.EnrollToken, c.Event, c.Group, c.GroupMember,
+		c.CommandPolicy, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
 		c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline, c.Report, c.Session,
 		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User,
 	} {
@@ -356,6 +362,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.EnrollToken.mutate(ctx, m)
 	case *EventMutation:
 		return c.Event.mutate(ctx, m)
+	case *FindingMutation:
+		return c.Finding.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
 	case *GroupMemberMutation:
@@ -1727,6 +1735,139 @@ func (c *EventClient) mutate(ctx context.Context, m *EventMutation) (Value, erro
 		return (&EventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Event mutation op: %q", m.Op())
+	}
+}
+
+// FindingClient is a client for the Finding schema.
+type FindingClient struct {
+	config
+}
+
+// NewFindingClient returns a client for the Finding from the given config.
+func NewFindingClient(c config) *FindingClient {
+	return &FindingClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `finding.Hooks(f(g(h())))`.
+func (c *FindingClient) Use(hooks ...Hook) {
+	c.hooks.Finding = append(c.hooks.Finding, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `finding.Intercept(f(g(h())))`.
+func (c *FindingClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Finding = append(c.inters.Finding, interceptors...)
+}
+
+// Create returns a builder for creating a Finding entity.
+func (c *FindingClient) Create() *FindingCreate {
+	mutation := newFindingMutation(c.config, OpCreate)
+	return &FindingCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Finding entities.
+func (c *FindingClient) CreateBulk(builders ...*FindingCreate) *FindingCreateBulk {
+	return &FindingCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FindingClient) MapCreateBulk(slice any, setFunc func(*FindingCreate, int)) *FindingCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FindingCreateBulk{err: fmt.Errorf("calling to FindingClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FindingCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FindingCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Finding.
+func (c *FindingClient) Update() *FindingUpdate {
+	mutation := newFindingMutation(c.config, OpUpdate)
+	return &FindingUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FindingClient) UpdateOne(_m *Finding) *FindingUpdateOne {
+	mutation := newFindingMutation(c.config, OpUpdateOne, withFinding(_m))
+	return &FindingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FindingClient) UpdateOneID(id uuid.UUID) *FindingUpdateOne {
+	mutation := newFindingMutation(c.config, OpUpdateOne, withFindingID(id))
+	return &FindingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Finding.
+func (c *FindingClient) Delete() *FindingDelete {
+	mutation := newFindingMutation(c.config, OpDelete)
+	return &FindingDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FindingClient) DeleteOne(_m *Finding) *FindingDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FindingClient) DeleteOneID(id uuid.UUID) *FindingDeleteOne {
+	builder := c.Delete().Where(finding.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FindingDeleteOne{builder}
+}
+
+// Query returns a query builder for Finding.
+func (c *FindingClient) Query() *FindingQuery {
+	return &FindingQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFinding},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Finding entity by its id.
+func (c *FindingClient) Get(ctx context.Context, id uuid.UUID) (*Finding, error) {
+	return c.Query().Where(finding.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FindingClient) GetX(ctx context.Context, id uuid.UUID) *Finding {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FindingClient) Hooks() []Hook {
+	return c.hooks.Finding
+}
+
+// Interceptors returns the client interceptors.
+func (c *FindingClient) Interceptors() []Interceptor {
+	return c.inters.Finding
+}
+
+func (c *FindingClient) mutate(ctx context.Context, m *FindingMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FindingCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FindingUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FindingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FindingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Finding mutation op: %q", m.Op())
 	}
 }
 
@@ -3612,14 +3753,14 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 type (
 	hooks struct {
 		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy,
-		EnrollToken, Event, Group, GroupMember, HostCredential, Incident, Intel,
-		ProcessBaseline, Report, Session, SessionMessage, Setting, Suppression, Task,
-		TaskRun, User []ent.Hook
+		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, Incident,
+		Intel, ProcessBaseline, Report, Session, SessionMessage, Setting, Suppression,
+		Task, TaskRun, User []ent.Hook
 	}
 	inters struct {
 		AgentSession, Alert, Approval, Asset, AuditLog, Command, CommandPolicy,
-		EnrollToken, Event, Group, GroupMember, HostCredential, Incident, Intel,
-		ProcessBaseline, Report, Session, SessionMessage, Setting, Suppression, Task,
-		TaskRun, User []ent.Interceptor
+		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, Incident,
+		Intel, ProcessBaseline, Report, Session, SessionMessage, Setting, Suppression,
+		Task, TaskRun, User []ent.Interceptor
 	}
 )

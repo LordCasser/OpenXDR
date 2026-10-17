@@ -100,7 +100,7 @@ func TestAPIGroupScope(t *testing.T) {
 	}
 
 	// 组内只是 viewer：改 incident 状态与下发指令都不行
-	r, _ := postJSON(ts, "/api/incidents/"+incA.ID.String()+"/status", `{"status":"closed"}`)
+	r, _ := postJSON(ts, "/api/incidents/"+incA.ID.String()+"/status", `{"status":"closed","note":"x"}`)
 	r.Body.Close()
 	if r.StatusCode != 403 {
 		t.Errorf("viewer 改状态应被拒，得到 %d", r.StatusCode)

@@ -14,6 +14,7 @@ import (
 	"openxdr/server/ent"
 	entasset "openxdr/server/ent/asset"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/ent/finding"
 	entgroup "openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/hostcredential"
@@ -133,6 +134,9 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 			if _, err := tx.CommandPolicy.Delete().Where(commandpolicy.GroupIDEQ(g.ID)).Exec(r.Context()); err != nil {
 				return err
 			}
+			if _, err := tx.Finding.Delete().Where(finding.GroupIDEQ(g.ID)).Exec(r.Context()); err != nil {
+				return err
+			}
 			return tx.Group.DeleteOneID(g.ID).Exec(r.Context())
 		})
 		if err != nil {
@@ -240,6 +244,10 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 				if _, err := tx.HostCredential.Delete().Where(hostcredential.AssetIDEQ(a.ID)).Exec(r.Context()); err != nil {
 					return err
 				}
+				// 待办归原组的运维，换组后不再跟着走
+				if _, err := tx.Finding.Delete().Where(finding.AssetIDEQ(a.ID)).Exec(r.Context()); err != nil {
+					return err
+				}
 			}
 			return tx.Asset.UpdateOneID(a.ID).SetGroupID(g.ID).Exec(r.Context())
 		}); err != nil {
@@ -267,7 +275,10 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 			if err != nil || n == 0 {
 				return err
 			}
-			_, err = tx.HostCredential.Delete().Where(hostcredential.AssetIDEQ(a.ID)).Exec(r.Context())
+			if _, err = tx.HostCredential.Delete().Where(hostcredential.AssetIDEQ(a.ID)).Exec(r.Context()); err != nil {
+				return err
+			}
+			_, err = tx.Finding.Delete().Where(finding.AssetIDEQ(a.ID)).Exec(r.Context())
 			return err
 		})
 		if err != nil {
