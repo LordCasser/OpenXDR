@@ -35,8 +35,12 @@ var DefaultAIAllow = []string{
 	"who -a",
 	"last -n 30 -a",
 	"lastb -n 30 -a",
+	"cat /etc/sudoers",
+	"ls -la /etc/sudoers.d",
+	"cat /root/.ssh/authorized_keys",
 	"crontab -l",
-	"ls -la /etc/cron.d",
+	"ls -la /etc/cron.d /etc/cron.hourly /etc/cron.daily /etc/cron.weekly /etc/cron.monthly",
+	"systemctl list-unit-files --type=service --state=enabled --no-pager",
 	`journalctl -u ssh -u sshd --since "24 hours ago" --no-pager -n 200`,
 	// Windows（PowerShell）
 	"Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,LastBootUpTime,FreePhysicalMemory,TotalVisibleMemorySize",

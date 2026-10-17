@@ -20,7 +20,7 @@ func TestUnknownCommandIsNotSuccessfulToolResult(t *testing.T) {
 }
 
 func TestCommandOutputBoundedWithoutChangingReceipt(t *testing.T) {
-	stdout, stderr := strings.Repeat("中", 30000), strings.Repeat("e", 9000)
+	stdout, stderr := strings.Repeat("中", 30000), strings.Repeat("e", 20000)
 	original := &ent.Command{ID: uuid.New(), Status: "succeeded", Stdout: &stdout, Stderr: &stderr}
 	output, err := (&Service{}).waitCommand(context.Background(), original, 1)
 	if err != nil {
@@ -30,10 +30,10 @@ func TestCommandOutputBoundedWithoutChangingReceipt(t *testing.T) {
 	if err := json.Unmarshal([]byte(output), &got); err != nil {
 		t.Fatal(err)
 	}
-	if !got.Truncated || len(*got.Stdout) > 4096 || len(*got.Stderr) > 4096 || !utf8.ValidString(*got.Stdout) {
+	if !got.Truncated || len(*got.Stdout) > modelOutputLimit || len(*got.Stderr) > modelOutputLimit || !utf8.ValidString(*got.Stdout) {
 		t.Fatalf("模型回执未正确裁剪: %+v", got)
 	}
-	if original.Truncated || len(*original.Stdout) != 90000 || len(*original.Stderr) != 9000 {
+	if original.Truncated || len(*original.Stdout) != 90000 || len(*original.Stderr) != 20000 {
 		t.Fatal("完整命令回执被修改")
 	}
 	short := "完整输出"

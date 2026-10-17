@@ -191,13 +191,24 @@ func (s *Service) recorder(id uuid.UUID, seq *int, emit piruntime.Observer) piru
 	}
 }
 
+// queryDescription 与 queryrole 的视图定义同一口径，改视图时一起改。
+const queryDescription = "通过当前组专属只读数据库身份查询授权视图，最多返回 200 行和 8 KiB。" +
+	"视图：assets(id, hostname, os, ip_addrs, last_seen)；" +
+	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id)；" +
+	"incidents(id, created_at, status, title, ai_verdict)；" +
+	"events(id, ts, class_uid, source, asset_id, username, conn_tuple, raw)；" +
+	"commands(id, created_at, asset_id, cmd, status, exit_code, stdout)。" +
+	"按主机统计用 alerts.asset_id 关联 assets.id；rule_id 是规则 UUID，规则名看 alerts.incident_id 关联的 incidents.title；" +
+	"status 为 triaged 表示 AI 已研判、尚未人工结案。不确定列名时先查 information_schema.columns，不猜测；" +
+	"优先聚合与字段投影，避免 SELECT *、graph、raw 等大字段；events 查询务必带 ts 范围。"
+
 func (s *Service) tools(ctx context.Context, group uuid.UUID) []piruntime.Tool {
 	tools := []piruntime.Tool{
 		{Name: "exec", Description: "对组内资产执行命令，可能阻塞等待审批。host 为资产 UUID；遵守会话 dry-run 设置。", Parameters: json.RawMessage(`{"type":"object","properties":{"host":{"type":"string"},"cmd":{"type":"string","minLength":1,"maxLength":32768},"timeout":{"type":"integer","minimum":1,"maximum":300}},"required":["host","cmd"],"additionalProperties":false}`)},
 		{Name: "report", Description: "保存当前会话的 Markdown 报告。", Parameters: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":200},"markdown":{"type":"string","minLength":1,"maxLength":262144}},"required":["title","markdown"],"additionalProperties":false}`)},
 	}
 	if s.queryURL(ctx, group) != "" {
-		tools = append(tools, piruntime.Tool{Name: "query", Description: "通过当前组专属只读数据库身份查询授权视图，最多返回 200 行和 8 KiB。先确认授权视图的真实列名，不猜测表或列；优先聚合与字段投影，避免 SELECT *、graph、raw 等大字段。", Parameters: json.RawMessage(`{"type":"object","properties":{"sql":{"type":"string","minLength":1,"maxLength":16384}},"required":["sql"],"additionalProperties":false}`)})
+		tools = append(tools, piruntime.Tool{Name: "query", Description: queryDescription, Parameters: json.RawMessage(`{"type":"object","properties":{"sql":{"type":"string","minLength":1,"maxLength":16384}},"required":["sql"],"additionalProperties":false}`)})
 	}
 	return tools
 }
@@ -286,12 +297,15 @@ func (s *Service) waitCommand(ctx context.Context, cmd *ent.Command, timeout uin
 }
 func marshal(v any) (string, error) { data, err := json.Marshal(v); return string(data), err }
 
-// 每个输出流最多 4 KiB，且不切断 UTF-8 字符。
+// modelOutputLimit 每个输出流送入模型的上限：ps / ss 在宿主机上常有十几 KiB，4 KiB 只够看个开头。
+const modelOutputLimit = 16 << 10
+
+// modelOutput 裁到 modelOutputLimit，且不切断 UTF-8 字符。
 func modelOutput(value *string, truncated *bool) *string {
-	if value == nil || len(*value) <= 4096 {
+	if value == nil || len(*value) <= modelOutputLimit {
 		return value
 	}
-	end := 4096
+	end := modelOutputLimit
 	for !utf8.RuneStart((*value)[end]) {
 		end--
 	}
