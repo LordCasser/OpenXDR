@@ -19,6 +19,16 @@ mod registry;
 #[cfg(target_os = "linux")]
 mod authwatch;
 
+// 资产清单（监听端口 + 云环境）：共用部分与云探测跨平台，监听表按平台取
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod cloud;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod inventory;
+#[cfg(target_os = "linux")]
+mod inventory_linux;
+#[cfg(target_os = "windows")]
+mod inventory_win;
+
 #[cfg(target_os = "linux")]
 mod fswatch;
 
@@ -74,6 +84,16 @@ pub fn spawn(agent_id: String, cfg: Config) -> mpsc::Receiver<AgentEvent> {
     // 内核模块加载监控（/proc/modules diff，rootkit 可见性）
     #[cfg(target_os = "linux")]
     kmodwatch::spawn(agent_id.clone(), sink.clone());
+
+    // 资产清单：监听端口与属主进程、云环境，60s 轮询，变化或满 6 小时才报
+    #[cfg(target_os = "linux")]
+    if cfg.collect_inventory {
+        inventory_linux::spawn(agent_id.clone(), sink.clone());
+    }
+    #[cfg(target_os = "windows")]
+    if cfg.collect_inventory {
+        inventory_win::spawn(agent_id.clone(), sink.clone());
+    }
 
     #[cfg(all(target_os = "linux", feature = "ebpf"))]
     tokio::spawn(linux::run(agent_id, sink, cfg.collect_network));
@@ -171,7 +191,7 @@ impl EventSink {
     }
 
     /// 上报侧已关闭（断线重连后旧的一轮采集）。没有事件可发的采集循环靠它及时退出
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     pub fn is_closed(&self) -> bool {
         self.tx.is_closed()
     }

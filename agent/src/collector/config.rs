@@ -16,6 +16,8 @@ pub struct Config {
     pub collect_auth: bool,
     pub collect_persist: bool,
     pub collect_network: bool,
+    /// 资产清单：监听端口与属主进程、云环境
+    pub collect_inventory: bool,
 }
 
 impl Default for Config {
@@ -26,6 +28,7 @@ impl Default for Config {
             collect_auth: true,
             collect_persist: true,
             collect_network: true,
+            collect_inventory: true,
         }
     }
 }
@@ -62,6 +65,14 @@ mod tests {
         let c = Config::parse(r#"{"collectAuth": false}"#);
         assert!(!c.collect_auth, "显式关掉的要生效");
         assert!(c.collect_files, "没提到的保持默认开启");
+    }
+
+    #[test]
+    fn inventory_switch() {
+        assert!(Config::parse("").collect_inventory, "默认开启");
+        let c = Config::parse(r#"{"collectInventory": false}"#);
+        assert!(!c.collect_inventory, "显式关掉的要生效");
+        assert!(c.collect_network, "没提到的保持默认开启");
     }
 
     #[test]
