@@ -49,6 +49,32 @@ func Match(pattern, cmd string) (bool, error) {
 	return re.MatchString(cmd), nil
 }
 
+// systemDirs 命令名在这几个目录间可互换：都归 root 所有、都在 agent 的 PATH 里，
+// 写 df、/bin/df 还是 /usr/bin/df 跑的是同一个程序。
+var systemDirs = []string{"/usr/bin/", "/bin/", "/usr/sbin/", "/sbin/"}
+
+// spellings 同一条命令的等价写法：裸命令名加各系统目录下的绝对路径，只改第一个词。
+// 名单写哪种都能命中，不用先上主机查路径；deny 名单同理，换个写法也躲不过。
+// 第一个词是其他路径（./x、/opt/x）时只认原样。
+func spellings(cmd string) []string {
+	bare := cmd
+	for _, dir := range systemDirs {
+		if rest, ok := strings.CutPrefix(cmd, dir); ok {
+			bare = rest
+			break
+		}
+	}
+	name, _, _ := strings.Cut(bare, " ")
+	if name == "" || strings.Contains(name, "/") {
+		return []string{cmd}
+	}
+	out := []string{bare}
+	for _, dir := range systemDirs {
+		out = append(out, dir+bare)
+	}
+	return out
+}
+
 // authorize 返回发起人名。系统身份没有用户与组内角色可查，
 // 只能在 kind=task、initiator=system 的任务会话里对本组资产执行。
 func (g *Gate) authorize(ctx context.Context, req Request) (string, error) {
@@ -94,11 +120,13 @@ func (g *Gate) needsApproval(ctx context.Context, req Request) (bool, error) {
 		if policy.Mode != expected {
 			return false, errors.New("名单模式与来源不一致")
 		}
-		ok, err := Match(policy.Pattern, *req.Command.Cmd)
-		if err != nil {
-			return false, fmt.Errorf("名单无效: %w", err)
+		for _, cmd := range spellings(*req.Command.Cmd) {
+			ok, err := Match(policy.Pattern, cmd)
+			if err != nil {
+				return false, fmt.Errorf("名单无效: %w", err)
+			}
+			matched = matched || ok
 		}
-		matched = matched || ok
 	}
 	if req.Origin == "ai" {
 		return !matched, nil

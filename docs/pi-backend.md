@@ -70,6 +70,8 @@ SSE 用 fetch 读取 POST 响应，不能直接用浏览器 EventSource：
 - 人工：匹配任一 deny 名单后等待审批，否则放行。空名单意味着没有额外审批。
 - origin 固定为入口身份；创建名单时，AI 自动使用 allow，人工自动使用 deny。
 - pattern 为 Go 正则，平台强制完整字符串匹配。例如 `whoami` 不匹配 `whoami; id`。
+  命令的第一个词在 `/usr/bin`、`/bin`、`/usr/sbin`、`/sbin` 间视为同一程序：名单写 `df -hT`，
+  `/usr/bin/df -hT` 也命中，反之亦然；deny 名单同理。其他路径（`./x`、`/opt/x`）只认原样。
   **这不是 shell AST 解析**；管理员配置 `.*` 等宽泛表达式就会扩大放行范围。
 - 名单命中也不会越过组权限、`RESPONSE_ENABLED` 或 dry-run。审批只批准原始资产、
   命令、超时和 dry-run 的组合，不能把演练升级成真执行。

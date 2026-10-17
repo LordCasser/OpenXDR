@@ -20,3 +20,25 @@ func TestFullCommandMatch(t *testing.T) {
 		t.Fatal("坏正则必须拒绝")
 	}
 }
+
+func TestSpellings(t *testing.T) {
+	has := func(list []string, s string) bool {
+		for _, v := range list {
+			if v == s {
+				return true
+			}
+		}
+		return false
+	}
+	for _, cmd := range []string{"df -hT", "/usr/bin/df -hT", "/bin/df -hT", "/sbin/df -hT"} {
+		got := spellings(cmd)
+		if !has(got, "df -hT") || !has(got, "/usr/bin/df -hT") || !has(got, "/usr/sbin/df -hT") {
+			t.Errorf("%q 的等价写法不全：%v", cmd, got)
+		}
+	}
+	for _, cmd := range []string{"/opt/x/df -hT", "./df", "/usr/bin/../../tmp/df", ""} {
+		if got := spellings(cmd); len(got) != 1 || got[0] != cmd {
+			t.Errorf("%q 只能原样匹配：%v", cmd, got)
+		}
+	}
+}
