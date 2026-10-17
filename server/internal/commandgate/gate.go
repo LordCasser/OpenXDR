@@ -241,6 +241,10 @@ func (g *Gate) await(ctx context.Context, req Request, username string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
+			if req.System {
+				// 无人值守的任务里没人批，再换别的名单外命令只会把运行时长耗光
+				return errors.New("审批超时，命令未执行。定时任务无人值守，名单外命令不会被批准：后续只用免审批名单，未覆盖的检查项在报告里注明未验证")
+			}
 			return errors.New("审批超时，命令未执行")
 		case <-ticker.C:
 			current, err := g.DB.Approval.Get(ctx, a.ID)

@@ -6,8 +6,8 @@ schedule: "CRON_TZ=Asia/Shanghai 0 2 * * *"
 model: ""
 # "*" 表示每个组各跑一次；也可写组名
 targets: { group: "*" }
-# 名单外命令的审批等待上限，超时按拒绝处理
-approval_timeout: 10m
+# 名单外命令的审批等待上限，超时按拒绝处理。夜里无人值守，等久了只会耗光 30 分钟运行时长
+approval_timeout: 2m
 # 不写默认演练。巡检要拿到真实输出所以显式关掉；命令仍须过组内 AI 白名单或人工审批，
 # 且 RESPONSE_ENABLED=true 时才会下发。建议先把只读命令（df、ss、last 等）加进白名单
 dry_run: false
