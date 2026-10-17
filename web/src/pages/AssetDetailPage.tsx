@@ -125,12 +125,12 @@ export function AssetDetailPage() {
   const openFindings = (findings.data ?? []).filter(f => f.status === 'open')
   const eventCount = events.data ? `${events.data.items.length}${events.data.truncated ? '+' : ''}` : '-'
 
-  // 一键排查：在主机所在组新建对话（默认演练），把主机名预填进提问
+  // 一键排查：在主机所在组新建对话，把主机名预填进提问
   const investigate = async () => {
     if (!asset.groupId) return
     setStarting(true)
     try {
-      const s = await createAgentSession({ groupId: asset.groupId, title: t('investigateTitle', { host: asset.hostname }), dryRun: true })
+      const s = await createAgentSession({ groupId: asset.groupId, title: t('investigateTitle', { host: asset.hostname }) })
       client.invalidateQueries({ queryKey: ['sessions', asset.groupId] })
       navigate(`/chat/${s.id}?prompt=${encodeURIComponent(t('investigatePrompt', { host: asset.hostname }))}`)
     } catch (e) {
@@ -223,7 +223,6 @@ export function AssetDetailPage() {
                       columns={[
                         { title: t('thTime'), dataIndex: 'createdAt', render: fmtTime, width: 170 },
                         { title: t('thAction'), dataIndex: 'kind', width: 120, render: v => commandKind(v, t) },
-                        { title: t('thMode'), dataIndex: 'dryRun', width: 90, render: d => <Tag color={d ? 'default' : 'red'}>{t(d ? 'dryRun' : 'liveRun')}</Tag> },
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <CommandStatusTag value={v} /> },
                         { title: t('thCreatedBy'), dataIndex: 'issuedBy', width: 110 },
                         { title: t('thResult'), dataIndex: 'detail', ellipsis: true },

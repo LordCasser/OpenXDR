@@ -3,7 +3,7 @@ import {
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Col, Empty, Flex, Form, Input, Modal, Radio, Result, Row, Segmented, Space, Spin, Tag, Tooltip, Typography, theme,
+  Alert, App, Button, Card, Col, Empty, Flex, Form, Input, Modal, Result, Row, Segmented, Space, Spin, Tag, Tooltip, Typography, theme,
 } from 'antd'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
@@ -58,9 +58,9 @@ function InlineApprovals({ rows, hosts, onDecided }: { rows: Approval[]; hosts: 
     const go = () => decideApproval(a.id, approve).then(onDecided).catch(e => message.error(errText(e, t)))
     if (!approve) return go()
     modal.confirm({
-      title: t(a.dry_run ? 'apConfirmDryTitle' : 'apConfirmLiveTitle', { host }),
+      title: t('apConfirmLiveTitle', { host }),
       content: <pre className="chat-code">{a.cmd}</pre>,
-      okButtonProps: { danger: !a.dry_run },
+      okButtonProps: { danger: true },
       onOk: go,
     })
   }
@@ -70,7 +70,7 @@ function InlineApprovals({ rows, hosts, onDecided }: { rows: Approval[]; hosts: 
       type="warning"
       showIcon
       className="chat-indent"
-      title={<Space>{t('apInline', { host: hosts[a.asset_id] ?? a.asset_id })}<Tag color={a.dry_run ? 'default' : 'red'}>{t(a.dry_run ? 'dryRun' : 'liveRun')}</Tag></Space>}
+      title={t('apInline', { host: hosts[a.asset_id] ?? a.asset_id })}
       description={<pre className="chat-code">{a.cmd}</pre>}
       action={
         <Space orientation="vertical">
@@ -85,16 +85,15 @@ function InlineApprovals({ rows, hosts, onDecided }: { rows: Approval[]; hosts: 
 function NewSessionModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (s: AgentSession) => void }) {
   const { t } = useI18n()
   const { group } = useSession()
-  const [form] = Form.useForm<{ title?: string; mode: 'dry' | 'live' }>()
-  const mode = Form.useWatch('mode', form)
+  const [form] = Form.useForm<{ title?: string }>()
   const [busy, setBusy] = useState(false)
   const { message } = App.useApp()
 
-  const submit = async (v: { title?: string; mode: 'dry' | 'live' }) => {
+  const submit = async (v: { title?: string }) => {
     if (!group) return
     setBusy(true)
     try {
-      onCreated(await createAgentSession({ groupId: group.id, title: v.title?.trim() || undefined, dryRun: v.mode !== 'live' }))
+      onCreated(await createAgentSession({ groupId: group.id, title: v.title?.trim() || undefined }))
       form.resetFields()
     } catch (e) {
       message.error(errText(e, t))
@@ -105,23 +104,14 @@ function NewSessionModal({ open, onClose, onCreated }: { open: boolean; onClose:
 
   return (
     <Modal open={open} title={t('newChat')} onCancel={onClose} onOk={() => form.submit()} confirmLoading={busy} okText={t('create')} destroyOnHidden>
-      <Form form={form} layout="vertical" initialValues={{ mode: 'dry' }} onFinish={submit}>
+      <Form form={form} layout="vertical" onFinish={submit}>
         <Form.Item label={t('group')}>
           <Typography.Text strong>{group?.name}</Typography.Text>
         </Form.Item>
         <Form.Item name="title" label={t('sessionTitle')} extra={t('sessionTitleHint')}>
           <Input maxLength={80} />
         </Form.Item>
-        <Form.Item name="mode" label={t('execMode')}>
-          <Radio.Group
-            options={[
-              { value: 'dry', label: t('dryRun') },
-              { value: 'live', label: t('liveRun') },
-            ]}
-            optionType="button"
-          />
-        </Form.Item>
-        <Alert type={mode === 'live' ? 'warning' : 'info'} showIcon title={t(mode === 'live' ? 'liveRunHint' : 'dryRunHint')} />
+        <Alert type="info" showIcon title={t('sessionExecHint')} />
       </Form>
     </Modal>
   )
@@ -240,11 +230,11 @@ export function ChatPage() {
   const canChat = group?.role === 'admin' || group?.role === 'analyst'
   const canSend = !!session && canChat && session.initiator === me.username && session.status === 'idle' && !busy
 
-  // 没选会话时点模板：直接新建一个演练会话，把模板填进去
+  // 没选会话时点模板：直接新建一个会话，把模板填进去
   const startWith = async (text: string) => {
     if (!group || !canChat) return
     try {
-      const s = await createAgentSession({ groupId: group.id, dryRun: true })
+      const s = await createAgentSession({ groupId: group.id })
       client.invalidateQueries({ queryKey: ['sessions', group.id] })
       navigate(`/chat/${s.id}?prompt=${encodeURIComponent(text)}`)
     } catch (e) {
@@ -345,7 +335,6 @@ export function ChatPage() {
                   <Space size={4} wrap style={{ marginTop: 4 }}>
                     <SessionStatusTag value={s.status} />
                     {s.kind === 'task' && <Tag>{t('taskSession')}</Tag>}
-                    {s.dry_run !== true && <Tag color="red">{t('liveRun')}</Tag>}
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(s.created_at).slice(b.key === 'sessionsEarlier' || b.key === 'sessionsPinned' ? 5 : 11, 16)}</Typography.Text>
                   </Space>
                 </button>
@@ -360,7 +349,6 @@ export function ChatPage() {
           <Space>
             <span>{session.title || t('chatSession')}</span>
             <SessionStatusTag value={session.status} />
-            <Tag color={session.dry_run ? 'default' : 'red'}>{t(session.dry_run ? 'dryRun' : 'liveRun')}</Tag>
           </Space>
         )}
         extra={session && <Typography.Text type="secondary">{session.initiator} · {session.model}</Typography.Text>}
@@ -378,7 +366,6 @@ export function ChatPage() {
           </Flex>
         ) : (
           <>
-            {session.dry_run && <Alert type="info" banner showIcon title={t('dryRunBanner')} />}
             <div className="chat-log">
               {messages.isPending && <Spin />}
               {messages.isError && <Alert type="error" showIcon title={errText(messages.error, t)} />}

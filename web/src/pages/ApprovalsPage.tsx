@@ -88,9 +88,9 @@ export function ApprovalsPage() {
     const go = () => decideApproval(a.id, approve).then(() => approvals.refetch()).catch(e => message.error(errText(e, t)))
     if (!approve) return go()
     modal.confirm({
-      title: t(a.dry_run ? 'apConfirmDryTitle' : 'apConfirmLiveTitle', { host: hosts[a.asset_id] ?? a.asset_id }),
+      title: t('apConfirmLiveTitle', { host: hosts[a.asset_id] ?? a.asset_id }),
       content: <pre className="chat-code">{a.cmd}</pre>,
-      okButtonProps: { danger: !a.dry_run },
+      okButtonProps: { danger: true },
       onOk: go,
     })
   }
@@ -101,7 +101,6 @@ export function ApprovalsPage() {
     { title: t('thTime'), dataIndex: 'created_at', width: 170, render: fmtTime },
     { title: t('thHostname'), dataIndex: 'asset_id', width: 140, render: (v: string) => <HostLink id={v} /> },
     { title: t('apCmd'), dataIndex: 'cmd', render: (v: string) => <code className="cmd-cell">{v}</code> },
-    { title: t('thMode'), dataIndex: 'dry_run', width: 90, render: (v: boolean) => <Tag color={v ? 'default' : 'red'}>{t(v ? 'dryRun' : 'liveRun')}</Tag> },
     { title: t('apRequester'), width: 140, render: (_: unknown, a: Approval) => <Space size={4}><Tag>{a.origin === 'ai' ? 'AI' : t('human')}</Tag>{a.requested_by}</Space> },
     { title: t('apSession'), dataIndex: 'session_id', width: 100, render: (v?: string) => (v ? <Link to={`/chat/${v}`}>{t('openSession')}</Link> : '-') },
     ...(withActions

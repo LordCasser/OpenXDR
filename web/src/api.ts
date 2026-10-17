@@ -189,7 +189,6 @@ export interface CommandRow {
   createdAt: string
   kind: string
   status: string
-  dryRun: boolean
   assetId: string
   incidentId: string | null
   issuedBy: string
@@ -205,7 +204,6 @@ export async function issueCommand(body: {
   assetId: string
   incidentId?: string
   pid?: number
-  dryRun: boolean
 }): Promise<CommandRow> {
   const r = await post('/api/commands', body)
   if (!r.ok) await fail(r)
@@ -516,8 +514,6 @@ export interface AgentSession {
   title?: string
   status: 'running' | 'idle' | 'succeeded' | 'failed'
   error?: string
-  // 后端 omitempty：实执行时字段缺省，只有 true 才是演练
-  dry_run?: boolean
 }
 
 // Pi 原生消息，原样存库、原样回放
@@ -549,7 +545,6 @@ export const fetchAgentSession = (id: string) => get<AgentSession>(`/api/agent-s
 export const createAgentSession = async (body: {
   groupId: string
   title?: string
-  dryRun: boolean
 }): Promise<AgentSession> => (await send('POST', '/api/agent-sessions', body)).json()
 
 export const fetchSessionMessages = (id: string) =>
@@ -616,7 +611,6 @@ export interface Approval {
   origin: 'ai' | 'human'
   cmd: string
   timeout_ms: number
-  dry_run: boolean
   status: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled' | 'consumed'
   expires_at: string
   decided_by?: string
