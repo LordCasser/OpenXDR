@@ -123,6 +123,10 @@ func TestTrackFindings(t *testing.T) {
 	if !strings.Contains(r.SystemPrompt, `"subjects":[{`) || !strings.Contains(r.SystemPrompt, "反弹 shell @ pve2") || !strings.Contains(r.SystemPrompt, "结案建议") {
 		t.Errorf("绑定对象未进系统提示：%s", r.SystemPrompt)
 	}
+	// 对话只围绕交过来的对象，遗留待办仅供参考，不带巡检的复查指令
+	if !strings.Contains(r.SystemPrompt, "仅供参考") || strings.Contains(r.SystemPrompt, "巡检时逐条复查") {
+		t.Errorf("对话会话不该要求复查遗留待办：%s", r.SystemPrompt)
+	}
 	if n := db.Finding.Query().Where(finding.StatusEQ("open")).CountX(ctx); n != 1 {
 		t.Errorf("应只有一条遗留：%d", n)
 	}
