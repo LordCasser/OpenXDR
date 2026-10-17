@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,6 +72,9 @@ func (e *Engine) batch(ctx context.Context) error {
 	graphs := map[uuid.UUID]*Graph{}
 	assign := map[uuid.UUID][]uuid.UUID{}
 	reopen := map[uuid.UUID]bool{}
+	// 标题跟随最高级别的告警：maxSev 是各 incident 当前最高级别，titles 是批内要改写的标题
+	maxSev := map[uuid.UUID]int16{}
+	titles := map[uuid.UUID]string{}
 
 	for _, al := range pending {
 		// 匹配不到资产的告警（例如探针看到的外部 IP）统一归到 uuid.Nil 这个桶，
@@ -98,18 +102,23 @@ func (e *Engine) batch(ctx context.Context) error {
 			lateralFrom = src
 		}
 		if inc == nil {
-			hostname := "unknown"
-			if al.Edges.Asset != nil {
-				hostname = al.Edges.Asset.Hostname
-			}
-			title := fmt.Sprintf("%s @ %s", e.ruleTitle(al.RuleID), hostname)
 			inc, err = e.DB.Incident.Create().
 				SetGraph(json.RawMessage("{}")).
-				SetTitle(title).
+				SetTitle(e.title(al)).
 				Save(ctx)
 			if err != nil {
 				return err
 			}
+			maxSev[inc.ID] = al.Severity
+		}
+		if _, ok := maxSev[inc.ID]; !ok {
+			if maxSev[inc.ID], err = e.maxSeverity(ctx, inc.ID); err != nil {
+				return err
+			}
+		}
+		if al.Severity > maxSev[inc.ID] {
+			maxSev[inc.ID] = al.Severity
+			titles[inc.ID] = e.title(al)
 		}
 		byAsset[bucket] = cachedIncident{incident: inc, lastTs: al.Ts}
 		// 已研判的 incident 收到新证据：重开，研判引擎会带新证据重新定性
@@ -137,6 +146,9 @@ func (e *Engine) batch(ctx context.Context) error {
 		if reopen[incID] {
 			upd.SetStatus("open")
 		}
+		if title, ok := titles[incID]; ok {
+			upd.SetTitle(title)
+		}
 		if err := upd.Exec(ctx); err != nil {
 			return err
 		}
@@ -149,6 +161,30 @@ func (e *Engine) batch(ctx context.Context) error {
 	}
 	slog.Info("关联完成", "alerts", len(pending), "incidents", len(graphs))
 	return nil
+}
+
+// title incident 标题：告警规则标题 @ 主机名。
+func (e *Engine) title(al *ent.Alert) string {
+	hostname := "unknown"
+	if al.Edges.Asset != nil {
+		hostname = al.Edges.Asset.Hostname
+	}
+	return fmt.Sprintf("%s @ %s", e.ruleTitle(al.RuleID), hostname)
+}
+
+// maxSeverity 已归属告警里的最高级别；没有已归属告警时返回最小值，任何告警都比它高。
+func (e *Engine) maxSeverity(ctx context.Context, incID uuid.UUID) (int16, error) {
+	top, err := e.DB.Alert.Query().
+		Where(alert.IncidentIDEQ(incID)).
+		Order(ent.Desc(alert.FieldSeverity)).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		return math.MinInt16, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return top.Severity, nil
 }
 
 // findByLineage 沿进程血缘上溯，找祖先进程已归属的 incident。

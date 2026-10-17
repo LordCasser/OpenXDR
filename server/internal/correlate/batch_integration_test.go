@@ -87,6 +87,42 @@ func TestCorrelateBatchGroupsByAsset(t *testing.T) {
 	}
 }
 
+// incident 标题跟随最高级别的告警：同级不改，更高级别（批内或跨批）才改写。
+func TestCorrelateBatchTitleFollowsSeverity(t *testing.T) {
+	ctx, client := testdb.New(t)
+	now := time.Now()
+	asset := client.Asset.Create().SetHostname("host-a").SaveX(ctx)
+	mk := func(ts time.Time, ruleID string, sev int16) {
+		client.Alert.Create().SetTs(ts).SetRuleID(ruleID).SetSeverity(sev).
+			SetAssetID(asset.ID).SaveX(ctx)
+	}
+	eng := &Engine{DB: client, Rules: &sigma.Engine{}, Window: 30 * time.Minute, MaxGraphNodes: 50}
+	title := func() string {
+		t.Helper()
+		if err := eng.batch(ctx); err != nil {
+			t.Fatalf("batch 失败: %v", err)
+		}
+		inc := client.Incident.Query().OnlyX(ctx)
+		return *inc.Title
+	}
+
+	mk(now, "r-first", 2)
+	mk(now.Add(time.Second), "r-same", 2)
+	mk(now.Add(2*time.Second), "r-mid", 3)
+	if got := title(); got != "r-mid @ host-a" {
+		t.Errorf("批内更高级别应改写标题，得到 %q", got)
+	}
+	mk(now.Add(time.Minute), "r-low", 1)
+	mk(now.Add(2*time.Minute), "r-mid2", 3)
+	if got := title(); got != "r-mid @ host-a" {
+		t.Errorf("不高于现有最高级别不应改写标题，得到 %q", got)
+	}
+	mk(now.Add(3*time.Minute), "r-high", 5)
+	if got := title(); got != "r-high @ host-a" {
+		t.Errorf("跨批更高级别应改写标题，得到 %q", got)
+	}
+}
+
 // 同一批次也必须遵守时间窗；批次边界不能改变关联语义。
 func TestCorrelateBatchSeparates(t *testing.T) {
 	ctx, client := testdb.New(t)
