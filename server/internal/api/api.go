@@ -2,9 +2,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -37,6 +39,8 @@ type incidentSummary struct {
 	AlertCount int             `json:"alertCount"`
 	// 派生自告警的最高级别，列表按轻重着色用
 	Severity int16 `json:"severity"`
+	// 第一条有归属资产的告警所在资产的组，前端按组过滤/展示
+	GroupID *uuid.UUID `json:"groupId"`
 	// 结案信息：谁、何时、为什么
 	Resolution *string    `json:"resolution"`
 	ResolvedBy *string    `json:"resolvedBy"`
@@ -99,7 +103,12 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			return
 		}
 		q := db.Incident.Query().Where(s.incident()...)
-		if status := r.URL.Query().Get("status"); status != "" {
+		switch status := r.URL.Query().Get("status"); status {
+		case "":
+		case "unresolved":
+			// 待处置：引擎已研判但分析师还没结案的也算
+			q = q.Where(incident.StatusIn("open", "triaged"))
+		default:
 			q = q.Where(incident.StatusEQ(status))
 		}
 		// 资产详情页：涉及这台主机的事件
@@ -111,7 +120,20 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			}
 			q = q.Where(incident.HasAlertsWith(alert.AssetIDEQ(id)))
 		}
-		incidents, err := q.Order(ent.Desc(incident.FieldCreatedAt)).Limit(50).All(r.Context())
+		limit := 50
+		if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil {
+			limit = min(max(n, 1), 500)
+		}
+		offset := 0
+		if n, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && n > 0 {
+			offset = n
+		}
+		total, err := q.Clone().Count(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		incidents, err := q.Order(ent.Desc(incident.FieldCreatedAt)).Limit(limit).Offset(offset).All(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -138,10 +160,18 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			sevBy[c.IncidentID] = c.Max
 		}
 
+		groupBy, err := incidentGroups(r.Context(), db, ids)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		out := make([]incidentSummary, len(incidents))
 		for i, inc := range incidents {
 			out[i] = summarize(inc, countBy[inc.ID], sevBy[inc.ID])
+			out[i].GroupID = groupBy[inc.ID]
 		}
+		w.Header().Set("X-Total-Count", strconv.Itoa(total))
 		writeJSON(w, out)
 	})
 
@@ -197,8 +227,15 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			}
 			rows[i] = row
 		}
+		groupBy, err := incidentGroups(r.Context(), db, []uuid.UUID{id})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		summary := summarize(inc, len(alerts), maxSev)
+		summary.GroupID = groupBy[id]
 		writeJSON(w, incidentDetail{
-			incidentSummary: summarize(inc, len(alerts), maxSev),
+			incidentSummary: summary,
 			Graph:           inc.Graph,
 			AssetID:         assetID,
 			Alerts:          rows,
@@ -286,6 +323,47 @@ func summarize(inc *ent.Incident, alertCount int, severity int16) incidentSummar
 		Title: inc.Title, AiVerdict: inc.AiVerdict, AlertCount: alertCount,
 		Severity: severity, Resolution: inc.Resolution, ResolvedBy: inc.ResolvedBy, ResolvedAt: inc.ResolvedAt,
 	}
+}
+
+// incidentGroups 各 incident 第一条有归属资产的告警所在资产的组。
+// 按 (incident, 资产) 聚合最早时间，行数只随涉及的主机数增长，不随告警量膨胀。
+func incidentGroups(ctx context.Context, db *ent.Client, ids []uuid.UUID) (map[uuid.UUID]*uuid.UUID, error) {
+	var firsts []struct {
+		IncidentID uuid.UUID `json:"incident_id"`
+		AssetID    uuid.UUID `json:"asset_id"`
+		Min        time.Time `json:"min"`
+	}
+	err := db.Alert.Query().
+		Where(alert.IncidentIDIn(ids...), alert.AssetIDNotNil()).
+		GroupBy(alert.FieldIncidentID, alert.FieldAssetID).
+		Aggregate(ent.Min(alert.FieldTs)).
+		Scan(ctx, &firsts)
+	if err != nil {
+		return nil, err
+	}
+	first := map[uuid.UUID]uuid.UUID{}
+	earliest := map[uuid.UUID]time.Time{}
+	assetIDs := make([]uuid.UUID, 0, len(firsts))
+	for _, f := range firsts {
+		if ts, ok := earliest[f.IncidentID]; !ok || f.Min.Before(ts) {
+			earliest[f.IncidentID] = f.Min
+			first[f.IncidentID] = f.AssetID
+		}
+		assetIDs = append(assetIDs, f.AssetID)
+	}
+	assets, err := db.Asset.Query().Where(entasset.IDIn(assetIDs...)).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	groupOf := map[uuid.UUID]*uuid.UUID{}
+	for _, a := range assets {
+		groupOf[a.ID] = a.GroupID
+	}
+	out := make(map[uuid.UUID]*uuid.UUID, len(first))
+	for inc, asset := range first {
+		out[inc] = groupOf[asset]
+	}
+	return out, nil
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

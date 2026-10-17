@@ -152,13 +152,27 @@ func mapUsers(api *http.ServeMux, db *ent.Client) {
 	})
 
 	api.HandleFunc("GET /api/audit", func(w http.ResponseWriter, r *http.Request) {
-		rows, err := db.AuditLog.Query().
+		const maxAuditRows = 500
+		q := db.AuditLog.Query()
+		// 关键词在库里筛，否则只能在最近 500 条里找
+		if kw := r.URL.Query().Get("q"); kw != "" {
+			q = q.Where(entauditlog.Or(
+				entauditlog.UsernameContainsFold(kw),
+				entauditlog.ActionContainsFold(kw),
+				entauditlog.TargetContainsFold(kw),
+				entauditlog.DetailContainsFold(kw),
+			))
+		}
+		rows, err := q.
 			Order(ent.Desc(entauditlog.FieldTs)).
-			Limit(500).
+			Limit(maxAuditRows).
 			All(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if len(rows) == maxAuditRows {
+			w.Header().Set("X-Truncated", "1")
 		}
 		type auditRow struct {
 			ID         uuid.UUID `json:"id"`

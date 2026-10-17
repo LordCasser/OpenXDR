@@ -178,6 +178,14 @@ func TestAPIUsers(t *testing.T) {
 	if !strings.Contains(string(ab), "user_created") {
 		t.Errorf("审计应记录 user_created: %s", ab)
 	}
+	// 关键词不区分大小写，跨字段匹配（target 里的 alice）
+	_, ab = get(t, ts, "/api/audit?q=ALICE")
+	if !strings.Contains(string(ab), "user_created") {
+		t.Errorf("q 应按 target 不区分大小写命中: %s", ab)
+	}
+	if _, ab = get(t, ts, "/api/audit?q=no-such-thing"); strings.TrimSpace(string(ab)) != "[]" {
+		t.Errorf("不存在的关键词不应命中: %s", ab)
+	}
 }
 
 // 指令下发：非法 kind 拒绝、响应未启用时下发失败（但拒绝而非 500）。

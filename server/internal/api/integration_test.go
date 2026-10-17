@@ -129,6 +129,79 @@ func TestAPIGetIncidents(t *testing.T) {
 	}
 }
 
+// GET /api/incidents 分页：unresolved 合并 open+triaged，X-Total-Count 是分页前总数，
+// groupId 取第一条有资产的告警所在组。
+func TestAPIIncidentsPaging(t *testing.T) {
+	ctx, client := testdb.New(t)
+	g := client.Group.Create().SetName("A").SaveX(ctx)
+	grouped := client.Asset.Create().SetHostname("a1").SetGroupID(g.ID).SaveX(ctx)
+	loose := client.Asset.Create().SetHostname("loose").SaveX(ctx)
+	now := time.Now()
+	var incs []*ent.Incident
+	for i, status := range []string{"open", "triaged", "closed", "open"} {
+		incs = append(incs, client.Incident.Create().SetStatus(status).SetGraph(json.RawMessage(`{}`)).
+			SetCreatedAt(now.Add(time.Duration(i)*time.Minute)).SaveX(ctx))
+	}
+	// incs[0]：无资产告警最早，其次是有组资产，最后是未分组资产 → 取有组资产的组
+	client.Alert.Create().SetTs(now).SetRuleID("r").SetSeverity(1).SetIncidentID(incs[0].ID).SaveX(ctx)
+	client.Alert.Create().SetTs(now.Add(time.Second)).SetRuleID("r").SetSeverity(1).
+		SetAssetID(grouped.ID).SetIncidentID(incs[0].ID).SaveX(ctx)
+	client.Alert.Create().SetTs(now.Add(2 * time.Second)).SetRuleID("r").SetSeverity(1).
+		SetAssetID(loose.ID).SetIncidentID(incs[0].ID).SaveX(ctx)
+	// incs[1]：第一条有资产的告警在未分组资产上 → groupId 为空
+	client.Alert.Create().SetTs(now).SetRuleID("r").SetSeverity(1).
+		SetAssetID(loose.ID).SetIncidentID(incs[1].ID).SaveX(ctx)
+	client.Alert.Create().SetTs(now.Add(time.Second)).SetRuleID("r").SetSeverity(1).
+		SetAssetID(grouped.ID).SetIncidentID(incs[1].ID).SaveX(ctx)
+
+	ts := httptest.NewServer(asAdmin(Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)))
+	t.Cleanup(ts.Close)
+	list := func(path string) ([]incidentSummary, string) {
+		t.Helper()
+		resp, body := get(t, ts, path)
+		if resp.StatusCode != 200 {
+			t.Fatalf("%s status = %d", path, resp.StatusCode)
+		}
+		var out []incidentSummary
+		if err := json.Unmarshal(body, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out, resp.Header.Get("X-Total-Count")
+	}
+
+	if got, total := list("/api/incidents?status=unresolved"); len(got) != 3 || total != "3" {
+		t.Errorf("unresolved 应含 3 个 open/triaged，得到 %d 个，总数 %s", len(got), total)
+	}
+	got, total := list("/api/incidents?status=unresolved&limit=1&offset=1")
+	if len(got) != 1 || total != "3" || got[0].ID != incs[1].ID {
+		t.Errorf("第二页应只有 incs[1]，总数 3，得到 %v 总数 %s", got, total)
+	}
+	if got, total := list("/api/incidents?limit=0"); len(got) != 1 || total != "4" {
+		t.Errorf("limit 下限应夹到 1，得到 %d 个，总数 %s", len(got), total)
+	}
+
+	byID := map[uuid.UUID]*uuid.UUID{}
+	all, _ := list("/api/incidents")
+	for _, inc := range all {
+		byID[inc.ID] = inc.GroupID
+	}
+	if gid := byID[incs[0].ID]; gid == nil || *gid != g.ID {
+		t.Errorf("incs[0] groupId 应为组 A，得到 %v", gid)
+	}
+	if gid := byID[incs[1].ID]; gid != nil {
+		t.Errorf("incs[1] 第一条有资产告警在未分组资产上，groupId 应为空，得到 %v", gid)
+	}
+
+	_, body := get(t, ts, "/api/incidents/"+incs[0].ID.String())
+	var detail incidentDetail
+	if err := json.Unmarshal(body, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.GroupID == nil || *detail.GroupID != g.ID {
+		t.Errorf("详情 groupId 应为组 A，得到 %v", detail.GroupID)
+	}
+}
+
 // GET /api/incidents/{id} 返回图、告警明细、规则标题与事件原文。
 func TestAPIGetIncidentDetail(t *testing.T) {
 	ts, incID := seed(t)

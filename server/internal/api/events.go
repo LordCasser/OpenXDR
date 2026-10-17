@@ -82,6 +82,10 @@ func mapEvents(api *http.ServeMux, db *ent.Client) {
 			return
 		}
 
+		// 取满上限说明可能还有更早的，提示前端收窄条件
+		if len(rows) == limit {
+			w.Header().Set("X-Truncated", "1")
+		}
 		out := make([]eventRow, len(rows))
 		for i, e := range rows {
 			out[i] = eventRow{

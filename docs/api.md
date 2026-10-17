@@ -16,8 +16,8 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/incidents?status=&assetId=` | incident 列表（最新 50 条），含派生严重度与告警数；`assetId` 筛涉及该主机的事件 |
-| GET | `/api/incidents/{id}` | 详情：实体图、告警明细（含原始事件）、AI verdict |
+| GET | `/api/incidents?status=&assetId=&limit=&offset=` | incident 列表（按创建时间倒序），含派生严重度、告警数与 `groupId`（第一条有资产的告警所在资产的组，无则 null）；`status` 另支持 `unresolved`（= open + triaged）；`limit` 默认 50、范围 1..500，`offset` 默认 0；响应头 `X-Total-Count` 为分页前的匹配总数；`assetId` 筛涉及该主机的事件 |
+| GET | `/api/incidents/{id}` | 详情：实体图、告警明细（含原始事件）、AI verdict、`groupId` |
 | POST | `/api/incidents/{id}/status` | `{"status":"open\|closed\|false_positive","note":"…"}`；closed 为属实已处置、false_positive 为误报或良性，两者必须写 `note`（1–2000 字），记录结案人与时间并作为案例喂回研判；改回 open 清掉结案信息 |
 | GET | `/api/findings?status=` | 运维待办（巡检 AI 登记，按组裁剪，最近 500 条），含主机名、首次与最近发现时间 |
 | POST | `/api/findings/{id}/status` | `{"status":"open\|resolved\|ignored","note":"…"}`，需组内 analyst；resolved / ignored 必须写原因，忽略原因会交给巡检 AI，之后不再登记 |
@@ -31,7 +31,8 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 `classUid`（1001 文件 / 1007 进程 / 3002 认证 / 4001 网络 / 4003 DNS /
 201002 注册表 / 100001 日志）、
 `source`（agent/sensor/syslog）、`q`（对事件体子串匹配，通配符按字面量处理）、
-`limit`（≤200，默认 100）。各类事件的字段 schema 见
+`limit`（≤200，默认 100）。返回条数等于 `limit` 时带响应头 `X-Truncated: 1`，
+提示可能还有更多、应收窄条件。各类事件的字段 schema 见
 [events.md](events.md)。
 
 ## 威胁情报
@@ -50,9 +51,9 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/suppressions` | 抑制清单（含压掉次数） |
-| POST | `/api/suppressions` | `{"ruleId","assetId"(空=全局),"reason","expiresInDays"(0=长期)}` |
-| DELETE | `/api/suppressions/{id}` | 撤销 |
+| GET | `/api/suppressions` | 抑制清单（含压掉次数）；非 admin 只见本组资产的抑制，全局抑制仅 admin 可见 |
+| POST | `/api/suppressions` | `{"ruleId","assetId"(空=全局),"reason","expiresInDays"(0=长期)}`；需该资产所在组的 analyst，全局抑制仅 admin，否则 403 |
+| DELETE | `/api/suppressions/{id}` | 撤销，权限同创建（按该抑制的资产判断） |
 
 ## 响应处置
 
@@ -75,7 +76,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | POST | `/api/users` | 建号：`{"username","password","role"}`（admin） |
 | POST | `/api/users/{id}/password` | 重置密码（admin） |
 | DELETE | `/api/users/{id}` | 删号（admin） |
-| GET | `/api/audit` | 审计日志（admin） |
+| GET | `/api/audit?q=` | 审计日志（admin，最新 500 条）；`q` 对用户名、动作、对象、详情做不区分大小写的子串匹配；取满 500 条时带 `X-Truncated: 1` |
 | GET | `/api/settings/notify` | 通知配置 `{url,format,linkBase,minSeverity}`（admin）。未保存过时返回环境变量默认值 |
 | PUT | `/api/settings/notify` | 保存通知配置（admin）；`format` 取 generic / dingtalk / feishu / wecom，地址须为 http(s) |
 | POST | `/api/settings/notify/test` | 用请求体里的配置（不保存）发一条测试消息（admin），推送失败返回 502 |

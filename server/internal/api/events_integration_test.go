@@ -29,6 +29,13 @@ func TestAPIEventSearch(t *testing.T) {
 	if got := fetch(""); len(got) != 1 {
 		t.Fatalf("无条件应返回 24h 内全部事件，实际 %d", len(got))
 	}
+	// 取满 limit 才提示截断
+	if resp, _ := get(t, ts, "/api/events?limit=1"); resp.Header.Get("X-Truncated") != "1" {
+		t.Error("取满 limit 应带 X-Truncated")
+	}
+	if resp, _ := get(t, ts, "/api/events?limit=2"); resp.Header.Get("X-Truncated") != "" {
+		t.Error("未取满 limit 不应带 X-Truncated")
+	}
 	if got := fetch("q=" + url.QueryEscape("ssh failed")); len(got) != 1 {
 		t.Errorf("关键词应命中，实际 %d", len(got))
 	}
