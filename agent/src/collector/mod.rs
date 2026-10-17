@@ -55,8 +55,12 @@ mod persistwatch;
 #[cfg(target_os = "windows")]
 mod windows;
 
+/// 上报缓冲。server 每条事件要等三副本确认，单流约千条每秒；定时任务齐发时
+/// 宿主机两秒内能冒出两千多条进程事件，缓冲得兜住这种尖峰慢慢排空，而不是丢
+const SINK_CAPACITY: usize = 16 * 1024;
+
 pub fn spawn(agent_id: String, cfg: Config) -> mpsc::Receiver<AgentEvent> {
-    let (tx, rx) = mpsc::channel(1024);
+    let (tx, rx) = mpsc::channel(SINK_CAPACITY);
     let sink = EventSink {
         tx,
         dropped: Arc::new(AtomicU64::new(0)),
