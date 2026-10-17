@@ -24,9 +24,10 @@ export default function Navigation15() {
     locale === "zh-CN"
       ? {
           links: [
-            { label: "信号", href: "#signals" },
-            { label: "处理链路", href: "#pipeline" },
-            { label: "设计原则", href: "#principles" },
+            { label: "纳管", href: "#onboard" },
+            { label: "安全", href: "#secure" },
+            { label: "运维", href: "#operate" },
+            { label: "开始", href: "#start" },
             { label: "代码仓库", href: "https://github.com/yaklang/OpenXDR" },
           ],
           primary: "主导航",
@@ -40,9 +41,10 @@ export default function Navigation15() {
         }
       : {
           links: [
-            { label: "Signals", href: "#signals" },
-            { label: "Pipeline", href: "#pipeline" },
-            { label: "Principles", href: "#principles" },
+            { label: "Onboard", href: "#onboard" },
+            { label: "Secure", href: "#secure" },
+            { label: "Operate", href: "#operate" },
+            { label: "Start", href: "#start" },
             { label: "Repository", href: "https://github.com/yaklang/OpenXDR" },
           ],
           primary: "Primary",

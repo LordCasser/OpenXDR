@@ -11,14 +11,14 @@ export type Locale = "en" | "zh-CN";
 
 const pageMetadata = {
   en: {
-    title: "OpenXDR - Signal over noise",
+    title: "OpenXDR - Onboarded means operated and secured",
     description:
-      "OpenXDR is an open-source XDR platform combining endpoint, network, and log telemetry with AI-assisted correlation.",
+      "Open-source XDR: onboard a host and it gets continuous detection, layered noise reduction, daily inspections and an AI assistant that does the work — with dangerous commands waiting for your approval.",
   },
   "zh-CN": {
-    title: "OpenXDR - 从噪声中提取信号",
+    title: "OpenXDR - 纳管即运维，纳管即安全",
     description:
-      "OpenXDR 是一个开源 XDR 平台，通过 AI 辅助关联端点、网络与日志遥测数据。",
+      "开源 XDR：主机纳管后自动获得持续检测、层层降噪、每日巡检和能动手的 AI 助手，危险命令等你批准。",
   },
 } satisfies Record<Locale, { title: string; description: string }>;
 
@@ -59,4 +59,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
 export function useLocale() {
   return useContext(LocaleContext);
+}
+
+/** 按当前语言取一份文案，中英文成对写在调用处。 */
+export function useCopy<T>(copy: Record<Locale, T>): T {
+  return copy[useLocale()];
 }

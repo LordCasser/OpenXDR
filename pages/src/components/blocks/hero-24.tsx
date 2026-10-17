@@ -38,26 +38,26 @@ export function Hero24() {
   const copy =
     locale === "zh-CN"
       ? {
-          badge: "开源 · EDR + NDR + SIEM",
-          headline: "一万条告警进来。",
-          headlineAccent: "三个真实事件出来。",
+          badge: "开源 · EDR + NDR + SIEM + AI 运维",
+          headline: "纳管即运维，",
+          headlineAccent: "纳管即安全。",
           description:
-            "OpenXDR 将端点、全流量、身份与日志证据汇聚成一条可解释的攻击链，再由 AI 调查通过关联筛选的事件。",
+            "主机装上 agent、划进组，就自动获得持续采集、层层降噪的检测、每日巡检和一个能动手的 AI 助手。一万条告警进来，三个真事件出去；危险的命令，等你点头。",
           github: "在 GitHub 查看",
-          pipeline: "追踪信号路径",
-          evidence: "统一证据平面覆盖",
-          partners: ["端点", "网络", "身份", "云", "日志"],
+          pipeline: "往下滚，亲手试一试",
+          evidence: "一套平台覆盖",
+          partners: ["端点", "全流量", "日志", "AI 运维", "审批与审计"],
         }
       : {
-          badge: "Open source · EDR + NDR + SIEM",
-          headline: "Ten thousand alerts in.",
-          headlineAccent: "Three incidents out.",
+          badge: "Open source · EDR + NDR + SIEM + AI ops",
+          headline: "Onboarded means operated.",
+          headlineAccent: "Onboarded means secured.",
           description:
-            "OpenXDR joins endpoint, full-traffic, identity, and log evidence into one explainable attack story, then lets AI investigate the incidents that survive correlation.",
+            "Install the agent, put the host in a group, and it gets continuous collection, layered detection, daily inspections and an AI assistant that does the work. Ten thousand alerts in, three real incidents out — and dangerous commands wait for your nod.",
           github: "View on GitHub",
-          pipeline: "Follow the signal",
-          evidence: "One evidence plane across",
-          partners: ["ENDPOINT", "NETWORK", "IDENTITY", "CLOUD", "LOGS"],
+          pipeline: "Scroll down and try it",
+          evidence: "One platform across",
+          partners: ["ENDPOINT", "NETWORK", "LOGS", "AI OPS", "APPROVAL & AUDIT"],
         };
 
   useEffect(() => {
@@ -158,7 +158,7 @@ export function Hero24() {
               <ArrowRight className="ml-2 h-4 w-4" />
             </a>
             <a
-              href="#pipeline"
+              href="#onboard"
               className="inline-flex w-full cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/5 px-6 py-3 text-sm font-medium text-white backdrop-blur transition-colors duration-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 sm:w-auto sm:px-8 sm:py-3.5 sm:text-base"
             >
               {copy.pipeline}
