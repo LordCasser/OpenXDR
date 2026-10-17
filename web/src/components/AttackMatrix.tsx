@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, Space, Spin, Tag, Tooltip, Typography, theme } from 'antd'
+import { LoadError } from './LoadError'
 import { fetchAttack } from '../api'
 import { useI18n } from '../i18n'
 
@@ -25,8 +26,10 @@ const TACTIC: Record<string, [string, string]> = {
 export function AttackMatrix() {
   const { t, locale } = useI18n()
   const { token } = theme.useToken()
-  const { data: cov, isPending } = useQuery({ queryKey: ['attack'], queryFn: fetchAttack })
+  const { data: cov, isPending, isError, error, refetch } = useQuery({ queryKey: ['attack'], queryFn: fetchAttack })
   const covered = cov?.tactics.filter(c => c.rules > 0).length ?? 0
+
+  if (isError) return <LoadError error={error} onRetry={() => refetch()} />
 
   return (
     <Card>

@@ -108,15 +108,24 @@ function NewSessionModal({ open, onClose, onCreated }: { open: boolean; onClose:
 export function ChatPage() {
   const { sessionId = '' } = useParams()
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  // 会话列表的筛选跨会话保留，不随 key 重置。
+  const [filter, setFilter] = useState<SessionFilter>({ search: '', kind: '' })
   const setPrompt = useCallback((value: SetStateAction<string>) => setDrafts(previous => ({
     ...previous,
     [sessionId]: typeof value === 'function' ? value(previous[sessionId] ?? '') : value,
   })), [sessionId])
   // 每段会话独立持有请求、滚动和错误状态，草稿在切换后仍保留。
-  return <ChatWorkspace key={sessionId} prompt={drafts[sessionId] ?? ''} setPrompt={setPrompt} />
+  return <ChatWorkspace key={sessionId} prompt={drafts[sessionId] ?? ''} setPrompt={setPrompt} filter={filter} setFilter={setFilter} />
 }
 
-function ChatWorkspace({ prompt, setPrompt }: { prompt: string; setPrompt: Dispatch<SetStateAction<string>> }) {
+type SessionFilter = { search: string; kind: '' | 'chat' | 'task' }
+
+function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
+  prompt: string
+  setPrompt: Dispatch<SetStateAction<string>>
+  filter: SessionFilter
+  setFilter: Dispatch<SetStateAction<SessionFilter>>
+}) {
   const { t } = useI18n()
   const { me, group, setGroupId } = useSession()
   const { sessionId } = useParams()
@@ -129,8 +138,7 @@ function ChatWorkspace({ prompt, setPrompt }: { prompt: string; setPrompt: Dispa
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [kind, setKind] = useState<'' | 'chat' | 'task'>('')
+  const { search, kind } = filter
   const wide = !!Grid.useBreakpoint().lg
   const [sessionsOpen, setSessionsOpen] = useState(false)
   const log = useRef<HTMLDivElement>(null)
@@ -319,8 +327,8 @@ function ChatWorkspace({ prompt, setPrompt }: { prompt: string; setPrompt: Dispa
         styles={{ body: { padding: 0, overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column' } }}
       >
         <div className="chat-session-filter">
-          <Input.Search size="small" allowClear value={search} placeholder={t('searchSessions')} onChange={e => setSearch(e.target.value)} />
-          <Segmented size="small" block value={kind} onChange={v => setKind(v as '' | 'chat' | 'task')}
+          <Input.Search size="small" allowClear value={search} placeholder={t('searchSessions')} onChange={e => setFilter(f => ({ ...f, search: e.target.value }))} />
+          <Segmented size="small" block value={kind} onChange={v => setFilter(f => ({ ...f, kind: v as SessionFilter['kind'] }))}
             options={[{ value: '', label: t('all') }, { value: 'chat', label: t('chatSession') }, { value: 'task', label: t('taskSession') }]} />
         </div>
         <div style={{ overflow: 'auto', flex: 1 }}>

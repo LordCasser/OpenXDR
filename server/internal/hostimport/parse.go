@@ -65,6 +65,9 @@ func Parse(document string) ([]Host, error) {
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
 			marker := markdownFence.FindStringSubmatch(scanner.Text())
+			if marker != nil && marker[1][0] == '`' && strings.Contains(marker[2], "`") {
+				marker = nil // CommonMark：反引号围栏的 info string 不能含反引号，这是行内代码
+			}
 			if fence != "" {
 				closed := marker != nil && marker[1][0] == fence[0] && len(marker[1]) >= len(fence) && strings.TrimSpace(marker[2]) == ""
 				if closed {

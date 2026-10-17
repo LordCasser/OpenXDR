@@ -1,11 +1,12 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Drawer, Empty, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Transfer } from 'antd'
-import { useState } from 'react'
+import { App, Button, Card, Drawer, Empty, Form, Input, Modal, Popconfirm, Select, Space, Spin, Table, Tabs, Transfer } from 'antd'
+import { useRef, useState } from 'react'
 import {
   assignAsset, createGroup, deleteGroup, fetchAssets, fetchGroups, fetchMembers, fetchUsers, removeMember, setMember, unassignAsset,
   type GroupRow, type MemberRow,
 } from '../api'
+import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { ROLE_KEY, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
@@ -14,22 +15,36 @@ function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void 
   const { t } = useI18n()
   const { message, modal } = App.useApp()
   const client = useQueryClient()
+  const pending = useRef(false)
+  const [busy, setBusy] = useState(false)
   const [newUser, setNewUser] = useState<string>()
   const [newRole, setNewRole] = useState('analyst')
   const members = useQuery({ queryKey: ['members', group.id], queryFn: () => fetchMembers(group.id) })
-  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: fetchUsers })
-  const { data: assets = [] } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
+  const usersQuery = useQuery({ queryKey: ['users'], queryFn: fetchUsers })
+  const assetsQuery = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
 
   const run = async (fn: () => Promise<unknown>) => {
+    if (pending.current) return false
+    pending.current = true
+    setBusy(true)
     try {
       await fn()
+      return true
     } catch (e) {
       message.error(errText(e, t))
+      return false
+    } finally {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['members', group.id] }),
+        client.invalidateQueries({ queryKey: ['assets'] }),
+        client.invalidateQueries({ queryKey: ['groups'] }),
+      ])
+      pending.current = false
+      setBusy(false)
     }
-    client.invalidateQueries({ queryKey: ['members', group.id] })
-    client.invalidateQueries({ queryKey: ['assets'] })
-    client.invalidateQueries({ queryKey: ['groups'] })
   }
+  const users = usersQuery.data ?? []
+  const assets = assetsQuery.data ?? []
   const roleOptions = Object.entries(ROLE_KEY).map(([value, key]) => ({ value, label: t(key) }))
   const candidates = users.filter(u => !members.data?.some(m => m.userId === u.id))
   const inGroup = assets.filter(a => a.groupId === group.id).map(a => a.id)
@@ -48,20 +63,21 @@ function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void 
   }
 
   return (
-    <Drawer open size={720} title={t('manageGroup', { name: group.name })} onClose={onClose}>
+    <Drawer open size={720} title={t('manageGroup', { name: group.name })} onClose={() => { if (!busy) onClose() }} closable={!busy} maskClosable={!busy} keyboard={!busy}>
       <Tabs
         items={[
           {
             key: 'members',
             label: t('groupMembers'),
-            children: (
+            children: members.isError ? <LoadError error={members.error} onRetry={() => members.refetch()} /> : usersQuery.isError ? <LoadError error={usersQuery.error} onRetry={() => usersQuery.refetch()} /> : (members.isPending || usersQuery.isPending) ? <Spin /> : (
               <Space orientation="vertical" style={{ width: '100%' }}>
                 <Space.Compact style={{ width: '100%' }}>
-                  <Select style={{ flex: 1 }} placeholder={t('pickUser')} value={newUser} onChange={setNewUser} options={candidates.map(u => ({ value: u.id, label: u.username }))} showSearch optionFilterProp="label" />
-                  <Select style={{ width: 120 }} value={newRole} onChange={setNewRole} options={roleOptions} />
-                  <Button type="primary" icon={<PlusOutlined />} disabled={!newUser} onClick={() => run(async () => { await setMember(group.id, newUser!, newRole); setNewUser(undefined) })}>{t('add')}</Button>
+                  <Select disabled={busy} aria-label={t('pickUser')} style={{ flex: 1, minWidth: 0 }} placeholder={t('pickUser')} value={newUser} onChange={setNewUser} options={candidates.map(u => ({ value: u.id, label: u.username }))} showSearch optionFilterProp="label" />
+                  <Select disabled={busy} aria-label={t('groupRole')} style={{ width: 120 }} value={newRole} onChange={setNewRole} options={roleOptions} />
+                  <Button type="primary" icon={<PlusOutlined />} disabled={busy || !newUser} loading={busy} onClick={() => run(async () => { await setMember(group.id, newUser!, newRole); setNewUser(undefined) })}>{t('add')}</Button>
                 </Space.Compact>
                 <Table<MemberRow>
+                  scroll={{ x: 440 }}
                   size="small"
                   rowKey="userId"
                   loading={members.isPending}
@@ -70,12 +86,12 @@ function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void 
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noMembers')} /> }}
                   columns={[
                     { title: t('username'), dataIndex: 'username' },
-                    { title: t('groupRole'), dataIndex: 'role', width: 160, render: (v, m) => <Select size="small" style={{ width: 130 }} value={v} options={roleOptions} onChange={r => run(() => setMember(group.id, m.userId, r))} /> },
+                    { title: t('groupRole'), dataIndex: 'role', width: 160, render: (v, m) => <Select disabled={busy} aria-label={`${m.username} ${t('groupRole')}`} size="small" style={{ width: 130 }} value={v} options={roleOptions} onChange={r => run(() => setMember(group.id, m.userId, r))} /> },
                     {
                       title: t('actions'), width: 90,
                       render: (_, m) => (
                         <Popconfirm title={t('confirmRemoveMember', { name: m.username })} onConfirm={() => run(() => removeMember(group.id, m.userId))}>
-                          <Button type="link" danger size="small">{t('remove')}</Button>
+                          <Button type="link" danger size="small" disabled={busy}>{t('remove')}</Button>
                         </Popconfirm>
                       ),
                     },
@@ -87,15 +103,17 @@ function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void 
           {
             key: 'assets',
             label: t('groupAssets'),
-            children: (
+            children: assetsQuery.isError ? <LoadError error={assetsQuery.error} onRetry={() => assetsQuery.refetch()} /> : assetsQuery.isPending ? <Spin /> : (
               <Transfer
+                disabled={busy}
                 dataSource={assets.map(a => ({ key: a.id, title: a.hostname, description: a.ipAddrs?.join(', ') ?? '' }))}
                 targetKeys={inGroup}
                 onChange={moveAssets}
                 render={item => item.title}
                 titles={[t('otherAssets'), t('thisGroup')]}
                 showSearch
-                styles={{ section: { width: 300, height: 420 } }}
+                filterOption={(input, item) => `${item.title} ${item.description}`.toLowerCase().includes(input.toLowerCase())}
+                styles={{ section: { flex: 1, minWidth: 0, height: 420 } }}
               />
             ),
           },
@@ -110,12 +128,17 @@ export function GroupsPage() {
   const { t } = useI18n()
   const { message } = App.useApp()
   const client = useQueryClient()
+  const pending = useRef(false)
+  const [busy, setBusy] = useState(false)
   const [creating, setCreating] = useState(false)
   const [managing, setManaging] = useState<GroupRow | null>(null)
   const [form] = Form.useForm()
   const { data, isPending } = useQuery({ queryKey: ['groups'], queryFn: fetchGroups })
 
   const run = async (fn: () => Promise<unknown>) => {
+    if (pending.current) return false
+    pending.current = true
+    setBusy(true)
     try {
       await fn()
       await client.invalidateQueries({ queryKey: ['groups'] })
@@ -125,33 +148,34 @@ export function GroupsPage() {
     } catch (e) {
       message.error(errText(e, t))
       return false
-    }
+    } finally { pending.current = false; setBusy(false) }
   }
 
   return (
     <Page
       title={t('navGroups')}
       subtitle={t('groupsSubtitle')}
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>{t('newGroup')}</Button>}
+      extra={<Button type="primary" icon={<PlusOutlined />} disabled={busy} onClick={() => { form.resetFields(); setCreating(true) }}>{t('newGroup')}</Button>}
     >
       <Card styles={{ body: { padding: 0 } }}>
         <Table<GroupRow>
+          scroll={{ x: 650 }}
           rowKey="id"
           loading={isPending}
           dataSource={data ?? []}
           pagination={false}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noGroups')} /> }}
           columns={[
-            { title: t('groupName'), dataIndex: 'name', render: (v, g) => <a onClick={() => setManaging(g)}>{v}</a> },
+            { title: t('groupName'), dataIndex: 'name', render: (v, g) => <Button type="link" disabled={busy} onClick={() => setManaging(g)}>{v}</Button> },
             { title: t('thAssetCount'), dataIndex: 'assetCount', width: 120, align: 'right' },
             { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 200, render: fmtTime },
             {
               title: t('actions'), width: 160,
               render: (_, g) => (
                 <Space>
-                  <Button type="link" size="small" onClick={() => setManaging(g)}>{t('manage')}</Button>
+                  <Button type="link" size="small" disabled={busy} onClick={() => setManaging(g)}>{t('manage')}</Button>
                   <Popconfirm title={t('groupDeleteConfirm', { name: g.name })} onConfirm={() => run(() => deleteGroup(g.id))}>
-                    <Button type="link" danger size="small">{t('del')}</Button>
+                    <Button type="link" danger size="small" disabled={busy}>{t('del')}</Button>
                   </Popconfirm>
                 </Space>
               ),
@@ -159,12 +183,12 @@ export function GroupsPage() {
           ]}
         />
       </Card>
-      <Modal open={creating} title={t('newGroup')} onCancel={() => setCreating(false)} onOk={() => form.submit()} destroyOnHidden>
-        <Form form={form} layout="vertical" onFinish={async v => { if (await run(() => createGroup(v.name.trim()))) { setCreating(false); form.resetFields() } }}>
+      <Modal open={creating} title={t('newGroup')} onCancel={() => { if (!busy) setCreating(false) }} confirmLoading={busy} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => form.submit()} destroyOnHidden>
+        <Form disabled={busy} form={form} layout="vertical" onFinish={async v => { if (await run(() => createGroup(v.name.trim()))) { setCreating(false); form.resetFields() } }}>
           <Form.Item name="name" label={t('groupName')} rules={[{ required: true, whitespace: true }]}><Input /></Form.Item>
         </Form>
       </Modal>
-      {managing && <GroupDrawer group={managing} onClose={() => setManaging(null)} />}
+      {managing && <GroupDrawer key={managing.id} group={managing} onClose={() => setManaging(null)} />}
     </Page>
   )
 }

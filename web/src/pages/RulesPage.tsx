@@ -3,6 +3,7 @@ import { Input, Select, Space, Table, Tabs, Tag, Tooltip } from 'antd'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchRules, type RuleRow } from '../api'
+import { LoadError } from '../components/LoadError'
 import { AttackMatrix } from '../components/AttackMatrix'
 import { CLASS_KEY, SeverityTag } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
@@ -15,8 +16,9 @@ export function RulesPage() {
   const { t } = useI18n()
   const [params, setParams] = useSearchParams()
   const [q, setQ] = useState('')
+  const [draft, setDraft] = useState('')
   const [sev, setSev] = useState(0)
-  const { data, isPending } = useQuery({ queryKey: ['rules'], queryFn: fetchRules })
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['rules'], queryFn: fetchRules })
   const rows = (data ?? []).filter(r =>
     (!q || (r.title + r.id).toLowerCase().includes(q.toLowerCase())) && (!sev || r.severity === sev),
   )
@@ -24,14 +26,16 @@ export function RulesPage() {
 
   const list = (
     <FilterCard
+      onReset={draft || q || sev ? () => { setDraft(''); setQ(''); setSev(0) } : undefined}
       filters={
         <Space wrap>
-          <Input.Search allowClear style={{ width: 280 }} placeholder={t('ruleSearchHint')} onSearch={setQ} onChange={e => !e.target.value && setQ('')} />
-          <Select style={{ width: 140 }} value={sev} onChange={setSev} options={[{ value: 0, label: t('allSeverities') }, ...[5, 4, 3, 2, 1].map(n => ({ value: n, label: t(`sev${n}` as 'sev1') }))]} />
+          <Input.Search allowClear style={{ width: 280, maxWidth: '100%' }} aria-label={t('ruleSearchHint')} value={draft} placeholder={t('ruleSearchHint')} onSearch={v => setQ(v.trim())} onChange={e => { setDraft(e.target.value); if (!e.target.value) setQ('') }} />
+          <Select aria-label={t('thSeverity')} style={{ width: 140 }} value={sev} onChange={setSev} options={[{ value: 0, label: t('allSeverities') }, ...[5, 4, 3, 2, 1].map(n => ({ value: n, label: t(`sev${n}` as 'sev1') }))]} />
         </Space>
       }
     >
-      <Table<RuleRow>
+      {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<RuleRow>
+        scroll={{ x: 850 }}
         size="small"
         rowKey="id"
         loading={isPending}
@@ -44,7 +48,7 @@ export function RulesPage() {
           { title: t('thPlatform'), dataIndex: 'product', width: 110, render: v => v || '-' },
           { title: t('thDataSource'), width: 140, render: (_, r) => (r.ingested ? <Tag>{r.source}</Tag> : <Tag color="warning">{t('noDataSource')}</Tag>) },
         ]}
-      />
+      />}
     </FilterCard>
   )
 

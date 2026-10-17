@@ -1,9 +1,10 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { createUser, deleteUser, fetchUsers, resetUserPassword, type UserRow } from '../api'
 import { useSession } from '../app/session'
+import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { ROLE_KEY, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
@@ -15,13 +16,18 @@ export function UsersPage() {
   const { message } = App.useApp()
   const client = useQueryClient()
   const { me } = useSession()
+  const pending = useRef(false)
+  const [busy, setBusy] = useState(false)
   const [creating, setCreating] = useState(false)
   const [resetting, setResetting] = useState<UserRow | null>(null)
   const [createForm] = Form.useForm()
   const [resetForm] = Form.useForm()
-  const { data, isPending } = useQuery({ queryKey: ['users'], queryFn: fetchUsers })
+  const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['users'], queryFn: fetchUsers })
 
   const run = async (fn: () => Promise<unknown>, ok?: string) => {
+    if (pending.current) return false
+    pending.current = true
+    setBusy(true)
     try {
       await fn()
       if (ok) message.success(ok)
@@ -32,7 +38,7 @@ export function UsersPage() {
     } catch (e) {
       message.error(errText(e, t))
       return false
-    }
+    } finally { pending.current = false; setBusy(false) }
   }
   const roleOptions = Object.entries(ROLE_KEY).map(([value, key]) => ({ value, label: t(key) }))
   const pwRules = [{ required: true, min: 8, message: t('passwordMin') }]
@@ -41,10 +47,11 @@ export function UsersPage() {
     <Page
       title={t('navUsers')}
       subtitle={t('usersSubtitle')}
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>{t('newUser')}</Button>}
+      extra={<Button type="primary" icon={<PlusOutlined />} disabled={busy} onClick={() => { createForm.resetFields(); setCreating(true) }}>{t('newUser')}</Button>}
     >
       <Card styles={{ body: { padding: 0 } }}>
-        <Table<UserRow>
+        {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<UserRow>
+          scroll={{ x: 680 }}
           rowKey="id"
           loading={isPending}
           dataSource={data ?? []}
@@ -57,32 +64,32 @@ export function UsersPage() {
               title: t('actions'), width: 200,
               render: (_, u) => (
                 <Space>
-                  <Button type="link" size="small" onClick={() => setResetting(u)}>{t('resetPassword')}</Button>
+                  <Button type="link" size="small" disabled={busy} onClick={() => { resetForm.resetFields(); setResetting(u) }}>{t('resetPassword')}</Button>
                   {u.username !== me.username && (
                     <Popconfirm title={t('confirmDeleteUser', { name: u.username })} onConfirm={() => run(() => deleteUser(u.id))}>
-                      <Button type="link" danger size="small">{t('del')}</Button>
+                      <Button type="link" danger size="small" disabled={busy}>{t('del')}</Button>
                     </Popconfirm>
                   )}
                 </Space>
               ),
             },
           ]}
-        />
+        />}
       </Card>
 
-      <Modal open={creating} title={t('newUser')} onCancel={() => setCreating(false)} onOk={() => createForm.submit()} destroyOnHidden>
-        <Form form={createForm} layout="vertical" initialValues={{ role: 'analyst' }}
-          onFinish={async v => { if (await run(() => createUser(v))) { setCreating(false); createForm.resetFields() } }}>
-          <Form.Item name="username" label={t('username')} rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="password" label={t('password')} rules={pwRules}><Input.Password /></Form.Item>
+      <Modal open={creating} title={t('newUser')} onCancel={() => { if (!busy) { createForm.resetFields(); setCreating(false) } }} confirmLoading={busy} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => createForm.submit()} destroyOnHidden>
+        <Form disabled={busy} form={createForm} layout="vertical" initialValues={{ role: 'analyst' }}
+          onFinish={async v => { if (await run(() => createUser({ ...v, username: v.username.trim() }))) { setCreating(false); createForm.resetFields() } }}>
+          <Form.Item name="username" label={t('username')} rules={[{ required: true, whitespace: true }]}><Input autoComplete="off" /></Form.Item>
+          <Form.Item name="password" label={t('password')} rules={pwRules}><Input.Password autoComplete="new-password" /></Form.Item>
           <Form.Item name="role" label={t('globalRole')} extra={t('globalRoleHint')}><Select options={roleOptions} /></Form.Item>
         </Form>
       </Modal>
 
-      <Modal open={!!resetting} title={t('resetPasswordFor', { name: resetting?.username ?? '' })} onCancel={() => setResetting(null)} onOk={() => resetForm.submit()} destroyOnHidden>
-        <Form form={resetForm} layout="vertical"
-          onFinish={async v => { if (await run(() => resetUserPassword(resetting!.id, v.password), t('passwordReset'))) setResetting(null) }}>
-          <Form.Item name="password" label={t('newPassword')} rules={pwRules}><Input.Password /></Form.Item>
+      <Modal open={!!resetting} title={t('resetPasswordFor', { name: resetting?.username ?? '' })} onCancel={() => { if (!busy) { resetForm.resetFields(); setResetting(null) } }} confirmLoading={busy} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => resetForm.submit()} destroyOnHidden>
+        <Form disabled={busy} form={resetForm} layout="vertical"
+          onFinish={async v => { if (await run(() => resetUserPassword(resetting!.id, v.password), t('passwordReset'))) { resetForm.resetFields(); setResetting(null) } }}>
+          <Form.Item name="password" label={t('newPassword')} rules={pwRules}><Input.Password autoComplete="new-password" /></Form.Item>
         </Form>
       </Modal>
     </Page>

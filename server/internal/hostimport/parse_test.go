@@ -189,3 +189,10 @@ func TestMarkdownFenceBoundaries(t *testing.T) {
 		t.Fatal("带尾随内容的标记不能结束代码块")
 	}
 }
+
+func TestMarkdownInlineCodeIsNotFence(t *testing.T) {
+	hosts, err := Parse("# 主机\n```inline``` 只是行内代码\n\n| 主机名 | 地址 |\n| real-host | 192.0.2.1 |\n")
+	if err != nil || len(hosts) != 1 || hosts[0].Hostname != "real-host" {
+		t.Fatalf("info string 含反引号的行不是围栏，数量 %d，错误 %v", len(hosts), err)
+	}
+}

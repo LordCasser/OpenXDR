@@ -41,7 +41,7 @@ export function SessionProvider({ me, children }: { me: Me; children: ReactNode 
   }
 
   if (groupsQuery.isPending) return <Spin fullscreen />
-  if (groupsQuery.isError) return <LoadError error={groupsQuery.error} onRetry={() => groupsQuery.refetch()} />
+  if (groupsQuery.isError && !groupsQuery.data) return <LoadError error={groupsQuery.error} onRetry={() => groupsQuery.refetch()} />
 
   return (
     <SessionContext.Provider

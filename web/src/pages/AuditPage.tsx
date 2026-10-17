@@ -57,14 +57,16 @@ const ACTION: Record<string, { key: MsgKey; color?: string }> = {
 export function AuditPage() {
   const { t } = useI18n()
   const [q, setQ] = useState('')
+  const [draft, setDraft] = useState('')
   // 关键词在后端全量匹配，不只筛已加载的这一页
   const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['audit', q], queryFn: () => fetchAudit(q) })
 
   return (
     <Page title={t('navAudit')} subtitle={t('auditSubtitle')}>
-      <FilterCard filters={<Input.Search allowClear style={{ width: 300 }} placeholder={t('auditSearchHint')} onSearch={setQ} onChange={e => !e.target.value && setQ('')} />}>
+      <FilterCard onReset={draft || q ? () => { setDraft(''); setQ('') } : undefined} filters={<Input.Search allowClear style={{ width: 300, maxWidth: '100%' }} aria-label={t('auditSearchHint')} value={draft} placeholder={t('auditSearchHint')} onSearch={v => setQ(v.trim())} onChange={e => { setDraft(e.target.value); if (!e.target.value) setQ('') }} />}>
         {data?.truncated && <Alert type="info" banner showIcon title={t('listTruncated', { n: data.items.length })} />}
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<AuditRow>
+          scroll={{ x: 1100 }}
           size="small"
           rowKey="id"
           loading={isPending}
