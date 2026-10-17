@@ -56,14 +56,19 @@ function ExecChain({ calls, results, hosts, onPreview }: {
 }) {
   const { t } = useI18n()
   const { token } = theme.useToken()
+  const [all, setAll] = useState(false)
   const done = calls.filter(c => results.has(c.id)).length
+  // 一轮几十步时只露最后几步，前面的折起来，点开再看
+  const FOLD = 6
+  const hidden = all ? 0 : Math.max(0, calls.length - FOLD)
   return (
     <div className="chat-chain" style={{ borderColor: token.colorBorderSecondary, background: token.colorFillQuaternary }}>
       <Space size={6} className="chat-chain-head" style={{ color: token.colorTextSecondary }}>
         <ToolOutlined />{t('execChain', { done, n: calls.length })}
       </Space>
+      {hidden > 0 && <Button type="link" size="small" style={{ padding: 0, marginBottom: 8 }} onClick={() => setAll(true)}>{t('showEarlierSteps', { n: hidden })}</Button>}
       <Timeline
-        items={calls.map(c => {
+        items={calls.slice(hidden).map(c => {
           const r = results.get(c.id)
           const icon = !r ? <LoadingOutlined style={{ color: token.colorPrimary }} />
             : r.isError ? <CloseCircleFilled style={{ color: token.colorError }} />
@@ -71,7 +76,10 @@ function ExecChain({ calls, results, hosts, onPreview }: {
           const host = String(c.arguments.host ?? '')
           const title = c.name === 'exec' ? t('toolExec', { host: hosts[host] ?? host })
             : c.name === 'report' ? t('toolReport', { title: String(c.arguments.title ?? '') })
-              : t('toolCall', { name: c.name })
+              : c.name === 'query' ? t('toolQuery')
+                : c.name === 'track' ? t(c.arguments.status === 'resolved' ? 'toolTrackResolved' : c.arguments.status === 'withdrawn' ? 'toolTrackWithdrawn' : 'toolTrackOpen',
+                  { title: String(c.arguments.title ?? ''), host: hosts[host] ?? host })
+                  : t('toolCall', { name: c.name })
           return {
             key: c.id,
             icon,
@@ -83,7 +91,9 @@ function ExecChain({ calls, results, hosts, onPreview }: {
                   {!r && <Typography.Text type="secondary">{t(c.name === 'exec' ? 'stepWaitingExec' : 'stepRunning')}</Typography.Text>}
                 </Space>
                 {c.name === 'exec' && <pre className="chat-code">{String(c.arguments.cmd ?? '')}</pre>}
-                {c.name !== 'exec' && c.name !== 'report' && <pre className="chat-code">{JSON.stringify(c.arguments, null, 2)}</pre>}
+                {c.name === 'query' && <pre className="chat-code">{String(c.arguments.sql ?? '')}</pre>}
+                {c.name === 'track' && !!c.arguments.detail && <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 13 }}>{String(c.arguments.detail)}</Typography.Paragraph>}
+                {!['exec', 'report', 'query', 'track'].includes(c.name) && <pre className="chat-code">{JSON.stringify(c.arguments, null, 2)}</pre>}
                 {c.name === 'report' && <Button size="small" icon={<FileTextOutlined />} onClick={() => onPreview(c)} style={{ marginTop: 6 }}>{t('previewReport')}</Button>}
                 {r && c.name !== 'report' && (
                   <Collapse ghost size="small" className="chat-step-out"

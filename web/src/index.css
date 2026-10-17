@@ -94,6 +94,12 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .mini-row { padding: 6px 0; border-bottom: 1px solid var(--ant-color-border-secondary); }
 .mini-row:last-child { border-bottom: none; }
 
+/* 会话列表：日期分组标题与置顶按钮（悬停才出现，已置顶常亮） */
+.chat-session-bucket { font-size: 12px; color: var(--ant-color-text-tertiary); padding: 10px 16px 4px; }
+.session-pin { color: var(--ant-color-text-quaternary); opacity: 0; padding: 0 2px; transition: opacity .15s; }
+.chat-session-item:hover .session-pin, .session-pin:focus-visible { opacity: 1; }
+.session-pin.pinned { opacity: 1; color: var(--ant-color-primary); }
+
 /* 告警时间线里的证据行 */
 .timeline-evidence { margin-top: 4px; font-size: 12px; color: var(--ant-color-text-secondary); word-break: break-all; }
 

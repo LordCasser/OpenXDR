@@ -514,6 +514,7 @@ export interface AgentSession {
   title?: string
   status: 'running' | 'idle' | 'succeeded' | 'failed'
   error?: string
+  // 后端 omitempty：实执行时字段缺省，只有 true 才是演练
   dry_run?: boolean
 }
 

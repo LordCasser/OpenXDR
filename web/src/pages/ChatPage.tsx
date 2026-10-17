@@ -1,9 +1,9 @@
 import {
-  AlertOutlined, CloudServerOutlined, GlobalOutlined, LoginOutlined, PlusOutlined, RobotOutlined, SendOutlined, StopOutlined,
+  AlertOutlined, CloudServerOutlined, GlobalOutlined, LoginOutlined, PlusOutlined, PushpinOutlined, RobotOutlined, SendOutlined, StopOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Col, Empty, Flex, Form, Input, Modal, Radio, Result, Row, Segmented, Space, Spin, Tag, Typography, theme,
+  Alert, App, Button, Card, Col, Empty, Flex, Form, Input, Modal, Radio, Result, Row, Segmented, Space, Spin, Tag, Tooltip, Typography, theme,
 } from 'antd'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
@@ -167,6 +167,21 @@ export function ChatPage() {
   const shown = (sessions.data ?? []).filter(s =>
     (!kind || s.kind === kind) && (!search || (s.title ?? '').toLowerCase().includes(search.toLowerCase())),
   )
+  // 置顶存在本地，按用户分开；其余按今天 / 昨天 / 更早分组
+  const pinKey = `pinnedSessions:${me.username}`
+  const [pinned, setPinned] = useState<string[]>(() => JSON.parse(localStorage.getItem(pinKey) ?? '[]'))
+  const togglePin = (id: string) => {
+    const next = pinned.includes(id) ? pinned.filter(x => x !== id) : [id, ...pinned]
+    localStorage.setItem(pinKey, JSON.stringify(next))
+    setPinned(next)
+  }
+  const dayStart = new Date().setHours(0, 0, 0, 0)
+  const buckets: { key: MsgKey; items: AgentSession[] }[] = [
+    { key: 'sessionsPinned', items: shown.filter(s => pinned.includes(s.id)) },
+    { key: 'sessionsToday', items: shown.filter(s => !pinned.includes(s.id) && Date.parse(s.created_at) >= dayStart) },
+    { key: 'sessionsYesterday', items: shown.filter(s => !pinned.includes(s.id) && Date.parse(s.created_at) < dayStart && Date.parse(s.created_at) >= dayStart - 86_400_000) },
+    { key: 'sessionsEarlier', items: shown.filter(s => !pinned.includes(s.id) && Date.parse(s.created_at) < dayStart - 86_400_000) },
+  ]
 
   // 别的标签页或定时任务正在跑时，本页没有流，靠轮询跟上
   const messages = useQuery({
@@ -302,25 +317,40 @@ export function ChatPage() {
           {sessions.isError && <Alert type="error" showIcon title={errText(sessions.error, t)} />}
           {sessions.isPending && <Spin style={{ display: 'block', margin: 24 }} />}
           {sessions.data && shown.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noSessions')} />}
-          {shown.map(s => (
-            <button
-              type="button"
-              aria-current={s.id === sessionId ? 'page' : undefined}
-              key={s.id}
-              className="chat-session-item"
-              style={s.id === sessionId ? { background: token.controlItemBgActive } : undefined}
-              onClick={() => navigate(`/chat/${s.id}`)}
-            >
-              <Typography.Text ellipsis strong style={{ display: 'block' }}>
-                {s.title || t(s.kind === 'task' ? 'taskSession' : 'chatSession')}
-              </Typography.Text>
-              <Space size={4} wrap style={{ marginTop: 4 }}>
-                <SessionStatusTag value={s.status} />
-                {s.kind === 'task' && <Tag>{t('taskSession')}</Tag>}
-                {s.dry_run === false && <Tag color="red">{t('liveRun')}</Tag>}
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(s.created_at)}</Typography.Text>
-              </Space>
-            </button>
+          {buckets.filter(b => b.items.length).map(b => (
+            <div key={b.key}>
+              <div className="chat-session-bucket">{t(b.key)}</div>
+              {b.items.map(s => (
+                <button
+                  type="button"
+                  aria-current={s.id === sessionId ? 'page' : undefined}
+                  key={s.id}
+                  className="chat-session-item"
+                  style={s.id === sessionId ? { background: token.controlItemBgActive } : undefined}
+                  onClick={() => navigate(`/chat/${s.id}`)}
+                >
+                  <Flex align="center" gap={4}>
+                    <Typography.Text ellipsis strong style={{ flex: 1 }}>
+                      {s.title || t(s.kind === 'task' ? 'taskSession' : 'chatSession')}
+                    </Typography.Text>
+                    <Tooltip title={t(pinned.includes(s.id) ? 'unpin' : 'pin')}>
+                      <span role="button" tabIndex={0} aria-label={t(pinned.includes(s.id) ? 'unpin' : 'pin')}
+                        className={pinned.includes(s.id) ? 'session-pin pinned' : 'session-pin'}
+                        onClick={e => { e.stopPropagation(); togglePin(s.id) }}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); togglePin(s.id) } }}>
+                        <PushpinOutlined />
+                      </span>
+                    </Tooltip>
+                  </Flex>
+                  <Space size={4} wrap style={{ marginTop: 4 }}>
+                    <SessionStatusTag value={s.status} />
+                    {s.kind === 'task' && <Tag>{t('taskSession')}</Tag>}
+                    {s.dry_run !== true && <Tag color="red">{t('liveRun')}</Tag>}
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(s.created_at).slice(b.key === 'sessionsEarlier' || b.key === 'sessionsPinned' ? 5 : 11, 16)}</Typography.Text>
+                  </Space>
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       </Card>
@@ -330,7 +360,7 @@ export function ChatPage() {
           <Space>
             <span>{session.title || t('chatSession')}</span>
             <SessionStatusTag value={session.status} />
-            <Tag color={session.dry_run === false ? 'red' : 'default'}>{t(session.dry_run === false ? 'liveRun' : 'dryRun')}</Tag>
+            <Tag color={session.dry_run ? 'default' : 'red'}>{t(session.dry_run ? 'dryRun' : 'liveRun')}</Tag>
           </Space>
         )}
         extra={session && <Typography.Text type="secondary">{session.initiator} · {session.model}</Typography.Text>}
@@ -348,6 +378,7 @@ export function ChatPage() {
           </Flex>
         ) : (
           <>
+            {session.dry_run && <Alert type="info" banner showIcon title={t('dryRunBanner')} />}
             <div className="chat-log">
               {messages.isPending && <Spin />}
               {messages.isError && <Alert type="error" showIcon title={errText(messages.error, t)} />}
