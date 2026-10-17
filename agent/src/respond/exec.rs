@@ -21,9 +21,6 @@ pub async fn run(cmd: &Command) -> Outcome {
     if cmd.cmd.is_empty() {
         return Outcome::failed("未指定命令");
     }
-    if cmd.dry_run {
-        return Outcome::ok(format!("dry-run：将执行 {}", cmd.cmd));
-    }
     let timeout = match cmd.timeout_ms {
         0 => DEFAULT_TIMEOUT,
         ms => Duration::from_millis(ms.into()),

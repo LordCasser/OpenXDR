@@ -18,13 +18,6 @@ pub fn isolate(cmd: &Command) -> Outcome {
     }
 
     let script = build_ruleset(&cmd.allow_endpoints);
-    if cmd.dry_run {
-        return Outcome::ok(format!(
-            "dry-run：将隔离本机，仅放行 {}。规则如下：\n{script}",
-            cmd.allow_endpoints.join(", ")
-        ));
-    }
-
     match apply(&script) {
         Ok(()) => Outcome::ok(format!(
             "已隔离本机，放行 {}",
@@ -34,10 +27,7 @@ pub fn isolate(cmd: &Command) -> Outcome {
     }
 }
 
-pub fn unisolate(cmd: &Command) -> Outcome {
-    if cmd.dry_run {
-        return Outcome::ok(format!("dry-run：将删除隔离表 {TABLE}，恢复正常通信"));
-    }
+pub fn unisolate(_cmd: &Command) -> Outcome {
     match run_nft(&["delete", "table", "inet", TABLE]) {
         Ok(_) => Outcome::ok("已解除隔离"),
         // 表不存在说明本来就没隔离，视为已达成目标
