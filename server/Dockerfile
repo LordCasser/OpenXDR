@@ -17,7 +17,10 @@ RUN npm ci --omit=dev --ignore-scripts
 
 FROM alpine:3.22
 # node 依赖 libstdc++；chromium + 中文字体渲染报告，Poppler 将 PDF 页面渲染为视觉模型输入
-RUN apk add --no-cache libstdc++ chromium font-noto-cjk poppler-utils && adduser -D -u 10001 openxdr
+# 国内构建可传 ALPINE_MIRROR（如 https://mirrors.ustc.edu.cn），默认官方源
+ARG ALPINE_MIRROR=
+RUN if [ -n "$ALPINE_MIRROR" ]; then sed -i -E "s#https?://dl-cdn.alpinelinux.org#$ALPINE_MIRROR#" /etc/apk/repositories; fi && \
+    apk add --no-cache libstdc++ chromium font-noto-cjk poppler-utils && adduser -D -u 10001 openxdr
 COPY --from=build /openxdr-server /usr/local/bin/openxdr-server
 COPY --from=pi-runtime /usr/local/bin/node /usr/local/bin/node
 COPY --from=pi-runtime /pi-runtime /app/pi-runtime

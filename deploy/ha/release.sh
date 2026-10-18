@@ -10,6 +10,7 @@
 #   HA_DIR       节点上的部署目录，默认 /opt/openxdr-ha
 #   GOPROXY      构建 server 时的 Go 代理，国内网络可设 https://goproxy.cn,direct
 #   NPM_REGISTRY 构建 web 时的 npm 源，如 https://registry.npmmirror.com
+#   ALPINE_MIRROR 构建 server 镜像时的 alpine 软件源，如 https://mirrors.ustc.edu.cn
 #   ALLOW_DIRTY  设为 1 才允许工作区有未提交改动（镜像会带上它们，标签加 -dirty）
 #
 # 同步内容：两个镜像，以及 rules/ 与 tasks/（节点上 bind mount，逐个文件原地覆盖，
@@ -36,7 +37,7 @@ first=$1 second=$2
 if remote "$first" "ip -4 -o addr | grep -qw '$VIP'"; then first=$2 second=$1; fi
 
 echo "== 构建 $TAG"
-docker build -q -f "$ROOT/server/Dockerfile" ${GOPROXY:+--build-arg GOPROXY="$GOPROXY"} -t "openxdr-ha-server:$TAG" "$ROOT"
+docker build -q -f "$ROOT/server/Dockerfile" ${GOPROXY:+--build-arg GOPROXY="$GOPROXY"} ${ALPINE_MIRROR:+--build-arg ALPINE_MIRROR="$ALPINE_MIRROR"} -t "openxdr-ha-server:$TAG" "$ROOT"
 docker build -q -f "$ROOT/web/Dockerfile" ${NPM_REGISTRY:+--build-arg NPM_REGISTRY="$NPM_REGISTRY"} -t "openxdr-ha-web:$TAG" "$ROOT/web"
 
 bundle=$(mktemp)
