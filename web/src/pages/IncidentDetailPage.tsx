@@ -1,6 +1,6 @@
-import { ArrowLeftOutlined, DownOutlined, DownloadOutlined, RobotOutlined, UpOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DownOutlined, DownloadOutlined, EllipsisOutlined, RobotOutlined, UpOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Col, Descriptions, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Tooltip, Typography } from 'antd'
+import { App, Button, Card, Col, Descriptions, Dropdown, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { HttpError, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
@@ -12,7 +12,7 @@ import { HostLink } from '../components/HostLink'
 import { IncidentGraph } from '../components/IncidentGraph'
 import { neighbors, type QueueItem } from '../components/incidentQueue'
 import { LoadError } from '../components/LoadError'
-import { Page } from '../components/Page'
+import { Page, useWideTable } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
 import { ResolveModal } from '../components/ResolveModal'
 import { SuppressModal } from '../components/SuppressModal'
@@ -84,6 +84,7 @@ export function IncidentDetailPage() {
   const canChat = useCanChat()(inc?.groupId)
   const handoff = useHandoff()
   const queue = neighbors(id)
+  const wide = useWideTable()
   const step = (to: string | undefined) => to && navigate(`/incidents/${to}`)
   useKeys({ j: () => step(queue.next), k: () => step(queue.prev) })
   useRemember(inc && { to: `/incidents/${inc.id}`, label: inc.title ?? inc.id, kind: 'incident' })
@@ -114,11 +115,14 @@ export function IncidentDetailPage() {
     return true
   }
   const done = inc.status === 'closed' || inc.status === 'false_positive'
+  const exportReport = () => downloadReport(inc.id, inc.title).catch(e => message.error(errText(e, t)))
 
   return (
     <Page
       crumb={inc.title ?? inc.id}
-      title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} /><SeverityTag value={inc.severity} />{inc.title ?? inc.id}<IncidentStatusTag value={inc.status} /></Space>}
+      title={<Space align={wide ? "center" : "start"}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} />{wide && <SeverityTag value={inc.severity} />}{inc.title ?? inc.id}{wide && <IncidentStatusTag value={inc.status} />}</Space>}
+      // 窄屏标题会折行，级别与状态挪到标题下面一行，不夹在折行的标题中间
+      subtitle={!wide && <Space size={4} style={{ marginLeft: 40 }}><SeverityTag value={inc.severity} /><IncidentStatusTag value={inc.status} /></Space>}
       extra={
         <>
           {queue.index >= 0 && (
@@ -136,11 +140,30 @@ export function IncidentDetailPage() {
               {t('handoffToAI')}
             </Button>
           )}
-          {/* 只读角色也能导报告：写汇报不是处置动作 */}
-          <Button icon={<DownloadOutlined />} onClick={() => downloadReport(inc.id, inc.title).catch(e => message.error(errText(e, t)))}>{t('exportReport')}</Button>
-          {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('close')}</Button>}
-          {canAct && !done && <Button danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>}
-          {canAct && done && <Button onClick={() => changeStatus('open')}>{t('reopen')}</Button>}
+          {/* 只读角色也能导报告：写汇报不是处置动作。窄屏把次要操作收进「更多」，标题区不至于折成好几行 */}
+          {wide ? (
+            <>
+              <Button icon={<DownloadOutlined />} onClick={exportReport}>{t('exportReport')}</Button>
+              {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('close')}</Button>}
+              {canAct && !done && <Button danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>}
+              {canAct && done && <Button onClick={() => changeStatus('open')}>{t('reopen')}</Button>}
+            </>
+          ) : (
+            <Dropdown trigger={['click']} menu={{
+              items: [
+                { key: 'export', icon: <DownloadOutlined />, label: t('exportReport') },
+                ...(canAct && !done ? [{ key: 'closed', label: t('close') }, { key: 'false_positive', label: t('markFp'), danger: true }] : []),
+                ...(canAct && done ? [{ key: 'open', label: t('reopen') }] : []),
+              ],
+              onClick: ({ key }) => {
+                if (key === 'export') exportReport()
+                else if (key === 'open') void changeStatus('open')
+                else setResolving(key as 'closed' | 'false_positive')
+              },
+            }}>
+              <Button icon={<EllipsisOutlined />} aria-label={t('more')} />
+            </Dropdown>
+          )}
         </>
       }
     >

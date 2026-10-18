@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { Graph, GraphNode } from '../api'
 import { useI18n } from '../i18n'
 
-// 中间一列既放进程也放连接：端点证据和流量证据在同一层
-const COLUMNS = ['asset', 'process', 'connection', 'alert'] as const
-const COL_X: Record<string, number> = { asset: 12, process: 268, connection: 268, alert: 524 }
+// 中间一列放进程、连接与文件：端点证据和流量证据在同一层
+const COLUMNS = ['asset', 'process', 'connection', 'file', 'alert'] as const
+const COL_X: Record<string, number> = { asset: 12, process: 268, connection: 268, file: 268, alert: 524 }
 const NODE_W = 220
-const LEGEND = { asset: 'graphAsset', process: 'graphProcess', connection: 'graphConnection', alert: 'graphAlert' } as const
+const LEGEND = { asset: 'graphAsset', process: 'graphProcess', connection: 'graphConnection', file: 'graphFile', alert: 'graphAlert' } as const
+// 适配宽度时最多缩到这里：再小字就看不清了，放不下的部分拖动查看
+const MIN_FIT = 0.7
 const NODE_H = 36
 const GAP_Y = 48
 
@@ -29,16 +31,17 @@ export function IncidentGraph({ graph }: { graph: Graph }) {
     asset: token.colorPrimary,
     process: token.purple,
     connection: token.colorSuccess,
+    file: token.cyan,
     alert: token.colorError,
   }
-  const columns: Record<string, GraphNode[]> = { asset: [], process: [], connection: [], alert: [] }
+  const columns: Record<string, GraphNode[]> = { asset: [], process: [], connection: [], file: [], alert: [] }
   for (const node of graph.nodes) (columns[node.type] ?? columns.process).push(node)
 
   const pos = new Map<string, { x: number; y: number }>()
   let middleRow = 0
   for (const col of COLUMNS) {
-    // process 和 connection 共用中间列，纵向接着排，不能各自从 0 开始
-    const shared = col === 'process' || col === 'connection'
+    // 中间列几类共用，纵向接着排，不能各自从 0 开始
+    const shared = col === 'process' || col === 'connection' || col === 'file'
     columns[col].forEach((n, i) => {
       const row = shared ? middleRow++ : i
       pos.set(n.id, { x: COL_X[col], y: 20 + row * GAP_Y })
@@ -60,12 +63,16 @@ export function IncidentGraph({ graph }: { graph: Graph }) {
       const k = Math.min(3, Math.max(0.3, v.k * f))
       return { k, x: cx - ((cx - v.x) * k) / v.k, y: cy - ((cy - v.y) * k) / v.k }
     })
+  const [boxW, setBoxW] = useState(contentW)
   const fit = () => {
     const w = box.current?.clientWidth ?? contentW
-    const k = Math.min(1, w / contentW)
+    const k = Math.max(MIN_FIT, Math.min(1, w / contentW))
     setFitK(k)
-    setView({ k, x: (w - contentW * k) / 2, y: 0 })
+    setBoxW(w)
+    // 放得下就居中；放不下（手机）从左边开始，先看到主机与进程
+    setView({ k, x: Math.max(0, (w - contentW * k) / 2), y: 0 })
   }
+  const overflows = contentW * fitK > boxW + 1
   useEffect(fit, [contentW, contentH, height])
   // React 的 onWheel 是被动监听，阻止不了页面滚动，只能手挂
   useEffect(() => {
@@ -84,7 +91,7 @@ export function IncidentGraph({ graph }: { graph: Graph }) {
     <div>
       <Flex justify="space-between" align="center" style={{ marginBottom: 8 }}>
       <Space size={16} wrap>
-        {(['asset', 'process', 'connection', 'alert'] as const).map(k => (
+        {COLUMNS.filter(k => columns[k].length).map(k => (
           <Space key={k} size={6}><span className="graph-legend" style={{ background: colors[k] }} /><Typography.Text type="secondary" style={{ fontSize: 12 }}>{t(LEGEND[k])}</Typography.Text></Space>
         ))}
       </Space>
@@ -138,6 +145,7 @@ export function IncidentGraph({ graph }: { graph: Graph }) {
         </g>
       </svg>
       </div>
+      {overflows && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('graphDragHint')}</Typography.Text>}
       {graph.overflow > 0 && <Typography.Text type="warning">{t('graphOverflow', { n: graph.overflow })}</Typography.Text>}
     </div>
   )

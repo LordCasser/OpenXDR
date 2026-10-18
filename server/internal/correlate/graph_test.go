@@ -165,4 +165,19 @@ func TestEventNodeNoGUID(t *testing.T) {
 	}
 }
 
+// 文件事件：没有进程上下文时画成文件节点（同一路径共用），有肇事进程时仍按进程画。
+func TestEventNodeFile(t *testing.T) {
+	id, typ, label := eventNode(mkEvent(1001, "", "", nil, `{"activity_id":2,"file":{"path":"/etc/ld.so.preload"}}`))
+	if id != "file:/etc/ld.so.preload" || typ != "file" || label != "/etc/ld.so.preload" {
+		t.Errorf("无进程的文件事件 = (%q, %q, %q)", id, typ, label)
+	}
+	_, typ, label = eventNode(mkEvent(1001, "", "", nil, `{"file":{"path":"/etc/passwd"},"process":{"name":"vim","pid":7}}`))
+	if typ != "process" || label != "vim (7)" {
+		t.Errorf("有肇事进程的文件事件 = (%q, %q)", typ, label)
+	}
+	if _, typ, _ = eventNode(mkEvent(1007, "", "", nil, `{"file":{"path":"/tmp/x"}}`)); typ != "process" {
+		t.Errorf("非文件类事件不应画成文件，得到 %q", typ)
+	}
+}
+
 func hasNodePrefix(s, p string) bool { return len(s) > len(p) && s[:len(p)] == p }

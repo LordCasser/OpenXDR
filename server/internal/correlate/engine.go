@@ -337,12 +337,13 @@ func (e *Engine) ruleTitle(ruleID string) string {
 
 // OCSF class：网络活动 / DNS 活动，其余按端点事件处理
 const (
+	classFileActivity    = 1001
 	classNetworkActivity = 4001
 	classDNSActivity     = 4003
 )
 
-// eventNode 事件在图上的节点：端点事件画成进程，网络事件画成连接。
-// 同一进程/连接的多条告警共用一个节点，靠 id 去重。
+// eventNode 事件在图上的节点：端点事件画成进程，网络事件画成连接，
+// 没有进程上下文的文件事件画成文件。同一进程/连接/文件的多条告警共用一个节点，靠 id 去重。
 func eventNode(evt *ent.Event) (id, typ, label string) {
 	if evt.ClassUID == classNetworkActivity || evt.ClassUID == classDNSActivity {
 		id = "event:" + evt.ID.String()
@@ -355,8 +356,27 @@ func eventNode(evt *ent.Event) (id, typ, label string) {
 	id = "event:" + evt.ID.String()
 	if evt.ProcessGUID != nil {
 		id = "process:" + evt.ProcessGUID.String()
+	} else if path := bareFilePath(evt); path != "" {
+		return "file:" + path, "file", path
 	}
 	return id, "process", processLabel(evt)
+}
+
+// bareFilePath 没有进程上下文的文件事件（inotify 路径只报路径与动作）返回文件路径，其余返回空。
+// 这类事件画成进程会只剩一个兜底标签 "process"，看不出发生在哪个文件上。
+func bareFilePath(evt *ent.Event) string {
+	var raw struct {
+		Process struct {
+			Name string `json:"name"`
+		} `json:"process"`
+		File struct {
+			Path string `json:"path"`
+		} `json:"file"`
+	}
+	if evt.ClassUID != classFileActivity || json.Unmarshal(evt.Raw, &raw) != nil || raw.Process.Name != "" {
+		return ""
+	}
+	return raw.File.Path
 }
 
 func connLabel(evt *ent.Event) string {
