@@ -51,11 +51,8 @@ type Engine struct {
 	OnVerdict func(ctx context.Context, incidentID uuid.UUID, verdict json.RawMessage)
 }
 
+// Run 常驻运行：模型可以在控制台随时配上或撤掉，没配置的轮次直接跳过
 func (e *Engine) Run(ctx context.Context) {
-	if !e.LLM.Enabled() {
-		slog.Warn("AI 研判未启用：未配置 AI_MODEL")
-		return
-	}
 	ticker := time.NewTicker(e.Interval)
 	defer ticker.Stop()
 	for {
@@ -63,6 +60,9 @@ func (e *Engine) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if !e.LLM.Enabled() {
+				continue
+			}
 			if err := e.batch(ctx); err != nil {
 				slog.Error("研判批次失败", "err", err)
 			}

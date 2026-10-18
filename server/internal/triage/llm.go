@@ -23,7 +23,11 @@ type LLM struct {
 	NoThinking bool
 	// MaxTokens 输出上限，0 表示不设
 	MaxTokens int
-	http      *http.Client
+	// Endpoint 每次调用时取地址、模型与密钥（控制台可改）；为空用上面的固定值
+	Endpoint func() (baseURL, model, apiKey string)
+	// OnUsage 调用成功后报告用量，供用量概览；为空不记
+	OnUsage func(model string, input, output int)
+	http    *http.Client
 }
 
 func NewLLM(baseURL, model, apiKey string, timeout time.Duration) *LLM {
@@ -35,7 +39,17 @@ func NewLLM(baseURL, model, apiKey string, timeout time.Duration) *LLM {
 	}
 }
 
-func (l *LLM) Enabled() bool { return l.Model != "" }
+func (l *LLM) endpoint() (string, string, string) {
+	if l.Endpoint != nil {
+		return l.Endpoint()
+	}
+	return l.BaseURL, l.Model, l.APIKey
+}
+
+func (l *LLM) Enabled() bool {
+	_, model, _ := l.endpoint()
+	return model != ""
+}
 
 // Message OpenAI chat 消息。工具调用往返都用它承载。
 type Message struct {
@@ -77,15 +91,16 @@ func makeTool(name, description string, parameters string) Tool {
 // 不设 response_format：与 tool calling 混用在部分推理服务上不兼容，
 // 最终答案的 JSON 提取交给 parseVerdict 的容错逻辑。
 func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, error) {
+	baseURL, model, apiKey := l.endpoint()
 	payload := map[string]any{
-		"model":       l.Model,
+		"model":       model,
 		"messages":    msgs,
 		"temperature": 0.1,
 	}
 	if len(tools) > 0 {
 		payload["tools"] = tools
 	}
-	if l.NoThinking && glmModel.MatchString(l.Model) {
+	if l.NoThinking && glmModel.MatchString(model) {
 		payload["chat_template_kwargs"] = map[string]bool{"enable_thinking": false}
 	}
 	if l.MaxTokens > 0 {
@@ -93,13 +108,13 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 	}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		l.BaseURL+"/chat/completions", bytes.NewReader(body))
+		baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return Message{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if l.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+l.APIKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
 	resp, err := l.http.Do(req)
@@ -115,9 +130,16 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 		Choices []struct {
 			Message Message `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return Message{}, err
+	}
+	if l.OnUsage != nil {
+		l.OnUsage(model, out.Usage.PromptTokens, out.Usage.CompletionTokens)
 	}
 	if len(out.Choices) == 0 {
 		return Message{}, fmt.Errorf("LLM 返回空 choices")

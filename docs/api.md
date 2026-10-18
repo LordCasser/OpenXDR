@@ -81,6 +81,10 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | GET | `/api/settings/notify` | 通知配置 `{url,format,linkBase,minSeverity}`（admin）。未保存过时返回环境变量默认值 |
 | PUT | `/api/settings/notify` | 保存通知配置（admin）；`format` 取 generic / dingtalk / feishu / wecom，地址须为 http(s) |
 | POST | `/api/settings/notify/test` | 用请求体里的配置（不保存）发一条测试消息（admin），推送失败返回 502 |
+| GET | `/api/settings/ai` | AI 与外部情报配置（admin）：端点、研判/标注模型、Pi 模型、反向解析、VT 转情报阈值；密钥只返回是否已设与末四位；`source` 标明每项来自控制台还是环境变量 |
+| PUT | `/api/settings/ai` | 修改（admin）：只改出现的字段；密钥传空串表示清空；`reset` 列出的项回到环境变量。未配置 `HOST_CREDENTIAL_KEY` 时拒绝保存密钥 |
+| POST | `/api/settings/ai/test` | 用请求体里未保存的值测试（admin）：`target` 为 model / piModel 时发一句最短对话，vt 时查一个公共地址；失败返回 502 |
+| GET | `/api/settings/ai/usage?days=&tz=` | AI 用量（admin）：按天、用途（chat / task / triage / annotate）、模型聚合的 token 与调用次数，及用量最多的 10 个会话 |
 
 ## 资产组
 

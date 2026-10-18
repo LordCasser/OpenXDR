@@ -236,17 +236,13 @@ func (g *Group) targets(hits []hit, from, to string) []PublicDest {
 	if len(hits) == 0 {
 		return nil
 	}
-	out := publicDests(hits, g.Info, maxTargets)
-	var notes map[string]string
+	var owner *ent.Asset
 	for _, a := range g.Assets {
 		if id := a.ID.String(); id == from || id == to {
-			notes = a.RelationNotes
+			owner = a
 		}
 	}
-	for i := range out {
-		out[i].Purpose = notes[out[i].IP]
-	}
-	return out
+	return WithNotes(publicDests(hits, g.Info, maxTargets), owner)
 }
 
 // note AI 给的关系说明，先看发起方对被连方的描述，再看反方向

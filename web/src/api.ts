@@ -480,6 +480,28 @@ export const fetchNotifySettings = () => get<NotifySettings>('/api/settings/noti
 export const saveNotifySettings = (s: NotifySettings) => send('PUT', '/api/settings/notify', s)
 export const testNotifySettings = (s: NotifySettings) => send('POST', '/api/settings/notify/test', s)
 
+// AI 与外部情报配置：密钥只回是否已设与末四位；source 标明每项来自控制台还是环境变量
+export interface AISettings {
+  baseUrl: string; model: string; piModel: string; ptr: boolean; vtAlertMin: number
+  apiKeySet: boolean; apiKeyHint?: string; vtKeySet: boolean; vtKeyHint?: string
+  source: Record<string, 'console' | 'env'>
+  canSaveSecrets: boolean
+}
+// 只发改动的项；密钥传空串表示清空；reset 里的项回到环境变量
+export interface AISettingsPatch {
+  baseUrl?: string; model?: string; piModel?: string; ptr?: boolean; vtAlertMin?: number; apiKey?: string; vtKey?: string; reset?: string[]
+}
+export const fetchAISettings = () => get<AISettings>('/api/settings/ai')
+export const saveAISettings = async (p: AISettingsPatch): Promise<AISettings> => (await send('PUT', '/api/settings/ai', p)).json()
+export const testAISettings = async (p: AISettingsPatch & { target: 'model' | 'piModel' | 'vt' }): Promise<{ ms: number; reply: string }> =>
+  (await send('POST', '/api/settings/ai/test', p)).json()
+
+// AI 用量：按天、用途、模型聚合；用途 chat AI 助手 / task 定时任务 / triage 事件研判 / annotate 资产标注
+export interface AIUsageRow { day: string; feature: 'chat' | 'task' | 'triage' | 'annotate'; model: string; input: number; output: number; cacheRead: number; calls: number }
+export interface AIUsageTop { id: string; title: string; kind: string; group: string; model: string; tokens: number; calls: number; lastAt: string }
+export const fetchAIUsage = (days: number) =>
+  get<{ rows: AIUsageRow[]; top: AIUsageTop[] }>(`/api/settings/ai/usage?days=${days}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`)
+
 // 主机接入：令牌按组签发，明文只在创建时返回一次
 export interface EnrollStatus {
   enabled: boolean
@@ -724,6 +746,8 @@ export interface MapNode {
 export interface PublicDest {
   ip: string; ports: string[]; processes?: string[]; count: number; lastSeen: string
   ptr?: string; owner?: string; country?: string; malicious?: number; suspicious?: number; domains?: string[]; checked?: boolean; purpose?: string
+  // 上机调查或人工给的结论，优先于 AI 推断的 purpose
+  note?: ServiceNote
 }
 export interface MapEdge {
   from: string; to: string; ports: string[]; processes: string[]; count: number; lastSeen: string; note?: string; targets?: PublicDest[]

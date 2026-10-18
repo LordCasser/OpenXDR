@@ -29,7 +29,7 @@ func TestSweep(t *testing.T) {
 
 	n := &Notifier{
 		DB: client, Settings: &Settings{DB: client, Default: Target{URL: hook.URL, Format: "generic", LinkBase: "http://console"}},
-		WaitTriage: true,
+		WaitTriage: func() bool { return true },
 		Client:     hook.Client(),
 		start:      time.Now().Add(-time.Minute),
 	}

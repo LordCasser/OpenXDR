@@ -3,6 +3,7 @@
 package assetmap
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
 	"openxdr/server/internal/testdb"
 )
@@ -104,5 +106,49 @@ func TestEnricherRound(t *testing.T) {
 	}
 	if f.PublicDestinations != 4 || len(f.Public) != 4 || f.Public[0].Owner == "" || f.Public[0].Purpose != "" {
 		t.Fatalf("画像公网事实不对: %d %+v", f.PublicDestinations, f.Public)
+	}
+}
+
+// VirusTotal 判恶意达到阈值的地址进威胁情报（之后连它就出告警）；重查不再达到阈值的立即失效；
+// 人工录入的同一地址不被改写
+func TestEnricherFlagsIntel(t *testing.T) {
+	ctx, client := testdb.New(t)
+	web, _ := client.Asset.Create().SetHostname("web-01").SetIPAddrs([]string{"10.0.0.1"}).Save(ctx)
+	now := time.Now()
+	for _, ip := range []string{"203.0.113.66", "203.0.113.77"} {
+		if err := client.AssetLink.Create().SetSrcIP("10.0.0.1").SetSrcAssetID(web.ID).SetDstIP(ip).SetDstPort(4444).SetProto("tcp").
+			SetCount(5).SetFirstSeen(now).SetLastSeen(now).Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 人工已录入 .77：不论 VirusTotal 怎么说都不动
+	_ = client.Intel.Create().SetKind(intel.KindIP).SetValue("203.0.113.77").SetSource("manual").SetNote("人工").Exec(ctx)
+	malicious := atomic.Int32{}
+	malicious.Store(4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"data":{"attributes":{"as_owner":"Bad Hosting","last_analysis_stats":{"malicious":%d}}}}`, malicious.Load())
+	}))
+	defer srv.Close()
+	e := &Enricher{DB: client, VTPerMin: 4, VTPerDay: 500, TTL: 7 * 24 * time.Hour, VTBase: srv.URL, HTTP: srv.Client(),
+		Settings: func() (bool, string, int) { return false, "k", 3 }}
+	if err := e.round(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	row, err := client.Intel.Query().Where(intel.ValueEQ("203.0.113.66")).Only(ctx)
+	if err != nil || row.Source != "virustotal" || row.ExpiresAt == nil || !row.ExpiresAt.After(now.Add(7*24*time.Hour)) || !strings.Contains(*row.Note, "4 个引擎") {
+		t.Fatalf("达到阈值应加入情报: %+v %v", row, err)
+	}
+	if m, _ := client.Intel.Query().Where(intel.ValueEQ("203.0.113.77")).Only(ctx); m.Source != "manual" || *m.Note != "人工" {
+		t.Fatalf("人工情报不应被改写: %+v", m)
+	}
+
+	// 一周后重查，VirusTotal 改判：立即失效
+	malicious.Store(1)
+	later := now.Add(8 * 24 * time.Hour)
+	if err := e.round(ctx, later); err != nil {
+		t.Fatal(err)
+	}
+	if row, _ = client.Intel.Query().Where(intel.ValueEQ("203.0.113.66")).Only(ctx); row.ExpiresAt == nil || row.ExpiresAt.After(later) {
+		t.Fatalf("不再达到阈值应立即失效: %+v", row.ExpiresAt)
 	}
 }

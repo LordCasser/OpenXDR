@@ -42,7 +42,16 @@ export function PublicDestList({ items, host, limit = 8 }: {
                 <VTTag d={d} />
               </Space>
               <div>
-                {d.purpose ? <Typography.Text strong>{d.purpose}</Typography.Text> : <Typography.Text type="secondary">{t('egressUnknown')}</Typography.Text>}
+                {/* 调查或人工结论优先，其次资产标注时 AI 的推断 */}
+                {d.note ? (
+                  <Tooltip title={d.note.note}>
+                    <Space size={4} wrap>
+                      <Typography.Text strong>{d.note.name}</Typography.Text>
+                      <Tag color={d.note.source === 'human' ? 'green' : 'blue'} variant="filled">{t(d.note.source === 'human' ? 'egressHuman' : 'egressInvestigated')}</Tag>
+                      {d.note.risk && d.note.risk !== 'low' && <Tag color={d.note.risk === 'high' ? 'error' : 'warning'}>{t(d.note.risk === 'high' ? 'riskHigh' : 'riskMedium')}</Tag>}
+                    </Space>
+                  </Tooltip>
+                ) : d.purpose ? <Typography.Text strong>{d.purpose}</Typography.Text> : <Typography.Text type="secondary">{t('egressUnknown')}</Typography.Text>}
                 {(d.owner || d.country) && <Typography.Text type="secondary"> · {[d.owner, d.country].filter(Boolean).join(' · ')}</Typography.Text>}
               </div>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -56,7 +65,7 @@ export function PublicDestList({ items, host, limit = 8 }: {
                 <Button type="text" size="small" icon={<ExportOutlined />} aria-label={t('openVT')}
                   href={`https://www.virustotal.com/gui/ip-address/${encodeURIComponent(d.ip)}`} target="_blank" rel="noopener noreferrer" />
               </Tooltip>
-              {host?.groupId && canChat(host.groupId) && !d.purpose && (
+              {host?.groupId && canChat(host.groupId) && !d.note && (
                 <Tooltip title={t('investigateEgress')}>
                   <Button type="text" size="small" icon={<RobotOutlined />} aria-label={t('investigateEgress')} loading={handoff.busy} onClick={() => investigate(d)} />
                 </Tooltip>

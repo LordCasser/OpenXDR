@@ -19,6 +19,7 @@ import (
 
 	"openxdr/server/ent"
 	"openxdr/server/ent/assetlink"
+	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
 )
 
@@ -40,14 +41,17 @@ var (
 // 按最近一周的连接量从多到少查，结果缓存 TTL 后重查。VirusTotal 免费额度很紧（4 次/分钟、500 次/天），
 // 按分钟与天两道限额走；撞到 429 停到下一轮，key 被拒停一小时，都不影响图谱与标注本身。
 type Enricher struct {
-	DB       *ent.Client
-	PTR      bool
-	VTKey    string
-	VTPerMin int
-	VTPerDay int
-	TTL      time.Duration
-	Interval time.Duration
-	HTTP     *http.Client
+	DB *ent.Client
+	// Settings 每轮取一次反向解析开关、VirusTotal key 与转情报阈值（控制台可改）；为空用下面的固定值
+	Settings   func() (ptr bool, vtKey string, alertMin int)
+	PTR        bool
+	VTKey      string
+	VTAlertMin int
+	VTPerMin   int
+	VTPerDay   int
+	TTL        time.Duration
+	Interval   time.Duration
+	HTTP       *http.Client
 	// 测试替换；空为官方地址
 	VTBase   string
 	Resolver *net.Resolver
@@ -74,6 +78,12 @@ func (e *Enricher) Run(ctx context.Context) {
 
 // round 一轮：挑出到期的地址，反向解析与 VirusTotal 各按自己的额度查，查到多少写多少
 func (e *Enricher) round(ctx context.Context, now time.Time) error {
+	if e.Settings != nil {
+		e.PTR, e.VTKey, e.VTAlertMin = e.Settings()
+	}
+	if !e.PTR && e.VTKey == "" {
+		return nil
+	}
 	ips, err := e.candidates(ctx, now)
 	if err != nil || len(ips) == 0 {
 		return err
@@ -127,6 +137,11 @@ func (e *Enricher) round(ctx context.Context, now time.Time) error {
 		}
 		if err := e.save(ctx, ip, info, upd, now); err != nil {
 			return err
+		}
+		if upd.vt != nil {
+			if err := e.syncIntel(ctx, ip, *upd.vt, now); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -253,6 +268,37 @@ func parseVT(body io.Reader, ip string) (vtResult, error) {
 	return r, nil
 }
 
+// syncIntel 达到阈值的地址加进威胁情报，之后再有主机连它就按情报命中出告警；到期跟着缓存期走。
+// 重查后不再达到阈值的立即失效。人工或别的来源已有的同一地址不动
+func (e *Enricher) syncIntel(ctx context.Context, ip string, v vtResult, now time.Time) error {
+	hit := e.VTAlertMin > 0 && v.malicious >= e.VTAlertMin
+	row, err := e.DB.Intel.Query().Where(intel.KindEQ(intel.KindIP), intel.ValueEQ(ip)).Only(ctx)
+	switch {
+	case ent.IsNotFound(err):
+		if !hit {
+			return nil
+		}
+		note := fmt.Sprintf("VirusTotal %d 个引擎判恶意 · %s", v.malicious, cmp.Or(v.owner, "-"))
+		err = e.DB.Intel.Create().SetKind(intel.KindIP).SetValue(ip).SetSource(intelSource).SetSeverity(4).
+			SetNote(note).SetExpiresAt(now.Add(e.TTL + 24*time.Hour)).Exec(ctx)
+		if ent.IsConstraintError(err) {
+			return nil
+		}
+		return err
+	case err != nil:
+		return err
+	case row.Source != intelSource:
+		return nil
+	case hit:
+		return row.Update().SetNote(fmt.Sprintf("VirusTotal %d 个引擎判恶意 · %s", v.malicious, cmp.Or(v.owner, "-"))).
+			SetExpiresAt(now.Add(e.TTL + 24*time.Hour)).Exec(ctx)
+	default:
+		return row.Update().SetExpiresAt(now).Exec(ctx)
+	}
+}
+
+const intelSource = "virustotal"
+
 type ipUpdate struct {
 	ptr *string
 	vt  *vtResult
@@ -300,6 +346,23 @@ type PublicDest struct {
 	Checked bool `json:"checked,omitempty"`
 	// AI 标注给的用途，只在接口里填，不回灌给模型
 	Purpose string `json:"purpose,omitempty"`
+	// 上机调查或人工给的结论，优先于 Purpose
+	Note *ServiceNote `json:"note,omitempty"`
+}
+
+// WithNotes 填上资产给这些地址的用途与调查结论（只在接口里，不进模型上下文）
+func WithNotes(ds []PublicDest, a *ent.Asset) []PublicDest {
+	if a == nil {
+		return ds
+	}
+	notes := EgressNotesOf(a)
+	for i := range ds {
+		ds[i].Purpose = a.RelationNotes[ds[i].IP]
+		if n, ok := notes[ds[i].IP]; ok {
+			ds[i].Note = &n
+		}
+	}
+	return ds
 }
 
 // hit 一条连到公网地址的依赖边，ip 是公网那一端

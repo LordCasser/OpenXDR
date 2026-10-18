@@ -20,7 +20,7 @@
 | `SANDBOX_KEY` | 空 | 与 sandboxd 的共享密钥，至少 32 个字符 |
 | `SANDBOX_CA_FILE` | 空 | 校验 sandboxd 证书的 CA；空用系统根证书 |
 
-Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/identify/report，以及已配置组的 query。identify 把对某个监听服务的调查结论写回资产（来源 investigation，不覆盖人工标注），见 [资产图谱与攻击面](asset-map.md#服务说明与调查)。
+Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/identify/egress/report，以及已配置组的 query。identify 把对某个监听服务的调查结论写回资产（来源 investigation，不覆盖人工标注），见 [资产图谱与攻击面](asset-map.md#服务说明与调查)；egress 同样写回对某个公网外联的调查结论（只收这台主机确实连过的公网地址）。
 没有新增对外工具执行端口，身份、组和来源均由 Go 绑定，模型不能修改；命令一律真执行，没有演练模式。
 每轮上下文包含本组最多 200 台资产的 UUID、主机名和 OS；超出会标注截断。
 每轮最多「组内主机数 × 20 + 遗留待办数 + 32」次模型调用（32–256），预算写进系统提示让模型留出提交报告的余量，每次输出最多 8192 token。exec 送入模型的 stdout/stderr 各最多 16 KiB，截断标记为 `truncated=true`，Command 记录仍保留原始回执。GLM 显式关闭模板 thinking。未实现费用预算或自动历史压缩。
@@ -30,7 +30,7 @@ Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/identify/r
 配置 `SANDBOX_URL` 后，Pi 不再在 server 里跑 `runner.mjs`，而是由独立主机上的 `sandboxd`
 为每轮对话起一个一次性容器（`deploy/pi-sandbox`）。容器里 Pi 用自己的默认工具（bash / read / edit / write），
 按 `openxdr` Skill 工作手册行事；平台能力只通过容器内的 `xdr` 命令行使用
-（`xdr exec / sql / track / identify / report / context`）。
+（`xdr exec / sql / track / identify / egress / report / context`）。
 
 - 协议不变：server 与容器之间仍是 runner 的 JSONL，经 sandboxd 一条全双工 HTTP 流转发。
   `xdr` 经容器内 unix socket 把调用交给桥，桥发 `tool_request` 回平台——组、发起人、

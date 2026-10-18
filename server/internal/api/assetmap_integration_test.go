@@ -34,9 +34,9 @@ func TestAssetMapPermissionsAndLocks(t *testing.T) {
 	analyst := client.User.Create().SetUsername("ana").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
 	client.GroupMember.Create().SetGroupID(group.ID).SetUserID(analyst.ID).SetRole("analyst").SaveX(ctx)
 
-	admin := httptest.NewServer(asAdmin(AssetMap(client, true)))
+	admin := httptest.NewServer(asAdmin(AssetMap(client, func() bool { return true })))
 	t.Cleanup(admin.Close)
-	ana := httptest.NewServer(as(analyst, AssetMap(client, true)))
+	ana := httptest.NewServer(as(analyst, AssetMap(client, func() bool { return true })))
 	t.Cleanup(ana.Close)
 
 	gid := group.ID.String()
@@ -116,7 +116,7 @@ func TestAssetMapPermissionsAndLocks(t *testing.T) {
 	}
 
 	// 没开 AI 时拒绝标注请求
-	noAI := httptest.NewServer(asAdmin(AssetMap(client, false)))
+	noAI := httptest.NewServer(asAdmin(AssetMap(client, func() bool { return false })))
 	t.Cleanup(noAI.Close)
 	if code := send(t, noAI, "POST", "/api/assets/"+host.ID.String()+"/annotate", ``); code != http.StatusServiceUnavailable {
 		t.Errorf("未配置模型应 503: %d", code)

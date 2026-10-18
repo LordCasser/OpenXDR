@@ -31,6 +31,7 @@ usage() {
   xdr sql <只读SQL>                      查本组只读视图，输出 TSV（首行列名）
   xdr track <主机名> <key> <low|medium|high> <open|resolved|withdrawn> <标题> <详情>
   xdr identify <主机名> <tcp/端口|udp/端口> <high|medium|low> <服务名> <依据与结论>
+  xdr egress <主机名> <公网地址> <high|medium|low> <用途> <依据与结论>
   xdr report <标题> <Markdown 文件>       保存最终报告
 U
 }
@@ -53,6 +54,9 @@ case "$cmd" in
   identify)
     [ $# -ge 5 ] || { usage; exit 2; }
     call identify "$(jq -cn --arg h "$(host_id "$1")" --arg p "$2" --arg r "$3" --arg n "$4" --arg note "$5" '{host:$h,port:$p,risk:$r,name:$n,note:$note}')" ;;
+  egress)
+    [ $# -ge 5 ] || { usage; exit 2; }
+    call egress "$(jq -cn --arg h "$(host_id "$1")" --arg ip "$2" --arg r "$3" --arg n "$4" --arg note "$5" '{host:$h,ip:$ip,risk:$r,name:$n,note:$note}')" ;;
   report)
     [ $# -ge 2 ] && [ -f "$2" ] || { usage; exit 2; }
     call report "$(jq -cn --arg t "$1" --rawfile m "$2" '{title:$t,markdown:$m}')" ;;

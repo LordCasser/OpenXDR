@@ -46,8 +46,8 @@ type Scheduler struct {
 	Dir    string
 	// 检查到期与重载 YAML 的周期
 	Interval time.Duration
-	// 任务未指定模型时使用
-	DefaultModel string
+	// 任务未指定模型时使用（控制台可改，每轮取）；为空表示 Pi 未启用，任务照常同步但不运行
+	DefaultModel func() string
 	Notify       Notifier
 	// 单次运行上限，含模型、工具与审批等待
 	Timeout time.Duration
@@ -139,9 +139,14 @@ func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 	if len(groups) == 0 {
 		slog.Warn("任务没有可用的目标组", "task", t.ID, "group", t.TargetGroup)
 	}
+	// 任务自带模型也得在 Pi 启用时才跑：端点与密钥跟着平台配置走
+	def := s.DefaultModel()
+	if def == "" {
+		return
+	}
 	model := t.Model
 	if model == "" {
-		model = s.DefaultModel
+		model = def
 	}
 	for _, g := range groups {
 		scheduled, err := s.due(ctx, t, g.ID, now)

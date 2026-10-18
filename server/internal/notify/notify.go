@@ -28,8 +28,8 @@ type Notifier struct {
 	DB       *ent.Client
 	Settings *Settings
 	Interval time.Duration
-	// AI 启用时为 true：等 verdict 出来再推
-	WaitTriage bool
+	// AI 研判启用时返回 true：等 verdict 出来再推。模型可在控制台随时改，每次判断时取
+	WaitTriage func() bool
 	Client     *http.Client
 
 	// 推送目标启用的时刻；未配置目标时为零值
@@ -116,7 +116,7 @@ func (n *Notifier) decide(inc *ent.Incident, severity int16) (bool, string) {
 		return false, "已人工处理"
 	}
 	if len(inc.AiVerdict) == 0 {
-		if n.WaitTriage {
+		if n.WaitTriage != nil && n.WaitTriage() {
 			return false, "wait"
 		}
 		return true, "" // AI 未启用，事件即推

@@ -327,14 +327,14 @@ server 全部通过环境变量配置，均有默认值：
 | `LOG_LEVEL` | `info` | debug / info / warn / error |
 | `RULES_PATH` | `../rules` | Sigma 规则目录 |
 | `RULES_RELOAD_SECONDS` | `30` | 规则目录变更检测周期，变更自动热重载；0 关闭 |
-| `TASKS_PATH` | `../tasks` | 预设任务 YAML 目录；需配置 `PI_MODEL` 才调度，见 [Pi 后端](pi-backend.md#预设任务) |
+| `TASKS_PATH` | `../tasks` | 预设任务 YAML 目录；配置了 Pi 模型（`PI_MODEL` 或控制台）才运行，见 [Pi 后端](pi-backend.md#预设任务) |
 | `SCHEDULE_INTERVAL_SECONDS` | `30` | 任务到期检查与 YAML 重载周期 |
 | `CHROMIUM_PATH` | `chromium` | 报告 PDF 渲染用的 headless Chromium，server 镜像已内置 |
 | `HTTP_ADDR` / `GRPC_ADDR` | `:8080` / `:8081` | 监听地址 |
 | `ALERT_DEDUP_WINDOW_MINUTES` | `5` | 告警去重窗口 |
 | `CORRELATE_WINDOW_MINUTES` | `30` | 关联时间窗 |
 | `CORRELATE_MAX_GRAPH_NODES` | `500` | 单个事件图节点上限 |
-| `AI_MODEL` | 空（不启用） | 研判模型名 |
+| `AI_MODEL` | 空（不启用） | 事件研判与资产标注的模型名。**`AI_*`、`PI_MODEL`、`VT_API_KEY`、`IPINFO_PTR`、`VT_ALERT_MIN_ENGINES` 也能在控制台「系统设置 → AI 模型 / 外部情报」里改**，保存过的项以控制台为准、十几秒内全集群生效，环境变量只是首次部署的默认值；控制台保存的密钥用 `HOST_CREDENTIAL_KEY` 加密，没配这把钥匙时只能用环境变量提供密钥 |
 | `AI_BASE_URL` | `http://localhost:11434/v1` | OpenAI 兼容端点 |
 | `SYSLOG_ADDR` | 空（不启用） | syslog 监听地址，如 `:514`。UDP 与 TCP 同时监听 |
 | `SUPPRESSION_RELOAD_SECONDS` | `30` | 抑制规则重载与命中计数回写周期 |
@@ -358,6 +358,7 @@ server 全部通过环境变量配置，均有默认值：
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测的按资产学习期 |
 | `RETENTION_DAYS` | `30` | 原始事件保留天数，0 表示不清理。被告警引用的证据事件不受影响 |
 | `IPINFO_PTR` | `true` | 对资产连过的公网地址做反向解析（PTR），结果缓存，供图谱展示与 AI 标注认地址；内网没有外部解析时可设 `false` |
+| `VT_ALERT_MIN_ENGINES` | `3` | VirusTotal 判恶意的引擎数达到该值，就把地址加入威胁情报（来源 virustotal，随缓存期到期），之后再有主机连它即按情报命中告警；重查后不再达到即失效，人工录入的同一地址不动；0 关闭 |
 | `VT_API_KEY` | 空 | VirusTotal API key。配置后查询公网目的地址的归属、国家、恶意判定与历史解析域名；**会把资产连过的公网 IP 发给 VirusTotal**，不配置则不查 |
 | `VT_PER_MINUTE` / `VT_PER_DAY` | `4` / `500` | VirusTotal 查询限额（默认按免费额度），撞到 429 自动等下一分钟 |
 | `IPINFO_TTL_DAYS` | `7` | 公网地址信息的缓存期（天），到期重查 |

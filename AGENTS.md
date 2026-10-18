@@ -123,7 +123,8 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 
 - **语言**：代码注释、日志消息、文档均用简体中文；标识符与提交信息遵循各目录现状。
 - **配置**：server 全部走环境变量（`getenv`/`getenvInt`，见 `main.go` 与 `docs/deployment.md` 配置表），
-  均有默认值，不加配置文件。
+  均有默认值，不加配置文件。少数运营中常改的项（通知目标、AI 端点与模型、外部情报查询）可在控制台改，
+  存在 `settings` 表里覆盖环境变量（`notify.Settings`、`aiconf.Store`），密钥用 `HOST_CREDENTIAL_KEY` 加密。
 - **失败策略贯穿全项目**：拿不准就拒绝或降级，绝不静默产出错误数据——
   Sigma 规则用了未实现的修饰符直接拒绝加载而不是降级匹配；Windows 规则不在
   Linux 资产上求值；坏采集配置一律退回内置默认；TLS 三个变量（CA/证书/私钥）

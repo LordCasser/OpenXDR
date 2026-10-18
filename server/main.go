@@ -24,6 +24,7 @@ import (
 
 	"openxdr/server/ent"
 	"openxdr/server/internal/agentchat"
+	"openxdr/server/internal/aiconf"
 	"openxdr/server/internal/api"
 	"openxdr/server/internal/assetmap"
 	"openxdr/server/internal/auth"
@@ -131,41 +132,57 @@ func main() {
 		go cluster.RunLeader(ctx, db, "auto-close-benign", autoClose.Run)
 	}
 
-	// 资产图谱与攻击面：物化清单与依赖边始终运行；配置了 AI_MODEL 才做 AI 标注
+	var credentialVault *hostimport.Vault
+	if key := os.Getenv("HOST_CREDENTIAL_KEY"); key != "" {
+		credentialVault, err = hostimport.NewVault(key)
+		if err != nil {
+			slog.Error("凭据加密配置无效")
+			os.Exit(1)
+		}
+	}
+
+	// AI 与外部情报查询配置：控制台保存的为准，环境变量是首次部署的默认值；密钥用上面同一把钥匙加密落库
+	aiConf := &aiconf.Store{DB: client, Vault: credentialVault, Default: aiconf.Config{
+		BaseURL: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"),
+		Model: os.Getenv("AI_MODEL"), PiModel: os.Getenv("PI_MODEL"),
+		PTR: getenv("IPINFO_PTR", "true") == "true", VTKey: os.Getenv("VT_API_KEY"), VTAlertMin: getenvInt("VT_ALERT_MIN_ENGINES", 3),
+	}}
+	conf := func() aiconf.Config { return aiConf.Get(ctx) }
+	// 研判与资产标注共用一个端点与模型，每次调用按当时的配置，用量按用途分开记
+	llmFor := func(feature string) *triage.LLM {
+		l := triage.NewLLM("", "", "", time.Duration(getenvInt("AI_TIMEOUT_SECONDS", 120))*time.Second)
+		l.Endpoint = func() (string, string, string) { c := conf(); return c.BaseURL, c.Model, c.APIKey }
+		l.OnUsage = aiconf.Recorder(client, feature)
+		return l
+	}
+
+	// 资产图谱与攻击面：物化清单与依赖边始终运行；配置了研判与标注模型才做 AI 标注
 	assetEngine := &assetmap.Engine{
 		DB: client, SQL: db,
-		LLM: triage.NewLLM(getenv("AI_BASE_URL", "http://localhost:11434/v1"), os.Getenv("AI_MODEL"), os.Getenv("AI_API_KEY"),
-			time.Duration(getenvInt("AI_TIMEOUT_SECONDS", 120))*time.Second),
+		LLM:      llmFor("annotate"),
 		Interval: time.Minute,
 		Refresh:  time.Duration(getenvInt("ASSET_ANNOTATE_REFRESH_HOURS", 24)) * time.Hour,
 	}
 	// 标注是后台批量调用：关掉 GLM 隐式思考、限住输出，耗时才稳定（实测 pve1 默认模式波动到 120 秒超时）
 	assetEngine.LLM.NoThinking, assetEngine.LLM.MaxTokens = true, 2048
 	go cluster.RunLeader(ctx, db, "assetmap", assetEngine.Run)
-	// 公网目的地址的背景信息：反向解析默认开；配了 VT_API_KEY 才查 VirusTotal（会把外联的公网地址发给它）
+	// 公网目的地址的背景信息：反向解析默认开；配了 VirusTotal key 才查（会把外联的公网地址发给它）。开关与 key 每轮取
 	ipEnricher := &assetmap.Enricher{
-		DB: client, PTR: getenv("IPINFO_PTR", "true") == "true",
-		VTKey: os.Getenv("VT_API_KEY"), VTPerMin: getenvInt("VT_PER_MINUTE", 4), VTPerDay: getenvInt("VT_PER_DAY", 500),
+		DB: client, Settings: func() (bool, string, int) { c := conf(); return c.PTR, c.VTKey, c.VTAlertMin },
+		VTPerMin: getenvInt("VT_PER_MINUTE", 4), VTPerDay: getenvInt("VT_PER_DAY", 500),
 		TTL: time.Duration(getenvInt("IPINFO_TTL_DAYS", 7)) * 24 * time.Hour, Interval: time.Minute,
 		HTTP: &http.Client{Timeout: 15 * time.Second},
 	}
-	if ipEnricher.PTR || ipEnricher.VTKey != "" {
-		go cluster.RunLeader(ctx, db, "ipinfo", ipEnricher.Run)
-	}
+	go cluster.RunLeader(ctx, db, "ipinfo", ipEnricher.Run)
 
 	hub := response.NewHub(client, os.Getenv("RESPONSE_ENABLED") == "true")
 	allowlist := isolationAllowlist()
 
 	// 研判引擎：AI 带只读调查工具逐个研判 incident
 	triageEngine := &triage.Engine{
-		DB:    client,
-		Rules: rules,
-		LLM: triage.NewLLM(
-			getenv("AI_BASE_URL", "http://localhost:11434/v1"),
-			os.Getenv("AI_MODEL"),
-			os.Getenv("AI_API_KEY"),
-			time.Duration(getenvInt("AI_TIMEOUT_SECONDS", 120))*time.Second,
-		),
+		DB:       client,
+		Rules:    rules,
+		LLM:      llmFor("triage"),
 		Interval: time.Duration(getenvInt("AI_INTERVAL_SECONDS", 30)) * time.Second,
 	}
 	// 自动响应：显式开启才挂钩子，隔离真执行（仍受 RESPONSE_ENABLED 约束），白名单主机绝不自动隔离
@@ -177,9 +194,8 @@ func main() {
 			AllowEndpoints: allowlist,
 		}).React
 	}
-	if triageEngine.LLM.Enabled() {
-		go cluster.RunLeader(ctx, db, "triage", triageEngine.Run)
-	}
+	// 常驻：模型在控制台配上就开始研判，撤掉就停
+	go cluster.RunLeader(ctx, db, "triage", triageEngine.Run)
 
 	// 推送目标以控制台保存的为准，环境变量只是首次部署的默认值
 	notifySettings := &notify.Settings{DB: client, Default: notify.Target{
@@ -193,7 +209,7 @@ func main() {
 		DB:         client,
 		Settings:   notifySettings,
 		Interval:   time.Duration(getenvInt("WEBHOOK_INTERVAL_SECONDS", 30)) * time.Second,
-		WaitTriage: os.Getenv("AI_MODEL") != "",
+		WaitTriage: triageEngine.LLM.Enabled,
 	}
 	go cluster.RunLeader(ctx, db, "notify", notifier.Run)
 	silentAfter := time.Duration(getenvInt("AGENT_SILENT_MINUTES", 10)) * time.Minute
@@ -330,7 +346,7 @@ func main() {
 	}
 	chat := &agentchat.Service{Base: ctx, Rules: rules, Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second, Notify: webhook.Send},
 		Runtime: piRuntime, Sandboxed: piRuntime.Sandboxed(),
-		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), Query: queryRoles}
+		AI: func() (string, string, string) { c := conf(); return c.BaseURL, c.APIKey, c.PiModel }, Query: queryRoles}
 	go chat.Recover(ctx)
 	// 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
 	report.Chromium = getenv("CHROMIUM_PATH", "chromium")
@@ -338,15 +354,12 @@ func main() {
 		DB: client, Runner: chat,
 		Dir:          getenv("TASKS_PATH", "../tasks"),
 		Interval:     time.Duration(getenvInt("SCHEDULE_INTERVAL_SECONDS", 30)) * time.Second,
-		DefaultModel: chat.Model,
+		DefaultModel: func() string { return conf().PiModel },
 		Notify:       webhook.Send,
 		Timeout:      time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second,
 	}
-	if chat.Model != "" {
-		go cluster.RunLeader(ctx, db, "schedule", scheduler.Run)
-	} else {
-		slog.Warn("预设任务未启用：未配置 PI_MODEL")
-	}
+	// 常驻：任务定义照常同步到库里，Pi 模型配上才运行
+	go cluster.RunLeader(ctx, db, "schedule", scheduler.Run)
 	enrollSvc, err := enroll.FromEnv(client, silentAfter)
 	if err != nil {
 		slog.Error("主机接入配置无效", "err", err)
@@ -355,23 +368,15 @@ func main() {
 	if reason := enrollSvc.Disabled(); reason != "" {
 		slog.Warn("主机在线接入未启用", "reason", reason)
 	}
-	var credentialVault *hostimport.Vault
-	if key := os.Getenv("HOST_CREDENTIAL_KEY"); key != "" {
-		credentialVault, err = hostimport.NewVault(key)
-		if err != nil {
-			slog.Error("凭据加密配置无效")
-			os.Exit(1)
-		}
-	}
 	routes := http.NewServeMux()
 	routes.Handle("/api/host-import/", api.HostImports(&hostimport.Service{DB: client, Vault: credentialVault}, enrollSvc, os.Getenv("ENROLL_PUBLIC_URL"), getenv("ENROLL_SSH_ENABLED", "false") == "true"))
-	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook))
+	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook, aiConf, db))
 	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))
 	routes.Handle("/api/intel/feeds/", api.IntelFeeds(client, intelFeeds))
 	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
 	routes.Handle("/api/enroll-tokens", enrollTokens)
 	routes.Handle("/api/enroll-tokens/", enrollTokens)
-	assetMap := api.AssetMap(client, assetEngine.LLM.Enabled())
+	assetMap := api.AssetMap(client, assetEngine.LLM.Enabled)
 	for _, path := range api.AssetMapPaths {
 		routes.Handle(path, assetMap)
 	}

@@ -59,7 +59,7 @@ func TestSchedulerTick(t *testing.T) {
 	var mu sync.Mutex
 	notes := map[string]string{}
 	s := &Scheduler{
-		DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute,
+		DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute,
 		Notify: func(_ context.Context, title, text, path string) error {
 			mu.Lock()
 			defer mu.Unlock()
@@ -152,7 +152,7 @@ func TestSchedulerRetriesOnce(t *testing.T) {
 	}
 	runner := &fakeRunner{db: client, flaky: g.ID.String()}
 	var titles []string
-	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute,
+	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute,
 		Notify: func(_ context.Context, title, _, _ string) error { titles = append(titles, title); return nil }}
 	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
 		t.Fatal(err)
@@ -185,7 +185,7 @@ func TestSchedulerRunRequested(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := &fakeRunner{db: client}
-	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: "m", Timeout: time.Minute}
+	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute}
 	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestSchedulerBoundsActiveGroups(t *testing.T) {
 	}
 	task := db.Task.Create().SetID("bounded").SetCreatedAt(time.Now().Add(-time.Minute)).SetName("巡检").SetSchedule("* * * * *").SetPrompt("检查").SaveX(ctx)
 	runner := &blockedRunner{make(chan struct{}, 6), make(chan struct{})}
-	s := &Scheduler{DB: db, Runner: runner, Timeout: time.Minute}
+	s := &Scheduler{DB: db, Runner: runner, DefaultModel: func() string { return "m" }, Timeout: time.Minute}
 	done := make(chan struct{})
 	go func() { defer close(done); s.fire(ctx, task) }()
 	for range 4 {
@@ -259,5 +259,28 @@ func TestSchedulerBoundsActiveGroups(t *testing.T) {
 	s.wg.Wait()
 	if n := db.TaskRun.Query().CountX(ctx); n != 6 {
 		t.Fatalf("等待目标丢失，得到 %d", n)
+	}
+}
+
+// Pi 模型没配（控制台或环境变量都空）时到期任务不运行；配上后下一轮即运行
+func TestSchedulerWaitsForPiModel(t *testing.T) {
+	ctx, db := testdb.New(t)
+	g := db.Group.Create().SetName("a").SaveX(ctx)
+	db.Asset.Create().SetHostname("a").SetGroupID(g.ID).SaveX(ctx)
+	task := db.Task.Create().SetID("wait").SetCreatedAt(time.Now().Add(-time.Minute)).SetName("巡检").SetSchedule("* * * * *").SetPrompt("检查").SaveX(ctx)
+	runner := &blockedRunner{make(chan struct{}, 1), make(chan struct{})}
+	model := ""
+	s := &Scheduler{DB: db, Runner: runner, DefaultModel: func() string { return model }, Timeout: time.Minute}
+	s.fire(ctx, task)
+	if n := db.TaskRun.Query().CountX(ctx); n != 0 {
+		t.Fatalf("没配 Pi 模型不应运行，得到 %d 次", n)
+	}
+	model = "m"
+	s.fire(ctx, task)
+	<-runner.started
+	close(runner.release)
+	s.wg.Wait()
+	if n := db.TaskRun.Query().CountX(ctx); n != 1 {
+		t.Fatalf("配上模型后应运行一次，得到 %d 次", n)
 	}
 }

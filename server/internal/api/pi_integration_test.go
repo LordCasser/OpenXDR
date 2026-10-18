@@ -34,7 +34,7 @@ func TestPiGroupAPI(t *testing.T) {
 	db.Session.Create().SetUserID(user.ID).SetTokenHash(hex.EncodeToString(sum[:])).SetExpiresAt(time.Now().Add(time.Hour)).SaveX(ctx)
 	mux := http.NewServeMux()
 	gate := &commandgate.Gate{DB: db}
-	mapAgentSessions(mux, db, &agentchat.Service{DB: db, Model: "test", Runtime: apiPiRunner{}})
+	mapAgentSessions(mux, db, &agentchat.Service{DB: db, AI: func() (string, string, string) { return "", "", "test" }, Runtime: apiPiRunner{}})
 	mapCommandPolicy(mux, db, gate)
 	mapCommands(mux, db, response.NewHub(db, false), nil, gate)
 	handler := auth.Middleware(db, mux)

@@ -173,6 +173,12 @@ func (_c *AssetCreate) SetServiceNotes(v json.RawMessage) *AssetCreate {
 	return _c
 }
 
+// SetEgressNotes sets the "egress_notes" field.
+func (_c *AssetCreate) SetEgressNotes(v json.RawMessage) *AssetCreate {
+	_c.mutation.SetEgressNotes(v)
+	return _c
+}
+
 // SetZoneID sets the "zone_id" field.
 func (_c *AssetCreate) SetZoneID(v uuid.UUID) *AssetCreate {
 	_c.mutation.SetZoneID(v)
@@ -506,6 +512,10 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ServiceNotes(); ok {
 		_spec.SetField(asset.FieldServiceNotes, field.TypeJSON, value)
 		_node.ServiceNotes = value
+	}
+	if value, ok := _c.mutation.EgressNotes(); ok {
+		_spec.SetField(asset.FieldEgressNotes, field.TypeJSON, value)
+		_node.EgressNotes = value
 	}
 	if value, ok := _c.mutation.ZoneID(); ok {
 		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)

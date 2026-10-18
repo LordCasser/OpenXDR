@@ -24,8 +24,8 @@ var AssetMapPaths = []string{"/api/asset-map", "/api/attack-surface", "/api/zone
 
 // AssetMap 资产图谱、攻击面、区域定义与资产画像。读按组 viewer；
 // 改标注要组 analyst；区域定义与资产的区域指派影响攻击面判定，要组 admin。
-// aiEnabled 为 false 时不接受标注请求，图谱与攻击面照常可用。
-func AssetMap(db *ent.Client, aiEnabled bool) http.Handler {
+// aiEnabled 返回 false 时不接受标注请求，图谱与攻击面照常可用。模型可在控制台随时改，每次请求时判断
+func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 	mux := http.NewServeMux()
 	groupParam := func(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 		id, err := uuid.Parse(r.URL.Query().Get("groupId"))
@@ -149,10 +149,10 @@ func AssetMap(db *ent.Client, aiEnabled bool) http.Handler {
 		writeJSON(w, map[string]any{
 			"zone": facts.Zone, "exposure": facts.Exposure, "cloud": facts.Cloud,
 			"listening": listening, "inventoryAt": a.InventoryAt, "services": assetmap.NotesOf(a),
-			"outbound": facts.Outbound, "inbound": facts.Inbound, "publicDestinations": facts.PublicDestinations, "public": withPurpose(facts.Public, a.RelationNotes),
+			"outbound": facts.Outbound, "inbound": facts.Inbound, "publicDestinations": facts.PublicDestinations, "public": assetmap.WithNotes(facts.Public, a),
 			"role": a.Role, "summary": a.Summary, "criticality": a.Criticality, "reason": a.AnnotationReason,
 			"relationNotes": a.RelationNotes, "lockedFields": a.LockedFields,
-			"annotatedAt": a.AnnotatedAt, "annotateRequestedAt": a.AnnotateRequestedAt, "aiEnabled": aiEnabled,
+			"annotatedAt": a.AnnotatedAt, "annotateRequestedAt": a.AnnotateRequestedAt, "aiEnabled": aiEnabled(),
 		})
 	})
 
@@ -299,8 +299,8 @@ func AssetMap(db *ent.Client, aiEnabled bool) http.Handler {
 		if !ok || !assetInScope(w, r, db, a.ID, "analyst") {
 			return
 		}
-		if !aiEnabled {
-			http.Error(w, "未配置 AI_MODEL，无法标注", http.StatusServiceUnavailable)
+		if !aiEnabled() {
+			http.Error(w, "未配置研判与标注模型，无法标注", http.StatusServiceUnavailable)
 			return
 		}
 		if err := a.Update().SetAnnotateRequestedAt(time.Now()).Exec(r.Context()); err != nil {
@@ -363,12 +363,4 @@ func zoneSaved(w http.ResponseWriter, err error) bool {
 		return false
 	}
 	return true
-}
-
-// withPurpose 公网目的地址带上 AI 标注给的用途（事实里不带，免得回灌给模型）
-func withPurpose(ds []assetmap.PublicDest, notes map[string]string) []assetmap.PublicDest {
-	for i := range ds {
-		ds[i].Purpose = notes[ds[i].IP]
-	}
-	return ds
 }

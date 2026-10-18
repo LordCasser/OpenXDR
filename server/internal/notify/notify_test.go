@@ -22,7 +22,7 @@ func incidentAt(created time.Time, status string, verdictJSON string) *ent.Incid
 }
 
 func TestDecide(t *testing.T) {
-	n := &Notifier{start: time.Now().Add(-time.Hour), WaitTriage: true}
+	n := &Notifier{start: time.Now().Add(-time.Hour), WaitTriage: func() bool { return true }}
 	fresh := time.Now()
 
 	cases := []struct {
@@ -51,7 +51,7 @@ func TestDecide(t *testing.T) {
 }
 
 func TestDecideNoAI(t *testing.T) {
-	n := &Notifier{start: time.Now().Add(-time.Hour), WaitTriage: false}
+	n := &Notifier{start: time.Now().Add(-time.Hour), WaitTriage: func() bool { return false }}
 	if send, _ := n.decide(incidentAt(time.Now(), "open", ""), 1); !send {
 		t.Fatal("AI 未启用时事件应立即推送")
 	}

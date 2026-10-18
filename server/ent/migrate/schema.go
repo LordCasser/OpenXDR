@@ -8,6 +8,28 @@ import (
 )
 
 var (
+	// AiUsagesColumns holds the columns for the "ai_usages" table.
+	AiUsagesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "ts", Type: field.TypeTime},
+		{Name: "feature", Type: field.TypeString},
+		{Name: "model", Type: field.TypeString},
+		{Name: "input", Type: field.TypeInt},
+		{Name: "output", Type: field.TypeInt},
+	}
+	// AiUsagesTable holds the schema information for the "ai_usages" table.
+	AiUsagesTable = &schema.Table{
+		Name:       "ai_usages",
+		Columns:    AiUsagesColumns,
+		PrimaryKey: []*schema.Column{AiUsagesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "aiusage_ts",
+				Unique:  false,
+				Columns: []*schema.Column{AiUsagesColumns[1]},
+			},
+		},
+	}
 	// AgentSessionsColumns holds the columns for the "agent_sessions" table.
 	AgentSessionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -148,6 +170,7 @@ var (
 		{Name: "cloud", Type: field.TypeJSON, Nullable: true},
 		{Name: "inventory_at", Type: field.TypeTime, Nullable: true},
 		{Name: "service_notes", Type: field.TypeJSON, Nullable: true},
+		{Name: "egress_notes", Type: field.TypeJSON, Nullable: true},
 		{Name: "zone_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "role", Type: field.TypeString, Nullable: true},
 		{Name: "summary", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -764,6 +787,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AiUsagesTable,
 		AgentSessionsTable,
 		AlertsTable,
 		ApprovalsTable,

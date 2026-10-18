@@ -4,6 +4,7 @@ package ent
 
 import (
 	"openxdr/server/ent/agentsession"
+	"openxdr/server/ent/aiusage"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/approval"
 	"openxdr/server/ent/asset"
@@ -40,6 +41,16 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	aiusageFields := schema.AIUsage{}.Fields()
+	_ = aiusageFields
+	// aiusageDescTs is the schema descriptor for ts field.
+	aiusageDescTs := aiusageFields[1].Descriptor()
+	// aiusage.DefaultTs holds the default value on creation for the ts field.
+	aiusage.DefaultTs = aiusageDescTs.Default.(func() time.Time)
+	// aiusageDescID is the schema descriptor for id field.
+	aiusageDescID := aiusageFields[0].Descriptor()
+	// aiusage.DefaultID holds the default value on creation for the id field.
+	aiusage.DefaultID = aiusageDescID.Default.(func() uuid.UUID)
 	agentsessionFields := schema.AgentSession{}.Fields()
 	_ = agentsessionFields
 	// agentsessionDescCreatedAt is the schema descriptor for created_at field.

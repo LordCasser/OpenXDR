@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"openxdr/server/internal/aiconf"
 	"openxdr/server/internal/notify"
 	"openxdr/server/internal/testdb"
 )
@@ -26,7 +27,7 @@ func TestNotifySettings(t *testing.T) {
 	t.Cleanup(hook.Close)
 
 	settings := &notify.Settings{DB: client, Default: notify.Target{Format: "generic"}}
-	ts := httptest.NewServer(Settings(client, settings, &notify.Webhook{Settings: settings}))
+	ts := httptest.NewServer(Settings(client, settings, &notify.Webhook{Settings: settings}, &aiconf.Store{DB: client}, nil))
 	t.Cleanup(ts.Close)
 
 	do := func(method, path, body string) *http.Response {

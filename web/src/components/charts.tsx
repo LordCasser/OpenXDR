@@ -1,4 +1,4 @@
-import { Tooltip, Typography, theme } from 'antd'
+import { Space, Tooltip, Typography, theme } from 'antd'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTheme } from '../app/theme'
@@ -127,6 +127,88 @@ export function BarList({ items, max, dim, labelWidth = '38%' }: {
           ? <Link key={i.key} to={i.to} className="bar-row bar-row-link">{row}</Link>
           : <div key={i.key} className="bar-row">{row}</div>
       })}
+    </div>
+  )
+}
+
+// 分类色：参考配色的前四位，固定顺序、亮暗各一组，已用 dataviz 校验脚本跑过（相邻 CVD ΔE ≥ 8.4）。
+// 亮色下第 3、4 位对底色不到 3:1，用到它们的图必须带图例和表格视图
+export function useCategorical() {
+  const { dark } = useTheme()
+  return dark ? ['#3987e5', '#d95926', '#199e70', '#c98500'] : ['#2a78d6', '#eb6834', '#1baf7a', '#eda100']
+}
+
+// 堆叠柱图：同一根柱子里各段之间留 2px 底色缝，只有最上面一段圆角；每根柱子整列是悬停区，提示里逐项列出
+export function StackedColumnChart({ data, series, height = 220, xLabel, tip }: {
+  data: { key: string; values: number[] }[]
+  series: { name: string; color: string }[]
+  height?: number
+  xLabel: (i: number) => string | null
+  tip: (i: number) => React.ReactNode
+}) {
+  const { token } = theme.useToken()
+  const [ref, width] = useWidth()
+  const [hover, setHover] = useState<number | null>(null)
+  const axisW = 40
+  const axisH = 22
+  const padTop = 8
+  const gap = 2
+  const plotW = Math.max(0, width - axisW)
+  const plotH = height - axisH - padTop
+  const max = niceMax(Math.max(...data.map(d => d.values.reduce((a, b) => a + b, 0)), 0))
+  const slot = data.length ? plotW / data.length : 0
+  const barW = Math.min(24, Math.max(2, slot - 2))
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => f * max)
+  const base = padTop + plotH
+  const y = (v: number) => base - (v / max) * plotH
+
+  return (
+    <div>
+      <Space size={16} wrap style={{ marginBottom: 8 }}>
+        {series.map(s => (
+          <Space key={s.name} size={6}><span className="graph-legend" style={{ background: s.color }} /><Typography.Text type="secondary" style={{ fontSize: 12 }}>{s.name}</Typography.Text></Space>
+        ))}
+      </Space>
+      <div ref={ref}>
+        {width > 0 && (
+          <svg width={width} height={height} role="img">
+            {ticks.map(v => (
+              <g key={v}>
+                <line x1={axisW} x2={width} y1={y(v)} y2={y(v)} stroke={v ? token.colorBorderSecondary : token.colorBorder} strokeWidth={1} />
+                <text x={axisW - 6} y={y(v) + 4} textAnchor="end" fontSize={11} fill={token.colorTextTertiary} style={{ fontVariantNumeric: 'tabular-nums' }}>{compact(v)}</text>
+              </g>
+            ))}
+            {data.map((d, i) => {
+              const x = axisW + i * slot
+              const bx = x + (slot - barW) / 2
+              const top = d.values.reduce((last, v, j) => (v > 0 ? j : last), -1)
+              let cum = 0
+              const label = xLabel(i)
+              return (
+                <g key={d.key} opacity={hover === null || hover === i ? 1 : 0.55}>
+                  {d.values.map((v, j) => {
+                    if (v <= 0) return null
+                    const y0 = y(cum) - (cum > 0 ? gap : 0)
+                    cum += v
+                    const y1 = y(cum)
+                    const h = y0 - y1
+                    if (h <= 0) return null
+                    const r = j === top ? Math.min(4, h, barW / 2) : 0
+                    return (
+                      <path key={j} fill={series[j].color}
+                        d={`M ${bx} ${y0} V ${y1 + r} Q ${bx} ${y1} ${bx + r} ${y1} H ${bx + barW - r} Q ${bx + barW} ${y1} ${bx + barW} ${y1 + r} V ${y0} Z`} />
+                    )
+                  })}
+                  {label && <text x={x + slot / 2} y={height - 6} textAnchor="middle" fontSize={11} fill={token.colorTextTertiary}>{label}</text>}
+                  <Tooltip title={tip(i)} mouseEnterDelay={0}>
+                    <rect x={x} y={0} width={slot} height={base} fill="transparent" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
+                  </Tooltip>
+                </g>
+              )
+            })}
+          </svg>
+        )}
+      </div>
     </div>
   )
 }

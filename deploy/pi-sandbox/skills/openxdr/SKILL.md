@@ -25,6 +25,7 @@ xdr exec pve1 'ss -tlnp'                    # 主机用主机名；第三个参�
 xdr sql "SELECT ... FROM alerts ..." > a.tsv # 只读查询本组视图，TSV 输出
 xdr track pve1 disk-full medium open '根分区 93%' '/dev/sda1 93%，journal 占 11G'
 xdr identify pve1 udp/5405 low 'Corosync 集群通信' '进程 corosync，PVE 集群心跳，仅集群内访问'
+xdr egress pve2 208.111.34.178 low 'Tailscale 中继' 'tailscaled 连 DERP 中继，组网正常业务'
 xdr report '标题' report.md                 # 最终报告（Markdown 文件）
 ```
 
@@ -70,5 +71,9 @@ SELECT e.ts, e.raw->'process'->>'cmd_line' FROM alerts a JOIN events e ON e.id=a
 
 **调查服务**：查清端口由哪个进程监听、可执行文件属于哪个软件包、服务单元与配置、谁在访问、是否需要对当前范围开放，
 确认后用 `xdr identify` 记录；查不清就写进报告，不要记录猜测。
+
+**调查外联**：主机连某个公网地址，查清是哪个进程发起、可执行文件属于哪个软件包、服务单元与配置里出现的域名或地址、
+是否正常业务（`ss -tnp`、`/proc/<pid>/exe`、`dpkg -S` / `rpm -qf`、`systemctl status`、`grep -r 地址或域名 /etc`），
+确认后用 `xdr egress` 记录用途与风险；只能记这台主机确实连过的公网地址，查不清就写进报告。
 
 最后用 `xdr report` 交一份报告：结论在前，证据在后，未验证事项单独列出。

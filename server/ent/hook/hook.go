@@ -8,6 +8,18 @@ import (
 	"openxdr/server/ent"
 )
 
+// The AIUsageFunc type is an adapter to allow the use of ordinary
+// function as AIUsage mutator.
+type AIUsageFunc func(context.Context, *ent.AIUsageMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AIUsageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AIUsageMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AIUsageMutation", m)
+}
+
 // The AgentSessionFunc type is an adapter to allow the use of ordinary
 // function as AgentSession mutator.
 type AgentSessionFunc func(context.Context, *ent.AgentSessionMutation) (ent.Value, error)

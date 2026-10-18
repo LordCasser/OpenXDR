@@ -19,9 +19,18 @@ import (
 	"openxdr/server/internal/auth"
 )
 
+// piModel 当前 Pi 模型，未启用为空
+func piModel(service *agentchat.Service) string {
+	if service == nil {
+		return ""
+	}
+	_, _, model := service.Endpoint()
+	return model
+}
+
 func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Service) {
 	mux.HandleFunc("POST /api/agent-sessions", func(w http.ResponseWriter, r *http.Request) {
-		if service == nil || service.Model == "" {
+		if piModel(service) == "" {
 			http.Error(w, "Pi 未启用", 503)
 			return
 		}
@@ -41,7 +50,7 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		create := db.AgentSession.Create().SetKind("chat").SetGroupID(body.GroupID).SetInitiator(auth.From(r.Context()).Username).SetModel(service.Model).SetTitle(body.Title).SetStatus("idle")
+		create := db.AgentSession.Create().SetKind("chat").SetGroupID(body.GroupID).SetInitiator(auth.From(r.Context()).Username).SetModel(piModel(service)).SetTitle(body.Title).SetStatus("idle")
 		if len(body.Subjects) > 0 {
 			create.SetSubjects(body.Subjects)
 		}
@@ -104,7 +113,7 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 		writeJSON(w, rows)
 	})
 	mux.HandleFunc("POST /api/agent-sessions/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
-		if service == nil || service.Model == "" {
+		if piModel(service) == "" {
 			http.Error(w, "Pi 未启用", 503)
 			return
 		}

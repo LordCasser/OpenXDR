@@ -42,6 +42,9 @@ func (Asset) Fields() []ent.Field {
 		// 监听服务说明：键为 协议/端口（如 udp/5405），值含服务名、说明、风险与来源（ai / investigation / human）。
 		// 端口表认不出的服务靠它命名；人工写的优先级最高，AI 不覆盖
 		field.JSON("service_notes", json.RawMessage{}).Optional(),
+		// 公网外联的调查结论：键为公网地址，值与服务说明同构（用途、依据、风险、来源）。
+		// AI 上机调查或人工写的，优先于资产标注给的用途
+		field.JSON("egress_notes", json.RawMessage{}).Optional(),
 		// 组管理员手工指定的区域；为空按网段、云环境、IP 自动划分
 		field.UUID("zone_id", uuid.UUID{}).Optional().Nillable(),
 

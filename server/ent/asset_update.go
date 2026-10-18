@@ -286,6 +286,24 @@ func (_u *AssetUpdate) ClearServiceNotes() *AssetUpdate {
 	return _u
 }
 
+// SetEgressNotes sets the "egress_notes" field.
+func (_u *AssetUpdate) SetEgressNotes(v json.RawMessage) *AssetUpdate {
+	_u.mutation.SetEgressNotes(v)
+	return _u
+}
+
+// AppendEgressNotes appends value to the "egress_notes" field.
+func (_u *AssetUpdate) AppendEgressNotes(v json.RawMessage) *AssetUpdate {
+	_u.mutation.AppendEgressNotes(v)
+	return _u
+}
+
+// ClearEgressNotes clears the value of the "egress_notes" field.
+func (_u *AssetUpdate) ClearEgressNotes() *AssetUpdate {
+	_u.mutation.ClearEgressNotes()
+	return _u
+}
+
 // SetZoneID sets the "zone_id" field.
 func (_u *AssetUpdate) SetZoneID(v uuid.UUID) *AssetUpdate {
 	_u.mutation.SetZoneID(v)
@@ -731,6 +749,17 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ServiceNotesCleared() {
 		_spec.ClearField(asset.FieldServiceNotes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.EgressNotes(); ok {
+		_spec.SetField(asset.FieldEgressNotes, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedEgressNotes(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldEgressNotes, value)
+		})
+	}
+	if _u.mutation.EgressNotesCleared() {
+		_spec.ClearField(asset.FieldEgressNotes, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ZoneID(); ok {
 		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)
@@ -1204,6 +1233,24 @@ func (_u *AssetUpdateOne) AppendServiceNotes(v json.RawMessage) *AssetUpdateOne 
 // ClearServiceNotes clears the value of the "service_notes" field.
 func (_u *AssetUpdateOne) ClearServiceNotes() *AssetUpdateOne {
 	_u.mutation.ClearServiceNotes()
+	return _u
+}
+
+// SetEgressNotes sets the "egress_notes" field.
+func (_u *AssetUpdateOne) SetEgressNotes(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.SetEgressNotes(v)
+	return _u
+}
+
+// AppendEgressNotes appends value to the "egress_notes" field.
+func (_u *AssetUpdateOne) AppendEgressNotes(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.AppendEgressNotes(v)
+	return _u
+}
+
+// ClearEgressNotes clears the value of the "egress_notes" field.
+func (_u *AssetUpdateOne) ClearEgressNotes() *AssetUpdateOne {
+	_u.mutation.ClearEgressNotes()
 	return _u
 }
 
@@ -1682,6 +1729,17 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.ServiceNotesCleared() {
 		_spec.ClearField(asset.FieldServiceNotes, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.EgressNotes(); ok {
+		_spec.SetField(asset.FieldEgressNotes, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedEgressNotes(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldEgressNotes, value)
+		})
+	}
+	if _u.mutation.EgressNotesCleared() {
+		_spec.ClearField(asset.FieldEgressNotes, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ZoneID(); ok {
 		_spec.SetField(asset.FieldZoneID, field.TypeUUID, value)

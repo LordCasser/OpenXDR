@@ -73,6 +73,7 @@ func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 		func(ctx context.Context) (int, error) { return c.Setting.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AssetLink.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.IPInfo.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.AIUsage.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Zone.Delete().Exec(ctx) },
 	}
 	for i, del := range dels {
