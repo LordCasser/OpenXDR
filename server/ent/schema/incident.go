@@ -30,7 +30,20 @@ func (Incident) Fields() []ent.Field {
 		field.Text("resolution").Optional().Nillable(),
 		field.String("resolved_by").Optional().Nillable(),
 		field.Time("resolved_at").Optional().Nillable(),
+		// AI 的结案建议：人在事件页一键采纳（结案仍记在人名下、照常作为人工案例回喂研判）或忽略。
+		// 任何状态变更都会清掉它
+		field.JSON("closure_proposal", &ClosureProposal{}).Optional(),
 	}
+}
+
+// ClosureProposal AI 提的结案建议
+type ClosureProposal struct {
+	// closed 属实已处置 / false_positive 误报或良性
+	Status    string     `json:"status"`
+	Note      string     `json:"note"`
+	SessionID uuid.UUID  `json:"sessionId"`
+	ReportID  *uuid.UUID `json:"reportId,omitempty"`
+	At        time.Time  `json:"at"`
 }
 
 func (Incident) Edges() []ent.Edge {

@@ -18,7 +18,7 @@ import (
 
 // subjectsPrompt 会话绑定了事件或待办时追加的说明；结案留给人，因为结案备注会作为人工案例喂回研判。
 const subjectsPrompt = "subjects 是用户从界面交给你处理的事件或待办，平台每轮按库里的当前状态提供：围绕它们调查、核实并处置，需要执行的命令照常直接下发，高风险操作照常等组管理员批准。" +
-	"事件由人在界面上结案，你在结尾按事件逐个给出结案建议（属实已处置 / 误报或良性，附理由）；待办处理好并复查确认后，用 track 标 resolved（host 与 key 取 subject 里的值）。"
+	"事件由人在界面上结案：查证完每个事件用 propose_close 提结案建议（属实已处置 closed / 误报或良性 false_positive，附定性与关键证据），人在事件页一键采纳；待办处理好并复查确认后，用 track 标 resolved（host 与 key 取 subject 里的值）。"
 
 // roster 交来的对象逐条列进系统提示：只放在数据里时，模型会数错个数、做完一部分就收工
 func roster(subjects []map[string]any) string {

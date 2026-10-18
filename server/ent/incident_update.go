@@ -10,6 +10,7 @@ import (
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/predicate"
+	"openxdr/server/ent/schema"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -190,6 +191,18 @@ func (_u *IncidentUpdate) ClearResolvedAt() *IncidentUpdate {
 	return _u
 }
 
+// SetClosureProposal sets the "closure_proposal" field.
+func (_u *IncidentUpdate) SetClosureProposal(v *schema.ClosureProposal) *IncidentUpdate {
+	_u.mutation.SetClosureProposal(v)
+	return _u
+}
+
+// ClearClosureProposal clears the value of the "closure_proposal" field.
+func (_u *IncidentUpdate) ClearClosureProposal() *IncidentUpdate {
+	_u.mutation.ClearClosureProposal()
+	return _u
+}
+
 // AddAlertIDs adds the "alerts" edge to the Alert entity by IDs.
 func (_u *IncidentUpdate) AddAlertIDs(ids ...uuid.UUID) *IncidentUpdate {
 	_u.mutation.AddAlertIDs(ids...)
@@ -321,6 +334,12 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ResolvedAtCleared() {
 		_spec.ClearField(incident.FieldResolvedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ClosureProposal(); ok {
+		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)
+	}
+	if _u.mutation.ClosureProposalCleared() {
+		_spec.ClearField(incident.FieldClosureProposal, field.TypeJSON)
 	}
 	if _u.mutation.AlertsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -545,6 +564,18 @@ func (_u *IncidentUpdateOne) ClearResolvedAt() *IncidentUpdateOne {
 	return _u
 }
 
+// SetClosureProposal sets the "closure_proposal" field.
+func (_u *IncidentUpdateOne) SetClosureProposal(v *schema.ClosureProposal) *IncidentUpdateOne {
+	_u.mutation.SetClosureProposal(v)
+	return _u
+}
+
+// ClearClosureProposal clears the value of the "closure_proposal" field.
+func (_u *IncidentUpdateOne) ClearClosureProposal() *IncidentUpdateOne {
+	_u.mutation.ClearClosureProposal()
+	return _u
+}
+
 // AddAlertIDs adds the "alerts" edge to the Alert entity by IDs.
 func (_u *IncidentUpdateOne) AddAlertIDs(ids ...uuid.UUID) *IncidentUpdateOne {
 	_u.mutation.AddAlertIDs(ids...)
@@ -706,6 +737,12 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if _u.mutation.ResolvedAtCleared() {
 		_spec.ClearField(incident.FieldResolvedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ClosureProposal(); ok {
+		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)
+	}
+	if _u.mutation.ClosureProposalCleared() {
+		_spec.ClearField(incident.FieldClosureProposal, field.TypeJSON)
 	}
 	if _u.mutation.AlertsCleared() {
 		edge := &sqlgraph.EdgeSpec{

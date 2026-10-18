@@ -38,6 +38,8 @@ usage() {
   xdr suppress <主机名> <规则 id> <理由> <天数> <条件>...
                                          提议抑制反复误报的命中（组管理员批准后生效）。条件 1–3 个，AND：
                                          字段=值（等于）、字段~=值（包含）、字段$=值（结尾），字段为事件体 dot path
+  xdr propose-close <事件 id> <false_positive|closed> <结案说明> [报告 id]
+                                         给事件提结案建议，人在事件页一键采纳
   xdr report <标题> <Markdown 文件>       保存最终报告
 U
 }
@@ -89,6 +91,9 @@ case "$cmd" in
       fi
     done
     call suppress "$(jq -cn --arg h "$host" --arg r "$rule" --arg why "$why" --argjson d "$days" --argjson c "$conds" '{host:$h,rule_id:$r,reason:$why,days:$d,conditions:$c}')" ;;
+  propose-close)
+    [ $# -ge 3 ] || { usage; exit 2; }
+    call propose_close "$(jq -cn --arg i "$1" --arg s "$2" --arg n "$3" --arg r "${4:-}" '{incident:$i,status:$s,note:$n} + (if $r == "" then {} else {report:$r} end)')" ;;
   report)
     [ $# -ge 2 ] && [ -f "$2" ] || { usage; exit 2; }
     call report "$(jq -cn --arg t "$1" --rawfile m "$2" '{title:$t,markdown:$m}')" ;;

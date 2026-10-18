@@ -33,6 +33,8 @@ const (
 	FieldResolvedBy = "resolved_by"
 	// FieldResolvedAt holds the string denoting the resolved_at field in the database.
 	FieldResolvedAt = "resolved_at"
+	// FieldClosureProposal holds the string denoting the closure_proposal field in the database.
+	FieldClosureProposal = "closure_proposal"
 	// EdgeAlerts holds the string denoting the alerts edge name in mutations.
 	EdgeAlerts = "alerts"
 	// Table holds the table name of the incident in the database.
@@ -58,6 +60,7 @@ var Columns = []string{
 	FieldResolution,
 	FieldResolvedBy,
 	FieldResolvedAt,
+	FieldClosureProposal,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

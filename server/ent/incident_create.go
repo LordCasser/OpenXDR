@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/incident"
+	"openxdr/server/ent/schema"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -130,6 +131,12 @@ func (_c *IncidentCreate) SetNillableResolvedAt(v *time.Time) *IncidentCreate {
 	if v != nil {
 		_c.SetResolvedAt(*v)
 	}
+	return _c
+}
+
+// SetClosureProposal sets the "closure_proposal" field.
+func (_c *IncidentCreate) SetClosureProposal(v *schema.ClosureProposal) *IncidentCreate {
+	_c.mutation.SetClosureProposal(v)
 	return _c
 }
 
@@ -292,6 +299,10 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ResolvedAt(); ok {
 		_spec.SetField(incident.FieldResolvedAt, field.TypeTime, value)
 		_node.ResolvedAt = &value
+	}
+	if value, ok := _c.mutation.ClosureProposal(); ok {
+		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)
+		_node.ClosureProposal = value
 	}
 	if nodes := _c.mutation.AlertsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

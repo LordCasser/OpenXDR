@@ -539,6 +539,7 @@ var (
 		{Name: "resolution", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "resolved_by", Type: field.TypeString, Nullable: true},
 		{Name: "resolved_at", Type: field.TypeTime, Nullable: true},
+		{Name: "closure_proposal", Type: field.TypeJSON, Nullable: true},
 	}
 	// IncidentsTable holds the schema information for the "incidents" table.
 	IncidentsTable = &schema.Table{

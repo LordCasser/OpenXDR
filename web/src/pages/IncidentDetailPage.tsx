@@ -1,9 +1,9 @@
 import { ArrowLeftOutlined, DownOutlined, DownloadOutlined, EllipsisOutlined, RobotOutlined, UpOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Col, Descriptions, Dropdown, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Tooltip, Typography } from 'antd'
+import { Alert, App, Button, Card, Col, Descriptions, Dropdown, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { HttpError, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
+import { HttpError, dismissClosureProposal, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
 import { useCanActIn, useSession } from '../app/session'
 import { useRemember } from '../app/recent'
 import { useKeys } from '../app/shortcuts'
@@ -80,6 +80,8 @@ export function IncidentDetailPage() {
   const { groups } = useSession()
   const [suppressing, setSuppressing] = useState(false)
   const [resolving, setResolving] = useState<'closed' | 'false_positive' | null>(null)
+  // 采纳 AI 结案建议：带着它的说明打开结案弹窗，人确认后才结案
+  const [adopting, setAdopting] = useState(false)
   const [alertView, setAlertView] = useState<'table' | 'timeline'>('timeline')
   const { data: inc, isPending, error, refetch } = useQuery({ queryKey: ['incident', id], queryFn: () => fetchIncident(id!), refetchInterval: 15_000 })
   const canAct = useCanActIn(inc?.groupId)
@@ -106,6 +108,7 @@ export function IncidentDetailPage() {
       return false
     }
     setResolving(null)
+    setAdopting(false)
     await client.invalidateQueries({ queryKey: ['incident', id] })
     client.invalidateQueries({ queryKey: ['incidents'] })
     if (status === 'false_positive') setSuppressing(true)
@@ -172,6 +175,23 @@ export function IncidentDetailPage() {
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={16}>
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            {inc.closureProposal && !done && (
+              <Alert type="info" showIcon icon={<RobotOutlined />}
+                title={t(inc.closureProposal.status === 'closed' ? 'proposalClosed' : 'proposalFp')}
+                description={<>
+                  <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 8 }}>{inc.closureProposal.note}</Typography.Paragraph>
+                  <Space size={12} wrap>
+                    <Link to={`/chat/${inc.closureProposal.sessionId}`}>{t('openSession')}</Link>
+                    {inc.closureProposal.reportId && <a href={`/api/agent-reports/${inc.closureProposal.reportId}/html`} target="_blank" rel="noreferrer">{t('proposalReport')}</a>}
+                  </Space>
+                </>}
+                action={canAct && (
+                  <Space orientation="vertical">
+                    <Button type="primary" size="small" onClick={() => { setAdopting(true); setResolving(inc.closureProposal!.status) }}>{t('proposalAdopt')}</Button>
+                    <Button size="small" onClick={() => dismissClosureProposal(inc.id).then(() => client.invalidateQueries({ queryKey: ['incident', id] }), e => message.error(errText(e, t)))}>{t('proposalDismiss')}</Button>
+                  </Space>
+                )} />
+            )}
             <VerdictCard verdict={inc.aiVerdict} />
             <Card title={t('graphTitle')}><IncidentGraph graph={inc.graph} /></Card>
             <Card title={t('alertsTitle', { n: inc.alerts.length })} styles={{ body: { padding: alertView === 'timeline' ? '20px 24px 4px' : 0 } }}
@@ -236,7 +256,8 @@ export function IncidentDetailPage() {
         open={!!resolving}
         title={t(resolving === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')}
         hint={t('resolveHint')}
-        onCancel={() => setResolving(null)}
+        initialNote={adopting ? inc.closureProposal?.note : undefined}
+        onCancel={() => { setResolving(null); setAdopting(false) }}
         onSubmit={async note => { if (!await changeStatus(resolving!, note)) throw new Error() }}
       />
       <SuppressModal open={suppressing} alerts={inc.alerts} assetId={inc.assetId} onClose={() => setSuppressing(false)} />

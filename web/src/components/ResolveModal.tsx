@@ -3,10 +3,12 @@ import { useRef, useState } from 'react'
 import { useI18n } from '../i18n'
 
 // 结案与处理待办共用：必须写明原因，备注会作为案例交给 AI。onSubmit 失败时应抛出，弹窗与备注保留
-export function ResolveModal({ open, title, hint, onCancel, onSubmit }: {
+export function ResolveModal({ open, title, hint, initialNote, onCancel, onSubmit }: {
   open: boolean
   title: string
   hint: string
+  // 采纳 AI 结案建议时预填它的说明，人可以改
+  initialNote?: string
   onCancel: () => void
   onSubmit: (note: string) => Promise<void>
 }) {
@@ -31,7 +33,7 @@ export function ResolveModal({ open, title, hint, onCancel, onSubmit }: {
   return (
     <Modal open={open} title={title} onCancel={() => { if (!busy) onCancel() }} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => form.submit()} confirmLoading={busy} destroyOnHidden>
       <Typography.Paragraph type="secondary">{hint}</Typography.Paragraph>
-      <Form disabled={busy} form={form} layout="vertical" onFinish={finish}>
+      <Form disabled={busy} form={form} layout="vertical" onFinish={finish} initialValues={{ note: initialNote }}>
         <Form.Item name="note" label={t('resolveNote')} rules={[{ required: true, whitespace: true, message: t('resolveNoteRequired') }]}>
           <Input.TextArea rows={4} maxLength={2000} showCount autoFocus />
         </Form.Item>

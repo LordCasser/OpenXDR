@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"openxdr/server/ent/incident"
+	"openxdr/server/ent/schema"
 	"strings"
 	"time"
 
@@ -37,6 +38,8 @@ type Incident struct {
 	ResolvedBy *string `json:"resolved_by,omitempty"`
 	// ResolvedAt holds the value of the "resolved_at" field.
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	// ClosureProposal holds the value of the "closure_proposal" field.
+	ClosureProposal *schema.ClosureProposal `json:"closure_proposal,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the IncidentQuery when eager-loading is set.
 	Edges        IncidentEdges `json:"edges"`
@@ -66,7 +69,7 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case incident.FieldGraph, incident.FieldAiVerdict:
+		case incident.FieldGraph, incident.FieldAiVerdict, incident.FieldClosureProposal:
 			values[i] = new([]byte)
 		case incident.FieldStatus, incident.FieldTitle, incident.FieldResolution, incident.FieldResolvedBy:
 			values[i] = new(sql.NullString)
@@ -158,6 +161,14 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				_m.ResolvedAt = new(time.Time)
 				*_m.ResolvedAt = value.Time
 			}
+		case incident.FieldClosureProposal:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field closure_proposal", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ClosureProposal); err != nil {
+					return fmt.Errorf("unmarshal field closure_proposal: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -235,6 +246,9 @@ func (_m *Incident) String() string {
 		builder.WriteString("resolved_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("closure_proposal=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ClosureProposal))
 	builder.WriteByte(')')
 	return builder.String()
 }

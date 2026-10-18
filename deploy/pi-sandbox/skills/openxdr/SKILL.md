@@ -32,6 +32,7 @@ xdr remember - '10.1.1.100 是 pve1 上的 LXC 203（网关：Caddy + docker）�
 xdr forget <记忆 id>                         # 删掉被现场证据推翻的 AI 记忆
 xdr suppress pve1 8f1d3b56-7a29-4e03-b5c8-1d4f9e2a7b60 'VM100 vpn-proxy 每天 10:58 解析订阅域名，例行业务' 30 'query.hostname$=.doggygo.top'
 xdr suppress pve1 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90 'Termix 面板每分钟 SSH 健康检查' 30 'process.cmd_line~=__TERMIX_EXIT' 'dst_endpoint.port=22'
+xdr propose-close <事件 id> false_positive '误报/良性：……（定性、关键证据、依据）' <报告 id>
 xdr report '标题' report.md                 # 最终报告（Markdown 文件）
 ```
 
@@ -81,7 +82,8 @@ SELECT e.ts, e.raw->'process'->>'cmd_line' FROM alerts a JOIN events e ON e.id=a
 一条只写一件事；一次性的结论写报告，问题用 `track`，服务与外联用 `identify` / `egress`，不要往记忆里塞。
 
 **处理交来的事件**：`xdr context` 里的 `subjects` 是交给你的事件。逐个：读告警与证据 → 需要时上机取证（进程、文件、登录记录、网络连接）→
-给出结论（恶意 / 可疑 / 良性）、关键证据、处置建议与结案建议。事件由人结案，你只给建议。
+给出结论（恶意 / 可疑 / 良性）、关键证据与处置建议，再用 `xdr propose-close` 提结案建议（false_positive 误报或良性 /
+closed 属实且已处置；说明写成人能直接采纳的结案说明，可附报告 id）。事件由人在事件页一键采纳，你不能也不需要自己结案。
 
 **巡检**：每台主机看磁盘与 inode、内存与负载、失败的服务、监听端口与外连、新增账户与 sudo、计划任务、近 24 小时登录失败、平台告警。
 需要人处理的问题用 `xdr track` 登记，一个问题一条，同一问题每次用同一个 key；正常项写进报告，不登记。

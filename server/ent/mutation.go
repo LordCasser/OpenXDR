@@ -15490,6 +15490,7 @@ type IncidentMutation struct {
 	resolution       *string
 	resolved_by      *string
 	resolved_at      *time.Time
+	closure_proposal **schema.ClosureProposal
 	clearedFields    map[string]struct{}
 	alerts           map[uuid.UUID]struct{}
 	removedalerts    map[uuid.UUID]struct{}
@@ -16036,6 +16037,55 @@ func (m *IncidentMutation) ResetResolvedAt() {
 	delete(m.clearedFields, incident.FieldResolvedAt)
 }
 
+// SetClosureProposal sets the "closure_proposal" field.
+func (m *IncidentMutation) SetClosureProposal(sp *schema.ClosureProposal) {
+	m.closure_proposal = &sp
+}
+
+// ClosureProposal returns the value of the "closure_proposal" field in the mutation.
+func (m *IncidentMutation) ClosureProposal() (r *schema.ClosureProposal, exists bool) {
+	v := m.closure_proposal
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClosureProposal returns the old "closure_proposal" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldClosureProposal(ctx context.Context) (v *schema.ClosureProposal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClosureProposal is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClosureProposal requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClosureProposal: %w", err)
+	}
+	return oldValue.ClosureProposal, nil
+}
+
+// ClearClosureProposal clears the value of the "closure_proposal" field.
+func (m *IncidentMutation) ClearClosureProposal() {
+	m.closure_proposal = nil
+	m.clearedFields[incident.FieldClosureProposal] = struct{}{}
+}
+
+// ClosureProposalCleared returns if the "closure_proposal" field was cleared in this mutation.
+func (m *IncidentMutation) ClosureProposalCleared() bool {
+	_, ok := m.clearedFields[incident.FieldClosureProposal]
+	return ok
+}
+
+// ResetClosureProposal resets all changes to the "closure_proposal" field.
+func (m *IncidentMutation) ResetClosureProposal() {
+	m.closure_proposal = nil
+	delete(m.clearedFields, incident.FieldClosureProposal)
+}
+
 // AddAlertIDs adds the "alerts" edge to the Alert entity by ids.
 func (m *IncidentMutation) AddAlertIDs(ids ...uuid.UUID) {
 	if m.alerts == nil {
@@ -16124,7 +16174,7 @@ func (m *IncidentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.created_at != nil {
 		fields = append(fields, incident.FieldCreatedAt)
 	}
@@ -16152,6 +16202,9 @@ func (m *IncidentMutation) Fields() []string {
 	if m.resolved_at != nil {
 		fields = append(fields, incident.FieldResolvedAt)
 	}
+	if m.closure_proposal != nil {
+		fields = append(fields, incident.FieldClosureProposal)
+	}
 	return fields
 }
 
@@ -16178,6 +16231,8 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 		return m.ResolvedBy()
 	case incident.FieldResolvedAt:
 		return m.ResolvedAt()
+	case incident.FieldClosureProposal:
+		return m.ClosureProposal()
 	}
 	return nil, false
 }
@@ -16205,6 +16260,8 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldResolvedBy(ctx)
 	case incident.FieldResolvedAt:
 		return m.OldResolvedAt(ctx)
+	case incident.FieldClosureProposal:
+		return m.OldClosureProposal(ctx)
 	}
 	return nil, fmt.Errorf("unknown Incident field %s", name)
 }
@@ -16277,6 +16334,13 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetResolvedAt(v)
 		return nil
+	case incident.FieldClosureProposal:
+		v, ok := value.(*schema.ClosureProposal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClosureProposal(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Incident field %s", name)
 }
@@ -16325,6 +16389,9 @@ func (m *IncidentMutation) ClearedFields() []string {
 	if m.FieldCleared(incident.FieldResolvedAt) {
 		fields = append(fields, incident.FieldResolvedAt)
 	}
+	if m.FieldCleared(incident.FieldClosureProposal) {
+		fields = append(fields, incident.FieldClosureProposal)
+	}
 	return fields
 }
 
@@ -16356,6 +16423,9 @@ func (m *IncidentMutation) ClearField(name string) error {
 		return nil
 	case incident.FieldResolvedAt:
 		m.ClearResolvedAt()
+		return nil
+	case incident.FieldClosureProposal:
+		m.ClearClosureProposal()
 		return nil
 	}
 	return fmt.Errorf("unknown Incident nullable field %s", name)
@@ -16391,6 +16461,9 @@ func (m *IncidentMutation) ResetField(name string) error {
 		return nil
 	case incident.FieldResolvedAt:
 		m.ResetResolvedAt()
+		return nil
+	case incident.FieldClosureProposal:
+		m.ResetClosureProposal()
 		return nil
 	}
 	return fmt.Errorf("unknown Incident field %s", name)

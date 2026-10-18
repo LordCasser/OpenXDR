@@ -1,6 +1,6 @@
 import { RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Badge, Button, Segmented, Space, Table, Tooltip, Typography } from 'antd'
+import { App, Badge, Button, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { fetchIncidents, setIncidentStatus, type IncidentSummary } from '../api'
@@ -146,7 +146,10 @@ export function IncidentsPage() {
               { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
               { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
               { responsive: WIDE_ONLY, title: t('group'), dataIndex: 'groupId', width: 140, ellipsis: true, render: v => groups.find(g => g.id === v)?.name ?? '-' },
-              { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
+              {
+                title: t('thStatus'), dataIndex: 'status', width: 130,
+                render: (v, r) => <Space size={4} wrap><IncidentStatusTag value={v} />{r.closureProposal && <Tag color="purple" variant="filled">{t('proposalTag')}</Tag>}</Space>,
+              },
               {
                 responsive: WIDE_ONLY, title: t('thVerdict'), width: 150,
                 render: (_, r) => {

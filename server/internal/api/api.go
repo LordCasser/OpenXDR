@@ -17,6 +17,7 @@ import (
 	"openxdr/server/ent/alert"
 	entasset "openxdr/server/ent/asset"
 	"openxdr/server/ent/incident"
+	"openxdr/server/ent/schema"
 	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
@@ -46,6 +47,8 @@ type incidentSummary struct {
 	Resolution *string    `json:"resolution"`
 	ResolvedBy *string    `json:"resolvedBy"`
 	ResolvedAt *time.Time `json:"resolvedAt"`
+	// ClosureProposal AI 的结案建议，人采纳或忽略
+	ClosureProposal *schema.ClosureProposal `json:"closureProposal"`
 }
 
 type alertRow struct {
@@ -273,7 +276,8 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 		if !incidentVisible(w, r, db, id, "analyst") {
 			return
 		}
-		u := db.Incident.UpdateOneID(id).SetStatus(body.Status)
+		// 人改了状态，AI 的结案建议就作废了（采纳也走这里）
+		u := db.Incident.UpdateOneID(id).SetStatus(body.Status).ClearClosureProposal()
 		if body.Status == "open" {
 			u.ClearResolution().ClearResolvedBy().ClearResolvedAt()
 		} else {
@@ -289,6 +293,24 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			return
 		}
 		audit.Log(r.Context(), db, r, "incident_status", id.String(), strings.TrimSpace(body.Status+" "+note))
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// 忽略 AI 的结案建议
+	mux.HandleFunc("DELETE /api/incidents/{id}/closure-proposal", func(w http.ResponseWriter, r *http.Request) {
+		id, err := uuid.Parse(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "无效的 incident id", http.StatusBadRequest)
+			return
+		}
+		if !incidentVisible(w, r, db, id, "analyst") {
+			return
+		}
+		if err := db.Incident.UpdateOneID(id).ClearClosureProposal().Exec(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		audit.Log(r.Context(), db, r, "incident_proposal_dismissed", id.String(), "")
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -330,6 +352,7 @@ func summarize(inc *ent.Incident, alertCount int, severity int16) incidentSummar
 		ID: inc.ID, CreatedAt: inc.CreatedAt, Status: inc.Status,
 		Title: inc.Title, AiVerdict: inc.AiVerdict, AlertCount: alertCount,
 		Severity: severity, Resolution: inc.Resolution, ResolvedBy: inc.ResolvedBy, ResolvedAt: inc.ResolvedAt,
+		ClosureProposal: inc.ClosureProposal,
 	}
 }
 

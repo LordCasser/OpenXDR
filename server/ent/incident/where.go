@@ -531,6 +531,16 @@ func ResolvedAtNotNil() predicate.Incident {
 	return predicate.Incident(sql.FieldNotNull(FieldResolvedAt))
 }
 
+// ClosureProposalIsNil applies the IsNil predicate on the "closure_proposal" field.
+func ClosureProposalIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldClosureProposal))
+}
+
+// ClosureProposalNotNil applies the NotNil predicate on the "closure_proposal" field.
+func ClosureProposalNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldClosureProposal))
+}
+
 // HasAlerts applies the HasEdge predicate on the "alerts" edge.
 func HasAlerts() predicate.Incident {
 	return predicate.Incident(func(s *sql.Selector) {

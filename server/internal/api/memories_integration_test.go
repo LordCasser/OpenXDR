@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
+	"openxdr/server/ent/schema"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/suppress"
@@ -69,5 +72,40 @@ func TestAPIMemories(t *testing.T) {
 	}
 	if n := client.AuditLog.Query().CountX(ctx); n != 3 {
 		t.Errorf("增删改都要写审计，得到 %d 条", n)
+	}
+}
+
+// 采纳（人结案）与忽略都会清掉 AI 的结案建议；结案记在人名下
+func TestClosureProposalLifecycle(t *testing.T) {
+	ctx, client := testdb.New(t)
+	g := client.Group.Create().SetName("A").SaveX(ctx)
+	host := client.Asset.Create().SetHostname("pve1").SetGroupID(g.ID).SaveX(ctx)
+	proposal := &schema.ClosureProposal{Status: "false_positive", Note: "良性", SessionID: uuid.New(), At: time.Now()}
+	mk := func() uuid.UUID {
+		inc := client.Incident.Create().SetGraph(json.RawMessage(`{}`)).SetClosureProposal(proposal).SaveX(ctx)
+		client.Alert.Create().SetTs(time.Now()).SetRuleID("r").SetSeverity(3).SetAssetID(host.ID).SetIncidentID(inc.ID).SaveX(ctx)
+		return inc.ID
+	}
+	adopted, dismissed := mk(), mk()
+	h := Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
+	admin := httptest.NewServer(asAdmin(h))
+	t.Cleanup(admin.Close)
+	_, body := get(t, admin, "/api/incidents/"+adopted.String())
+	if !strings.Contains(string(body), `"closureProposal":{"status":"false_positive"`) {
+		t.Fatalf("详情应带结案建议: %s", body)
+	}
+	resp, err := http.Post(admin.URL+"/api/incidents/"+adopted.String()+"/status", "application/json", strings.NewReader(`{"status":"false_positive","note":"良性"}`))
+	if err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("结案: %v %v", err, resp)
+	}
+	if inc := client.Incident.GetX(ctx, adopted); inc.ClosureProposal != nil || inc.ResolvedBy == nil || *inc.ResolvedBy != "admin" {
+		t.Fatalf("采纳后建议应清掉、结案记在人名下: %+v", inc)
+	}
+	req, _ := http.NewRequest("DELETE", admin.URL+"/api/incidents/"+dismissed.String()+"/closure-proposal", nil)
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("忽略: %v %v", err, resp)
+	}
+	if inc := client.Incident.GetX(ctx, dismissed); inc.ClosureProposal != nil || inc.Status != "open" {
+		t.Fatalf("忽略后建议应清掉、状态不变: %+v", inc)
 	}
 }

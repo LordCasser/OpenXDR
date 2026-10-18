@@ -40,6 +40,16 @@ export interface IncidentSummary {
   resolution: string | null
   resolvedBy: string | null
   resolvedAt: string | null
+  // AI 的结案建议：人一键采纳（结案仍记在人名下）或忽略
+  closureProposal: ClosureProposal | null
+}
+
+export interface ClosureProposal {
+  status: 'closed' | 'false_positive'
+  note: string
+  sessionId: string
+  reportId?: string
+  at: string
 }
 
 export interface AlertRow {
@@ -149,6 +159,8 @@ export const fetchIncidents = (params: { status?: string; assetId?: string; limi
 export const fetchIncident = (id: string) => get<IncidentDetail>(`/api/incidents/${id}`)
 
 // 结案（closed / false_positive）必须带结论备注，改回 open 不用
+export const dismissClosureProposal = (id: string) => send('DELETE', `/api/incidents/${id}/closure-proposal`)
+
 export async function setIncidentStatus(id: string, status: string, note?: string): Promise<void> {
   const r = await post(`/api/incidents/${id}/status`, { status, note })
   if (!r.ok) await fail(r)
