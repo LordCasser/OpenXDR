@@ -27,6 +27,7 @@ import (
 	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
+	"openxdr/server/ent/ipinfo"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
 	"openxdr/server/ent/session"
@@ -78,6 +79,8 @@ type Client struct {
 	GroupMember *GroupMemberClient
 	// HostCredential is the client for interacting with the HostCredential builders.
 	HostCredential *HostCredentialClient
+	// IPInfo is the client for interacting with the IPInfo builders.
+	IPInfo *IPInfoClient
 	// Incident is the client for interacting with the Incident builders.
 	Incident *IncidentClient
 	// Intel is the client for interacting with the Intel builders.
@@ -127,6 +130,7 @@ func (c *Client) init() {
 	c.Group = NewGroupClient(c.config)
 	c.GroupMember = NewGroupMemberClient(c.config)
 	c.HostCredential = NewHostCredentialClient(c.config)
+	c.IPInfo = NewIPInfoClient(c.config)
 	c.Incident = NewIncidentClient(c.config)
 	c.Intel = NewIntelClient(c.config)
 	c.ProcessBaseline = NewProcessBaselineClient(c.config)
@@ -245,6 +249,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Group:           NewGroupClient(cfg),
 		GroupMember:     NewGroupMemberClient(cfg),
 		HostCredential:  NewHostCredentialClient(cfg),
+		IPInfo:          NewIPInfoClient(cfg),
 		Incident:        NewIncidentClient(cfg),
 		Intel:           NewIntelClient(cfg),
 		ProcessBaseline: NewProcessBaselineClient(cfg),
@@ -290,6 +295,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Group:           NewGroupClient(cfg),
 		GroupMember:     NewGroupMemberClient(cfg),
 		HostCredential:  NewHostCredentialClient(cfg),
+		IPInfo:          NewIPInfoClient(cfg),
 		Incident:        NewIncidentClient(cfg),
 		Intel:           NewIntelClient(cfg),
 		ProcessBaseline: NewProcessBaselineClient(cfg),
@@ -333,9 +339,9 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink, c.AuditLog,
 		c.Command, c.CommandPolicy, c.EnrollToken, c.Event, c.Finding, c.Group,
-		c.GroupMember, c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline,
-		c.Report, c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task,
-		c.TaskRun, c.User, c.Zone,
+		c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Intel,
+		c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
+		c.Suppression, c.Task, c.TaskRun, c.User, c.Zone,
 	} {
 		n.Use(hooks...)
 	}
@@ -347,9 +353,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink, c.AuditLog,
 		c.Command, c.CommandPolicy, c.EnrollToken, c.Event, c.Finding, c.Group,
-		c.GroupMember, c.HostCredential, c.Incident, c.Intel, c.ProcessBaseline,
-		c.Report, c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task,
-		c.TaskRun, c.User, c.Zone,
+		c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Intel,
+		c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
+		c.Suppression, c.Task, c.TaskRun, c.User, c.Zone,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -386,6 +392,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.GroupMember.mutate(ctx, m)
 	case *HostCredentialMutation:
 		return c.HostCredential.mutate(ctx, m)
+	case *IPInfoMutation:
+		return c.IPInfo.mutate(ctx, m)
 	case *IncidentMutation:
 		return c.Incident.mutate(ctx, m)
 	case *IntelMutation:
@@ -2421,6 +2429,139 @@ func (c *HostCredentialClient) mutate(ctx context.Context, m *HostCredentialMuta
 	}
 }
 
+// IPInfoClient is a client for the IPInfo schema.
+type IPInfoClient struct {
+	config
+}
+
+// NewIPInfoClient returns a client for the IPInfo from the given config.
+func NewIPInfoClient(c config) *IPInfoClient {
+	return &IPInfoClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ipinfo.Hooks(f(g(h())))`.
+func (c *IPInfoClient) Use(hooks ...Hook) {
+	c.hooks.IPInfo = append(c.hooks.IPInfo, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ipinfo.Intercept(f(g(h())))`.
+func (c *IPInfoClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IPInfo = append(c.inters.IPInfo, interceptors...)
+}
+
+// Create returns a builder for creating a IPInfo entity.
+func (c *IPInfoClient) Create() *IPInfoCreate {
+	mutation := newIPInfoMutation(c.config, OpCreate)
+	return &IPInfoCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IPInfo entities.
+func (c *IPInfoClient) CreateBulk(builders ...*IPInfoCreate) *IPInfoCreateBulk {
+	return &IPInfoCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IPInfoClient) MapCreateBulk(slice any, setFunc func(*IPInfoCreate, int)) *IPInfoCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IPInfoCreateBulk{err: fmt.Errorf("calling to IPInfoClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IPInfoCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IPInfoCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IPInfo.
+func (c *IPInfoClient) Update() *IPInfoUpdate {
+	mutation := newIPInfoMutation(c.config, OpUpdate)
+	return &IPInfoUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IPInfoClient) UpdateOne(_m *IPInfo) *IPInfoUpdateOne {
+	mutation := newIPInfoMutation(c.config, OpUpdateOne, withIPInfo(_m))
+	return &IPInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IPInfoClient) UpdateOneID(id uuid.UUID) *IPInfoUpdateOne {
+	mutation := newIPInfoMutation(c.config, OpUpdateOne, withIPInfoID(id))
+	return &IPInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IPInfo.
+func (c *IPInfoClient) Delete() *IPInfoDelete {
+	mutation := newIPInfoMutation(c.config, OpDelete)
+	return &IPInfoDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IPInfoClient) DeleteOne(_m *IPInfo) *IPInfoDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IPInfoClient) DeleteOneID(id uuid.UUID) *IPInfoDeleteOne {
+	builder := c.Delete().Where(ipinfo.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IPInfoDeleteOne{builder}
+}
+
+// Query returns a query builder for IPInfo.
+func (c *IPInfoClient) Query() *IPInfoQuery {
+	return &IPInfoQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIPInfo},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IPInfo entity by its id.
+func (c *IPInfoClient) Get(ctx context.Context, id uuid.UUID) (*IPInfo, error) {
+	return c.Query().Where(ipinfo.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IPInfoClient) GetX(ctx context.Context, id uuid.UUID) *IPInfo {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IPInfoClient) Hooks() []Hook {
+	return c.hooks.IPInfo
+}
+
+// Interceptors returns the client interceptors.
+func (c *IPInfoClient) Interceptors() []Interceptor {
+	return c.inters.IPInfo
+}
+
+func (c *IPInfoClient) mutate(ctx context.Context, m *IPInfoMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IPInfoCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IPInfoUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IPInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IPInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IPInfo mutation op: %q", m.Op())
+	}
+}
+
 // IncidentClient is a client for the Incident schema.
 type IncidentClient struct {
 	config
@@ -4038,13 +4179,13 @@ type (
 	hooks struct {
 		AgentSession, Alert, Approval, Asset, AssetLink, AuditLog, Command,
 		CommandPolicy, EnrollToken, Event, Finding, Group, GroupMember, HostCredential,
-		Incident, Intel, ProcessBaseline, Report, Session, SessionMessage, Setting,
-		Suppression, Task, TaskRun, User, Zone []ent.Hook
+		IPInfo, Incident, Intel, ProcessBaseline, Report, Session, SessionMessage,
+		Setting, Suppression, Task, TaskRun, User, Zone []ent.Hook
 	}
 	inters struct {
 		AgentSession, Alert, Approval, Asset, AssetLink, AuditLog, Command,
 		CommandPolicy, EnrollToken, Event, Finding, Group, GroupMember, HostCredential,
-		Incident, Intel, ProcessBaseline, Report, Session, SessionMessage, Setting,
-		Suppression, Task, TaskRun, User, Zone []ent.Interceptor
+		IPInfo, Incident, Intel, ProcessBaseline, Report, Session, SessionMessage,
+		Setting, Suppression, Task, TaskRun, User, Zone []ent.Interceptor
 	}
 )

@@ -6,9 +6,11 @@ import { Link, useNavigate } from 'react-router'
 import { fetchAssetMap, type AssetMap, type MapNode } from '../api'
 import { useSession } from '../app/session'
 import { AssetGraph, type Selection } from '../components/AssetGraph'
+import { Ago } from '../components/Ago'
 import { AssetProfileView, CritTag, ZoneTag, useZoneColor } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
+import { PublicDestList } from '../components/PublicDests'
 import { fmtTime } from '../components/format'
 import { useI18n } from '../i18n'
 
@@ -84,9 +86,17 @@ export function AssetMapPage() {
             <Descriptions.Item label={t('edgeProcesses')}>{selected.edge.processes.length ? selected.edge.processes.join(', ') : '-'}</Descriptions.Item>
             <Descriptions.Item label={t('edgeCount')}>{selected.edge.count}</Descriptions.Item>
             <Descriptions.Item label={t('thLastActive')}>{fmtTime(selected.edge.lastSeen)}</Descriptions.Item>
-            {selected.edge.targets?.length ? <Descriptions.Item label={t('topTargets')}>{selected.edge.targets.map(x => <div key={x} className="mono">{x}</div>)}</Descriptions.Item> : null}
           </Descriptions>
         )}
+        {selected && 'edge' in selected && !!selected.edge.targets?.length && (() => {
+          const a = [selected.from, selected.to].find(n => n.kind === 'asset')
+          return (
+            <>
+              <Typography.Text strong style={{ display: 'block', margin: '16px 0 8px' }}>{t('topTargets')}</Typography.Text>
+              <PublicDestList items={selected.edge.targets!} host={a && { id: a.id, name: a.label, groupId: group?.id }} />
+            </>
+          )
+        })()}
       </Drawer>
     </Page>
   )
@@ -113,7 +123,7 @@ function NodeDetail({ node, graph, canEdit, isGroupAdmin }: { node: MapNode; gra
     return (
       <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Link to={`/assets/${node.id}`}>{t('viewAsset')} <ArrowRightOutlined /></Link>
-        <AssetProfileView key={node.id} assetId={node.id} groupId={group?.id} canEdit={canEdit} isGroupAdmin={isGroupAdmin} compact />
+        <AssetProfileView key={node.id} assetId={node.id} hostname={node.label} groupId={group?.id} canEdit={canEdit} isGroupAdmin={isGroupAdmin} compact />
       </Space>
     )
   }
@@ -135,12 +145,19 @@ function NodeDetail({ node, graph, canEdit, isGroupAdmin }: { node: MapNode; gra
           <div style={{ marginTop: 8 }}>{inbound.map(e => <Tag key={e.from}>{label(e.from)}</Tag>)}</div>
         </div>
       )}
-      {node.kind === 'internet' && graph.edges.filter(e => e.from === node.id || e.to === node.id).map(e => (
-        <div key={`${e.from}>${e.to}`}>
-          <Typography.Text strong>{e.from === node.id ? `${t('mapLegendInternet')} → ${label(e.to)}` : `${label(e.from)} → ${t('mapLegendInternet')}`}</Typography.Text>
-          <div style={{ marginTop: 6 }}>{(e.targets ?? []).map(x => <div key={x} className="mono" style={{ fontSize: 12 }}>{x}</div>)}</div>
-        </div>
-      ))}
+      {/* 每台主机一段：先给总量与最近活动，再按地址列明细；连得多的主机排前面 */}
+      {node.kind === 'internet' && graph.edges.filter(e => e.from === node.id || e.to === node.id).sort((a, b) => b.count - a.count).map(e => {
+        const assetId = e.from === node.id ? e.to : e.from
+        return (
+          <div key={`${e.from}>${e.to}`}>
+            <Flex justify="space-between" align="baseline" gap={8} wrap>
+              <Typography.Text strong>{e.from === node.id ? `${t('mapLegendInternet')} → ${label(e.to)}` : `${label(e.from)} → ${t('mapLegendInternet')}`}</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('connCount', { n: e.count.toLocaleString() })} · <Ago iso={e.lastSeen} /></Typography.Text>
+            </Flex>
+            <div style={{ marginTop: 8 }}><PublicDestList items={e.targets ?? []} host={{ id: assetId, name: label(assetId), groupId: group?.id }} limit={6} /></div>
+          </div>
+        )
+      })}
       {node.kind === 'discovered' && <Button type="primary" onClick={() => navigate('/assets')}>{t('goEnroll')}</Button>}
     </Space>
   )

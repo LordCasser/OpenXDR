@@ -22,6 +22,7 @@ import (
 	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
+	"openxdr/server/ent/ipinfo"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
 	"openxdr/server/ent/session"
@@ -112,6 +113,7 @@ func checkColumn(t, c string) error {
 			group.Table:           group.ValidColumn,
 			groupmember.Table:     groupmember.ValidColumn,
 			hostcredential.Table:  hostcredential.ValidColumn,
+			ipinfo.Table:          ipinfo.ValidColumn,
 			incident.Table:        incident.ValidColumn,
 			intel.Table:           intel.ValidColumn,
 			processbaseline.Table: processbaseline.ValidColumn,

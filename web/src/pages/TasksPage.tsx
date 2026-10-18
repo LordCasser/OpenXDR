@@ -1,12 +1,13 @@
 import { CaretRightOutlined, EditOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Empty, Form, Input, Modal, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd'
+import { App, Button, Card, Empty, Form, Modal, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd'
 import { useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { fetchTaskRuns, fetchTasks, runTask, updateTask, type TaskRow, type TaskRunRow } from '../api'
 import { useSession } from '../app/session'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
+import { ScheduleEditor, describeCron } from '../components/Schedule'
 import { SessionStatusTag, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
@@ -38,7 +39,7 @@ function Runs({ task }: { task: TaskRow }) {
 
 // 定时任务：定义来自仓库 tasks/*.yml，这里只能启停与改周期（admin）；运行记录按组可见
 export function TasksPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { message } = App.useApp()
   const client = useQueryClient()
   const { isAdmin } = useSession()
@@ -98,10 +99,13 @@ export function TasksPage() {
               ),
             },
             {
-              title: t('taskSchedule'), width: 220,
+              title: t('taskSchedule'), width: 260,
+              // 先给人话，原表达式悬停看；认不出的形状直接显示表达式
               render: (_, task) => (
                 <Space>
-                  <code>{task.customSchedule ?? task.schedule}</code>
+                  <Tooltip title={<span className="mono">{task.customSchedule ?? task.schedule}</span>}>
+                    {describeCron(task.customSchedule ?? task.schedule, t, locale) ?? <code>{task.customSchedule ?? task.schedule}</code>}
+                  </Tooltip>
                   {task.customSchedule && <Tag color="blue">{t('taskCustom')}</Tag>}
                   {isAdmin && <Button type="link" size="small" aria-label={t('taskEditSchedule')} disabled={busy.includes(task.id)} icon={<EditOutlined />} onClick={() => { form.setFieldsValue({ schedule: task.customSchedule ?? task.schedule }); setEditing(task) }} />}
                 </Space>
@@ -122,8 +126,8 @@ export function TasksPage() {
       </Card>
       <Modal open={!!editing} title={t('taskEditSchedule')} onCancel={() => { if (!saving) setEditing(null) }} confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} cancelButtonProps={{ disabled: saving }} onOk={() => form.submit()} destroyOnHidden>
         <Form disabled={saving} form={form} layout="vertical" onFinish={saveSchedule}>
-          <Form.Item name="schedule" label={t('taskSchedule')} extra={t('taskScheduleHint', { yaml: editing?.schedule ?? '' })} rules={[{ required: true }]}>
-            <Input className="mono" />
+          <Form.Item name="schedule" label={editing?.name} rules={[{ required: true, pattern: /^(CRON_TZ=\S+\s+)?\S/, message: t('schedCustomHint') }]}>
+            <ScheduleEditor fallback={editing?.schedule ?? ''} />
           </Form.Item>
         </Form>
       </Modal>

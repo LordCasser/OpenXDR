@@ -48,6 +48,9 @@ type GroupMember func(*sql.Selector)
 // HostCredential is the predicate function for hostcredential builders.
 type HostCredential func(*sql.Selector)
 
+// IPInfo is the predicate function for ipinfo builders.
+type IPInfo func(*sql.Selector)
+
 // Incident is the predicate function for incident builders.
 type Incident func(*sql.Selector)
 

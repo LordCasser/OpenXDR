@@ -23,6 +23,7 @@ import (
 	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
+	"openxdr/server/ent/ipinfo"
 	"openxdr/server/ent/predicate"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
@@ -65,6 +66,7 @@ const (
 	TypeGroup           = "Group"
 	TypeGroupMember     = "GroupMember"
 	TypeHostCredential  = "HostCredential"
+	TypeIPInfo          = "IPInfo"
 	TypeIncident        = "Incident"
 	TypeIntel           = "Intel"
 	TypeProcessBaseline = "ProcessBaseline"
@@ -13687,6 +13689,1003 @@ func (m *HostCredentialMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *HostCredentialMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown HostCredential edge %s", name)
+}
+
+// IPInfoMutation represents an operation that mutates the IPInfo nodes in the graph.
+type IPInfoMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	ip            *string
+	ptr           *string
+	ptr_at        *time.Time
+	as_owner      *string
+	asn           *int
+	addasn        *int
+	country       *string
+	malicious     *int
+	addmalicious  *int
+	suspicious    *int
+	addsuspicious *int
+	domains       *[]string
+	appenddomains []string
+	vt_at         *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*IPInfo, error)
+	predicates    []predicate.IPInfo
+}
+
+var _ ent.Mutation = (*IPInfoMutation)(nil)
+
+// ipinfoOption allows management of the mutation configuration using functional options.
+type ipinfoOption func(*IPInfoMutation)
+
+// newIPInfoMutation creates new mutation for the IPInfo entity.
+func newIPInfoMutation(c config, op Op, opts ...ipinfoOption) *IPInfoMutation {
+	m := &IPInfoMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeIPInfo,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withIPInfoID sets the ID field of the mutation.
+func withIPInfoID(id uuid.UUID) ipinfoOption {
+	return func(m *IPInfoMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *IPInfo
+		)
+		m.oldValue = func(ctx context.Context) (*IPInfo, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().IPInfo.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withIPInfo sets the old IPInfo of the mutation.
+func withIPInfo(node *IPInfo) ipinfoOption {
+	return func(m *IPInfoMutation) {
+		m.oldValue = func(context.Context) (*IPInfo, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m IPInfoMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m IPInfoMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of IPInfo entities.
+func (m *IPInfoMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *IPInfoMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *IPInfoMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().IPInfo.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetIP sets the "ip" field.
+func (m *IPInfoMutation) SetIP(s string) {
+	m.ip = &s
+}
+
+// IP returns the value of the "ip" field in the mutation.
+func (m *IPInfoMutation) IP() (r string, exists bool) {
+	v := m.ip
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIP returns the old "ip" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldIP(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIP is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIP requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIP: %w", err)
+	}
+	return oldValue.IP, nil
+}
+
+// ResetIP resets all changes to the "ip" field.
+func (m *IPInfoMutation) ResetIP() {
+	m.ip = nil
+}
+
+// SetPtr sets the "ptr" field.
+func (m *IPInfoMutation) SetPtr(s string) {
+	m.ptr = &s
+}
+
+// Ptr returns the value of the "ptr" field in the mutation.
+func (m *IPInfoMutation) Ptr() (r string, exists bool) {
+	v := m.ptr
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPtr returns the old "ptr" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldPtr(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPtr is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPtr requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPtr: %w", err)
+	}
+	return oldValue.Ptr, nil
+}
+
+// ResetPtr resets all changes to the "ptr" field.
+func (m *IPInfoMutation) ResetPtr() {
+	m.ptr = nil
+}
+
+// SetPtrAt sets the "ptr_at" field.
+func (m *IPInfoMutation) SetPtrAt(t time.Time) {
+	m.ptr_at = &t
+}
+
+// PtrAt returns the value of the "ptr_at" field in the mutation.
+func (m *IPInfoMutation) PtrAt() (r time.Time, exists bool) {
+	v := m.ptr_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPtrAt returns the old "ptr_at" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldPtrAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPtrAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPtrAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPtrAt: %w", err)
+	}
+	return oldValue.PtrAt, nil
+}
+
+// ClearPtrAt clears the value of the "ptr_at" field.
+func (m *IPInfoMutation) ClearPtrAt() {
+	m.ptr_at = nil
+	m.clearedFields[ipinfo.FieldPtrAt] = struct{}{}
+}
+
+// PtrAtCleared returns if the "ptr_at" field was cleared in this mutation.
+func (m *IPInfoMutation) PtrAtCleared() bool {
+	_, ok := m.clearedFields[ipinfo.FieldPtrAt]
+	return ok
+}
+
+// ResetPtrAt resets all changes to the "ptr_at" field.
+func (m *IPInfoMutation) ResetPtrAt() {
+	m.ptr_at = nil
+	delete(m.clearedFields, ipinfo.FieldPtrAt)
+}
+
+// SetAsOwner sets the "as_owner" field.
+func (m *IPInfoMutation) SetAsOwner(s string) {
+	m.as_owner = &s
+}
+
+// AsOwner returns the value of the "as_owner" field in the mutation.
+func (m *IPInfoMutation) AsOwner() (r string, exists bool) {
+	v := m.as_owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAsOwner returns the old "as_owner" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldAsOwner(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAsOwner is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAsOwner requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAsOwner: %w", err)
+	}
+	return oldValue.AsOwner, nil
+}
+
+// ResetAsOwner resets all changes to the "as_owner" field.
+func (m *IPInfoMutation) ResetAsOwner() {
+	m.as_owner = nil
+}
+
+// SetAsn sets the "asn" field.
+func (m *IPInfoMutation) SetAsn(i int) {
+	m.asn = &i
+	m.addasn = nil
+}
+
+// Asn returns the value of the "asn" field in the mutation.
+func (m *IPInfoMutation) Asn() (r int, exists bool) {
+	v := m.asn
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAsn returns the old "asn" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldAsn(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAsn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAsn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAsn: %w", err)
+	}
+	return oldValue.Asn, nil
+}
+
+// AddAsn adds i to the "asn" field.
+func (m *IPInfoMutation) AddAsn(i int) {
+	if m.addasn != nil {
+		*m.addasn += i
+	} else {
+		m.addasn = &i
+	}
+}
+
+// AddedAsn returns the value that was added to the "asn" field in this mutation.
+func (m *IPInfoMutation) AddedAsn() (r int, exists bool) {
+	v := m.addasn
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAsn resets all changes to the "asn" field.
+func (m *IPInfoMutation) ResetAsn() {
+	m.asn = nil
+	m.addasn = nil
+}
+
+// SetCountry sets the "country" field.
+func (m *IPInfoMutation) SetCountry(s string) {
+	m.country = &s
+}
+
+// Country returns the value of the "country" field in the mutation.
+func (m *IPInfoMutation) Country() (r string, exists bool) {
+	v := m.country
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCountry returns the old "country" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldCountry(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCountry is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCountry requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCountry: %w", err)
+	}
+	return oldValue.Country, nil
+}
+
+// ResetCountry resets all changes to the "country" field.
+func (m *IPInfoMutation) ResetCountry() {
+	m.country = nil
+}
+
+// SetMalicious sets the "malicious" field.
+func (m *IPInfoMutation) SetMalicious(i int) {
+	m.malicious = &i
+	m.addmalicious = nil
+}
+
+// Malicious returns the value of the "malicious" field in the mutation.
+func (m *IPInfoMutation) Malicious() (r int, exists bool) {
+	v := m.malicious
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMalicious returns the old "malicious" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldMalicious(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMalicious is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMalicious requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMalicious: %w", err)
+	}
+	return oldValue.Malicious, nil
+}
+
+// AddMalicious adds i to the "malicious" field.
+func (m *IPInfoMutation) AddMalicious(i int) {
+	if m.addmalicious != nil {
+		*m.addmalicious += i
+	} else {
+		m.addmalicious = &i
+	}
+}
+
+// AddedMalicious returns the value that was added to the "malicious" field in this mutation.
+func (m *IPInfoMutation) AddedMalicious() (r int, exists bool) {
+	v := m.addmalicious
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMalicious resets all changes to the "malicious" field.
+func (m *IPInfoMutation) ResetMalicious() {
+	m.malicious = nil
+	m.addmalicious = nil
+}
+
+// SetSuspicious sets the "suspicious" field.
+func (m *IPInfoMutation) SetSuspicious(i int) {
+	m.suspicious = &i
+	m.addsuspicious = nil
+}
+
+// Suspicious returns the value of the "suspicious" field in the mutation.
+func (m *IPInfoMutation) Suspicious() (r int, exists bool) {
+	v := m.suspicious
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSuspicious returns the old "suspicious" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldSuspicious(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSuspicious is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSuspicious requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSuspicious: %w", err)
+	}
+	return oldValue.Suspicious, nil
+}
+
+// AddSuspicious adds i to the "suspicious" field.
+func (m *IPInfoMutation) AddSuspicious(i int) {
+	if m.addsuspicious != nil {
+		*m.addsuspicious += i
+	} else {
+		m.addsuspicious = &i
+	}
+}
+
+// AddedSuspicious returns the value that was added to the "suspicious" field in this mutation.
+func (m *IPInfoMutation) AddedSuspicious() (r int, exists bool) {
+	v := m.addsuspicious
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSuspicious resets all changes to the "suspicious" field.
+func (m *IPInfoMutation) ResetSuspicious() {
+	m.suspicious = nil
+	m.addsuspicious = nil
+}
+
+// SetDomains sets the "domains" field.
+func (m *IPInfoMutation) SetDomains(s []string) {
+	m.domains = &s
+	m.appenddomains = nil
+}
+
+// Domains returns the value of the "domains" field in the mutation.
+func (m *IPInfoMutation) Domains() (r []string, exists bool) {
+	v := m.domains
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDomains returns the old "domains" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldDomains(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDomains is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDomains requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDomains: %w", err)
+	}
+	return oldValue.Domains, nil
+}
+
+// AppendDomains adds s to the "domains" field.
+func (m *IPInfoMutation) AppendDomains(s []string) {
+	m.appenddomains = append(m.appenddomains, s...)
+}
+
+// AppendedDomains returns the list of values that were appended to the "domains" field in this mutation.
+func (m *IPInfoMutation) AppendedDomains() ([]string, bool) {
+	if len(m.appenddomains) == 0 {
+		return nil, false
+	}
+	return m.appenddomains, true
+}
+
+// ClearDomains clears the value of the "domains" field.
+func (m *IPInfoMutation) ClearDomains() {
+	m.domains = nil
+	m.appenddomains = nil
+	m.clearedFields[ipinfo.FieldDomains] = struct{}{}
+}
+
+// DomainsCleared returns if the "domains" field was cleared in this mutation.
+func (m *IPInfoMutation) DomainsCleared() bool {
+	_, ok := m.clearedFields[ipinfo.FieldDomains]
+	return ok
+}
+
+// ResetDomains resets all changes to the "domains" field.
+func (m *IPInfoMutation) ResetDomains() {
+	m.domains = nil
+	m.appenddomains = nil
+	delete(m.clearedFields, ipinfo.FieldDomains)
+}
+
+// SetVtAt sets the "vt_at" field.
+func (m *IPInfoMutation) SetVtAt(t time.Time) {
+	m.vt_at = &t
+}
+
+// VtAt returns the value of the "vt_at" field in the mutation.
+func (m *IPInfoMutation) VtAt() (r time.Time, exists bool) {
+	v := m.vt_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVtAt returns the old "vt_at" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldVtAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVtAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVtAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVtAt: %w", err)
+	}
+	return oldValue.VtAt, nil
+}
+
+// ClearVtAt clears the value of the "vt_at" field.
+func (m *IPInfoMutation) ClearVtAt() {
+	m.vt_at = nil
+	m.clearedFields[ipinfo.FieldVtAt] = struct{}{}
+}
+
+// VtAtCleared returns if the "vt_at" field was cleared in this mutation.
+func (m *IPInfoMutation) VtAtCleared() bool {
+	_, ok := m.clearedFields[ipinfo.FieldVtAt]
+	return ok
+}
+
+// ResetVtAt resets all changes to the "vt_at" field.
+func (m *IPInfoMutation) ResetVtAt() {
+	m.vt_at = nil
+	delete(m.clearedFields, ipinfo.FieldVtAt)
+}
+
+// Where appends a list predicates to the IPInfoMutation builder.
+func (m *IPInfoMutation) Where(ps ...predicate.IPInfo) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the IPInfoMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *IPInfoMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.IPInfo, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *IPInfoMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *IPInfoMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (IPInfo).
+func (m *IPInfoMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *IPInfoMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.ip != nil {
+		fields = append(fields, ipinfo.FieldIP)
+	}
+	if m.ptr != nil {
+		fields = append(fields, ipinfo.FieldPtr)
+	}
+	if m.ptr_at != nil {
+		fields = append(fields, ipinfo.FieldPtrAt)
+	}
+	if m.as_owner != nil {
+		fields = append(fields, ipinfo.FieldAsOwner)
+	}
+	if m.asn != nil {
+		fields = append(fields, ipinfo.FieldAsn)
+	}
+	if m.country != nil {
+		fields = append(fields, ipinfo.FieldCountry)
+	}
+	if m.malicious != nil {
+		fields = append(fields, ipinfo.FieldMalicious)
+	}
+	if m.suspicious != nil {
+		fields = append(fields, ipinfo.FieldSuspicious)
+	}
+	if m.domains != nil {
+		fields = append(fields, ipinfo.FieldDomains)
+	}
+	if m.vt_at != nil {
+		fields = append(fields, ipinfo.FieldVtAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *IPInfoMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case ipinfo.FieldIP:
+		return m.IP()
+	case ipinfo.FieldPtr:
+		return m.Ptr()
+	case ipinfo.FieldPtrAt:
+		return m.PtrAt()
+	case ipinfo.FieldAsOwner:
+		return m.AsOwner()
+	case ipinfo.FieldAsn:
+		return m.Asn()
+	case ipinfo.FieldCountry:
+		return m.Country()
+	case ipinfo.FieldMalicious:
+		return m.Malicious()
+	case ipinfo.FieldSuspicious:
+		return m.Suspicious()
+	case ipinfo.FieldDomains:
+		return m.Domains()
+	case ipinfo.FieldVtAt:
+		return m.VtAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *IPInfoMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case ipinfo.FieldIP:
+		return m.OldIP(ctx)
+	case ipinfo.FieldPtr:
+		return m.OldPtr(ctx)
+	case ipinfo.FieldPtrAt:
+		return m.OldPtrAt(ctx)
+	case ipinfo.FieldAsOwner:
+		return m.OldAsOwner(ctx)
+	case ipinfo.FieldAsn:
+		return m.OldAsn(ctx)
+	case ipinfo.FieldCountry:
+		return m.OldCountry(ctx)
+	case ipinfo.FieldMalicious:
+		return m.OldMalicious(ctx)
+	case ipinfo.FieldSuspicious:
+		return m.OldSuspicious(ctx)
+	case ipinfo.FieldDomains:
+		return m.OldDomains(ctx)
+	case ipinfo.FieldVtAt:
+		return m.OldVtAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown IPInfo field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *IPInfoMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case ipinfo.FieldIP:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIP(v)
+		return nil
+	case ipinfo.FieldPtr:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPtr(v)
+		return nil
+	case ipinfo.FieldPtrAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPtrAt(v)
+		return nil
+	case ipinfo.FieldAsOwner:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAsOwner(v)
+		return nil
+	case ipinfo.FieldAsn:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAsn(v)
+		return nil
+	case ipinfo.FieldCountry:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCountry(v)
+		return nil
+	case ipinfo.FieldMalicious:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMalicious(v)
+		return nil
+	case ipinfo.FieldSuspicious:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSuspicious(v)
+		return nil
+	case ipinfo.FieldDomains:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDomains(v)
+		return nil
+	case ipinfo.FieldVtAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVtAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown IPInfo field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *IPInfoMutation) AddedFields() []string {
+	var fields []string
+	if m.addasn != nil {
+		fields = append(fields, ipinfo.FieldAsn)
+	}
+	if m.addmalicious != nil {
+		fields = append(fields, ipinfo.FieldMalicious)
+	}
+	if m.addsuspicious != nil {
+		fields = append(fields, ipinfo.FieldSuspicious)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *IPInfoMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case ipinfo.FieldAsn:
+		return m.AddedAsn()
+	case ipinfo.FieldMalicious:
+		return m.AddedMalicious()
+	case ipinfo.FieldSuspicious:
+		return m.AddedSuspicious()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *IPInfoMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case ipinfo.FieldAsn:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAsn(v)
+		return nil
+	case ipinfo.FieldMalicious:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMalicious(v)
+		return nil
+	case ipinfo.FieldSuspicious:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSuspicious(v)
+		return nil
+	}
+	return fmt.Errorf("unknown IPInfo numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *IPInfoMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(ipinfo.FieldPtrAt) {
+		fields = append(fields, ipinfo.FieldPtrAt)
+	}
+	if m.FieldCleared(ipinfo.FieldDomains) {
+		fields = append(fields, ipinfo.FieldDomains)
+	}
+	if m.FieldCleared(ipinfo.FieldVtAt) {
+		fields = append(fields, ipinfo.FieldVtAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *IPInfoMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *IPInfoMutation) ClearField(name string) error {
+	switch name {
+	case ipinfo.FieldPtrAt:
+		m.ClearPtrAt()
+		return nil
+	case ipinfo.FieldDomains:
+		m.ClearDomains()
+		return nil
+	case ipinfo.FieldVtAt:
+		m.ClearVtAt()
+		return nil
+	}
+	return fmt.Errorf("unknown IPInfo nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *IPInfoMutation) ResetField(name string) error {
+	switch name {
+	case ipinfo.FieldIP:
+		m.ResetIP()
+		return nil
+	case ipinfo.FieldPtr:
+		m.ResetPtr()
+		return nil
+	case ipinfo.FieldPtrAt:
+		m.ResetPtrAt()
+		return nil
+	case ipinfo.FieldAsOwner:
+		m.ResetAsOwner()
+		return nil
+	case ipinfo.FieldAsn:
+		m.ResetAsn()
+		return nil
+	case ipinfo.FieldCountry:
+		m.ResetCountry()
+		return nil
+	case ipinfo.FieldMalicious:
+		m.ResetMalicious()
+		return nil
+	case ipinfo.FieldSuspicious:
+		m.ResetSuspicious()
+		return nil
+	case ipinfo.FieldDomains:
+		m.ResetDomains()
+		return nil
+	case ipinfo.FieldVtAt:
+		m.ResetVtAt()
+		return nil
+	}
+	return fmt.Errorf("unknown IPInfo field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *IPInfoMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *IPInfoMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *IPInfoMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *IPInfoMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *IPInfoMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *IPInfoMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *IPInfoMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown IPInfo unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *IPInfoMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown IPInfo edge %s", name)
 }
 
 // IncidentMutation represents an operation that mutates the Incident nodes in the graph.

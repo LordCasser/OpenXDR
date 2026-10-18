@@ -21,6 +21,8 @@ type Group struct {
 	Assets []*ent.Asset
 	Zones  []*ent.Zone
 	Links  []*ent.AssetLink
+	// 公网目的地址的背景信息缓存
+	Info map[string]*ent.IPInfo
 }
 
 // LoadGroup 只取最近 linkTTL 内还出现过的边
@@ -49,6 +51,18 @@ func LoadGroup(ctx context.Context, db *ent.Client, groupID uuid.UUID) (*Group, 
 		assetlink.LastSeenGT(time.Now().Add(-linkTTL)),
 		assetlink.Or(assetlink.SrcAssetIDIn(ids...), assetlink.SrcIPIn(ips...), assetlink.DstIPIn(ips...)),
 	).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var public []string
+	for _, l := range g.Links {
+		for _, ip := range []string{l.SrcIP, l.DstIP} {
+			if addr, err := netip.ParseAddr(ip); err == nil && Public(addr) && !slices.Contains(public, ip) {
+				public = append(public, ip)
+			}
+		}
+	}
+	g.Info, err = loadInfo(ctx, db, public)
 	return g, err
 }
 
@@ -106,8 +120,8 @@ type Edge struct {
 	Count     int64     `json:"count"`
 	LastSeen  time.Time `json:"lastSeen"`
 	Note      string    `json:"note,omitempty"`
-	// 连公网的边列出最常去的目的地址
-	Targets []string `json:"targets,omitempty"`
+	// 连公网的边按地址列出连接量最多的若干个，带背景信息与 AI 给的用途
+	Targets []PublicDest `json:"targets,omitempty"`
 }
 
 type Graph struct {
@@ -131,7 +145,7 @@ func (g *Group) Graph(now time.Time) Graph {
 	}
 	type pair struct{ from, to string }
 	edges := map[pair]*Edge{}
-	targets := map[pair]map[string]int64{}
+	targets := map[pair][]hit{}
 	weight := map[string]int64{}
 	for _, l := range g.Links {
 		src, dst := g.resolve(l.SrcIP, l.SrcAssetID), g.resolve(l.DstIP, nil)
@@ -177,15 +191,10 @@ func (g *Group) Graph(now time.Time) Graph {
 		if l.LastSeen.After(e.LastSeen) {
 			e.LastSeen = l.LastSeen
 		}
-		if dst.id == "internet" || src.id == "internet" {
-			if targets[k] == nil {
-				targets[k] = map[string]int64{}
-			}
-			other := l.DstIP
-			if src.id == "internet" {
-				other = l.SrcIP
-			}
-			targets[k][other+":"+strconv.Itoa(l.DstPort)] += l.Count
+		if dst.id == "internet" {
+			targets[k] = append(targets[k], hitOf(l, l.DstIP))
+		} else if src.id == "internet" {
+			targets[k] = append(targets[k], hitOf(l, l.SrcIP))
 		}
 	}
 
@@ -212,11 +221,31 @@ func (g *Group) Graph(now time.Time) Graph {
 		}
 		slices.Sort(e.Ports)
 		slices.Sort(e.Processes)
-		e.Targets = top(targets[k], 10)
+		e.Targets = g.targets(targets[k], k.from, k.to)
 		out.Edges = append(out.Edges, *e)
 	}
 	slices.SortFunc(out.Nodes, func(a, b Node) int { return cmp.Compare(a.ID, b.ID) })
 	slices.SortFunc(out.Edges, func(a, b Edge) int { return cmp.Or(cmp.Compare(a.From, b.From), cmp.Compare(a.To, b.To)) })
+	return out
+}
+
+const maxTargets = 20
+
+// targets 公网边的目的地址明细，用途取本组那一端资产的标注
+func (g *Group) targets(hits []hit, from, to string) []PublicDest {
+	if len(hits) == 0 {
+		return nil
+	}
+	out := publicDests(hits, g.Info, maxTargets)
+	var notes map[string]string
+	for _, a := range g.Assets {
+		if id := a.ID.String(); id == from || id == to {
+			notes = a.RelationNotes
+		}
+	}
+	for i := range out {
+		out[i].Purpose = notes[out[i].IP]
+	}
 	return out
 }
 
@@ -231,13 +260,4 @@ func (g *Group) note(src, dst endpoint) string {
 		return dst.asset.RelationNotes[label(src)]
 	}
 	return ""
-}
-
-func top(m map[string]int64, n int) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.SortFunc(keys, func(a, b string) int { return cmp.Or(cmp.Compare(m[b], m[a]), cmp.Compare(a, b)) })
-	return keys[:min(len(keys), n)]
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/netip"
 	"slices"
 	"strings"
@@ -30,6 +31,7 @@ const (
 	annotateDebounce = time.Hour
 	maxPrograms      = 80
 	maxPeers         = 40
+	maxPublic        = 30
 )
 
 // Lockable 人工可改的标注字段；改过即锁定，AI 不再覆盖
@@ -52,9 +54,10 @@ type Facts struct {
 	Outbound []string `json:"outbound"`
 	// 连到本机的对端（主机名或 IP → 端口）
 	Inbound []string `json:"inbound"`
-	// 公网目的地址个数，具体地址不进上下文
-	PublicDestinations int      `json:"publicDestinations"`
-	Programs           []string `json:"programs"`
+	// 公网目的地址个数；连接量最多的 maxPublic 个连同反向解析与 VirusTotal 信息给模型认用途
+	PublicDestinations int          `json:"publicDestinations"`
+	Public             []PublicDest `json:"public,omitempty"`
+	Programs           []string     `json:"programs"`
 	// 模型给关系说明时只能引用这些对端
 	Peers []string `json:"-"`
 }
@@ -186,11 +189,13 @@ func FactsOf(ctx context.Context, db *ent.Client, w *World, a *ent.Asset) (Facts
 		return Facts{}, err
 	}
 	public := map[string]bool{}
+	var publicHits []hit
 	// 同一对端端口合成一条，进程并列；有已知进程就不再写「?」（旧版 agent 留下的边没有进程名）
 	procs := map[string][]string{}
 	for _, l := range out {
 		if addr, err := netip.ParseAddr(l.DstIP); err == nil && Public(addr) && w.ByIP[addr] == nil {
 			public[l.DstIP] = true
+			publicHits = append(publicHits, hitOf(l, l.DstIP))
 			continue
 		}
 		peer := label(l.DstIP)
@@ -207,6 +212,11 @@ func FactsOf(ctx context.Context, db *ent.Client, w *World, a *ent.Asset) (Facts
 		f.Outbound = append(f.Outbound, target+" ← "+cmp.Or(strings.Join(names, ", "), "?"))
 	}
 	f.PublicDestinations = len(public)
+	info, err := loadInfo(ctx, db, slices.Collect(maps.Keys(public)))
+	if err != nil {
+		return Facts{}, err
+	}
+	f.Public = publicDests(publicHits, info, maxPublic)
 	in, err := db.AssetLink.Query().Where(assetlink.DstIPIn(a.IPAddrs...), assetlink.LastSeenGT(since)).All(ctx)
 	if err != nil {
 		return Facts{}, err
@@ -252,7 +262,11 @@ const annotatePrompt = `你是资产梳理助手。根据给出的一台主机�
 1 临时或无业务。
 只输出一个 JSON 对象，不要其他文字：
 {"role":"不超过 16 字的角色，如 PostgreSQL 数据库","summary":"不超过 120 字的功能说明","criticality":1-5,"reason":"不超过 150 字的重要程度依据","relations":[{"peer":"对端，必须原样取自 outbound 或 inbound 里的主机名或 IP","note":"不超过 30 字的关系说明，如 读写业务库"}],"services":[{"port":"原样取自 unknownServices 开头的 协议/端口","name":"不超过 16 字的服务名，如 Corosync 集群通信","note":"不超过 60 字的用途"}]}
-services 只为 unknownServices 里的端口命名；凭进程名与路径认不出就不要写，不要猜。`
+services 只为 unknownServices 里的端口命名；凭进程名与路径认不出就不要写，不要猜。
+public 是本机连过的公网地址（按连接量取前若干个），带端口、发起进程、反向解析 ptr、VirusTotal 给的归属 owner、国家 country、
+判恶意的引擎数 malicious 与历史解析域名 domains。在上面的 JSON 里再加一个字段为认得出的地址写用途：
+"egress":[{"ip":"原样取自 public 的 ip","purpose":"不超过 20 字的用途，如 Debian 软件源、Tailscale 中继、NTP 授时"}]
+只依据进程名、端口、域名与归属判断，依据不足的地址不要写；malicious 大于 0 的在用途里照实写明可疑。`
 
 // Annotation 模型给出的标注，已校验
 type Annotation struct {
@@ -277,7 +291,11 @@ func (e *Engine) annotate(ctx context.Context, w *World, a *ent.Asset) error {
 	if err != nil {
 		return err
 	}
-	ann, err := parseAnnotation(reply.Content, f.Peers, f.unknownKeys)
+	ips := make([]string, len(f.Public))
+	for i, d := range f.Public {
+		ips[i] = d.IP
+	}
+	ann, err := parseAnnotation(reply.Content, f.Peers, f.unknownKeys, ips)
 	if err != nil {
 		return err
 	}
@@ -306,8 +324,8 @@ func (e *Engine) annotate(ctx context.Context, w *World, a *ent.Asset) error {
 }
 
 // parseAnnotation 模型输出不可信：取第一个 JSON 对象，逐字段校验与截断，
-// 关系说明只保留事实里出现过的对端
-func parseAnnotation(answer string, peers, unknown []string) (Annotation, error) {
+// 关系说明只保留事实里出现过的对端，公网用途只保留 public 里给过的地址（同记在关系说明里，键是地址）
+func parseAnnotation(answer string, peers, unknown, public []string) (Annotation, error) {
 	start, end := strings.Index(answer, "{"), strings.LastIndex(answer, "}")
 	if start < 0 || end <= start {
 		return Annotation{}, fmt.Errorf("输出不含 JSON")
@@ -326,6 +344,10 @@ func parseAnnotation(answer string, peers, unknown []string) (Annotation, error)
 			Name string `json:"name"`
 			Note string `json:"note"`
 		} `json:"services"`
+		Egress []struct {
+			IP      string `json:"ip"`
+			Purpose string `json:"purpose"`
+		} `json:"egress"`
 	}
 	if err := json.Unmarshal([]byte(answer[start:end+1]), &raw); err != nil {
 		return Annotation{}, fmt.Errorf("输出不是合法 JSON: %w", err)
@@ -338,6 +360,11 @@ func parseAnnotation(answer string, peers, unknown []string) (Annotation, error)
 	for _, r := range raw.Relations {
 		if note := clean(r.Note, 60); note != "" && slices.Contains(peers, r.Peer) && len(ann.Relations) < maxPeers {
 			ann.Relations[r.Peer] = note
+		}
+	}
+	for _, eg := range raw.Egress {
+		if purpose := clean(eg.Purpose, 40); purpose != "" && slices.Contains(public, eg.IP) {
+			ann.Relations[eg.IP] = purpose
 		}
 	}
 	for _, sv := range raw.Services {

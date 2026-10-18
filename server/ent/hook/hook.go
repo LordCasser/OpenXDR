@@ -176,6 +176,18 @@ func (f HostCredentialFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.HostCredentialMutation", m)
 }
 
+// The IPInfoFunc type is an adapter to allow the use of ordinary
+// function as IPInfo mutator.
+type IPInfoFunc func(context.Context, *ent.IPInfoMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IPInfoFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IPInfoMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IPInfoMutation", m)
+}
+
 // The IncidentFunc type is an adapter to allow the use of ordinary
 // function as Incident mutator.
 type IncidentFunc func(context.Context, *ent.IncidentMutation) (ent.Value, error)

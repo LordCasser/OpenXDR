@@ -247,7 +247,7 @@ export function AssetDetailPage() {
         </Col>
         <Col xs={24} xl={7}>
           <Card title={t('profileTitle')} style={{ marginBottom: 16 }}>
-            <AssetProfileView assetId={asset.id} groupId={asset.groupId} canEdit={canAct} isGroupAdmin={isAdmin || group?.role === 'admin'} compact />
+            <AssetProfileView assetId={asset.id} hostname={asset.hostname} groupId={asset.groupId} canEdit={canAct} isGroupAdmin={isAdmin || group?.role === 'admin'} compact />
           </Card>
           <Card title={t('hostInfo')}>
             <Descriptions column={1} size="small">

@@ -19,6 +19,7 @@ import (
 	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
+	"openxdr/server/ent/ipinfo"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
 	"openxdr/server/ent/schema"
@@ -247,6 +248,36 @@ func init() {
 	hostcredentialDescID := hostcredentialFields[0].Descriptor()
 	// hostcredential.DefaultID holds the default value on creation for the id field.
 	hostcredential.DefaultID = hostcredentialDescID.Default.(func() uuid.UUID)
+	ipinfoFields := schema.IPInfo{}.Fields()
+	_ = ipinfoFields
+	// ipinfoDescPtr is the schema descriptor for ptr field.
+	ipinfoDescPtr := ipinfoFields[2].Descriptor()
+	// ipinfo.DefaultPtr holds the default value on creation for the ptr field.
+	ipinfo.DefaultPtr = ipinfoDescPtr.Default.(string)
+	// ipinfoDescAsOwner is the schema descriptor for as_owner field.
+	ipinfoDescAsOwner := ipinfoFields[4].Descriptor()
+	// ipinfo.DefaultAsOwner holds the default value on creation for the as_owner field.
+	ipinfo.DefaultAsOwner = ipinfoDescAsOwner.Default.(string)
+	// ipinfoDescAsn is the schema descriptor for asn field.
+	ipinfoDescAsn := ipinfoFields[5].Descriptor()
+	// ipinfo.DefaultAsn holds the default value on creation for the asn field.
+	ipinfo.DefaultAsn = ipinfoDescAsn.Default.(int)
+	// ipinfoDescCountry is the schema descriptor for country field.
+	ipinfoDescCountry := ipinfoFields[6].Descriptor()
+	// ipinfo.DefaultCountry holds the default value on creation for the country field.
+	ipinfo.DefaultCountry = ipinfoDescCountry.Default.(string)
+	// ipinfoDescMalicious is the schema descriptor for malicious field.
+	ipinfoDescMalicious := ipinfoFields[7].Descriptor()
+	// ipinfo.DefaultMalicious holds the default value on creation for the malicious field.
+	ipinfo.DefaultMalicious = ipinfoDescMalicious.Default.(int)
+	// ipinfoDescSuspicious is the schema descriptor for suspicious field.
+	ipinfoDescSuspicious := ipinfoFields[8].Descriptor()
+	// ipinfo.DefaultSuspicious holds the default value on creation for the suspicious field.
+	ipinfo.DefaultSuspicious = ipinfoDescSuspicious.Default.(int)
+	// ipinfoDescID is the schema descriptor for id field.
+	ipinfoDescID := ipinfoFields[0].Descriptor()
+	// ipinfo.DefaultID holds the default value on creation for the id field.
+	ipinfo.DefaultID = ipinfoDescID.Default.(func() uuid.UUID)
 	incidentFields := schema.Incident{}.Fields()
 	_ = incidentFields
 	// incidentDescCreatedAt is the schema descriptor for created_at field.

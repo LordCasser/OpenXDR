@@ -142,6 +142,16 @@ func main() {
 	// 标注是后台批量调用：关掉 GLM 隐式思考、限住输出，耗时才稳定（实测 pve1 默认模式波动到 120 秒超时）
 	assetEngine.LLM.NoThinking, assetEngine.LLM.MaxTokens = true, 2048
 	go cluster.RunLeader(ctx, db, "assetmap", assetEngine.Run)
+	// 公网目的地址的背景信息：反向解析默认开；配了 VT_API_KEY 才查 VirusTotal（会把外联的公网地址发给它）
+	ipEnricher := &assetmap.Enricher{
+		DB: client, PTR: getenv("IPINFO_PTR", "true") == "true",
+		VTKey: os.Getenv("VT_API_KEY"), VTPerMin: getenvInt("VT_PER_MINUTE", 4), VTPerDay: getenvInt("VT_PER_DAY", 500),
+		TTL: time.Duration(getenvInt("IPINFO_TTL_DAYS", 7)) * 24 * time.Hour, Interval: time.Minute,
+		HTTP: &http.Client{Timeout: 15 * time.Second},
+	}
+	if ipEnricher.PTR || ipEnricher.VTKey != "" {
+		go cluster.RunLeader(ctx, db, "ipinfo", ipEnricher.Run)
+	}
 
 	hub := response.NewHub(client, os.Getenv("RESPONSE_ENABLED") == "true")
 	allowlist := isolationAllowlist()

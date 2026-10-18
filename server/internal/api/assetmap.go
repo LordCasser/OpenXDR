@@ -149,7 +149,7 @@ func AssetMap(db *ent.Client, aiEnabled bool) http.Handler {
 		writeJSON(w, map[string]any{
 			"zone": facts.Zone, "exposure": facts.Exposure, "cloud": facts.Cloud,
 			"listening": listening, "inventoryAt": a.InventoryAt, "services": assetmap.NotesOf(a),
-			"outbound": facts.Outbound, "inbound": facts.Inbound, "publicDestinations": facts.PublicDestinations,
+			"outbound": facts.Outbound, "inbound": facts.Inbound, "publicDestinations": facts.PublicDestinations, "public": withPurpose(facts.Public, a.RelationNotes),
 			"role": a.Role, "summary": a.Summary, "criticality": a.Criticality, "reason": a.AnnotationReason,
 			"relationNotes": a.RelationNotes, "lockedFields": a.LockedFields,
 			"annotatedAt": a.AnnotatedAt, "annotateRequestedAt": a.AnnotateRequestedAt, "aiEnabled": aiEnabled,
@@ -363,4 +363,12 @@ func zoneSaved(w http.ResponseWriter, err error) bool {
 		return false
 	}
 	return true
+}
+
+// withPurpose 公网目的地址带上 AI 标注给的用途（事实里不带，免得回灌给模型）
+func withPurpose(ds []assetmap.PublicDest, notes map[string]string) []assetmap.PublicDest {
+	for i := range ds {
+		ds[i].Purpose = notes[ds[i].IP]
+	}
+	return ds
 }

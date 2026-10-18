@@ -471,6 +471,33 @@ var (
 			},
 		},
 	}
+	// IPInfosColumns holds the columns for the "ip_infos" table.
+	IPInfosColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "ip", Type: field.TypeString},
+		{Name: "ptr", Type: field.TypeString, Default: ""},
+		{Name: "ptr_at", Type: field.TypeTime, Nullable: true},
+		{Name: "as_owner", Type: field.TypeString, Default: ""},
+		{Name: "asn", Type: field.TypeInt, Default: 0},
+		{Name: "country", Type: field.TypeString, Default: ""},
+		{Name: "malicious", Type: field.TypeInt, Default: 0},
+		{Name: "suspicious", Type: field.TypeInt, Default: 0},
+		{Name: "domains", Type: field.TypeJSON, Nullable: true},
+		{Name: "vt_at", Type: field.TypeTime, Nullable: true},
+	}
+	// IPInfosTable holds the schema information for the "ip_infos" table.
+	IPInfosTable = &schema.Table{
+		Name:       "ip_infos",
+		Columns:    IPInfosColumns,
+		PrimaryKey: []*schema.Column{IPInfosColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ipinfo_ip",
+				Unique:  true,
+				Columns: []*schema.Column{IPInfosColumns[1]},
+			},
+		},
+	}
 	// IncidentsColumns holds the columns for the "incidents" table.
 	IncidentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -751,6 +778,7 @@ var (
 		GroupsTable,
 		GroupMembersTable,
 		HostCredentialsTable,
+		IPInfosTable,
 		IncidentsTable,
 		IntelsTable,
 		ProcessBaselinesTable,

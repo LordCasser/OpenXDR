@@ -40,6 +40,8 @@ type Tx struct {
 	GroupMember *GroupMemberClient
 	// HostCredential is the client for interacting with the HostCredential builders.
 	HostCredential *HostCredentialClient
+	// IPInfo is the client for interacting with the IPInfo builders.
+	IPInfo *IPInfoClient
 	// Incident is the client for interacting with the Incident builders.
 	Incident *IncidentClient
 	// Intel is the client for interacting with the Intel builders.
@@ -209,6 +211,7 @@ func (tx *Tx) init() {
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupMember = NewGroupMemberClient(tx.config)
 	tx.HostCredential = NewHostCredentialClient(tx.config)
+	tx.IPInfo = NewIPInfoClient(tx.config)
 	tx.Incident = NewIncidentClient(tx.config)
 	tx.Intel = NewIntelClient(tx.config)
 	tx.ProcessBaseline = NewProcessBaselineClient(tx.config)

@@ -117,12 +117,13 @@ func TestConnOf(t *testing.T) {
 }
 
 func TestParseAnnotation(t *testing.T) {
-	ann, err := parseAnnotation("好的：\n{\"role\":\"PostgreSQL 数据库\",\"summary\":\"业务库\",\"criticality\":5,\"reason\":\"被多台依赖\",\"relations\":[{\"peer\":\"web-01\",\"note\":\"读写业务库\"},{\"peer\":\"编造的\",\"note\":\"x\"}],\"services\":[{\"port\":\"udp/5405\",\"name\":\"Corosync\"},{\"port\":\"tcp/9999\",\"name\":\"编造\"}]}", []string{"web-01"}, []string{"udp/5405"})
-	if err != nil || ann.Criticality != 5 || ann.Relations["web-01"] != "读写业务库" || len(ann.Relations) != 1 || len(ann.Services) != 1 || ann.Services["udp/5405"].Source != "ai" {
+	ann, err := parseAnnotation("好的：\n{\"role\":\"PostgreSQL 数据库\",\"summary\":\"业务库\",\"criticality\":5,\"reason\":\"被多台依赖\",\"relations\":[{\"peer\":\"web-01\",\"note\":\"读写业务库\"},{\"peer\":\"编造的\",\"note\":\"x\"}],\"services\":[{\"port\":\"udp/5405\",\"name\":\"Corosync\"},{\"port\":\"tcp/9999\",\"name\":\"编造\"}],\"egress\":[{\"ip\":\"1.2.3.4\",\"purpose\":\"Debian 软件源\"},{\"ip\":\"9.9.9.9\",\"purpose\":\"编造\"}]}", []string{"web-01"}, []string{"udp/5405"}, []string{"1.2.3.4"})
+	// 公网用途只收 public 里给过的地址，和关系说明记在一起
+	if err != nil || ann.Criticality != 5 || ann.Relations["web-01"] != "读写业务库" || ann.Relations["1.2.3.4"] != "Debian 软件源" || len(ann.Relations) != 2 || len(ann.Services) != 1 || ann.Services["udp/5405"].Source != "ai" {
 		t.Fatalf("%+v %v", ann, err)
 	}
 	for _, bad := range []string{"没有 JSON", `{"role":"x","criticality":9}`, `{"role":"","criticality":3}`} {
-		if _, err := parseAnnotation(bad, nil, nil); err == nil {
+		if _, err := parseAnnotation(bad, nil, nil, nil); err == nil {
 			t.Errorf("应拒绝: %s", bad)
 		}
 	}
@@ -133,6 +134,7 @@ func TestFingerprintIgnoresVolatileFacts(t *testing.T) {
 	g := f
 	g.Programs = append(g.Programs, "/usr/bin/b")
 	g.PublicDestinations = 9
+	g.Public = []PublicDest{{IP: "1.2.3.4", Ports: []string{"tcp/443"}}}
 	if f.fingerprint() != g.fingerprint() {
 		t.Fatal("程序清单与公网目的地变化不应触发重新标注")
 	}

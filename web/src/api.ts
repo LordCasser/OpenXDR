@@ -720,8 +720,13 @@ export interface MapNode {
   listening?: number
   ports?: string[]
 }
+// 公网目的地址：按地址合并的外联明细，带反向解析、VirusTotal 信息与 AI 给的用途
+export interface PublicDest {
+  ip: string; ports: string[]; processes?: string[]; count: number; lastSeen: string
+  ptr?: string; owner?: string; country?: string; malicious?: number; suspicious?: number; domains?: string[]; checked?: boolean; purpose?: string
+}
 export interface MapEdge {
-  from: string; to: string; ports: string[]; processes: string[]; count: number; lastSeen: string; note?: string; targets?: string[]
+  from: string; to: string; ports: string[]; processes: string[]; count: number; lastSeen: string; note?: string; targets?: PublicDest[]
 }
 export interface AssetMap { nodes: MapNode[]; edges: MapEdge[] }
 
@@ -756,6 +761,7 @@ export interface AssetProfile {
   outbound: string[] | null
   inbound: string[] | null
   publicDestinations: number
+  public?: PublicDest[] | null
   role?: string | null
   summary?: string | null
   criticality?: number | null

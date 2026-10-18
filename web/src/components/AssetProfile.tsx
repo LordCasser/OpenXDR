@@ -6,10 +6,11 @@ import {
 import { useState } from 'react'
 import {
   assignAssetZone, fetchAssetProfile, fetchZones, requestAnnotate, saveAssetProfile,
-  type AssetProfile, type ExposureLevel, type ProfileEdit, type ZoneKind, type ZoneRef,
+  type AssetProfile, type ExposureLevel, type Listener, type ProfileEdit, type ZoneKind, type ZoneRef,
 } from '../api'
 import { useI18n, type MsgKey } from '../i18n'
 import { LoadError } from './LoadError'
+import { PublicDestList } from './PublicDests'
 import { errText, fmtTime } from './format'
 
 const ZONE_KEY: Record<ZoneKind, MsgKey> = { internal: 'zoneInternal', dmz: 'zoneDmz', external: 'zoneExternal', cloud: 'zoneCloud' }
@@ -57,15 +58,84 @@ function Locked({ locked }: { locked: boolean }) {
   return locked ? <Tooltip title={t('lockedByHuman')}><LockOutlined style={{ marginLeft: 6, fontSize: 12, opacity: 0.6 }} /></Tooltip> : null
 }
 
+// 监听端口：同一端口 IPv4 / IPv6 各报一条，合成一行；只绑回环的另列，默认收起
+interface Port { key: string; proto: string; port: number; addrs: string[]; process?: string; path?: string }
+const loopback = (a: string) => a.startsWith('127.') || a === '::1'
+const anyAddr = (a: string) => a === '0.0.0.0' || a === '::' || a === '*'
+
+function mergePorts(ls: Listener[]): Port[] {
+  const by = new Map<string, Port>()
+  for (const l of ls) {
+    const key = `${l.proto}/${l.port}/${l.process ?? ''}`
+    const p = by.get(key) ?? { key, proto: l.proto, port: l.port, addrs: [], process: l.process, path: l.path }
+    if (!p.addrs.includes(l.addr)) p.addrs.push(l.addr)
+    by.set(key, p)
+  }
+  return [...by.values()].sort((a, b) => a.port - b.port || a.proto.localeCompare(b.proto))
+}
+
+// 依赖：后端给的是「对端:端口 ← 进程」与「对端 → 端口」，按对端合并，端口与进程并列，配上 AI 的关系说明
+interface Peer { peer: string; ports: string[]; procs: string[] }
+function groupPeers(items: string[], dir: 'outbound' | 'inbound'): Peer[] {
+  const by = new Map<string, Peer>()
+  for (const s of items) {
+    let peer: string, port: string, procs: string[] = []
+    if (dir === 'outbound') {
+      const [target, who = ''] = s.split(' ← ')
+      const i = target.lastIndexOf(':')
+      peer = target.slice(0, i)
+      port = target.slice(i + 1)
+      procs = who.split(', ').filter(p => p && p !== '?')
+    } else {
+      [peer, port] = s.split(' → ')
+    }
+    const p = by.get(peer) ?? { peer, ports: [], procs: [] }
+    if (port && !p.ports.includes(port)) p.ports.push(port)
+    for (const x of procs) if (!p.procs.includes(x)) p.procs.push(x)
+    by.set(peer, p)
+  }
+  return [...by.values()]
+}
+
+function PeerList({ items, notes }: { items: Peer[]; notes: Record<string, string> }) {
+  const { t } = useI18n()
+  const [all, setAll] = useState(false)
+  // 有关系说明的排前面（AI 认出来的往往是关键依赖），再按端口多少
+  const sorted = [...items].sort((a, b) => Number(!!notes[b.peer]) - Number(!!notes[a.peer]) || b.ports.length - a.ports.length || a.peer.localeCompare(b.peer))
+  const shown = all ? sorted : sorted.slice(0, 8)
+  if (!items.length) return <Typography.Text type="secondary">-</Typography.Text>
+  return (
+    <div className="dest-list">
+      {shown.map(p => (
+        <div key={p.peer} className="dest-row">
+          <div className="dest-main">
+            <Space size={6} wrap>
+              <Typography.Text className={/^[\d.:a-f]+$/i.test(p.peer) ? 'mono' : undefined} strong>{p.peer}</Typography.Text>
+              <Typography.Text type="secondary" className="mono" style={{ fontSize: 12 }}>{p.ports.join(' ')}</Typography.Text>
+            </Space>
+            {(notes[p.peer] || p.procs.length > 0) && (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {[notes[p.peer], p.procs.length ? t('viaProcess', { p: p.procs.join(', ') }) : ''].filter(Boolean).join(' · ')}
+              </Typography.Text>
+            )}
+          </div>
+        </div>
+      ))}
+      {items.length > 8 && <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setAll(!all)}>{all ? t('collapse') : t('showAllN', { n: items.length })}</Button>}
+    </div>
+  )
+}
+
 // 资产画像：AI 标注 + 采集到的事实。组 analyst 能改标注，组 admin 能指派区域
-export function AssetProfileView({ assetId, groupId, canEdit, isGroupAdmin, compact }: {
-  assetId: string; groupId?: string | null; canEdit: boolean; isGroupAdmin: boolean; compact?: boolean
+export function AssetProfileView({ assetId, hostname, groupId, canEdit, isGroupAdmin, compact }: {
+  assetId: string; hostname: string; groupId?: string | null; canEdit: boolean; isGroupAdmin: boolean; compact?: boolean
 }) {
   const { t } = useI18n()
   const { message } = App.useApp()
   const client = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [showLocal, setShowLocal] = useState(false)
   const profile = useQuery({ queryKey: ['assetProfile', assetId], queryFn: () => fetchAssetProfile(assetId) })
   const zones = useQuery({ queryKey: ['zones', groupId], queryFn: () => fetchZones(groupId!), enabled: !!groupId && isGroupAdmin })
 
@@ -136,31 +206,47 @@ export function AssetProfileView({ assetId, groupId, canEdit, isGroupAdmin, comp
 
       <div>
         <Typography.Text strong>{t('listeningPorts')}</Typography.Text>
-        {!p.inventoryAt ? <Alert type="info" showIcon style={{ marginTop: 8 }} title={t('noInventory')} /> : (
-          <Table size="small" rowKey={l => `${l.proto}/${l.addr}/${l.port}`} pagination={false} style={{ marginTop: 8 }}
-            dataSource={p.listening ?? []} scroll={{ y: compact ? 220 : 320 }}
-            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
-            columns={[
-              { title: t('thPorts'), width: 92, render: (_, l) => <span className="mono">{l.proto}/{l.port}</span> },
-              { title: t('thService'), ellipsis: true, render: (_, l) => p.services?.[`${l.proto}/${l.port}`]?.name ?? '-' },
-              { title: t('thBind'), dataIndex: 'addr', ellipsis: true, render: (v: string) => <span className="mono">{v}</span> },
-              { title: t('listenProcess'), dataIndex: 'process', ellipsis: true, render: (_, l) => <Tooltip title={l.path}>{l.process ?? '-'}</Tooltip> },
-            ]} />
-        )}
+        {!p.inventoryAt ? <Alert type="info" showIcon style={{ marginTop: 8 }} title={t('noInventory')} /> : (() => {
+          const ports = mergePorts(p.listening ?? [])
+          const local = ports.filter(x => x.addrs.every(loopback))
+          const table = (rows: Port[]) => (
+            <Table<Port> size="small" rowKey="key" pagination={false} style={{ marginTop: 8 }} dataSource={rows}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+              columns={[
+                { title: t('thPorts'), width: 92, render: (_, l) => <span className="mono">{l.proto}/{l.port}</span> },
+                { title: t('thService'), ellipsis: true, render: (_, l) => p.services?.[`${l.proto}/${l.port}`]?.name ?? '-' },
+                { title: t('thBind'), ellipsis: true, render: (_, l) => (l.addrs.some(anyAddr) ? t('bindAll') : l.addrs.every(loopback) ? t('bindLocal') : <span className="mono">{l.addrs.join(', ')}</span>) },
+                { title: t('listenProcess'), dataIndex: 'process', ellipsis: true, render: (_, l) => <Tooltip title={l.path}>{l.process ?? '-'}</Tooltip> },
+              ]} />
+          )
+          return (
+            <>
+              {table(ports.filter(x => !local.includes(x)))}
+              {local.length > 0 && (
+                <Button type="link" size="small" style={{ padding: 0, marginTop: 4 }} onClick={() => setShowLocal(!showLocal)}>
+                  {t(showLocal ? 'hideLocalPorts' : 'showLocalPorts', { n: local.length })}
+                </Button>
+              )}
+              {showLocal && table(local)}
+            </>
+          )
+        })()}
       </div>
 
-      {(['outbound', 'inbound'] as const).map(dir => {
-        const items = p[dir] ?? []
-        return (
-          <div key={dir}>
-            <Typography.Text strong>{t(dir === 'outbound' ? 'dependsOn' : 'dependedBy')}</Typography.Text>
-            <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {items.length === 0 ? <Typography.Text type="secondary">-</Typography.Text> : items.map(s => <Tag key={s} className="mono">{s}</Tag>)}
-              {dir === 'outbound' && p.publicDestinations > 0 && <Typography.Text type="secondary">{t('publicDestinations', { n: p.publicDestinations })}</Typography.Text>}
-            </div>
-          </div>
-        )
-      })}
+      {(['outbound', 'inbound'] as const).map(dir => (
+        <div key={dir}>
+          <Typography.Text strong>{t(dir === 'outbound' ? 'dependsOn' : 'dependedBy')}</Typography.Text>
+          <div style={{ marginTop: 8 }}><PeerList items={groupPeers(p[dir] ?? [], dir)} notes={p.relationNotes ?? {}} /></div>
+        </div>
+      ))}
+
+      {p.publicDestinations > 0 && (
+        <div>
+          <Typography.Text strong>{t('publicEgress', { n: p.publicDestinations })}</Typography.Text>
+          {p.public && p.publicDestinations > p.public.length && <Typography.Text type="secondary" style={{ fontSize: 12 }}> · {t('publicTopN', { n: p.public.length })}</Typography.Text>}
+          <div style={{ marginTop: 8 }}><PublicDestList items={p.public ?? []} host={{ id: assetId, name: hostname, groupId }} limit={5} /></div>
+        </div>
+      )}
 
       <EditModal open={editing} profile={p} busy={busy} onClose={() => setEditing(false)}
         onSave={async edit => { if (await run(() => saveAssetProfile(assetId, edit))) setEditing(false) }} />

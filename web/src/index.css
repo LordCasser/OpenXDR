@@ -254,3 +254,10 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 a.queue-row:hover { background: var(--ant-color-fill-quaternary); color: inherit; }
 .queue-current { background: var(--ant-control-item-bg-active); font-weight: 500; }
 .queue-hint { display: block; padding: 6px 8px 2px; font-size: 12px; }
+/* 外联与依赖明细：一项一行，第一行回答是谁，下面是用途与连接事实 */
+.dest-list { display: flex; flex-direction: column; }
+.dest-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--ant-color-border-secondary); }
+.dest-row:last-of-type { border-bottom: 0; }
+.dest-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.dest-actions { flex: none; }
+.sched-preview { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 6px; background: var(--ant-color-fill-quaternary); }
