@@ -20622,6 +20622,10 @@ type SuppressionMutation struct {
 	matched_count    *int
 	addmatched_count *int
 	last_matched_at  *time.Time
+	status           *string
+	session_id       *uuid.UUID
+	reviewed_by      *string
+	reviewed_at      *time.Time
 	clearedFields    map[string]struct{}
 	done             bool
 	oldValue         func(context.Context) (*Suppression, error)
@@ -21092,6 +21096,189 @@ func (m *SuppressionMutation) ResetLastMatchedAt() {
 	delete(m.clearedFields, suppression.FieldLastMatchedAt)
 }
 
+// SetStatus sets the "status" field.
+func (m *SuppressionMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *SuppressionMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Suppression entity.
+// If the Suppression object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SuppressionMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *SuppressionMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *SuppressionMutation) SetSessionID(u uuid.UUID) {
+	m.session_id = &u
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *SuppressionMutation) SessionID() (r uuid.UUID, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the Suppression entity.
+// If the Suppression object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SuppressionMutation) OldSessionID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (m *SuppressionMutation) ClearSessionID() {
+	m.session_id = nil
+	m.clearedFields[suppression.FieldSessionID] = struct{}{}
+}
+
+// SessionIDCleared returns if the "session_id" field was cleared in this mutation.
+func (m *SuppressionMutation) SessionIDCleared() bool {
+	_, ok := m.clearedFields[suppression.FieldSessionID]
+	return ok
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *SuppressionMutation) ResetSessionID() {
+	m.session_id = nil
+	delete(m.clearedFields, suppression.FieldSessionID)
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (m *SuppressionMutation) SetReviewedBy(s string) {
+	m.reviewed_by = &s
+}
+
+// ReviewedBy returns the value of the "reviewed_by" field in the mutation.
+func (m *SuppressionMutation) ReviewedBy() (r string, exists bool) {
+	v := m.reviewed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewedBy returns the old "reviewed_by" field's value of the Suppression entity.
+// If the Suppression object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SuppressionMutation) OldReviewedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewedBy: %w", err)
+	}
+	return oldValue.ReviewedBy, nil
+}
+
+// ClearReviewedBy clears the value of the "reviewed_by" field.
+func (m *SuppressionMutation) ClearReviewedBy() {
+	m.reviewed_by = nil
+	m.clearedFields[suppression.FieldReviewedBy] = struct{}{}
+}
+
+// ReviewedByCleared returns if the "reviewed_by" field was cleared in this mutation.
+func (m *SuppressionMutation) ReviewedByCleared() bool {
+	_, ok := m.clearedFields[suppression.FieldReviewedBy]
+	return ok
+}
+
+// ResetReviewedBy resets all changes to the "reviewed_by" field.
+func (m *SuppressionMutation) ResetReviewedBy() {
+	m.reviewed_by = nil
+	delete(m.clearedFields, suppression.FieldReviewedBy)
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (m *SuppressionMutation) SetReviewedAt(t time.Time) {
+	m.reviewed_at = &t
+}
+
+// ReviewedAt returns the value of the "reviewed_at" field in the mutation.
+func (m *SuppressionMutation) ReviewedAt() (r time.Time, exists bool) {
+	v := m.reviewed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewedAt returns the old "reviewed_at" field's value of the Suppression entity.
+// If the Suppression object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SuppressionMutation) OldReviewedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewedAt: %w", err)
+	}
+	return oldValue.ReviewedAt, nil
+}
+
+// ClearReviewedAt clears the value of the "reviewed_at" field.
+func (m *SuppressionMutation) ClearReviewedAt() {
+	m.reviewed_at = nil
+	m.clearedFields[suppression.FieldReviewedAt] = struct{}{}
+}
+
+// ReviewedAtCleared returns if the "reviewed_at" field was cleared in this mutation.
+func (m *SuppressionMutation) ReviewedAtCleared() bool {
+	_, ok := m.clearedFields[suppression.FieldReviewedAt]
+	return ok
+}
+
+// ResetReviewedAt resets all changes to the "reviewed_at" field.
+func (m *SuppressionMutation) ResetReviewedAt() {
+	m.reviewed_at = nil
+	delete(m.clearedFields, suppression.FieldReviewedAt)
+}
+
 // Where appends a list predicates to the SuppressionMutation builder.
 func (m *SuppressionMutation) Where(ps ...predicate.Suppression) {
 	m.predicates = append(m.predicates, ps...)
@@ -21126,7 +21313,7 @@ func (m *SuppressionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SuppressionMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 12)
 	if m.created_at != nil {
 		fields = append(fields, suppression.FieldCreatedAt)
 	}
@@ -21150,6 +21337,18 @@ func (m *SuppressionMutation) Fields() []string {
 	}
 	if m.last_matched_at != nil {
 		fields = append(fields, suppression.FieldLastMatchedAt)
+	}
+	if m.status != nil {
+		fields = append(fields, suppression.FieldStatus)
+	}
+	if m.session_id != nil {
+		fields = append(fields, suppression.FieldSessionID)
+	}
+	if m.reviewed_by != nil {
+		fields = append(fields, suppression.FieldReviewedBy)
+	}
+	if m.reviewed_at != nil {
+		fields = append(fields, suppression.FieldReviewedAt)
 	}
 	return fields
 }
@@ -21175,6 +21374,14 @@ func (m *SuppressionMutation) Field(name string) (ent.Value, bool) {
 		return m.MatchedCount()
 	case suppression.FieldLastMatchedAt:
 		return m.LastMatchedAt()
+	case suppression.FieldStatus:
+		return m.Status()
+	case suppression.FieldSessionID:
+		return m.SessionID()
+	case suppression.FieldReviewedBy:
+		return m.ReviewedBy()
+	case suppression.FieldReviewedAt:
+		return m.ReviewedAt()
 	}
 	return nil, false
 }
@@ -21200,6 +21407,14 @@ func (m *SuppressionMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldMatchedCount(ctx)
 	case suppression.FieldLastMatchedAt:
 		return m.OldLastMatchedAt(ctx)
+	case suppression.FieldStatus:
+		return m.OldStatus(ctx)
+	case suppression.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case suppression.FieldReviewedBy:
+		return m.OldReviewedBy(ctx)
+	case suppression.FieldReviewedAt:
+		return m.OldReviewedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Suppression field %s", name)
 }
@@ -21265,6 +21480,34 @@ func (m *SuppressionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetLastMatchedAt(v)
 		return nil
+	case suppression.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case suppression.FieldSessionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case suppression.FieldReviewedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewedBy(v)
+		return nil
+	case suppression.FieldReviewedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Suppression field %s", name)
 }
@@ -21322,6 +21565,15 @@ func (m *SuppressionMutation) ClearedFields() []string {
 	if m.FieldCleared(suppression.FieldLastMatchedAt) {
 		fields = append(fields, suppression.FieldLastMatchedAt)
 	}
+	if m.FieldCleared(suppression.FieldSessionID) {
+		fields = append(fields, suppression.FieldSessionID)
+	}
+	if m.FieldCleared(suppression.FieldReviewedBy) {
+		fields = append(fields, suppression.FieldReviewedBy)
+	}
+	if m.FieldCleared(suppression.FieldReviewedAt) {
+		fields = append(fields, suppression.FieldReviewedAt)
+	}
 	return fields
 }
 
@@ -21347,6 +21599,15 @@ func (m *SuppressionMutation) ClearField(name string) error {
 		return nil
 	case suppression.FieldLastMatchedAt:
 		m.ClearLastMatchedAt()
+		return nil
+	case suppression.FieldSessionID:
+		m.ClearSessionID()
+		return nil
+	case suppression.FieldReviewedBy:
+		m.ClearReviewedBy()
+		return nil
+	case suppression.FieldReviewedAt:
+		m.ClearReviewedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Suppression nullable field %s", name)
@@ -21379,6 +21640,18 @@ func (m *SuppressionMutation) ResetField(name string) error {
 		return nil
 	case suppression.FieldLastMatchedAt:
 		m.ResetLastMatchedAt()
+		return nil
+	case suppression.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case suppression.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case suppression.FieldReviewedBy:
+		m.ResetReviewedBy()
+		return nil
+	case suppression.FieldReviewedAt:
+		m.ResetReviewedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Suppression field %s", name)

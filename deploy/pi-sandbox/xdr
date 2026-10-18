@@ -35,6 +35,7 @@ usage() {
   xdr memories                           本组长期记忆（id、来源、主机、内容）
   xdr remember [主机名|-] <内容>          记下以后用得上的环境事实（- 表示整个组）
   xdr forget <记忆 id>                   删掉过时的 AI 记忆
+  xdr suppress <主机名> <规则 id> <理由> [天数]  提议抑制反复误报的规则（组管理员批准后生效，默认 30 天）
   xdr report <标题> <Markdown 文件>       保存最终报告
 U
 }
@@ -73,6 +74,9 @@ case "$cmd" in
   forget)
     [ $# -ge 1 ] || { usage; exit 2; }
     call forget "$(jq -cn --arg i "$1" '{id:$i}')" ;;
+  suppress)
+    [ $# -ge 3 ] || { usage; exit 2; }
+    call suppress "$(jq -cn --arg h "$(host_id "$1")" --arg r "$2" --arg why "$3" --argjson d "${4:-30}" '{host:$h,rule_id:$r,reason:$why,days:$d}')" ;;
   report)
     [ $# -ge 2 ] && [ -f "$2" ] || { usage; exit 2; }
     call report "$(jq -cn --arg t "$1" --rawfile m "$2" '{title:$t,markdown:$m}')" ;;

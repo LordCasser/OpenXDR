@@ -172,6 +172,80 @@ func (_u *SuppressionUpdate) ClearLastMatchedAt() *SuppressionUpdate {
 	return _u
 }
 
+// SetStatus sets the "status" field.
+func (_u *SuppressionUpdate) SetStatus(v string) *SuppressionUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (_u *SuppressionUpdate) SetNillableStatus(v *string) *SuppressionUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
+	}
+	return _u
+}
+
+// SetSessionID sets the "session_id" field.
+func (_u *SuppressionUpdate) SetSessionID(v uuid.UUID) *SuppressionUpdate {
+	_u.mutation.SetSessionID(v)
+	return _u
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_u *SuppressionUpdate) SetNillableSessionID(v *uuid.UUID) *SuppressionUpdate {
+	if v != nil {
+		_u.SetSessionID(*v)
+	}
+	return _u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (_u *SuppressionUpdate) ClearSessionID() *SuppressionUpdate {
+	_u.mutation.ClearSessionID()
+	return _u
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (_u *SuppressionUpdate) SetReviewedBy(v string) *SuppressionUpdate {
+	_u.mutation.SetReviewedBy(v)
+	return _u
+}
+
+// SetNillableReviewedBy sets the "reviewed_by" field if the given value is not nil.
+func (_u *SuppressionUpdate) SetNillableReviewedBy(v *string) *SuppressionUpdate {
+	if v != nil {
+		_u.SetReviewedBy(*v)
+	}
+	return _u
+}
+
+// ClearReviewedBy clears the value of the "reviewed_by" field.
+func (_u *SuppressionUpdate) ClearReviewedBy() *SuppressionUpdate {
+	_u.mutation.ClearReviewedBy()
+	return _u
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (_u *SuppressionUpdate) SetReviewedAt(v time.Time) *SuppressionUpdate {
+	_u.mutation.SetReviewedAt(v)
+	return _u
+}
+
+// SetNillableReviewedAt sets the "reviewed_at" field if the given value is not nil.
+func (_u *SuppressionUpdate) SetNillableReviewedAt(v *time.Time) *SuppressionUpdate {
+	if v != nil {
+		_u.SetReviewedAt(*v)
+	}
+	return _u
+}
+
+// ClearReviewedAt clears the value of the "reviewed_at" field.
+func (_u *SuppressionUpdate) ClearReviewedAt() *SuppressionUpdate {
+	_u.mutation.ClearReviewedAt()
+	return _u
+}
+
 // Mutation returns the SuppressionMutation object of the builder.
 func (_u *SuppressionUpdate) Mutation() *SuppressionMutation {
 	return _u.mutation
@@ -251,6 +325,27 @@ func (_u *SuppressionUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.LastMatchedAtCleared() {
 		_spec.ClearField(suppression.FieldLastMatchedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Status(); ok {
+		_spec.SetField(suppression.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SessionID(); ok {
+		_spec.SetField(suppression.FieldSessionID, field.TypeUUID, value)
+	}
+	if _u.mutation.SessionIDCleared() {
+		_spec.ClearField(suppression.FieldSessionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.ReviewedBy(); ok {
+		_spec.SetField(suppression.FieldReviewedBy, field.TypeString, value)
+	}
+	if _u.mutation.ReviewedByCleared() {
+		_spec.ClearField(suppression.FieldReviewedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.ReviewedAt(); ok {
+		_spec.SetField(suppression.FieldReviewedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ReviewedAtCleared() {
+		_spec.ClearField(suppression.FieldReviewedAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -415,6 +510,80 @@ func (_u *SuppressionUpdateOne) ClearLastMatchedAt() *SuppressionUpdateOne {
 	return _u
 }
 
+// SetStatus sets the "status" field.
+func (_u *SuppressionUpdateOne) SetStatus(v string) *SuppressionUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (_u *SuppressionUpdateOne) SetNillableStatus(v *string) *SuppressionUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
+	}
+	return _u
+}
+
+// SetSessionID sets the "session_id" field.
+func (_u *SuppressionUpdateOne) SetSessionID(v uuid.UUID) *SuppressionUpdateOne {
+	_u.mutation.SetSessionID(v)
+	return _u
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_u *SuppressionUpdateOne) SetNillableSessionID(v *uuid.UUID) *SuppressionUpdateOne {
+	if v != nil {
+		_u.SetSessionID(*v)
+	}
+	return _u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (_u *SuppressionUpdateOne) ClearSessionID() *SuppressionUpdateOne {
+	_u.mutation.ClearSessionID()
+	return _u
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (_u *SuppressionUpdateOne) SetReviewedBy(v string) *SuppressionUpdateOne {
+	_u.mutation.SetReviewedBy(v)
+	return _u
+}
+
+// SetNillableReviewedBy sets the "reviewed_by" field if the given value is not nil.
+func (_u *SuppressionUpdateOne) SetNillableReviewedBy(v *string) *SuppressionUpdateOne {
+	if v != nil {
+		_u.SetReviewedBy(*v)
+	}
+	return _u
+}
+
+// ClearReviewedBy clears the value of the "reviewed_by" field.
+func (_u *SuppressionUpdateOne) ClearReviewedBy() *SuppressionUpdateOne {
+	_u.mutation.ClearReviewedBy()
+	return _u
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (_u *SuppressionUpdateOne) SetReviewedAt(v time.Time) *SuppressionUpdateOne {
+	_u.mutation.SetReviewedAt(v)
+	return _u
+}
+
+// SetNillableReviewedAt sets the "reviewed_at" field if the given value is not nil.
+func (_u *SuppressionUpdateOne) SetNillableReviewedAt(v *time.Time) *SuppressionUpdateOne {
+	if v != nil {
+		_u.SetReviewedAt(*v)
+	}
+	return _u
+}
+
+// ClearReviewedAt clears the value of the "reviewed_at" field.
+func (_u *SuppressionUpdateOne) ClearReviewedAt() *SuppressionUpdateOne {
+	_u.mutation.ClearReviewedAt()
+	return _u
+}
+
 // Mutation returns the SuppressionMutation object of the builder.
 func (_u *SuppressionUpdateOne) Mutation() *SuppressionMutation {
 	return _u.mutation
@@ -524,6 +693,27 @@ func (_u *SuppressionUpdateOne) sqlSave(ctx context.Context) (_node *Suppression
 	}
 	if _u.mutation.LastMatchedAtCleared() {
 		_spec.ClearField(suppression.FieldLastMatchedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Status(); ok {
+		_spec.SetField(suppression.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SessionID(); ok {
+		_spec.SetField(suppression.FieldSessionID, field.TypeUUID, value)
+	}
+	if _u.mutation.SessionIDCleared() {
+		_spec.ClearField(suppression.FieldSessionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.ReviewedBy(); ok {
+		_spec.SetField(suppression.FieldReviewedBy, field.TypeString, value)
+	}
+	if _u.mutation.ReviewedByCleared() {
+		_spec.ClearField(suppression.FieldReviewedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.ReviewedAt(); ok {
+		_spec.SetField(suppression.FieldReviewedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ReviewedAtCleared() {
+		_spec.ClearField(suppression.FieldReviewedAt, field.TypeTime)
 	}
 	_node = &Suppression{config: _u.config}
 	_spec.Assign = _node.assignValues

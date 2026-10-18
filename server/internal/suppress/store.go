@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/suppression"
 )
 
 type entry struct {
@@ -64,7 +65,8 @@ func (s *Store) Run(ctx context.Context) {
 
 // Reload 从库里重建索引。新建或撤销抑制规则后立即生效不必等下个周期。
 func (s *Store) Reload(ctx context.Context) {
-	rows, err := s.db.Suppression.Query().All(ctx)
+	// 只有生效的进索引：AI 提议的要等组管理员批准
+	rows, err := s.db.Suppression.Query().Where(suppression.StatusEQ("active")).All(ctx)
 	if err != nil {
 		slog.Error("加载抑制规则失败", "err", err)
 		return

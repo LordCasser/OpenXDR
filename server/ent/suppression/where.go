@@ -95,6 +95,26 @@ func LastMatchedAt(v time.Time) predicate.Suppression {
 	return predicate.Suppression(sql.FieldEQ(FieldLastMatchedAt, v))
 }
 
+// Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
+func Status(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEQ(FieldStatus, v))
+}
+
+// SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
+func SessionID(v uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEQ(FieldSessionID, v))
+}
+
+// ReviewedBy applies equality check predicate on the "reviewed_by" field. It's identical to ReviewedByEQ.
+func ReviewedBy(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEQ(FieldReviewedBy, v))
+}
+
+// ReviewedAt applies equality check predicate on the "reviewed_at" field. It's identical to ReviewedAtEQ.
+func ReviewedAt(v time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEQ(FieldReviewedAt, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Suppression {
 	return predicate.Suppression(sql.FieldEQ(FieldCreatedAt, v))
@@ -528,6 +548,246 @@ func LastMatchedAtIsNil() predicate.Suppression {
 // LastMatchedAtNotNil applies the NotNil predicate on the "last_matched_at" field.
 func LastMatchedAtNotNil() predicate.Suppression {
 	return predicate.Suppression(sql.FieldNotNull(FieldLastMatchedAt))
+}
+
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEQ(FieldStatus, v))
+}
+
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldNEQ(FieldStatus, v))
+}
+
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldIn(FieldStatus, vs...))
+}
+
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotIn(FieldStatus, vs...))
+}
+
+// StatusGT applies the GT predicate on the "status" field.
+func StatusGT(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldGT(FieldStatus, v))
+}
+
+// StatusGTE applies the GTE predicate on the "status" field.
+func StatusGTE(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldGTE(FieldStatus, v))
+}
+
+// StatusLT applies the LT predicate on the "status" field.
+func StatusLT(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldLT(FieldStatus, v))
+}
+
+// StatusLTE applies the LTE predicate on the "status" field.
+func StatusLTE(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldLTE(FieldStatus, v))
+}
+
+// StatusContains applies the Contains predicate on the "status" field.
+func StatusContains(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldContains(FieldStatus, v))
+}
+
+// StatusHasPrefix applies the HasPrefix predicate on the "status" field.
+func StatusHasPrefix(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldHasPrefix(FieldStatus, v))
+}
+
+// StatusHasSuffix applies the HasSuffix predicate on the "status" field.
+func StatusHasSuffix(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldHasSuffix(FieldStatus, v))
+}
+
+// StatusEqualFold applies the EqualFold predicate on the "status" field.
+func StatusEqualFold(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEqualFold(FieldStatus, v))
+}
+
+// StatusContainsFold applies the ContainsFold predicate on the "status" field.
+func StatusContainsFold(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// SessionIDEQ applies the EQ predicate on the "session_id" field.
+func SessionIDEQ(v uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEQ(FieldSessionID, v))
+}
+
+// SessionIDNEQ applies the NEQ predicate on the "session_id" field.
+func SessionIDNEQ(v uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldNEQ(FieldSessionID, v))
+}
+
+// SessionIDIn applies the In predicate on the "session_id" field.
+func SessionIDIn(vs ...uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldIn(FieldSessionID, vs...))
+}
+
+// SessionIDNotIn applies the NotIn predicate on the "session_id" field.
+func SessionIDNotIn(vs ...uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotIn(FieldSessionID, vs...))
+}
+
+// SessionIDGT applies the GT predicate on the "session_id" field.
+func SessionIDGT(v uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldGT(FieldSessionID, v))
+}
+
+// SessionIDGTE applies the GTE predicate on the "session_id" field.
+func SessionIDGTE(v uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldGTE(FieldSessionID, v))
+}
+
+// SessionIDLT applies the LT predicate on the "session_id" field.
+func SessionIDLT(v uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldLT(FieldSessionID, v))
+}
+
+// SessionIDLTE applies the LTE predicate on the "session_id" field.
+func SessionIDLTE(v uuid.UUID) predicate.Suppression {
+	return predicate.Suppression(sql.FieldLTE(FieldSessionID, v))
+}
+
+// SessionIDIsNil applies the IsNil predicate on the "session_id" field.
+func SessionIDIsNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldIsNull(FieldSessionID))
+}
+
+// SessionIDNotNil applies the NotNil predicate on the "session_id" field.
+func SessionIDNotNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotNull(FieldSessionID))
+}
+
+// ReviewedByEQ applies the EQ predicate on the "reviewed_by" field.
+func ReviewedByEQ(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEQ(FieldReviewedBy, v))
+}
+
+// ReviewedByNEQ applies the NEQ predicate on the "reviewed_by" field.
+func ReviewedByNEQ(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldNEQ(FieldReviewedBy, v))
+}
+
+// ReviewedByIn applies the In predicate on the "reviewed_by" field.
+func ReviewedByIn(vs ...string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldIn(FieldReviewedBy, vs...))
+}
+
+// ReviewedByNotIn applies the NotIn predicate on the "reviewed_by" field.
+func ReviewedByNotIn(vs ...string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotIn(FieldReviewedBy, vs...))
+}
+
+// ReviewedByGT applies the GT predicate on the "reviewed_by" field.
+func ReviewedByGT(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldGT(FieldReviewedBy, v))
+}
+
+// ReviewedByGTE applies the GTE predicate on the "reviewed_by" field.
+func ReviewedByGTE(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldGTE(FieldReviewedBy, v))
+}
+
+// ReviewedByLT applies the LT predicate on the "reviewed_by" field.
+func ReviewedByLT(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldLT(FieldReviewedBy, v))
+}
+
+// ReviewedByLTE applies the LTE predicate on the "reviewed_by" field.
+func ReviewedByLTE(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldLTE(FieldReviewedBy, v))
+}
+
+// ReviewedByContains applies the Contains predicate on the "reviewed_by" field.
+func ReviewedByContains(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldContains(FieldReviewedBy, v))
+}
+
+// ReviewedByHasPrefix applies the HasPrefix predicate on the "reviewed_by" field.
+func ReviewedByHasPrefix(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldHasPrefix(FieldReviewedBy, v))
+}
+
+// ReviewedByHasSuffix applies the HasSuffix predicate on the "reviewed_by" field.
+func ReviewedByHasSuffix(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldHasSuffix(FieldReviewedBy, v))
+}
+
+// ReviewedByIsNil applies the IsNil predicate on the "reviewed_by" field.
+func ReviewedByIsNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldIsNull(FieldReviewedBy))
+}
+
+// ReviewedByNotNil applies the NotNil predicate on the "reviewed_by" field.
+func ReviewedByNotNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotNull(FieldReviewedBy))
+}
+
+// ReviewedByEqualFold applies the EqualFold predicate on the "reviewed_by" field.
+func ReviewedByEqualFold(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEqualFold(FieldReviewedBy, v))
+}
+
+// ReviewedByContainsFold applies the ContainsFold predicate on the "reviewed_by" field.
+func ReviewedByContainsFold(v string) predicate.Suppression {
+	return predicate.Suppression(sql.FieldContainsFold(FieldReviewedBy, v))
+}
+
+// ReviewedAtEQ applies the EQ predicate on the "reviewed_at" field.
+func ReviewedAtEQ(v time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldEQ(FieldReviewedAt, v))
+}
+
+// ReviewedAtNEQ applies the NEQ predicate on the "reviewed_at" field.
+func ReviewedAtNEQ(v time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldNEQ(FieldReviewedAt, v))
+}
+
+// ReviewedAtIn applies the In predicate on the "reviewed_at" field.
+func ReviewedAtIn(vs ...time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldIn(FieldReviewedAt, vs...))
+}
+
+// ReviewedAtNotIn applies the NotIn predicate on the "reviewed_at" field.
+func ReviewedAtNotIn(vs ...time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotIn(FieldReviewedAt, vs...))
+}
+
+// ReviewedAtGT applies the GT predicate on the "reviewed_at" field.
+func ReviewedAtGT(v time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldGT(FieldReviewedAt, v))
+}
+
+// ReviewedAtGTE applies the GTE predicate on the "reviewed_at" field.
+func ReviewedAtGTE(v time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldGTE(FieldReviewedAt, v))
+}
+
+// ReviewedAtLT applies the LT predicate on the "reviewed_at" field.
+func ReviewedAtLT(v time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldLT(FieldReviewedAt, v))
+}
+
+// ReviewedAtLTE applies the LTE predicate on the "reviewed_at" field.
+func ReviewedAtLTE(v time.Time) predicate.Suppression {
+	return predicate.Suppression(sql.FieldLTE(FieldReviewedAt, v))
+}
+
+// ReviewedAtIsNil applies the IsNil predicate on the "reviewed_at" field.
+func ReviewedAtIsNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldIsNull(FieldReviewedAt))
+}
+
+// ReviewedAtNotNil applies the NotNil predicate on the "reviewed_at" field.
+func ReviewedAtNotNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotNull(FieldReviewedAt))
 }
 
 // And groups predicates with the AND operator between them.

@@ -31,6 +31,12 @@ func (Suppression) Fields() []ent.Field {
 		field.Time("expires_at").Optional().Nillable(),
 		field.Int("matched_count").Default(0),
 		field.Time("last_matched_at").Optional().Nillable(),
+		// active 生效 / proposed AI 提议、等组管理员批准 / rejected 被拒绝。只有 active 进抑制索引
+		field.String("status").Default("active"),
+		// 提议它的 AI 会话
+		field.UUID("session_id", uuid.UUID{}).Optional().Nillable(),
+		field.String("reviewed_by").Optional().Nillable(),
+		field.Time("reviewed_at").Optional().Nillable(),
 	}
 }
 

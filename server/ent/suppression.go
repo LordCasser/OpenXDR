@@ -34,7 +34,15 @@ type Suppression struct {
 	MatchedCount int `json:"matched_count,omitempty"`
 	// LastMatchedAt holds the value of the "last_matched_at" field.
 	LastMatchedAt *time.Time `json:"last_matched_at,omitempty"`
-	selectValues  sql.SelectValues
+	// Status holds the value of the "status" field.
+	Status string `json:"status,omitempty"`
+	// SessionID holds the value of the "session_id" field.
+	SessionID *uuid.UUID `json:"session_id,omitempty"`
+	// ReviewedBy holds the value of the "reviewed_by" field.
+	ReviewedBy *string `json:"reviewed_by,omitempty"`
+	// ReviewedAt holds the value of the "reviewed_at" field.
+	ReviewedAt   *time.Time `json:"reviewed_at,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -42,13 +50,13 @@ func (*Suppression) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case suppression.FieldAssetID:
+		case suppression.FieldAssetID, suppression.FieldSessionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case suppression.FieldMatchedCount:
 			values[i] = new(sql.NullInt64)
-		case suppression.FieldRuleID, suppression.FieldReason, suppression.FieldCreatedBy:
+		case suppression.FieldRuleID, suppression.FieldReason, suppression.FieldCreatedBy, suppression.FieldStatus, suppression.FieldReviewedBy:
 			values[i] = new(sql.NullString)
-		case suppression.FieldCreatedAt, suppression.FieldExpiresAt, suppression.FieldLastMatchedAt:
+		case suppression.FieldCreatedAt, suppression.FieldExpiresAt, suppression.FieldLastMatchedAt, suppression.FieldReviewedAt:
 			values[i] = new(sql.NullTime)
 		case suppression.FieldID:
 			values[i] = new(uuid.UUID)
@@ -125,6 +133,33 @@ func (_m *Suppression) assignValues(columns []string, values []any) error {
 				_m.LastMatchedAt = new(time.Time)
 				*_m.LastMatchedAt = value.Time
 			}
+		case suppression.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
+			} else if value.Valid {
+				_m.Status = value.String
+			}
+		case suppression.FieldSessionID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field session_id", values[i])
+			} else if value.Valid {
+				_m.SessionID = new(uuid.UUID)
+				*_m.SessionID = *value.S.(*uuid.UUID)
+			}
+		case suppression.FieldReviewedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field reviewed_by", values[i])
+			} else if value.Valid {
+				_m.ReviewedBy = new(string)
+				*_m.ReviewedBy = value.String
+			}
+		case suppression.FieldReviewedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field reviewed_at", values[i])
+			} else if value.Valid {
+				_m.ReviewedAt = new(time.Time)
+				*_m.ReviewedAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -190,6 +225,24 @@ func (_m *Suppression) String() string {
 	builder.WriteString(", ")
 	if v := _m.LastMatchedAt; v != nil {
 		builder.WriteString("last_matched_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("status=")
+	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	if v := _m.SessionID; v != nil {
+		builder.WriteString("session_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.ReviewedBy; v != nil {
+		builder.WriteString("reviewed_by=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ReviewedAt; v != nil {
+		builder.WriteString("reviewed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')

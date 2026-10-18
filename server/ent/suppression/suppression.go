@@ -30,6 +30,14 @@ const (
 	FieldMatchedCount = "matched_count"
 	// FieldLastMatchedAt holds the string denoting the last_matched_at field in the database.
 	FieldLastMatchedAt = "last_matched_at"
+	// FieldStatus holds the string denoting the status field in the database.
+	FieldStatus = "status"
+	// FieldSessionID holds the string denoting the session_id field in the database.
+	FieldSessionID = "session_id"
+	// FieldReviewedBy holds the string denoting the reviewed_by field in the database.
+	FieldReviewedBy = "reviewed_by"
+	// FieldReviewedAt holds the string denoting the reviewed_at field in the database.
+	FieldReviewedAt = "reviewed_at"
 	// Table holds the table name of the suppression in the database.
 	Table = "suppressions"
 )
@@ -45,6 +53,10 @@ var Columns = []string{
 	FieldExpiresAt,
 	FieldMatchedCount,
 	FieldLastMatchedAt,
+	FieldStatus,
+	FieldSessionID,
+	FieldReviewedBy,
+	FieldReviewedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -64,6 +76,8 @@ var (
 	DefaultCreatedBy string
 	// DefaultMatchedCount holds the default value on creation for the "matched_count" field.
 	DefaultMatchedCount int
+	// DefaultStatus holds the default value on creation for the "status" field.
+	DefaultStatus string
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -114,4 +128,24 @@ func ByMatchedCount(opts ...sql.OrderTermOption) OrderOption {
 // ByLastMatchedAt orders the results by the last_matched_at field.
 func ByLastMatchedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastMatchedAt, opts...).ToFunc()
+}
+
+// ByStatus orders the results by the status field.
+func ByStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// BySessionID orders the results by the session_id field.
+func BySessionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSessionID, opts...).ToFunc()
+}
+
+// ByReviewedBy orders the results by the reviewed_by field.
+func ByReviewedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewedBy, opts...).ToFunc()
+}
+
+// ByReviewedAt orders the results by the reviewed_at field.
+func ByReviewedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReviewedAt, opts...).ToFunc()
 }

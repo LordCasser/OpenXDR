@@ -404,6 +404,10 @@ func init() {
 	suppressionDescMatchedCount := suppressionFields[7].Descriptor()
 	// suppression.DefaultMatchedCount holds the default value on creation for the matched_count field.
 	suppression.DefaultMatchedCount = suppressionDescMatchedCount.Default.(int)
+	// suppressionDescStatus is the schema descriptor for status field.
+	suppressionDescStatus := suppressionFields[9].Descriptor()
+	// suppression.DefaultStatus holds the default value on creation for the status field.
+	suppression.DefaultStatus = suppressionDescStatus.Default.(string)
 	// suppressionDescID is the schema descriptor for id field.
 	suppressionDescID := suppressionFields[0].Descriptor()
 	// suppression.DefaultID holds the default value on creation for the id field.

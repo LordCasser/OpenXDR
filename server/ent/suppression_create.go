@@ -125,6 +125,62 @@ func (_c *SuppressionCreate) SetNillableLastMatchedAt(v *time.Time) *Suppression
 	return _c
 }
 
+// SetStatus sets the "status" field.
+func (_c *SuppressionCreate) SetStatus(v string) *SuppressionCreate {
+	_c.mutation.SetStatus(v)
+	return _c
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (_c *SuppressionCreate) SetNillableStatus(v *string) *SuppressionCreate {
+	if v != nil {
+		_c.SetStatus(*v)
+	}
+	return _c
+}
+
+// SetSessionID sets the "session_id" field.
+func (_c *SuppressionCreate) SetSessionID(v uuid.UUID) *SuppressionCreate {
+	_c.mutation.SetSessionID(v)
+	return _c
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_c *SuppressionCreate) SetNillableSessionID(v *uuid.UUID) *SuppressionCreate {
+	if v != nil {
+		_c.SetSessionID(*v)
+	}
+	return _c
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (_c *SuppressionCreate) SetReviewedBy(v string) *SuppressionCreate {
+	_c.mutation.SetReviewedBy(v)
+	return _c
+}
+
+// SetNillableReviewedBy sets the "reviewed_by" field if the given value is not nil.
+func (_c *SuppressionCreate) SetNillableReviewedBy(v *string) *SuppressionCreate {
+	if v != nil {
+		_c.SetReviewedBy(*v)
+	}
+	return _c
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (_c *SuppressionCreate) SetReviewedAt(v time.Time) *SuppressionCreate {
+	_c.mutation.SetReviewedAt(v)
+	return _c
+}
+
+// SetNillableReviewedAt sets the "reviewed_at" field if the given value is not nil.
+func (_c *SuppressionCreate) SetNillableReviewedAt(v *time.Time) *SuppressionCreate {
+	if v != nil {
+		_c.SetReviewedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *SuppressionCreate) SetID(v uuid.UUID) *SuppressionCreate {
 	_c.mutation.SetID(v)
@@ -186,6 +242,10 @@ func (_c *SuppressionCreate) defaults() {
 		v := suppression.DefaultMatchedCount
 		_c.mutation.SetMatchedCount(v)
 	}
+	if _, ok := _c.mutation.Status(); !ok {
+		v := suppression.DefaultStatus
+		_c.mutation.SetStatus(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := suppression.DefaultID()
 		_c.mutation.SetID(v)
@@ -205,6 +265,9 @@ func (_c *SuppressionCreate) check() error {
 	}
 	if _, ok := _c.mutation.MatchedCount(); !ok {
 		return &ValidationError{Name: "matched_count", err: errors.New(`ent: missing required field "Suppression.matched_count"`)}
+	}
+	if _, ok := _c.mutation.Status(); !ok {
+		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Suppression.status"`)}
 	}
 	return nil
 }
@@ -272,6 +335,22 @@ func (_c *SuppressionCreate) createSpec() (*Suppression, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LastMatchedAt(); ok {
 		_spec.SetField(suppression.FieldLastMatchedAt, field.TypeTime, value)
 		_node.LastMatchedAt = &value
+	}
+	if value, ok := _c.mutation.Status(); ok {
+		_spec.SetField(suppression.FieldStatus, field.TypeString, value)
+		_node.Status = value
+	}
+	if value, ok := _c.mutation.SessionID(); ok {
+		_spec.SetField(suppression.FieldSessionID, field.TypeUUID, value)
+		_node.SessionID = &value
+	}
+	if value, ok := _c.mutation.ReviewedBy(); ok {
+		_spec.SetField(suppression.FieldReviewedBy, field.TypeString, value)
+		_node.ReviewedBy = &value
+	}
+	if value, ok := _c.mutation.ReviewedAt(); ok {
+		_spec.SetField(suppression.FieldReviewedAt, field.TypeTime, value)
+		_node.ReviewedAt = &value
 	}
 	return _node, _spec
 }

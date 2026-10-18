@@ -7,7 +7,7 @@ import { App, Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout as AntLayout
 import type { MenuProps } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
-import { fetchApprovals, fetchFindings, fetchStats } from '../api'
+import { fetchApprovals, fetchFindings, fetchStats, fetchSuppressions } from '../api'
 import { errText, ROLE_KEY } from '../components/format'
 import { useI18n } from '../i18n'
 import { Logo } from '../components/Logo'
@@ -29,7 +29,9 @@ function useNavCounts(): Record<string, number | undefined> {
     enabled: group?.role === 'admin',
     refetchInterval: 10_000,
   })
+  const suppressions = useQuery({ queryKey: ['suppressions'], queryFn: fetchSuppressions, refetchInterval: 60_000 })
   return {
+    '/suppressions': suppressions.data?.filter(s => s.status === 'proposed').length || undefined,
     '/incidents': stats.data?.reviewIncidents,
     '/findings': findings.data?.length,
     '/approvals': approvals.data?.filter(a => a.status === 'pending').length,

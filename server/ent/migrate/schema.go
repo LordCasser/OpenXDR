@@ -710,6 +710,10 @@ var (
 		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
 		{Name: "matched_count", Type: field.TypeInt, Default: 0},
 		{Name: "last_matched_at", Type: field.TypeTime, Nullable: true},
+		{Name: "status", Type: field.TypeString, Default: "active"},
+		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "reviewed_by", Type: field.TypeString, Nullable: true},
+		{Name: "reviewed_at", Type: field.TypeTime, Nullable: true},
 	}
 	// SuppressionsTable holds the schema information for the "suppressions" table.
 	SuppressionsTable = &schema.Table{

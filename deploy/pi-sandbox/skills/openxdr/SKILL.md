@@ -30,6 +30,7 @@ xdr memories                                # 本组长期记忆：id 来源 主
 xdr remember pve1 '每天 04:30 cron 跑 /root/port-check.sh，用 /dev/tcp 探测内网端口，是例行巡检'
 xdr remember - '10.1.1.100 是 pve1 上的 LXC 203（网关：Caddy + docker），不是独立主机'
 xdr forget <记忆 id>                         # 删掉被现场证据推翻的 AI 记忆
+xdr suppress pve1 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90 'cron 每天 04:30 跑 /root/port-check.sh，用 /dev/tcp 探测内网端口，例行巡检' 30
 xdr report '标题' report.md                 # 最终报告（Markdown 文件）
 ```
 
@@ -90,5 +91,9 @@ SELECT e.ts, e.raw->'process'->>'cmd_line' FROM alerts a JOIN events e ON e.id=a
 **调查外联**：主机连某个公网地址，查清是哪个进程发起、可执行文件属于哪个软件包、服务单元与配置里出现的域名或地址、
 是否正常业务（`ss -tnp`、`/proc/<pid>/exe`、`dpkg -S` / `rpm -qf`、`systemctl status`、`grep -r 地址或域名 /etc`），
 确认后用 `xdr egress` 记录用途与风险；只能记这台主机确实连过的公网地址，查不清就写进报告。
+
+**提议抑制**：某条规则在某台主机上反复误报，而且你查证过是正常业务（哪个进程、什么命令、多久一次、属于什么业务），
+用 `xdr suppress` 提议抑制（只能单台主机、最长 90 天），组管理员批准后才生效。一次性的误报写进结论即可，不要提；
+被拒绝过的不要再提。平台指令（包括你自己的命令）触发的告警本来就不进事件，不需要抑制。
 
 最后用 `xdr report` 交一份报告：结论在前，证据在后，未验证事项单独列出。
