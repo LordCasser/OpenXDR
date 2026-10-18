@@ -64,7 +64,7 @@ function InlineApprovals({ rows, hosts, onDecided }: { rows: Approval[]; hosts: 
       title={t('apInline', { host: hosts[a.asset_id] ?? a.asset_id })}
       description={<pre className="chat-code">{a.cmd}</pre>}
       action={
-        <ApprovalActions approval={a} host={hosts[a.asset_id] ?? a.asset_id} onDecided={onDecided} vertical />
+        <ApprovalActions approval={a} onDecided={onDecided} vertical />
       }
     />
   ))

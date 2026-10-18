@@ -80,9 +80,7 @@ export function SuppressionsPage() {
                   render: (_: unknown, s: Suppression) => (
                     <Space size={0}>
                       {s.status === 'proposed' && canReview(s) && <>
-                        <Popconfirm title={t('supApproveConfirm')} onConfirm={() => review(s.id, 'approve')}>
-                          <Button type="link" size="small">{t('supApprove')}</Button>
-                        </Popconfirm>
+                        <Button type="link" size="small" onClick={() => review(s.id, 'approve')}>{t('supApprove')}</Button>
                         <Button type="link" size="small" onClick={() => review(s.id, 'reject')}>{t('supReject')}</Button>
                       </>}
                       {s.status !== 'proposed' && (

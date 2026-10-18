@@ -14,7 +14,7 @@ import { neighbors, type QueueItem } from '../components/incidentQueue'
 import { LoadError } from '../components/LoadError'
 import { Page, useWideTable } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
-import { ResolveModal } from '../components/ResolveModal'
+import { ResolveModal, agreesWithAI } from '../components/ResolveModal'
 import { SuppressModal } from '../components/SuppressModal'
 import { VerdictCard } from '../components/VerdictCard'
 import { IncidentStatusTag, SeverityTag, fmtTime, errText } from '../components/format'
@@ -257,6 +257,7 @@ export function IncidentDetailPage() {
         title={t(resolving === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')}
         hint={t('resolveHint')}
         initialNote={adopting ? inc.closureProposal?.note : undefined}
+        optional={agreesWithAI(inc.aiVerdict, resolving)}
         onCancel={() => { setResolving(null); setAdopting(false) }}
         onSubmit={async note => { if (!await changeStatus(resolving!, note)) throw new Error() }}
       />

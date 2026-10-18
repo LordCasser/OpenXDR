@@ -15476,28 +15476,29 @@ func (m *IPInfoMutation) ResetEdge(name string) error {
 // IncidentMutation represents an operation that mutates the Incident nodes in the graph.
 type IncidentMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *uuid.UUID
-	created_at       *time.Time
-	status           *string
-	graph            *json.RawMessage
-	appendgraph      json.RawMessage
-	ai_verdict       *json.RawMessage
-	appendai_verdict json.RawMessage
-	title            *string
-	notified_at      *time.Time
-	resolution       *string
-	resolved_by      *string
-	resolved_at      *time.Time
-	closure_proposal **schema.ClosureProposal
-	clearedFields    map[string]struct{}
-	alerts           map[uuid.UUID]struct{}
-	removedalerts    map[uuid.UUID]struct{}
-	clearedalerts    bool
-	done             bool
-	oldValue         func(context.Context) (*Incident, error)
-	predicates       []predicate.Incident
+	op                Op
+	typ               string
+	id                *uuid.UUID
+	created_at        *time.Time
+	status            *string
+	graph             *json.RawMessage
+	appendgraph       json.RawMessage
+	ai_verdict        *json.RawMessage
+	appendai_verdict  json.RawMessage
+	title             *string
+	notified_at       *time.Time
+	resolution        *string
+	resolved_by       *string
+	resolved_at       *time.Time
+	resolution_source *string
+	closure_proposal  **schema.ClosureProposal
+	clearedFields     map[string]struct{}
+	alerts            map[uuid.UUID]struct{}
+	removedalerts     map[uuid.UUID]struct{}
+	clearedalerts     bool
+	done              bool
+	oldValue          func(context.Context) (*Incident, error)
+	predicates        []predicate.Incident
 }
 
 var _ ent.Mutation = (*IncidentMutation)(nil)
@@ -16037,6 +16038,55 @@ func (m *IncidentMutation) ResetResolvedAt() {
 	delete(m.clearedFields, incident.FieldResolvedAt)
 }
 
+// SetResolutionSource sets the "resolution_source" field.
+func (m *IncidentMutation) SetResolutionSource(s string) {
+	m.resolution_source = &s
+}
+
+// ResolutionSource returns the value of the "resolution_source" field in the mutation.
+func (m *IncidentMutation) ResolutionSource() (r string, exists bool) {
+	v := m.resolution_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResolutionSource returns the old "resolution_source" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldResolutionSource(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResolutionSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResolutionSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResolutionSource: %w", err)
+	}
+	return oldValue.ResolutionSource, nil
+}
+
+// ClearResolutionSource clears the value of the "resolution_source" field.
+func (m *IncidentMutation) ClearResolutionSource() {
+	m.resolution_source = nil
+	m.clearedFields[incident.FieldResolutionSource] = struct{}{}
+}
+
+// ResolutionSourceCleared returns if the "resolution_source" field was cleared in this mutation.
+func (m *IncidentMutation) ResolutionSourceCleared() bool {
+	_, ok := m.clearedFields[incident.FieldResolutionSource]
+	return ok
+}
+
+// ResetResolutionSource resets all changes to the "resolution_source" field.
+func (m *IncidentMutation) ResetResolutionSource() {
+	m.resolution_source = nil
+	delete(m.clearedFields, incident.FieldResolutionSource)
+}
+
 // SetClosureProposal sets the "closure_proposal" field.
 func (m *IncidentMutation) SetClosureProposal(sp *schema.ClosureProposal) {
 	m.closure_proposal = &sp
@@ -16174,7 +16224,7 @@ func (m *IncidentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, incident.FieldCreatedAt)
 	}
@@ -16201,6 +16251,9 @@ func (m *IncidentMutation) Fields() []string {
 	}
 	if m.resolved_at != nil {
 		fields = append(fields, incident.FieldResolvedAt)
+	}
+	if m.resolution_source != nil {
+		fields = append(fields, incident.FieldResolutionSource)
 	}
 	if m.closure_proposal != nil {
 		fields = append(fields, incident.FieldClosureProposal)
@@ -16231,6 +16284,8 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 		return m.ResolvedBy()
 	case incident.FieldResolvedAt:
 		return m.ResolvedAt()
+	case incident.FieldResolutionSource:
+		return m.ResolutionSource()
 	case incident.FieldClosureProposal:
 		return m.ClosureProposal()
 	}
@@ -16260,6 +16315,8 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldResolvedBy(ctx)
 	case incident.FieldResolvedAt:
 		return m.OldResolvedAt(ctx)
+	case incident.FieldResolutionSource:
+		return m.OldResolutionSource(ctx)
 	case incident.FieldClosureProposal:
 		return m.OldClosureProposal(ctx)
 	}
@@ -16334,6 +16391,13 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetResolvedAt(v)
 		return nil
+	case incident.FieldResolutionSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResolutionSource(v)
+		return nil
 	case incident.FieldClosureProposal:
 		v, ok := value.(*schema.ClosureProposal)
 		if !ok {
@@ -16389,6 +16453,9 @@ func (m *IncidentMutation) ClearedFields() []string {
 	if m.FieldCleared(incident.FieldResolvedAt) {
 		fields = append(fields, incident.FieldResolvedAt)
 	}
+	if m.FieldCleared(incident.FieldResolutionSource) {
+		fields = append(fields, incident.FieldResolutionSource)
+	}
 	if m.FieldCleared(incident.FieldClosureProposal) {
 		fields = append(fields, incident.FieldClosureProposal)
 	}
@@ -16423,6 +16490,9 @@ func (m *IncidentMutation) ClearField(name string) error {
 		return nil
 	case incident.FieldResolvedAt:
 		m.ClearResolvedAt()
+		return nil
+	case incident.FieldResolutionSource:
+		m.ClearResolutionSource()
 		return nil
 	case incident.FieldClosureProposal:
 		m.ClearClosureProposal()
@@ -16461,6 +16531,9 @@ func (m *IncidentMutation) ResetField(name string) error {
 		return nil
 	case incident.FieldResolvedAt:
 		m.ResetResolvedAt()
+		return nil
+	case incident.FieldResolutionSource:
+		m.ResetResolutionSource()
 		return nil
 	case incident.FieldClosureProposal:
 		m.ResetClosureProposal()

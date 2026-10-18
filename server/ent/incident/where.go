@@ -91,6 +91,11 @@ func ResolvedAt(v time.Time) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldResolvedAt, v))
 }
 
+// ResolutionSource applies equality check predicate on the "resolution_source" field. It's identical to ResolutionSourceEQ.
+func ResolutionSource(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldResolutionSource, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldCreatedAt, v))
@@ -529,6 +534,81 @@ func ResolvedAtIsNil() predicate.Incident {
 // ResolvedAtNotNil applies the NotNil predicate on the "resolved_at" field.
 func ResolvedAtNotNil() predicate.Incident {
 	return predicate.Incident(sql.FieldNotNull(FieldResolvedAt))
+}
+
+// ResolutionSourceEQ applies the EQ predicate on the "resolution_source" field.
+func ResolutionSourceEQ(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldResolutionSource, v))
+}
+
+// ResolutionSourceNEQ applies the NEQ predicate on the "resolution_source" field.
+func ResolutionSourceNEQ(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldResolutionSource, v))
+}
+
+// ResolutionSourceIn applies the In predicate on the "resolution_source" field.
+func ResolutionSourceIn(vs ...string) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldResolutionSource, vs...))
+}
+
+// ResolutionSourceNotIn applies the NotIn predicate on the "resolution_source" field.
+func ResolutionSourceNotIn(vs ...string) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldResolutionSource, vs...))
+}
+
+// ResolutionSourceGT applies the GT predicate on the "resolution_source" field.
+func ResolutionSourceGT(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldResolutionSource, v))
+}
+
+// ResolutionSourceGTE applies the GTE predicate on the "resolution_source" field.
+func ResolutionSourceGTE(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldResolutionSource, v))
+}
+
+// ResolutionSourceLT applies the LT predicate on the "resolution_source" field.
+func ResolutionSourceLT(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldResolutionSource, v))
+}
+
+// ResolutionSourceLTE applies the LTE predicate on the "resolution_source" field.
+func ResolutionSourceLTE(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldResolutionSource, v))
+}
+
+// ResolutionSourceContains applies the Contains predicate on the "resolution_source" field.
+func ResolutionSourceContains(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldContains(FieldResolutionSource, v))
+}
+
+// ResolutionSourceHasPrefix applies the HasPrefix predicate on the "resolution_source" field.
+func ResolutionSourceHasPrefix(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldHasPrefix(FieldResolutionSource, v))
+}
+
+// ResolutionSourceHasSuffix applies the HasSuffix predicate on the "resolution_source" field.
+func ResolutionSourceHasSuffix(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldHasSuffix(FieldResolutionSource, v))
+}
+
+// ResolutionSourceIsNil applies the IsNil predicate on the "resolution_source" field.
+func ResolutionSourceIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldResolutionSource))
+}
+
+// ResolutionSourceNotNil applies the NotNil predicate on the "resolution_source" field.
+func ResolutionSourceNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldResolutionSource))
+}
+
+// ResolutionSourceEqualFold applies the EqualFold predicate on the "resolution_source" field.
+func ResolutionSourceEqualFold(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldEqualFold(FieldResolutionSource, v))
+}
+
+// ResolutionSourceContainsFold applies the ContainsFold predicate on the "resolution_source" field.
+func ResolutionSourceContainsFold(v string) predicate.Incident {
+	return predicate.Incident(sql.FieldContainsFold(FieldResolutionSource, v))
 }
 
 // ClosureProposalIsNil applies the IsNil predicate on the "closure_proposal" field.

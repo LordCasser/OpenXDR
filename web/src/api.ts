@@ -642,8 +642,8 @@ export const createAgentSession = async (body: {
   subjects?: string[]
 }): Promise<AgentSession> => (await send('POST', '/api/agent-sessions', body)).json()
 
-export const fetchSessionMessages = (id: string) =>
-  get<SessionMessage[]>(`/api/agent-sessions/${id}/messages`)
+export const fetchSessionMessages = (id: string, afterSeq = 0) =>
+  get<SessionMessage[]>(`/api/agent-sessions/${id}/messages${afterSeq ? `?afterSeq=${afterSeq}` : ''}`)
 
 // 发消息只是让后台开跑：会话切到 running 就返回，运行不随页面走；进度靠轮询会话与消息
 export const startSessionMessage = (id: string, prompt: string) =>
@@ -724,9 +724,15 @@ export interface TaskRow {
   model: string
   targetGroup: string
   prompt: string
+  // 按当前周期算的下一次运行时间；停用时为空
+  nextRun: string | null
 }
 
 export interface TaskRunRow {
+  reportId: string | null
+  reportTitle: string | null
+  // 这一轮做了多少步（工具调用次数）
+  steps: number
   id: string
   taskId: string
   groupId: string

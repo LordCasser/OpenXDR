@@ -134,6 +134,20 @@ func (_c *IncidentCreate) SetNillableResolvedAt(v *time.Time) *IncidentCreate {
 	return _c
 }
 
+// SetResolutionSource sets the "resolution_source" field.
+func (_c *IncidentCreate) SetResolutionSource(v string) *IncidentCreate {
+	_c.mutation.SetResolutionSource(v)
+	return _c
+}
+
+// SetNillableResolutionSource sets the "resolution_source" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableResolutionSource(v *string) *IncidentCreate {
+	if v != nil {
+		_c.SetResolutionSource(*v)
+	}
+	return _c
+}
+
 // SetClosureProposal sets the "closure_proposal" field.
 func (_c *IncidentCreate) SetClosureProposal(v *schema.ClosureProposal) *IncidentCreate {
 	_c.mutation.SetClosureProposal(v)
@@ -299,6 +313,10 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ResolvedAt(); ok {
 		_spec.SetField(incident.FieldResolvedAt, field.TypeTime, value)
 		_node.ResolvedAt = &value
+	}
+	if value, ok := _c.mutation.ResolutionSource(); ok {
+		_spec.SetField(incident.FieldResolutionSource, field.TypeString, value)
+		_node.ResolutionSource = &value
 	}
 	if value, ok := _c.mutation.ClosureProposal(); ok {
 		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)

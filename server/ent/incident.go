@@ -38,6 +38,8 @@ type Incident struct {
 	ResolvedBy *string `json:"resolved_by,omitempty"`
 	// ResolvedAt holds the value of the "resolved_at" field.
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	// ResolutionSource holds the value of the "resolution_source" field.
+	ResolutionSource *string `json:"resolution_source,omitempty"`
 	// ClosureProposal holds the value of the "closure_proposal" field.
 	ClosureProposal *schema.ClosureProposal `json:"closure_proposal,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -71,7 +73,7 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case incident.FieldGraph, incident.FieldAiVerdict, incident.FieldClosureProposal:
 			values[i] = new([]byte)
-		case incident.FieldStatus, incident.FieldTitle, incident.FieldResolution, incident.FieldResolvedBy:
+		case incident.FieldStatus, incident.FieldTitle, incident.FieldResolution, incident.FieldResolvedBy, incident.FieldResolutionSource:
 			values[i] = new(sql.NullString)
 		case incident.FieldCreatedAt, incident.FieldNotifiedAt, incident.FieldResolvedAt:
 			values[i] = new(sql.NullTime)
@@ -161,6 +163,13 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				_m.ResolvedAt = new(time.Time)
 				*_m.ResolvedAt = value.Time
 			}
+		case incident.FieldResolutionSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field resolution_source", values[i])
+			} else if value.Valid {
+				_m.ResolutionSource = new(string)
+				*_m.ResolutionSource = value.String
+			}
 		case incident.FieldClosureProposal:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field closure_proposal", values[i])
@@ -245,6 +254,11 @@ func (_m *Incident) String() string {
 	if v := _m.ResolvedAt; v != nil {
 		builder.WriteString("resolved_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ResolutionSource; v != nil {
+		builder.WriteString("resolution_source=")
+		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("closure_proposal=")

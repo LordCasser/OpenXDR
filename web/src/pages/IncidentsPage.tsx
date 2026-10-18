@@ -11,7 +11,7 @@ import { saveQueue } from '../components/incidentQueue'
 import { useRowLink } from '../components/rowLink'
 import { useFlash } from '../components/useFlash'
 import { LoadError } from '../components/LoadError'
-import { ResolveModal } from '../components/ResolveModal'
+import { ResolveModal, agreesWithAI } from '../components/ResolveModal'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
 import { FilterCard, Page, STICKY_HEADER, WIDE_ONLY, useWideTable } from '../components/Page'
 import { useI18n, type MsgKey } from '../i18n'
@@ -183,6 +183,7 @@ export function IncidentsPage() {
         open={!!resolving}
         title={`${t(resolving === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')} · ${t('batchSelected', { n: selected.length })}`}
         hint={t('resolveHint')}
+        optional={picked.length > 0 && picked.every(r => agreesWithAI(r.aiVerdict, resolving))}
         onCancel={() => setResolving(null)}
         onSubmit={note => batch(resolving!, note)}
       />

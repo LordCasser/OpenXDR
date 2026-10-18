@@ -29,6 +29,36 @@ import (
 	"openxdr/server/internal/suppress"
 )
 
+// resolutionOf 结案说明与来源。人写了就用人的（原样是 AI 结案建议的，记为 ai_proposal）；
+// 没写时只有结论与 AI 研判一致才行——判良性按误报关、判恶意或可疑按属实关——说明取研判摘要，记为 ai_verdict。
+// 结论与研判相反正是最该写理由的时候，不能空着
+func resolutionOf(inc *ent.Incident, status, note string) (string, *string, bool) {
+	src := func(s string) *string { return &s }
+	if note != "" {
+		if p := inc.ClosureProposal; p != nil && note == strings.TrimSpace(p.Note) {
+			return note, src("ai_proposal"), true
+		}
+		return note, nil, true
+	}
+	var v struct {
+		Verdict string `json:"verdict"`
+		Summary string `json:"summary"`
+	}
+	if json.Unmarshal(inc.AiVerdict, &v) != nil || v.Verdict == "" {
+		return "", nil, false
+	}
+	agrees := status == "false_positive" && v.Verdict == "benign" ||
+		status == "closed" && (v.Verdict == "malicious" || v.Verdict == "suspicious")
+	if !agrees {
+		return "", nil, false
+	}
+	summary := strings.TrimSpace(v.Summary)
+	if summary == "" {
+		summary = v.Verdict
+	}
+	return "采纳 AI 研判：" + summary, src("ai_verdict"), true
+}
+
 // triaged 是引擎专属状态，分析师只能在这三个之间拨
 var analystStatuses = []string{"open", "closed", "false_positive"}
 
@@ -269,19 +299,34 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			return
 		}
 		note := strings.TrimSpace(body.Note)
-		if body.Status != "open" && (note == "" || utf8.RuneCountInString(note) > 2000) {
-			http.Error(w, "结案须写明结论备注（1–2000 字）", http.StatusBadRequest)
+		if utf8.RuneCountInString(note) > 2000 {
+			http.Error(w, "结论备注最多 2000 字", http.StatusBadRequest)
 			return
 		}
 		if !incidentVisible(w, r, db, id, "analyst") {
 			return
 		}
+		inc, err := db.Incident.Get(r.Context(), id)
+		if ent.IsNotFound(err) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		// 人改了状态，AI 的结案建议就作废了（采纳也走这里）
 		u := db.Incident.UpdateOneID(id).SetStatus(body.Status).ClearClosureProposal()
 		if body.Status == "open" {
-			u.ClearResolution().ClearResolvedBy().ClearResolvedAt()
+			u.ClearResolution().ClearResolvedBy().ClearResolvedAt().ClearResolutionSource()
 		} else {
-			u.SetResolution(note).SetResolvedBy(auth.From(r.Context()).Username).SetResolvedAt(time.Now())
+			resolution, source, ok := resolutionOf(inc, body.Status, note)
+			if !ok {
+				http.Error(w, "结论与 AI 研判不一致或事件没有研判时，须写明理由", http.StatusBadRequest)
+				return
+			}
+			u.SetResolution(resolution).SetNillableResolutionSource(source).
+				SetResolvedBy(auth.From(r.Context()).Username).SetResolvedAt(time.Now())
 		}
 		err = u.Exec(r.Context())
 		if ent.IsNotFound(err) {
