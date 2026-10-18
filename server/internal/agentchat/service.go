@@ -535,6 +535,7 @@ func (s *Service) tools(ctx context.Context, group uuid.UUID) []piruntime.Tool {
 		{Name: "track", Description: trackDescription, Parameters: trackParameters},
 		{Name: "identify", Description: identifyDescription, Parameters: identifyParameters},
 		{Name: "egress", Description: egressDescription, Parameters: egressParameters},
+		{Name: "memories", Description: memoriesDescription, Parameters: memoriesParameters},
 		{Name: "remember", Description: rememberDescription, Parameters: rememberParameters},
 		{Name: "forget", Description: forgetDescription, Parameters: forgetParameters},
 		{Name: "suppress", Description: suppressDescription, Parameters: suppressParameters},
@@ -590,6 +591,8 @@ func (s *Service) tool(ctx context.Context, session *ent.AgentSession, who comma
 		return s.identify(ctx, session, args)
 	case "egress":
 		return s.egress(ctx, session, args)
+	case "memories":
+		return s.listMemories(ctx, session)
 	case "remember":
 		return s.remember(ctx, session, args)
 	case "forget":

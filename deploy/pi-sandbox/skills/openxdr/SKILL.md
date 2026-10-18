@@ -26,7 +26,7 @@ xdr sql "SELECT ... FROM alerts ..." > a.tsv # 只读查询本组视图，TSV �
 xdr track pve1 disk-full medium open '根分区 93%' '/dev/sda1 93%，journal 占 11G'
 xdr identify pve1 udp/5405 low 'Corosync 集群通信' '进程 corosync，PVE 集群心跳，仅集群内访问'
 xdr egress pve2 208.111.34.178 low 'Tailscale 中继' 'tailscaled 连 DERP 中继，组网正常业务'
-xdr memories                                # 本组长期记忆：id 来源 主机 内容
+xdr memories                                # 本组长期记忆（实时，含刚记下的）：id 来源 主机 内容
 xdr remember pve1 '每天 04:30 cron 跑 /root/port-check.sh，用 /dev/tcp 探测内网端口，是例行巡检'
 xdr remember - '10.1.1.100 是 pve1 上的 LXC 203（网关：Caddy + docker），不是独立主机'
 xdr forget <记忆 id>                         # 删掉被现场证据推翻的 AI 记忆
