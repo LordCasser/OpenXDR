@@ -1,17 +1,9 @@
-import { Form, Input, Modal, Typography } from 'antd'
+import { Alert, Form, Input, Modal, Typography } from 'antd'
 import { useRef, useState } from 'react'
-import type { Verdict } from '../api'
 import { useI18n } from '../i18n'
 
-// 结论与 AI 研判一致（判良性按误报关、判恶意或可疑按属实关）时理由可以不写：说明取研判摘要，
-// 不当人工案例回喂研判。相反或没有研判时必须写——那正是最值钱的人工判断
-export function agreesWithAI(verdict: Verdict | null | undefined, status: 'closed' | 'false_positive' | null): boolean {
-  const v = verdict?.verdict
-  return status === 'false_positive' ? v === 'benign' : status === 'closed' && (v === 'malicious' || v === 'suspicious')
-}
-
 // 结案与处理待办共用：必须写明原因，备注会作为案例交给 AI。onSubmit 失败时应抛出，弹窗与备注保留
-export function ResolveModal({ open, title, hint, initialNote, optional, onCancel, onSubmit }: {
+export function ResolveModal({ open, title, hint, initialNote, optional, contradicts, onCancel, onSubmit }: {
   open: boolean
   title: string
   hint: string
@@ -19,6 +11,8 @@ export function ResolveModal({ open, title, hint, initialNote, optional, onCance
   initialNote?: string
   // 与 AI 研判一致，理由选填
   optional?: boolean
+  // 所选结论与 AI 研判相反：提示为什么要写理由，以及同意 AI 时该点哪个按钮
+  contradicts?: boolean
   onCancel: () => void
   onSubmit: (note: string) => Promise<void>
 }) {
@@ -43,6 +37,7 @@ export function ResolveModal({ open, title, hint, initialNote, optional, onCance
   return (
     <Modal open={open} title={title} onCancel={() => { if (!busy) onCancel() }} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => form.submit()} confirmLoading={busy} destroyOnHidden>
       <Typography.Paragraph type="secondary">{hint}</Typography.Paragraph>
+      {contradicts && <Alert type="warning" showIcon title={t('resolveContradicts')} style={{ marginBottom: 16 }} />}
       <Form disabled={busy} form={form} layout="vertical" onFinish={finish} initialValues={{ note: initialNote }}>
         <Form.Item name="note" label={t('resolveNote')} extra={optional && t('resolveNoteOptional')}
           rules={optional ? [] : [{ required: true, whitespace: true, message: t('resolveNoteRequired') }]}>

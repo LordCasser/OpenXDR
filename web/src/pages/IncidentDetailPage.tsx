@@ -14,7 +14,8 @@ import { neighbors, type QueueItem } from '../components/incidentQueue'
 import { LoadError } from '../components/LoadError'
 import { Page, useWideTable } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
-import { ResolveModal, agreesWithAI } from '../components/ResolveModal'
+import { ResolveModal } from '../components/ResolveModal'
+import { agreesWithAI, verdictStatus } from '../components/verdict'
 import { SuppressModal } from '../components/SuppressModal'
 import { VerdictCard } from '../components/VerdictCard'
 import { IncidentStatusTag, SeverityTag, fmtTime, errText } from '../components/format'
@@ -149,6 +150,9 @@ export function IncidentDetailPage() {
           {wide ? (
             <>
               <Button icon={<DownloadOutlined />} onClick={exportReport}>{t('exportReport')}</Button>
+              {canAct && !done && verdictStatus(inc.aiVerdict) && (
+                <Button type="primary" ghost onClick={() => changeStatus(verdictStatus(inc.aiVerdict)!, '')}>{t('adoptVerdict')}</Button>
+              )}
               {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('close')}</Button>}
               {canAct && !done && <Button danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>}
               {canAct && done && <Button onClick={() => changeStatus('open')}>{t('reopen')}</Button>}
@@ -258,6 +262,7 @@ export function IncidentDetailPage() {
         hint={t('resolveHint')}
         initialNote={adopting ? inc.closureProposal?.note : undefined}
         optional={agreesWithAI(inc.aiVerdict, resolving)}
+        contradicts={!!verdictStatus(inc.aiVerdict) && !agreesWithAI(inc.aiVerdict, resolving)}
         onCancel={() => { setResolving(null); setAdopting(false) }}
         onSubmit={async note => { if (!await changeStatus(resolving!, note)) throw new Error() }}
       />
