@@ -17,11 +17,23 @@ import { Page } from '../components/Page'
 import { ScheduleEditor, describeCron } from '../components/Schedule'
 import { SessionStatusTag, errText, fmtTime } from '../components/format'
 import { activitiesOf, type Activity } from '../components/workerActivity'
-import { useI18n } from '../i18n'
+import { useI18n, type MsgKey } from '../i18n'
 
 const ICON: Record<Activity['kind'], ReactNode> = {
   exec: <CodeOutlined />, query: <DatabaseOutlined />, record: <EditFilled />, report: <FileTextOutlined />,
   read: <ReadOutlined />, sandbox: <ToolOutlined />, think: <EditOutlined />,
+}
+
+// 运行失败的原因翻成人话；认不出的原样显示
+const ERRORS: [RegExp, MsgKey][] = [
+  [/context canceled/, 'workerErrInterrupted'],
+  [/deadline exceeded|超时/, 'workerErrTimeout'],
+  [/max_turns/, 'workerErrTurns'],
+  [/没有提交报告/, 'workerErrNoReport'],
+]
+const errorText = (err: string, t: (k: MsgKey) => string) => {
+  const hit = ERRORS.find(([re]) => re.test(err))
+  return hit ? t(hit[1]) : err
 }
 
 function duration(ms: number): string {
@@ -98,7 +110,7 @@ function LastShift({ run }: { run: TaskRunRow }) {
       <Typography.Text>{t(ok ? 'workerLastOk' : 'workerLastFailed')}</Typography.Text>
       <Typography.Text type="secondary"><Ago iso={run.finishedAt ?? run.startedAt} /> · {t('workerTook', { took })} · {t('workerSteps', { n: run.steps })}</Typography.Text>
       {run.reportId && <a href={`/api/agent-reports/${run.reportId}/html`} target="_blank" rel="noreferrer"><FileTextOutlined /> {run.reportTitle}</a>}
-      {!ok && run.error && <Typography.Text type="danger" ellipsis style={{ maxWidth: 360 }}>{run.error}</Typography.Text>}
+      {!ok && run.error && <Tooltip title={run.error}><Typography.Text type="danger" ellipsis style={{ maxWidth: 360 }}>{errorText(run.error, t)}</Typography.Text></Tooltip>}
       {run.sessionId && <Link to={`/chat/${run.sessionId}`}>{t('openSession')}</Link>}
     </Space>
   )
@@ -112,7 +124,7 @@ function ShiftStrip({ runs }: { runs: TaskRunRow[] }) {
   return (
     <Space size={3} wrap>
       {[...runs].slice(0, 20).reverse().map(r => (
-        <Tooltip key={r.id} title={<>{fmtTime(r.startedAt)}<br />{t('workerSteps', { n: r.steps })}{r.reportTitle && <><br />{r.reportTitle}</>}{r.error && <><br />{r.error}</>}</>}>
+        <Tooltip key={r.id} title={<>{fmtTime(r.startedAt)}<br />{t('workerSteps', { n: r.steps })}{r.reportTitle && <><br />{r.reportTitle}</>}{r.error && <><br />{errorText(r.error, t)}</>}</>}>
           <span style={{ display: 'inline-block', width: 10, height: 18, borderRadius: 3, background: color[r.status], opacity: r.status === 'running' ? 1 : 0.8 }} />
         </Tooltip>
       ))}
@@ -138,7 +150,7 @@ function Runs({ runs, loading }: { runs: TaskRunRow[]; loading: boolean }) {
         { title: t('group'), dataIndex: 'groupId', width: 120, render: v => groups.find(g => g.id === v)?.name ?? v.slice(0, 8) },
         { title: t('thStatus'), dataIndex: 'status', width: 90, render: v => <SessionStatusTag value={v} /> },
         { title: t('workerStepsTh'), dataIndex: 'steps', width: 70, align: 'right' },
-        { title: t('thDetail'), key: 'detail', ellipsis: true, render: (_, r) => (r.reportId ? <a href={`/api/agent-reports/${r.reportId}/html`} target="_blank" rel="noreferrer">{r.reportTitle}</a> : r.error ?? '-') },
+        { title: t('thDetail'), key: 'detail', ellipsis: true, render: (_, r) => (r.reportId ? <a href={`/api/agent-reports/${r.reportId}/html`} target="_blank" rel="noreferrer">{r.reportTitle}</a> : r.error ? errorText(r.error, t) : '-') },
         { title: '', dataIndex: 'sessionId', width: 90, render: v => v && <Link to={`/chat/${v}`}>{t('openSession')}</Link> },
       ]}
     />
@@ -164,7 +176,8 @@ function Worker({ task, busy, hosts, onToggle, onRun, onEdit }: {
   const last = runs.find(r => r.status !== 'running')
   const now = useNow(working.length > 0)
   const spec = task.customSchedule ?? task.schedule
-  const duty = task.prompt.split(/[。\n]/)[0]
+  // 职责取第一句；截在冒号上的（「……覆盖：」）去掉冒号
+  const duty = task.prompt.split(/[。\n]/)[0].replace(/[：:]\s*$/, '')
   const state = working.length ? 'working' : task.enabled ? 'idle' : 'off'
   const ring = { working: token.colorSuccess, idle: token.colorPrimary, off: token.colorTextQuaternary }[state]
 
