@@ -88,11 +88,7 @@ func mapEvents(api *http.ServeMux, db *ent.Client) {
 		}
 		out := make([]eventRow, len(rows))
 		for i, e := range rows {
-			out[i] = eventRow{
-				ID: e.ID, Ts: e.Ts, ClassUID: e.ClassUID, Source: e.Source,
-				AssetID: e.AssetID, Username: e.Username, ConnTuple: e.ConnTuple,
-				Raw: e.Raw,
-			}
+			out[i] = toEventRow(e)
 		}
 		writeJSON(w, out)
 	})

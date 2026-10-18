@@ -289,6 +289,19 @@ export interface EventRow {
   raw: unknown
 }
 
+// 问 AI：related 是查库得出的确定关联（父进程链、同一进程、子进程、同一连接、同一远端、前后同主机）；
+// explain 是模型读这条日志与候选后的解读，挑出的相关日志只会来自候选
+export type Relation = 'ancestor' | 'process' | 'child' | 'connection' | 'peer' | 'nearby'
+export interface RelatedGroup { relation: Relation; events: EventRow[] }
+export interface EventExplanation {
+  verdict: 'benign' | 'suspicious' | 'malicious' | 'unknown'
+  title: string; summary: string; points: string[]; next: string[]
+  related: { id: string; why: string }[]
+}
+export const fetchRelatedEvents = (id: string) => get<RelatedGroup[]>(`/api/events/${id}/related`)
+export const explainEvent = async (id: string, lang: string): Promise<EventExplanation> =>
+  (await send('POST', `/api/events/${id}/explain?lang=${lang}`)).json()
+
 export const searchEvents = (params: {
   assetId?: string
   q?: string
@@ -497,7 +510,7 @@ export const testAISettings = async (p: AISettingsPatch & { target: 'model' | 'p
   (await send('POST', '/api/settings/ai/test', p)).json()
 
 // AI 用量：按天、用途、模型聚合；用途 chat AI 助手 / task 定时任务 / triage 事件研判 / annotate 资产标注
-export interface AIUsageRow { day: string; feature: 'chat' | 'task' | 'triage' | 'annotate'; model: string; input: number; output: number; cacheRead: number; calls: number }
+export interface AIUsageRow { day: string; feature: 'chat' | 'task' | 'triage' | 'annotate' | 'explain'; model: string; input: number; output: number; cacheRead: number; calls: number }
 export interface AIUsageTop { id: string; title: string; kind: string; group: string; model: string; tokens: number; calls: number; lastAt: string }
 export const fetchAIUsage = (days: number) =>
   get<{ rows: AIUsageRow[]; top: AIUsageTop[] }>(`/api/settings/ai/usage?days=${days}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`)

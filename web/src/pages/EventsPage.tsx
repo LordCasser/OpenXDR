@@ -1,6 +1,6 @@
-import { ApartmentOutlined, FieldTimeOutlined, FilterOutlined } from '@ant-design/icons'
+import { ApartmentOutlined, FieldTimeOutlined, FilterOutlined, RobotOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Input, Select, Space, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchAssets, searchEvents, type EventRow } from '../api'
@@ -8,7 +8,9 @@ import { Refreshed } from '../components/Ago'
 import { EventFacts } from '../components/EventFacts'
 import { HostLink } from '../components/HostLink'
 import { LoadError } from '../components/LoadError'
-import { eventSummary } from '../components/eventSummary'
+import { EventAIDrawer } from '../components/EventAIDrawer'
+import { EventKind } from '../components/EventKind'
+import { eventAction, eventSummary } from '../components/eventSummary'
 import { CLASS_KEY, fmtTime } from '../components/format'
 import { FilterCard, Page, STICKY_HEADER, WIDE_ONLY, useWideTable } from '../components/Page'
 import { useI18n } from '../i18n'
@@ -36,6 +38,10 @@ export function EventsPage() {
   const { data, isFetching, isError, error, refetch, dataUpdatedAt } = useQuery({ queryKey: ['events', filter], queryFn: () => searchEvents(filter) })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
   const wideTable = useWideTable()
+  const [asking, setAsking] = useState<EventRow | null>(null)
+  // 当前结果里各类别的条数：点一下就只看这一类
+  const classCounts = Object.entries((data?.items ?? []).reduce<Record<number, number>>((m, r) => ({ ...m, [r.classUid]: (m[r.classUid] ?? 0) + 1 }), {}))
+    .map(([k, n]) => [Number(k), n] as const).sort((a, b) => b[1] - a[1])
 
   return (
     <Page title={t('navEvents')} subtitle={t('eventsSubtitle')}>
@@ -90,6 +96,16 @@ export function EventsPage() {
         extra={<Space wrap><Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} /><Typography.Text type="secondary">{t('eventCount', { n: data ? `${data.items.length}${data.truncated ? '+' : ''}` : 0 })}</Typography.Text></Space>}
       >
         {data?.truncated && <Alert type="info" banner showIcon title={t('listTruncated', { n: data.items.length })} />}
+        {(classCounts.length > 1 || filter.classUid !== 0) && (
+          <div className="class-chips">
+            <button type="button" className={`class-chip${filter.classUid === 0 ? ' active' : ''}`} onClick={() => setFilter({ classUid: 0 })}>{t('allClasses')}</button>
+            {classCounts.map(([uid, n]) => (
+              <button key={uid} type="button" className={`class-chip${filter.classUid === uid ? ' active' : ''}`} onClick={() => setFilter({ classUid: filter.classUid === uid ? 0 : uid })}>
+                <EventKind classUid={uid} /><span className="class-chip-n">{n}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<EventRow>
           sticky={STICKY_HEADER}
           scroll={wideTable ? { x: 950 } : undefined}
@@ -102,49 +118,68 @@ export function EventsPage() {
           expandable={{
             expandRowByClick: true,
             expandedRowRender: r => {
+              // 进程 GUID 出现在它自己的启停、子进程、连接与 DNS 事件里：按它全文检索就是这个进程的全部活动
               const guid: string | undefined = (r.raw as { process?: { uid?: string } } | null)?.process?.uid
               return (
-              <>
-                <Space size={8} wrap style={{ marginBottom: 8 }}>
-                  {r.assetId && r.assetId !== filter.assetId && (
-                    <Button size="small" icon={<FilterOutlined />} onClick={() => setFilter({ assetId: r.assetId! })}>{t('pivotHost')}</Button>
-                  )}
-                  {/* 进程 GUID 出现在它自己的启停、子进程、连接与 DNS 事件里：按它全文检索就是这个进程的全部活动 */}
-                  {guid && guid !== filter.q && (
-                    <Button size="small" icon={<ApartmentOutlined />} onClick={() => setFilter({ q: guid, classUid: 0, source: '', from: '', to: '', hours: 168 })}>{t('pivotProcess')}</Button>
-                  )}
-                  <Button size="small" icon={<FieldTimeOutlined />} onClick={() => setFilter({
-                    assetId: r.assetId ?? '', q: '', classUid: 0, source: '',
-                    from: new Date(Date.parse(r.ts) - 300_000).toISOString(),
-                    to: new Date(Date.parse(r.ts) + 300_000).toISOString(),
-                  })}>{t('pivotAround')}</Button>
-                  <Typography.Text copyable={{ text: JSON.stringify(r.raw, null, 2) }} type="secondary" style={{ fontSize: 12 }}>{t('rawEvent')}</Typography.Text>
-                </Space>
-                <EventFacts classUid={r.classUid} raw={r.raw} username={r.username} />
-                <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre>
-              </>
+                <div className="ev-expand">
+                  <Space size={8} wrap>
+                    <Button size="small" type="primary" ghost icon={<RobotOutlined />} onClick={() => setAsking(r)}>{t('askAI')}</Button>
+                    {r.assetId && r.assetId !== filter.assetId && (
+                      <Button size="small" icon={<FilterOutlined />} onClick={() => setFilter({ assetId: r.assetId! })}>{t('pivotHost')}</Button>
+                    )}
+                    {guid && guid !== filter.q && (
+                      <Button size="small" icon={<ApartmentOutlined />} onClick={() => setFilter({ q: guid, classUid: 0, source: '', from: '', to: '', hours: 168 })}>{t('pivotProcess')}</Button>
+                    )}
+                    <Button size="small" icon={<FieldTimeOutlined />} onClick={() => setFilter({
+                      assetId: r.assetId ?? '', q: '', classUid: 0, source: '',
+                      from: new Date(Date.parse(r.ts) - 300_000).toISOString(),
+                      to: new Date(Date.parse(r.ts) + 300_000).toISOString(),
+                    })}>{t('pivotAround')}</Button>
+                  </Space>
+                  <EventFacts classUid={r.classUid} raw={r.raw} username={r.username} />
+                  <details className="ev-raw">
+                    <summary>{t('rawEvent')}<Typography.Text copyable={{ text: JSON.stringify(r.raw, null, 2) }} style={{ marginLeft: 8 }} /></summary>
+                    <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre>
+                  </details>
+                </div>
               )
             },
           }}
           columns={[
             { title: t('thTime'), dataIndex: 'ts', render: v => (wideTable ? fmtTime(v) : fmtTime(v).slice(11)), width: wideTable ? 170 : 84 },
-            { responsive: WIDE_ONLY, title: t('thClass'), dataIndex: 'classUid', width: 100, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v) },
+            { responsive: WIDE_ONLY, title: t('thClass'), dataIndex: 'classUid', width: 110, render: v => <EventKind classUid={v} /> },
             { responsive: WIDE_ONLY, title: t('thHostname'), dataIndex: 'assetId', width: 130, render: v => <HostLink id={v} /> },
             {
               title: t('thSummary'), key: 'summary', ellipsis: { showTitle: false },
+              // 动作单独成标签（失败、删除标红），后面是对象；窄屏没有类别列，图标挪到这里
               render: (_, r) => {
-                const text = eventSummary(r.classUid, r.raw, t) || r.connTuple || '-'
+                const act = eventAction(r.classUid, r.raw, t)
+                const text = eventSummary(r.classUid, r.raw, t, false) || r.connTuple || '-'
                 return (
-                  <Typography.Text className="mono" copyable={{ text, onCopy: e => e?.stopPropagation() }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ width: '100%' }}>
-                    {text}
-                  </Typography.Text>
+                  <span className="ev-summary">
+                    {!wideTable && <EventKind classUid={r.classUid} compact />}
+                    {act && <span className={`ev-act ev-act-${act.tone}`}>{act.label}</span>}
+                    <Typography.Text className="mono" copyable={{ text, onCopy: e => e?.stopPropagation() }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ flex: 1, minWidth: 0 }}>
+                      {text}
+                    </Typography.Text>
+                  </span>
                 )
               },
             },
             { responsive: WIDE_ONLY, title: t('thUser'), dataIndex: 'username', width: 110, render: v => v || '-' },
+            {
+              title: '', key: 'ask', width: 44,
+              render: (_, r) => (
+                <Tooltip title={t('askAI')}>
+                  <Button type="text" size="small" className="row-actions" aria-label={t('askAI')} icon={<RobotOutlined />}
+                    onClick={e => { e.stopPropagation(); setAsking(r) }} />
+                </Tooltip>
+              ),
+            },
           ]}
         />}
       </FilterCard>
+      <EventAIDrawer event={asking} onClose={() => setAsking(null)} onAsk={setAsking} />
     </Page>
   )
 }

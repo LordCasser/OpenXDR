@@ -262,3 +262,48 @@ a.queue-row:hover { background: var(--ant-color-fill-quaternary); color: inherit
 .dest-actions { flex: none; }
 .sched-preview { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 6px; background: var(--ant-color-fill-quaternary); }
 .usage-value { font-size: 28px; font-weight: 600; line-height: 1.3; margin-top: 4px; }
+
+/* 日志检索：类别徽标、动作标签、类别速筛、展开行关键字段 */
+.event-kind { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.event-kind-icon { flex: none; width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+.ev-summary { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ev-act { flex: none; font-size: 12px; line-height: 18px; padding: 0 6px; border-radius: 4px; background: var(--ant-color-fill-tertiary); color: var(--ant-color-text-secondary); }
+.ev-act-ok { background: var(--ant-color-success-bg); color: var(--ant-color-success-text); }
+.ev-act-bad { background: var(--ant-color-error-bg); color: var(--ant-color-error-text); }
+.ev-act-warn { background: var(--ant-color-warning-bg); color: var(--ant-color-warning-text); }
+.class-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--ant-color-border-secondary); }
+.class-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 4px; border-radius: 16px; border: 1px solid var(--ant-color-border-secondary); background: var(--ant-color-bg-container); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.class-chip:first-child { padding-left: 10px; }
+.class-chip:hover { border-color: var(--ant-color-primary-border-hover); }
+.class-chip.active { border-color: var(--ant-color-primary); background: var(--ant-color-primary-bg); }
+.class-chip-n { color: var(--ant-color-text-tertiary); font-variant-numeric: tabular-nums; }
+.ev-expand { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.ev-field { display: flex; gap: 10px; min-width: 0; align-items: baseline; }
+.ev-field > span:first-child { flex: none; width: 72px; color: var(--ant-color-text-tertiary); font-size: 12px; }
+.ev-field code, .ev-field .ant-typography { min-width: 0; overflow-wrap: anywhere; }
+.ev-raw summary { cursor: pointer; color: var(--ant-color-text-secondary); font-size: 12px; user-select: none; }
+.ev-raw[open] summary { margin-bottom: 6px; }
+
+/* 问 AI 抽屉 */
+.ask-target { padding: 12px 14px; border-radius: 8px; background: var(--ant-color-fill-quaternary); }
+.ai-verdict { padding: 14px 16px; border-radius: 8px; border: 1px solid var(--ant-color-border-secondary); border-left-width: 4px; }
+.ai-verdict-benign { border-left-color: var(--ant-color-success); }
+.ai-verdict-suspicious { border-left-color: var(--ant-color-warning); }
+.ai-verdict-malicious { border-left-color: var(--ant-color-error); }
+.ai-verdict-unknown { border-left-color: var(--ant-color-border); }
+.ai-points { margin: 8px 0 12px; padding-left: 20px; }
+.ai-points li { margin: 2px 0; }
+.ai-reading { padding: 12px 14px; border-radius: 8px; border: 1px dashed var(--ant-color-border); }
+.rel-group { margin-top: 12px; }
+.rel-group-head { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ant-color-text-secondary); margin-bottom: 4px; }
+.rel-count { color: var(--ant-color-text-tertiary); font-variant-numeric: tabular-nums; }
+.rel-list { display: flex; flex-direction: column; margin-top: 6px; border: 1px solid var(--ant-color-border-secondary); border-radius: 8px; overflow: hidden; }
+.rel-line { border-bottom: 1px solid var(--ant-color-border-secondary); }
+.rel-line:last-child { border-bottom: 0; }
+.rel-picked { background: color-mix(in srgb, var(--ant-color-warning-bg) 60%, transparent); }
+.rel-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.rel-head:hover { background: var(--ant-color-fill-quaternary); }
+.rel-head:focus-visible { outline: 2px solid var(--ant-color-primary); outline-offset: -2px; }
+.rel-time { flex: none; font-size: 12px; color: var(--ant-color-text-tertiary); }
+.rel-why { padding: 0 10px 6px 40px; font-size: 12px; color: var(--ant-color-text-secondary); }
+.rel-detail { padding: 4px 10px 10px 40px; display: flex; flex-direction: column; gap: 4px; }

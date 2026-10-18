@@ -22,7 +22,7 @@ func Recorder(db *ent.Client, feature string) func(model string, input, output i
 	}
 }
 
-// UsageRow 按天、用途、模型聚合的一格。用途：chat AI 助手 / task 定时任务 / triage 事件研判 / annotate 资产标注
+// UsageRow 按天、用途、模型聚合的一格。用途：chat AI 助手 / task 定时任务 / triage 事件研判 / annotate 资产标注 / explain 日志解读
 type UsageRow struct {
 	Day       string `json:"day"`
 	Feature   string `json:"feature"`

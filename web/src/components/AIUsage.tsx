@@ -14,6 +14,7 @@ const FEATURES: { key: AIUsageRow['feature']; label: MsgKey }[] = [
   { key: 'task', label: 'usageTask' },
   { key: 'triage', label: 'usageTriage' },
   { key: 'annotate', label: 'usageAnnotate' },
+  { key: 'explain', label: 'usageExplain' },
 ]
 
 const tokens = (r: { input: number; output: number }) => r.input + r.output

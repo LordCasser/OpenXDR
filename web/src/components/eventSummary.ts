@@ -35,11 +35,23 @@ export function fmtDuration(ms: number): string {
 // DNS 结果码：0 是正常应答，其余直接用协议里的名字
 export const RCODE: Record<number, string> = { 1: 'FORMERR', 2: 'SERVFAIL', 3: 'NXDOMAIN', 4: 'NOTIMP', 5: 'REFUSED' }
 
-// 一行说清这条事件是什么：谁、做了什么、对象是谁。列表里不用再点开读 JSON
-export function eventSummary(classUid: number, raw: unknown, t: T): string {
+// 动作：启动 / 退出 / 创建 / 删除 / 登录成功或失败……tone 给列表上色用（bad 失败或删除、warn 非零退出）
+export function eventAction(classUid: number, raw: unknown, t: T): { label: string; tone: 'ok' | 'bad' | 'warn' | 'neutral' } | null {
+  const r = (raw ?? {}) as Raw
+  if (classUid === 3002 && r.activity_id < 10) return r.status_id === 1 ? { label: t('evLoginOk'), tone: 'ok' } : { label: t('evLoginFail'), tone: 'bad' }
+  const key = ACTIVITY[classUid]?.[r.activity_id]
+  if (!key) return null
+  const exitCode = r.process?.exit_code
+  const tone = key === 'evDelete' || key === 'evUnload' ? 'bad' : classUid === 1007 && r.activity_id === 2 && exitCode != null && exitCode !== 0 ? 'warn' : 'neutral'
+  return { label: t(key), tone }
+}
+
+// 一行说清这条事件是什么：谁、做了什么、对象是谁。列表里不用再点开读 JSON。
+// withAction=false 时不带动作词（列表把动作单独画成标签）
+export function eventSummary(classUid: number, raw: unknown, t: T, withAction = true): string {
   const r = (raw ?? {}) as Raw
   const key = ACTIVITY[classUid]?.[r.activity_id]
-  const act = key ? t(key) : undefined
+  const act = key && withAction ? t(key) : undefined
   switch (classUid) {
     case 1007: {
       const p = r.process ?? {}
@@ -51,7 +63,7 @@ export function eventSummary(classUid: number, raw: unknown, t: T): string {
       return join(act, r.file?.path, r.process?.name ? `· ${r.process.name}` : undefined)
     case 3002: {
       if (r.activity_id >= 10) return join(r.user?.name, r.group_name, r.target_server, r.policy_category)
-      const ok = r.status_id === 1 ? t('evLoginOk') : t('evLoginFail')
+      const ok = !withAction ? undefined : r.status_id === 1 ? t('evLoginOk') : t('evLoginFail')
       return join(ok, r.user?.name, r.src_endpoint?.ip ? `← ${r.src_endpoint.ip}` : undefined, r.service?.name ? `(${r.service.name})` : undefined)
     }
     case 4001: {

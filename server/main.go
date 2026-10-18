@@ -376,6 +376,13 @@ func main() {
 	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
 	routes.Handle("/api/enroll-tokens", enrollTokens)
 	routes.Handle("/api/enroll-tokens/", enrollTokens)
+	// 日志检索里的「问 AI」：交互式调用，同样关掉隐式思考、限住输出，等得起
+	explainLLM := llmFor("explain")
+	explainLLM.NoThinking, explainLLM.MaxTokens = true, 1500
+	eventAI := api.EventAI(client, explainLLM)
+	for _, path := range api.EventAIPaths {
+		routes.Handle(path, eventAI)
+	}
 	assetMap := api.AssetMap(client, assetEngine.LLM.Enabled)
 	for _, path := range api.AssetMapPaths {
 		routes.Handle(path, assetMap)
