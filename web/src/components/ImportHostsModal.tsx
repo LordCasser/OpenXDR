@@ -1,25 +1,28 @@
 import { CheckOutlined, DeleteOutlined, EyeOutlined, FileTextOutlined, KeyOutlined, ReloadOutlined, RocketOutlined, UploadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Flex, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Typography, Upload } from 'antd'
-import { useState } from 'react'
-import { commitHostImport, deleteHostCredential, enrollHostCredential, fetchHostCredentials, fetchHostImportStatus, previewHostImport, type HostCredential, type HostImportPreview, type ImportedHost } from '../api'
+import { Alert, App, Button, Checkbox, Flex, Image, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Typography, Upload } from 'antd'
+import { useRef, useState } from 'react'
+import { extractHostDocument, commitHostImport, deleteHostCredential, enrollHostCredential, fetchHostCredentials, fetchHostImportStatus, previewHostImport, type HostDocumentImage, type HostCredential, type HostImportPreview, type ImportedHost, type ReviewedHost } from '../api'
 import { useSession } from '../app/session'
 import { errText } from './format'
 import { useI18n } from '../i18n'
-
-const template = 'hosts:\n  - hostname: app-01\n    address: 192.0.2.10\n    os: linux\n    port: 22\n    username: root\n    password: "replace-me"\n'
 
 export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n()
   const { message } = App.useApp()
   const client = useQueryClient()
-  const { groups } = useSession()
+  const { groups, group } = useSession()
   const adminGroups = groups.filter(g => g.role === 'admin')
   const [groupId, setGroupId] = useState<string>()
-  const selectedGroup = groupId ?? adminGroups[0]?.id
+  const selectedGroup = adminGroups.some(g => g.id === groupId) ? groupId : (group?.role === 'admin' ? group.id : adminGroups[0]?.id)
   const [document, setDocument] = useState('')
+  const [images, setImages] = useState<HostDocumentImage[]>([])
+  const [imageIndex, setImageIndex] = useState(0)
+  const [imageOpen, setImageOpen] = useState(false)
+  const sourceRef = useRef<HTMLDivElement>(null)
   const [reading, setReading] = useState(false)
   const [filename, setFilename] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
   const [preview, setPreview] = useState<HostImportPreview>()
   const [tab, setTab] = useState('import')
   const [target, setTarget] = useState<HostCredential>()
@@ -31,10 +34,10 @@ export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: ()
     client.invalidateQueries({ queryKey: ['groups'] })
     client.invalidateQueries({ queryKey: ['host-credentials'] })
   }
-  const parse = useMutation({ mutationFn: () => previewHostImport(selectedGroup!, document), onSuccess: setPreview, onError: e => message.error(errText(e, t)) })
+  const parse = useMutation({ mutationFn: () => previewHostImport(selectedGroup!, document, images), onSuccess: result => { setConfirmed(false); setPreview({ hosts: result.hosts.map(h => ({ ...h, reviewId: crypto.randomUUID() })) }) }, onError: e => message.error(errText(e, t)) })
   const save = useMutation({
-    mutationFn: () => commitHostImport(selectedGroup!, document, preview!.digest),
-    onSuccess: result => { setFilename(''); setDocument(''); setPreview(undefined); setTab('credentials'); refresh(); message.success(t('hostImportSaved', { n: result.assetIds.length })) },
+    mutationFn: () => commitHostImport(selectedGroup!, preview!.hosts),
+    onSuccess: result => { setFilename(''); setDocument(''); setImages([]); setImageOpen(false); setPreview(undefined); setConfirmed(false); setTab('credentials'); refresh(); message.success(t('hostImportSaved', { n: result.assetIds.length })) },
     onError: e => message.error(errText(e, t)),
   })
   const install = useMutation({
@@ -43,13 +46,42 @@ export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: ()
     onError: e => { message.error(errText(e, t)); refresh() },
   })
   const remove = useMutation({ mutationFn: deleteHostCredential, onSuccess: refresh, onError: e => message.error(errText(e, t)) })
-  const busy = reading || parse.isPending || save.isPending || install.isPending
+  const busy = reading || parse.isPending || save.isPending || install.isPending || remove.isPending
   const secure = window.location.protocol === 'https:'
   const close = () => {
     if (busy) return
-    setFilename(''); setDocument(''); setPreview(undefined); setTarget(undefined); setFingerprint('')
-    parse.reset(); save.reset(); install.reset(); onClose()
+    setFilename(''); setDocument(''); setImages([]); setImageOpen(false); setPreview(undefined); setConfirmed(false); setTarget(undefined); setFingerprint('')
+    setTab('import'); parse.reset(); save.reset(); install.reset(); onClose()
   }
+  const edit = (id: string | undefined, patch: Partial<ReviewedHost>) => {
+    setConfirmed(false)
+    setPreview(current => current && ({ hosts: current.hosts.map(h => h.reviewId === id ? { ...h, ...patch } : h) }))
+  }
+  const showSource = (lines: number[]) => {
+    const input = sourceRef.current?.querySelector('textarea')
+    if (!input || !lines.length) return
+    const textLines = document.split('\n')
+    const first = Math.max(0, Math.min(...lines) - 1)
+    const last = Math.min(textLines.length, Math.max(...lines))
+    const start = textLines.slice(0, first).reduce((n, line) => n + line.length + 1, 0)
+    const end = start + textLines.slice(first, last).join('\n').length
+    input.focus()
+    input.setSelectionRange(start, end)
+    input.scrollTop = first * (parseFloat(getComputedStyle(input).lineHeight) || 22)
+    input.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
+  const reviewColumns = [
+    ...(['hostname', 'address', 'username', 'hostKey'] as const).map(field => ({
+      title: t(field === 'hostname' ? 'thHostname' : field === 'address' ? 'hostAddress' : field === 'username' ? 'hostUsername' : 'hostFingerprint'),
+      width: field === 'hostKey' ? 220 : 170,
+      render: (_: unknown, h: ReviewedHost) => <Input aria-label={field} value={h[field]} disabled={busy} onChange={e => edit(h.reviewId, { [field]: e.target.value })} />,
+    })),
+    { title: 'OS', width: 130, render: (_: unknown, h: ReviewedHost) => <Select aria-label="OS" value={h.os || undefined} placeholder={t('hostChooseOS')} disabled={busy} style={{ width: 110 }} options={[{ value: 'linux', label: 'Linux' }, { value: 'windows', label: 'Windows' }]} onChange={os => edit(h.reviewId, { os })} /> },
+    { title: t('hostPort'), width: 110, render: (_: unknown, h: ReviewedHost) => <InputNumber aria-label={t('hostPort')} min={1} max={65535} precision={0} value={h.port} disabled={busy} onChange={port => edit(h.reviewId, { port: port ?? 0 })} /> },
+    { title: t('hostCredential'), width: 160, render: (_: unknown, h: ReviewedHost) => <Space orientation="vertical"><Tag>{t(h.credentialToken ? 'hostCredentialDetected' : 'hostNoCredential')}</Tag>{h.credentialToken && <Button size="small" disabled={busy} onClick={() => edit(h.reviewId, { credentialToken: undefined, kind: 'none' })}>{t('hostDiscardCredential')}</Button>}</Space> },
+    { title: t('hostReviewEvidence'), width: 260, render: (_: unknown, h: ReviewedHost) => <Space orientation="vertical"><Button type="link" size="small" disabled={!h.lines?.length} onClick={() => showSource(h.lines)}>{t('hostSourceLines', { lines: h.lines?.join(', ') || '—' })}</Button>{h.images?.map(n => <Button key={n} type="link" size="small" onClick={() => { setImageIndex(n - 1); setImageOpen(true) }}>{t('hostSourceImage', { n })}</Button>)}{h.issues?.map((issue, i) => <Typography.Text type="warning" key={i}>{issue}</Typography.Text>)}</Space> },
+    { title: t('actions'), width: 90, render: (_: unknown, h: ReviewedHost) => <Button danger disabled={busy} onClick={() => { setConfirmed(false); setPreview(current => current && ({ hosts: current.hosts.filter(row => row.reviewId !== h.reviewId) })) }}>{t('remove')}</Button> },
+  ]
   const columns = [
     { title: t('thHostname'), dataIndex: 'hostname' },
     { title: t('hostAddress'), render: (_: unknown, h: ImportedHost) => `${h.address}:${h.port}` },
@@ -62,31 +94,35 @@ export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: ()
       <Flex vertical gap={16}>
         {!secure && <Alert type="warning" title={t('hostHTTPSRequired')} />}
         <Select showSearch optionFilterProp="label" aria-label={t('addHostGroup')} value={selectedGroup} disabled={busy} options={adminGroups.map(g => ({ value: g.id, label: g.name }))}
-          onChange={v => { setGroupId(v); setPreview(undefined) }} />
+          onChange={v => { setGroupId(v); setPreview(undefined); setConfirmed(false) }} />
         {status.isError && <Alert type="error" title={t('hostImportStatusError')} action={<Button size="small" icon={<ReloadOutlined aria-hidden />} loading={status.isFetching} onClick={() => status.refetch()}>{t('retry')}</Button>} />}
         {status.data && !status.data.credentialStorage && <Alert type="warning" title={t('hostVaultDisabled')} />}
+        {status.data && !status.data.aiParsing && <Alert type="warning" title={t('hostAIUnavailable')} />}
         <Tabs activeKey={tab} onChange={value => { if (!busy) setTab(value) }} items={[
           { key: 'import', icon: <FileTextOutlined aria-hidden />, label: t('hostImportDocument'), children: <Flex vertical gap={12}>
             <Typography.Text type="secondary">{t('hostImportHint')}</Typography.Text>
-            <Upload accept=".md,.txt,.yaml,.yml,.json" showUploadList={false} disabled={busy} beforeUpload={async file => {
-              if (file.size > 1024 * 1024) { message.error(t('hostImportTooLarge')); return false }
+            <Upload accept=".md,.txt,.yaml,.yml,.json,.csv,.log,.conf,.html,.docx,.xlsx,.pdf,.png,.jpg,.jpeg,.gif,.webp" showUploadList={false} disabled={busy || !secure || !selectedGroup} beforeUpload={async file => {
+              if (file.size > 20 * 1024 * 1024) { message.error(t('hostImportTooLarge')); return false }
+              setPreview(undefined); setConfirmed(false); setDocument(''); setImages([]); setImageOpen(false); setFilename('')
               setReading(true)
               try {
-                setDocument(await file.text()); setFilename(file.name); setPreview(undefined)
-              } catch {
-                message.error(t('hostDocumentReadError'))
+                const doc = await extractHostDocument(selectedGroup!, file); setDocument(doc.document); setImages(doc.images ?? []); setFilename(file.name); setPreview(undefined); setConfirmed(false)
+              } catch (e) {
+                message.error(errText(e, t))
               } finally { setReading(false) }
               return false
-            }}><Button icon={<UploadOutlined aria-hidden />} loading={reading} disabled={busy}>{t('hostChooseDocument')}</Button></Upload>
+            }}><Button icon={<UploadOutlined aria-hidden />} loading={reading} disabled={busy || !secure || !selectedGroup}>{t('hostChooseDocument')}</Button></Upload>
             {filename && <Typography.Text type="secondary" ellipsis={{ tooltip: filename }}>{filename}</Typography.Text>}
-            <Input.TextArea aria-label={t('hostImportDocument')} autoComplete="off" spellCheck={false} rows={10} value={document} placeholder={template} disabled={busy}
-              onChange={e => { setDocument(e.target.value); setFilename(''); setPreview(undefined) }} />
+            {!!images.length && <Image.PreviewGroup preview={{ open: imageOpen, current: imageIndex, onOpenChange: setImageOpen, onChange: setImageIndex }}><Space wrap>{images.map((img, i) => <Space key={i} orientation="vertical"><Image width={100} height={100} style={{ objectFit: 'contain' }} src={img.dataUrl} alt={img.name} /><Typography.Text>{t('hostSourceImage', { n: i + 1 })}</Typography.Text></Space>)}</Space></Image.PreviewGroup>}
+            <div ref={sourceRef}><Input.TextArea aria-label={t('hostImportDocument')} autoComplete="off" spellCheck={false} rows={10} value={document} placeholder={t('hostImportExample')} disabled={busy}
+              onChange={e => { setDocument(e.target.value); setFilename(''); setPreview(undefined); setConfirmed(false) }} /></div>
             <Space wrap>
-              <Button icon={<EyeOutlined aria-hidden />} loading={parse.isPending} disabled={!secure || !selectedGroup || !document || busy} onClick={() => parse.mutate()}>{t('hostImportPreview')}</Button>
-              <Button type="primary" icon={<CheckOutlined aria-hidden />} loading={save.isPending} disabled={!secure || !preview || busy} onClick={() => save.mutate()}>{t('hostImportConfirm')}</Button>
+              <Button icon={<EyeOutlined aria-hidden />} loading={parse.isPending} disabled={!secure || !selectedGroup || (!document.trim() && !images.length) || busy || !status.data?.aiParsing} onClick={() => parse.mutate()}>{t('hostImportPreview')}</Button>
+              <Button type="primary" icon={<CheckOutlined aria-hidden />} loading={save.isPending} disabled={!secure || !preview?.hosts.length || !confirmed || busy} onClick={() => save.mutate()}>{t('hostImportConfirm')}</Button>
             </Space>
             {preview && <Typography.Text role="status">{t('hostPreviewCount', { n: preview.hosts.length })}</Typography.Text>}
-            {preview && <Table<ImportedHost> rowKey="hostname" size="small" scroll={{ x: 700 }} columns={columns} dataSource={preview.hosts} pagination={{ pageSize: 10 }} />}
+            {preview && <Checkbox checked={confirmed} disabled={busy || !preview.hosts.length} onChange={e => setConfirmed(e.target.checked)}>{t('hostReviewConfirm')}</Checkbox>}
+            {preview && <Table<ReviewedHost> rowKey="reviewId" size="small" scroll={{ x: 1550 }} columns={reviewColumns} dataSource={preview.hosts} pagination={{ pageSize: 10 }} />}
           </Flex> },
           { key: 'credentials', icon: <KeyOutlined aria-hidden />, label: t('hostCredentials'), children: <Flex vertical gap={12}>
             <Typography.Text type="secondary">{t('hostEnrollmentHint')}</Typography.Text>

@@ -1,23 +1,35 @@
 # 文档导入与主机纳管
 
-状态：已实现文档预览、资产与凭据入库、显式 SSH 安装入口；真实 Linux/Windows
+状态：已实现任意结构运维文档的 AI 提取、可编辑预览、资产与凭据入库、显式 SSH 安装入口；真实 Linux/Windows
 远程安装仍需目标环境验收。导入成功、安装脚本成功、Agent 在线是三个不同状态。
 
 ## 操作流程
 
 1. 通过可信 HTTPS 打开控制台，在资产页选择「从文档导入」和目标组。
-2. 上传或粘贴 Markdown、YAML、JSON 文档，点击预览。最多 1 MiB、100 台主机。
-3. 核对主机名、地址、系统、用户、凭据类型后确认入库。密码、私钥不出现在预览结果中。
+2. 上传或粘贴现有运维文档，无需套模板。支持 UTF-8 文本（Markdown、CSV、JSON、YAML、配置和日志等）、DOCX、XLSX、PDF、PNG/JPEG/TIFF/WebP。上传最大 20 MiB，PDF 最多 30 页，提取文字最大 1 MiB、100 台主机。点击预览后调用配置的 AI 服务。
+3. 根据原文行号核对主机名、地址、系统、端口、用户名和凭据关联，可编辑字段、删除误识别行、丢弃某条凭据。缺失系统等问题须修正后才能保存。勾选确认后入库；密码、私钥不出现在预览结果中。
 4. 主机先显示「待纳管」。凭据页可删除凭据，也可单独点击「使用凭据纳管」。
 5. 提供通过可信渠道独立核对的 SSH SHA256 主机指纹，再确认安装。
 6. 安装脚本完成后等待 Agent 的 mTLS 注册和心跳；不能把安装响应当成已经在线。
 
 只有该组 admin 或全局 admin 可导入、列出凭据元数据、删除凭据和发起安装。
-导入本身不连接主机，也不会执行文档中的命令。模型不参与凭据识别，不接触凭据。
+导入本身不连接主机，也不会执行文档中的命令。AI 只做字段提取，不注册工具。原文（包括凭据）会发送至 `AI_BASE_URL` 指定的模型服务；部署者应选择适合处理运维凭据的服务。原文及模型原始响应不写入数据库、日志或审计。
 
-## 文档格式
+## AI 提取与确认
 
-支持结构化字段，不能确认主机与凭据对应关系的自由叙述需先整理成以下格式。
+端点、密钥与模型跟控制台「系统设置」里的 AI 配置走（默认取 `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`），模型名未设置时使用 Pi 模型。未配置模型时明确提示，不会伪装成 AI 解析。AI 超时为 180 秒；结果截断、格式错误或凭据与原文不一致时整次拒绝，不能悄悄导入部分结果。
+
+无需修改文档写法，例如：“应用节点 app-01，Ubuntu，地址 192.0.2.10；SSH 账号 ops，端口 2222，密码为交接记录中的明确值。”模型按语义识别，主机与凭据关联不清时提示人工核对。视觉模型可能识别错误，预览不是自动授权。
+
+含凭据的预览需要 `HOST_CREDENTIAL_KEY`：凭据以 AES-GCM 加密引用返回，绑定当前用户、目标组，30 分钟过期。无凭据文档不要求该密钥。确认直接提交修正后的元数据及引用，不重复调用模型、不重新读取原文；后端重新校验并整批原子入库。HA 节点共享密钥即可处理同一预览，不依赖进程内缓存。删除凭据引用只登记资产。
+
+文件读取不运行宏、不跟随外部链接。图片原始字节直接发送给视觉模型；PDF 使用 Poppler（`pdfinfo`、`pdftoppm`）逐页渲染后发送，不做本地 OCR。官方 server 镜像包含 PDF 渲染组件。DOCX 正文、页眉页脚、脚注以及 XLSX 工作表文字直接提取；内嵌图片同样直接发送。预览支持查看原图及定位来源页。最多 30 张图片或 PDF 页面，图像总量 20 MiB。转换临时目录仅当前系统用户可读，结束即清理。加密文件、旧版 DOC/XLS 等格式请先转换为 PDF。
+
+视觉请求使用 `AI_VISION_MODEL`，未配置则使用研判模型（再回退 Pi 模型）；端点和密钥与上面相同。模型必须支持 OpenAI 兼容的 `image_url` 内容，服务不回退本地 OCR。图片中的凭据必须带有效图像引用，并提示人工对照核对；后端无法逐字验证视觉识别准确性。纯文本凭据仍要求与原文逐字一致。
+
+## 结构化格式兼容
+
+旧 `/preview`、`/commit` 接口仍保留确定性结构化导入，供已有调用方使用；控制台使用新的 AI 链路。以下格式仍可直接作为 AI 输入，不再是强制模板。
 不会因为密码、私钥出现在文档中而拒绝整份文档，也不会把原文当普通知识文档保存。
 
 Markdown 主机表格：
@@ -103,8 +115,11 @@ Agent 将待签私钥写入 `agent.key.pending`；申请被拒绝不覆盖已有
 
 ## API
 
-- `GET /api/host-import/status`：是否配置凭据加密、是否开启 SSH 纳管。
-- `POST /api/host-import/preview`：`{groupId,document}` → `{digest,hosts}`，hosts 不包含秘密。
+- `GET /api/host-import/status`：`credentialStorage`、`sshEnrollment`、`aiParsing` 能力状态。
+- `POST /api/host-import/extract`：multipart `groupId`、`file` → `{document,images:[{name,dataUrl}]}`；仅组管理员可用，敏感响应禁止缓存。
+- `POST /api/host-import/analyze`：`{groupId,document,images}` → `{hosts}`；主机含可编辑元数据、`lines`、`images`（从 1 开始的图像编号）、`issues`、`needsReview` 及可选 `credentialToken`，不返回秘密。
+- `POST /api/host-import/confirm`：`{groupId,hosts,confirmed:true}` → `{assetIds}`；无模型调用。移除 `credentialToken` 表示不保存该凭据。重复主机、过期引用、跨用户/组引用及现有资产冲突均拒绝。
+- `POST /api/host-import/preview`：`{groupId,document,images}` → `{digest,hosts}`，hosts 不包含秘密。
 - `POST /api/host-import/commit`：`{groupId,document,digest}` → `{assetIds}`，重新解析原文并
   检查摘要，单事务提交。摘要用于核对预览内容，不是授权凭证。
 - `GET /api/host-import/credentials?groupId=…`：仅凭据元数据。

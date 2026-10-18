@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -370,8 +371,19 @@ func main() {
 	if reason := enrollSvc.Disabled(); reason != "" {
 		slog.Warn("主机在线接入未启用", "reason", reason)
 	}
+	// 运维文档导入：AI 解析主机清单，截图与扫描件走视觉模型（AI_VISION_MODEL，不配就用研判模型）。
+	// 端点与密钥按控制台当时的配置取；文档大，超时放宽到 180 秒、关掉隐式思考
+	importLLM := func(model string) *triage.LLM {
+		l := triage.NewLLM("", "", "", 180*time.Second)
+		l.NoThinking, l.MaxTokens = true, 16384
+		l.Endpoint = func() (string, string, string) {
+			c := conf()
+			return c.BaseURL, cmp.Or(model, c.Model, c.PiModel), c.APIKey
+		}
+		return l
+	}
 	routes := http.NewServeMux()
-	routes.Handle("/api/host-import/", api.HostImports(&hostimport.Service{DB: client, Vault: credentialVault}, enrollSvc, os.Getenv("ENROLL_PUBLIC_URL"), getenv("ENROLL_SSH_ENABLED", "false") == "true"))
+	routes.Handle("/api/host-import/", api.HostImports(&hostimport.Service{DB: client, Vault: credentialVault, LLM: importLLM(""), VisionLLM: importLLM(os.Getenv("AI_VISION_MODEL"))}, enrollSvc, os.Getenv("ENROLL_PUBLIC_URL"), getenv("ENROLL_SSH_ENABLED", "false") == "true"))
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook, aiConf, db))
 	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))
 	routes.Handle("/api/intel/feeds/", api.IntelFeeds(client, intelFeeds))

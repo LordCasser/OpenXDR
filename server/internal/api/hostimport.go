@@ -33,11 +33,12 @@ type credentialRow struct {
 // HostImports 的所有端点只对组 admin 开放。普通资产 API 与模型视图不接触凭据。
 func HostImports(s *hostimport.Service, enroller *enroll.Service, publicURL string, sshEnabled bool) http.Handler {
 	mux := http.NewServeMux()
+	hostImportAI(mux, s)
 	_, urlErr := hostimport.EnrollmentURL(publicURL)
 	ready := sshEnabled && s.Vault != nil && urlErr == nil && enroller.CA != nil && strings.HasPrefix(enroller.GRPCURL, "https://") && enroller.Disabled() == ""
 	mux.HandleFunc("GET /api/host-import/status", func(w http.ResponseWriter, r *http.Request) {
 		// 这里只返回能力状态，任何登录用户可读，不含配置值或凭据。
-		writeJSON(w, map[string]bool{"credentialStorage": s.Vault != nil, "sshEnrollment": ready})
+		writeJSON(w, map[string]bool{"credentialStorage": s.Vault != nil, "sshEnrollment": ready, "aiParsing": (s.LLM != nil && s.LLM.Enabled()) || (s.VisionLLM != nil && s.VisionLLM.Enabled())})
 	})
 	for _, action := range []string{"preview", "commit"} {
 		mux.HandleFunc("POST /api/host-import/"+action, func(w http.ResponseWriter, r *http.Request) {

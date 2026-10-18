@@ -53,10 +53,34 @@ func (l *LLM) Enabled() bool {
 
 // Message OpenAI chat 消息。工具调用往返都用它承载。
 type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+	FinishReason string        `json:"-"`
+	Parts        []ContentPart `json:"-"`
+	Role         string        `json:"role"`
+	Content      string        `json:"content"`
+	ToolCalls    []ToolCall    `json:"tool_calls,omitempty"`
+	ToolCallID   string        `json:"tool_call_id,omitempty"`
+}
+
+// 多模态消息仅在 Parts 非空时使用内容数组；现有文本聊天协议保持不变。
+type ContentPart struct {
+	Type     string    `json:"type"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+}
+type ImageURL struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
+}
+
+func (m Message) MarshalJSON() ([]byte, error) {
+	type plain Message
+	if m.Parts == nil {
+		return json.Marshal(plain(m))
+	}
+	return json.Marshal(struct {
+		plain
+		Content []ContentPart `json:"content"`
+	}{plain(m), m.Parts})
 }
 
 type ToolCall struct {
@@ -128,7 +152,8 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 
 	var out struct {
 		Choices []struct {
-			Message Message `json:"message"`
+			Message      Message `json:"message"`
+			FinishReason string  `json:"finish_reason"`
 		} `json:"choices"`
 		Usage struct {
 			PromptTokens     int `json:"prompt_tokens"`
@@ -144,5 +169,6 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 	if len(out.Choices) == 0 {
 		return Message{}, fmt.Errorf("LLM 返回空 choices")
 	}
+	out.Choices[0].Message.FinishReason = out.Choices[0].FinishReason
 	return out.Choices[0].Message, nil
 }

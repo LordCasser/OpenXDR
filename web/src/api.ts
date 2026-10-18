@@ -765,17 +765,18 @@ export interface ImportedHost {
   hostname: string; address: string; os: string; port: number; username: string
   kind: 'none' | 'password' | 'private_key'; hostKey: string
 }
-export interface HostImportPreview { digest: string; hosts: ImportedHost[] }
+export interface ReviewedHost extends ImportedHost { credentialToken?: string; images?: number[]; lines: number[]; needsReview: boolean; issues: string[]; reviewId?: string }
+export interface HostImportPreview { hosts: ReviewedHost[] }
 export interface HostCredential extends ImportedHost { id: string; assetId: string }
-export const fetchHostImportStatus = () => get<{ credentialStorage: boolean; sshEnrollment: boolean }>('/api/host-import/status')
+export const fetchHostImportStatus = () => get<{ credentialStorage: boolean; sshEnrollment: boolean; aiParsing: boolean }>('/api/host-import/status')
 export const fetchHostCredentials = (groupId: string) => get<HostCredential[]>(`/api/host-import/credentials?groupId=${encodeURIComponent(groupId)}`)
-export async function previewHostImport(groupId: string, document: string): Promise<HostImportPreview> {
-  const r = await post('/api/host-import/preview', { groupId, document })
+export async function previewHostImport(groupId: string, document: string, images: HostDocumentImage[] = []): Promise<HostImportPreview> {
+  const r = await post('/api/host-import/analyze', { groupId, document, images })
   if (!r.ok) await fail(r)
   return r.json()
 }
-export async function commitHostImport(groupId: string, document: string, digest: string): Promise<{ assetIds: string[] }> {
-  const r = await post('/api/host-import/commit', { groupId, document, digest })
+export async function commitHostImport(groupId: string, hosts: ReviewedHost[]): Promise<{ assetIds: string[] }> {
+  const r = await post('/api/host-import/confirm', { groupId, hosts, confirmed: true })
   if (!r.ok) await fail(r)
   return r.json()
 }
@@ -878,3 +879,14 @@ export const saveServiceNote = async (id: string, body: { port: string; name: st
   await send('PUT', `/api/assets/${id}/services`, body)
 }
 export const requestAnnotate = async (id: string) => { await send('POST', `/api/assets/${id}/annotate`) }
+
+export interface HostDocumentImage { name: string; dataUrl: string }
+export async function extractHostDocument(groupId: string, file: File): Promise<{ document: string; images: HostDocumentImage[] | null }> {
+  const body = new FormData()
+  body.append('groupId', groupId)
+  body.append('file', file)
+  const r = await fetch('/api/host-import/extract', { method: 'POST', body })
+  check(r)
+  if (!r.ok) await fail(r)
+  return await r.json()
+}

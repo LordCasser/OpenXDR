@@ -16,8 +16,8 @@ COPY server/pi-runtime/ ./
 RUN npm ci --omit=dev --ignore-scripts
 
 FROM alpine:3.22
-# node 二进制依赖 libstdc++；chromium + 中文字体用于报告 PDF 渲染
-RUN apk add --no-cache libstdc++ chromium font-noto-cjk && adduser -D -u 10001 openxdr
+# node 依赖 libstdc++；chromium + 中文字体渲染报告，Poppler 将 PDF 页面渲染为视觉模型输入
+RUN apk add --no-cache libstdc++ chromium font-noto-cjk poppler-utils && adduser -D -u 10001 openxdr
 COPY --from=build /openxdr-server /usr/local/bin/openxdr-server
 COPY --from=pi-runtime /usr/local/bin/node /usr/local/bin/node
 COPY --from=pi-runtime /pi-runtime /app/pi-runtime

@@ -45,8 +45,12 @@ func (v *Vault) Seal(secret Secret, binding string) ([]byte, error) {
 		return nil, err
 	}
 	defer clear(plain)
+	return v.sealBytes(plain, binding)
+}
+
+func (v *Vault) sealBytes(plain []byte, binding string) ([]byte, error) {
 	nonce := make([]byte, v.aead.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
+	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
 	return v.aead.Seal(nonce, nonce, plain, []byte(binding)), nil
@@ -54,17 +58,25 @@ func (v *Vault) Seal(secret Secret, binding string) ([]byte, error) {
 
 func (v *Vault) Open(sealed []byte, binding string) (Secret, error) {
 	var out Secret
-	if v == nil || len(sealed) < v.aead.NonceSize() {
-		return out, errors.New("凭据不可解密")
-	}
-	n := v.aead.NonceSize()
-	plain, err := v.aead.Open(nil, sealed[:n], sealed[n:], []byte(binding))
+	plain, err := v.openBytes(sealed, binding)
 	if err != nil {
-		return out, errors.New("凭据不可解密")
+		return out, err
 	}
 	defer clear(plain)
 	if err = json.Unmarshal(plain, &out); err != nil {
 		return Secret{}, errors.New("凭据不可解密")
 	}
 	return out, nil
+}
+
+func (v *Vault) openBytes(sealed []byte, binding string) ([]byte, error) {
+	if v == nil || len(sealed) < v.aead.NonceSize() {
+		return nil, errors.New("凭据不可解密")
+	}
+	n := v.aead.NonceSize()
+	plain, err := v.aead.Open(nil, sealed[:n], sealed[n:], []byte(binding))
+	if err != nil {
+		return nil, errors.New("凭据不可解密")
+	}
+	return plain, nil
 }
