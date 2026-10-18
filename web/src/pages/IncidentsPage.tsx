@@ -8,6 +8,7 @@ import { useCanAct, useSession } from '../app/session'
 import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { useCanChat, useHandoff } from '../components/Handoff'
 import { saveQueue } from '../components/incidentQueue'
+import { useRowLink } from '../components/rowLink'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
@@ -47,6 +48,7 @@ export function IncidentsPage() {
   useEffect(() => { setSelected([]); setResolving(null) }, [status, page])
   useEffect(() => { if (query.data) saveQueue(query.data.items.map(r => r.id)) }, [query.data])
   const canChat = useCanChat()
+  const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
   const handoff = useHandoff()
   // 多选交给 AI：一个会话属于一个组，选中的必须同组
   const picked = rows.filter(r => selected.includes(r.id))
@@ -121,6 +123,8 @@ export function IncidentsPage() {
           <Table<IncidentSummary>
           scroll={{ x: 1100 }}
             rowKey="id"
+            rowClassName="row-link"
+            onRow={rowLink}
             loading={query.isPending}
             dataSource={rows}
             locale={{ emptyText: <EmptyHint title={t(status === 'review' ? 'noReview' : status === 'unresolved' ? 'noUnresolved' : 'noIncidents')} hint={status === 'review' || status === 'unresolved' ? t('noUnresolvedHint') : undefined} /> }}

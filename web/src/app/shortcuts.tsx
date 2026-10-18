@@ -36,7 +36,7 @@ export function useHotkeyPages() {
     .filter((n): n is NavItem & { hotkey: string } => !!n.hotkey && (!n.groupAdmin || groupAdmin))
 }
 
-// 全局快捷键：G 再按页面键跳转，/ 打开命令面板，? 看帮助，[ 收起侧栏
+// 全局快捷键：G 再按页面键跳转，N 新对话，/ 打开命令面板，? 看帮助，[ 收起侧栏
 export function useGlobalKeys({ palette, help, sider }: { palette: () => void; help: () => void; sider: () => void }) {
   const navigate = useNavigate()
   const pending = useRef(0)
@@ -47,6 +47,7 @@ export function useGlobalKeys({ palette, help, sider }: { palette: () => void; h
     '/': palette,
     '?': help,
     '[': sider,
+    n: () => navigate('/chat'),
     ...Object.fromEntries(Object.entries(go).map(([k, fn]) => [k, after(fn)])),
   })
 }
@@ -59,6 +60,7 @@ export function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => 
     { label: t('shortcutPalette'), keys: <><kbd>{mac ? '⌘' : 'Ctrl'}</kbd><kbd>K</kbd> / <kbd>/</kbd></> },
     { label: t('shortcutHelp'), keys: <kbd>?</kbd> },
     { label: t('shortcutSider'), keys: <kbd>[</kbd> },
+    { label: t('newChat'), keys: <kbd>N</kbd> },
     { label: t('shortcutQueue'), keys: <><kbd>J</kbd> / <kbd>K</kbd></> },
   ]
   const goRows = pages.map(p => ({ label: t(p.key), keys: <><kbd>G</kbd> {t('shortcutsThen')} <kbd>{p.hotkey.toUpperCase()}</kbd></> }))

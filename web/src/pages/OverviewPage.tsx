@@ -3,14 +3,16 @@ import {
 } from '@ant-design/icons'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Card, Col, Empty, Flex, Row, Segmented, Space, Table, Typography, theme } from 'antd'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { fetchAgentReports, fetchApprovals, fetchAssets, fetchFindings, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks } from '../api'
+import { fetchAgentReports, fetchApprovals, fetchAssets, fetchFindings, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks, type IncidentSummary } from '../api'
 import { useSession } from '../app/session'
 import { Ago } from '../components/Ago'
 import { GettingStarted } from '../components/GettingStarted'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
+import { saveQueue } from '../components/incidentQueue'
+import { useRowLink } from '../components/rowLink'
 import { BarList, ColumnChart, SEVERITY_COLOR, compact, useSeriesColor } from '../components/charts'
 import { HostStateBadge, IncidentStatusTag, SessionStatusTag, SeverityTag, fmtTime, hostState } from '../components/format'
 import { useI18n } from '../i18n'
@@ -128,6 +130,8 @@ export function OverviewPage() {
   const incidents = useQuery({ queryKey: ['incidents', 'review', 'overview'], queryFn: () => fetchIncidents({ status: 'review', limit: 6 }), refetchInterval: 30_000 })
   const findings = useQuery({ queryKey: ['findings', 'open'], queryFn: () => fetchFindings('open'), refetchInterval: 60_000 })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
+  const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
+  useEffect(() => { if (incidents.data) saveQueue(incidents.data.items.map(r => r.id)) }, [incidents.data])
   const isGroupAdmin = group?.role === 'admin'
   const approvals = useQuery({ queryKey: ['approvals', group?.id], queryFn: () => fetchApprovals(group!.id), enabled: !!group && isGroupAdmin, refetchInterval: 10_000 })
   const s = stats.data
@@ -192,9 +196,11 @@ export function OverviewPage() {
         <Col xs={24} xl={16}>
           <Card title={t('reviewIncidents')} extra={<Link to="/incidents">{t('viewAll')}</Link>} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
             {incidents.isError ? <LoadError error={incidents.error} onRetry={() => incidents.refetch()} /> : (
-              <Table
+              <Table<IncidentSummary>
                 size="small"
                 rowKey="id"
+                rowClassName="row-link"
+                onRow={rowLink}
                 loading={incidents.isPending}
                 dataSource={incidents.data?.items ?? []}
                 pagination={false}

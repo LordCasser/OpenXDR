@@ -235,3 +235,4 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 .welcome-composer:focus-within { border-color: var(--ant-color-primary); box-shadow: 0 0 0 3px var(--ant-color-primary-bg); }
 .welcome-composer .ant-input { border: 0; box-shadow: none !important; padding: 4px 0; resize: none; }
 .welcome-hint { display: block; padding: 0 16px 10px; font-size: 12px; }
+.row-link { cursor: pointer; }

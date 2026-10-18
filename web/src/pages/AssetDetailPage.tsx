@@ -8,9 +8,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
   createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchFindings, fetchIncidents, saveAgentConfig, searchEvents,
-  type AgentConfig, type FindingRow,
+  type AgentConfig, type FindingRow, type IncidentSummary,
 } from '../api'
 import { useRemember } from '../app/recent'
+import { saveQueue } from '../components/incidentQueue'
+import { useRowLink } from '../components/rowLink'
 import { useCanActIn, useSession } from '../app/session'
 import { AssetProfileView } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
@@ -118,6 +120,8 @@ export function AssetDetailPage() {
   const events = useQuery({ queryKey: ['events', 'asset', id], queryFn: () => searchEvents({ assetId: id, hours: 168 }), enabled: !!asset })
   const commands = useQuery({ queryKey: ['commands', 'asset', id], queryFn: () => fetchCommands({ assetId: id! }), enabled: !!asset })
 
+  const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
+  useEffect(() => { if (incidents.data) saveQueue(incidents.data.items.map(r => r.id)) }, [incidents.data])
   useRemember(asset && { to: `/assets/${asset.id}`, label: asset.hostname, kind: 'asset' })
 
   if (assets.isPending) return <Skeleton active style={{ marginTop: 24 }} />
@@ -176,7 +180,7 @@ export function AssetDetailPage() {
                   key: 'incidents',
                   label: t('tabIncidents', { n: incidents.data?.total ?? 0 }),
                   children: incidents.isError ? <LoadError error={incidents.error} onRetry={() => incidents.refetch()} /> : (
-                    <Table size="small" rowKey="id" loading={incidents.isPending} dataSource={incidents.data?.items ?? []}
+                    <Table<IncidentSummary> size="small" rowKey="id" rowClassName="row-link" onRow={rowLink} loading={incidents.isPending} dataSource={incidents.data?.items ?? []}
                       pagination={{ current: incPage, pageSize: INCIDENT_PAGE, total: incidents.data?.total, hideOnSinglePage: true, onChange: setIncPage }}
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIncidents')} /> }}
                       columns={[

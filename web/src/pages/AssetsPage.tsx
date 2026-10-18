@@ -11,6 +11,7 @@ import { LoadError } from '../components/LoadError'
 import { AddHostModal } from '../components/AddHostModal'
 import { errText, HostStateBadge, hostState } from '../components/format'
 import { FilterCard, Page } from '../components/Page'
+import { useRowLink } from '../components/rowLink'
 import { useI18n } from '../i18n'
 
 // 心跳超过 5 分钟视为失联——agent 掉线本身就是值得注意的信号
@@ -35,6 +36,7 @@ export function AssetsPage() {
   const canAdd = groups.some(g => g.role === 'admin')
   const { data, isPending, isFetching, isError, error, dataUpdatedAt, refetch } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
 
+  const rowLink = useRowLink<Asset>(a => `/assets/${a.id}`)
   const imported = (a: Asset) => hostState(a) === 'imported'
   const rows = (data ?? []).filter(a =>
     (!q || a.hostname.toLowerCase().includes(q.toLowerCase()) || a.ipAddrs?.some(ip => ip.includes(q))) &&
@@ -81,6 +83,8 @@ export function AssetsPage() {
           scroll={{ x: 1100 }}
           locale={{ emptyText: <EmptyHint title={t(q || groupFilter ? 'noMatch' : 'noAssets')} hint={q || groupFilter ? undefined : t('noAssetsHint')} /> }}
           rowKey="id"
+          rowClassName="row-link"
+          onRow={rowLink}
           loading={isPending}
           dataSource={rows}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}

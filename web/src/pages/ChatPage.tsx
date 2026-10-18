@@ -233,16 +233,17 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
   // 从资产详情"一键排查"或模板进来时带 ?prompt=，填进输入框后从地址栏拿掉；
   // 「交给 AI」还带 send=1，会话就绪后直接发出去，人到了对话页 AI 已经在干活
   const [autoSend, setAutoSend] = useState<string | null>(null)
+  // 欢迎页（没有会话）带 ?prompt= 时只填进输入框，发出时再建会话
   useEffect(() => {
     const p = params.get('prompt')
-    if (!p || !session) return
-    if (params.get('send') === '1') setAutoSend(p)
+    if (!p || (sessionId && !session)) return
+    if (session && params.get('send') === '1') setAutoSend(p)
     else {
       setPrompt(p)
       input.current?.focus()
     }
     setParams({}, { replace: true })
-  }, [params, session, setParams, setPrompt])
+  }, [params, session, sessionId, setParams, setPrompt])
 
   // 宽屏进欢迎页（含点「新对话」）光标直接落在输入框；窄屏不弹键盘
   useEffect(() => {

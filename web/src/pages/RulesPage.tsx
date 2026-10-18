@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Input, Select, Space, Table, Tabs, Tag, Tooltip } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchRules, type RuleRow } from '../api'
 import { LoadError } from '../components/LoadError'
@@ -15,8 +15,16 @@ import { useI18n } from '../i18n'
 export function RulesPage() {
   const { t } = useI18n()
   const [params, setParams] = useSearchParams()
-  const [q, setQ] = useState('')
-  const [draft, setDraft] = useState('')
+  // 搜索词放 URL：事件详情里点规则名会带着规则 ID 跳过来
+  const q = params.get('q') ?? ''
+  const setQ = (v: string) => setParams(p => {
+    const next = new URLSearchParams(p)
+    if (v) next.set('q', v)
+    else next.delete('q')
+    return next
+  }, { replace: true })
+  const [draft, setDraft] = useState(q)
+  useEffect(() => setDraft(q), [q])
   const [sev, setSev] = useState(0)
   const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['rules'], queryFn: fetchRules })
   const rows = (data ?? []).filter(r =>

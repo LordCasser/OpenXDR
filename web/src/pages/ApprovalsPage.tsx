@@ -9,6 +9,7 @@ import { HostLink } from '../components/HostLink'
 import { ApprovalActions } from '../components/ApprovalActions'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
+import { EmptyHint } from '../components/Ago'
 import { fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
@@ -122,7 +123,7 @@ export function ApprovalsPage() {
             {
               key: 'pending',
               label: t('apTabQueue', { n: pending.length }),
-              children: approvals.isError ? <LoadError error={approvals.error} onRetry={() => approvals.refetch()} /> : <Table<Approval> scroll={{ x: 1050 }} rowKey="id" size="small" loading={approvals.isPending} dataSource={pending} pagination={false} columns={columns(true)} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('apNone')} /> }} />,
+              children: approvals.isError ? <LoadError error={approvals.error} onRetry={() => approvals.refetch()} /> : <Table<Approval> scroll={{ x: 1050 }} rowKey="id" size="small" loading={approvals.isPending} dataSource={pending} pagination={false} columns={columns(true)} locale={{ emptyText: <EmptyHint title={t('apNone')} hint={t('apNoneHint')} /> }} />,
             },
             {
               key: 'history',

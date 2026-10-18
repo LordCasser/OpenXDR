@@ -40,7 +40,7 @@ function AlertTimeline({ alerts }: { alerts: AlertRow[] }) {
             <Space size={8} wrap>
               <Typography.Text type="secondary" className="mono" style={{ fontSize: 12 }}>{fmtTime(a.ts).slice(11)}</Typography.Text>
               <SeverityTag value={a.severity} />
-              <Typography.Text strong>{a.ruleTitle ?? a.ruleId}</Typography.Text>
+              <Link to={`/rules?q=${encodeURIComponent(a.ruleId)}`}><Typography.Text strong>{a.ruleTitle ?? a.ruleId}</Typography.Text></Link>
               {a.count > 1 && <Typography.Text type="secondary">×{a.count}</Typography.Text>}
             </Space>
             {evidence(a.event) && <div className="mono timeline-evidence">{evidence(a.event)}</div>}
@@ -149,7 +149,7 @@ export function IncidentDetailPage() {
                 columns={[
                   { title: t('thFirst'), dataIndex: 'ts', render: fmtTime, width: 170 },
                   { title: t('thLast'), dataIndex: 'lastTs', render: fmtTime, width: 170 },
-                  { title: t('thRule'), dataIndex: 'ruleTitle', render: (v, a) => v ?? a.ruleId, ellipsis: true },
+                  { title: t('thRule'), dataIndex: 'ruleTitle', render: (v, a) => <Link to={`/rules?q=${encodeURIComponent(a.ruleId)}`}>{v ?? a.ruleId}</Link>, ellipsis: true },
                   { title: t('thSeverity'), dataIndex: 'severity', render: v => <SeverityTag value={v} />, width: 90 },
                   { title: t('thCount'), dataIndex: 'count', align: 'right', width: 70 },
                   {

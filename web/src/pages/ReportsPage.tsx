@@ -17,6 +17,7 @@ export function ReportsPage() {
   const { t } = useI18n()
   const { message } = App.useApp()
   const { group } = useSession()
+  const canChat = group?.role === 'admin' || group?.role === 'analyst'
   const [search, setSearch] = useState('')
   const [downloads, setDownloads] = useState<Set<string>>(new Set())
   const [preview, setPreview] = useState<AgentReport | null>(null)
@@ -50,7 +51,8 @@ export function ReportsPage() {
           loading={isPending}
           dataSource={rows}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
-          locale={{ emptyText: <EmptyHint title={t(search ? 'noMatch' : 'noReports')} /> }}
+          locale={{ emptyText: search ? <EmptyHint title={t('noMatch')} /> : <EmptyHint title={t('noReports')} hint={t('noReportsHint')}
+            action={canChat && <Link to={`/chat?${new URLSearchParams({ prompt: t('reportPrompt') })}`}><Button type="primary">{t('reportAskAI')}</Button></Link>} /> }}
           columns={[
             { title: t('reportTitle'), dataIndex: 'title', render: (v, r) => <Button type="link" className="report-title-button" icon={<FileSearchOutlined aria-hidden />} onClick={() => setPreview(r)}>{v}</Button> },
             { title: t('thCreatedAt'), dataIndex: 'created_at', width: 190, render: fmtTime },
