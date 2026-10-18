@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { fetchAgentReports, fetchApprovals, fetchAssets, fetchFindings, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks, type IncidentSummary } from '../api'
 import { useSession } from '../app/session'
+import { useTheme } from '../app/theme'
 import { Ago } from '../components/Ago'
 import { GettingStarted } from '../components/GettingStarted'
 import { LoadError } from '../components/LoadError'
@@ -21,6 +22,7 @@ import { useI18n } from '../i18n'
 function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: number; incidents: number; foot: ReactNode }) {
   const { t } = useI18n()
   const { token } = theme.useToken()
+  const { dark } = useTheme()
   const stages = [
     { label: t('funnelEvents'), value: events, to: '/events' },
     { label: t('funnelAlerts'), value: alerts },
@@ -37,9 +39,12 @@ function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: n
               <span>{t('funnelSqueeze', { p: squeeze(stages[i - 1].value, s.value) })}</span>
             </div>,
           ] : []),
-          <div key={s.label} className="funnel-stage" style={{ background: i === 2 ? token.colorPrimaryBg : token.colorFillQuaternary }}>
+          // 最后一级是结论：浅主色底加一圈细边。暗色算法里主色边框与底色同值、主色文字偏暗，换亮一档才压得住底色
+          <div key={s.label} className="funnel-stage" style={i === 2
+            ? { background: token.colorPrimaryBg, boxShadow: `inset 0 0 0 1px ${dark ? token.colorPrimary : token.colorPrimaryBorder}` }
+            : { background: token.colorFillQuaternary }}>
             <Typography.Text type="secondary">{s.label}</Typography.Text>
-            <div className="funnel-value" style={{ color: i === 2 ? token.colorPrimary : token.colorText }}>
+            <div className="funnel-value" style={{ color: i === 2 ? (dark ? token.colorPrimaryTextHover : token.colorPrimary) : token.colorText }}>
               {s.to ? <Link to={s.to} style={{ color: 'inherit' }}>{compact(s.value)}</Link> : compact(s.value)}
             </div>
           </div>,
@@ -131,7 +136,7 @@ export function OverviewPage() {
   const findings = useQuery({ queryKey: ['findings', 'open'], queryFn: () => fetchFindings('open'), refetchInterval: 60_000 })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
   const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
-  useEffect(() => { if (incidents.data) saveQueue(incidents.data.items.map(r => r.id)) }, [incidents.data])
+  useEffect(() => { if (incidents.data) saveQueue(incidents.data.items) }, [incidents.data])
   const isGroupAdmin = group?.role === 'admin'
   const approvals = useQuery({ queryKey: ['approvals', group?.id], queryFn: () => fetchApprovals(group!.id), enabled: !!group && isGroupAdmin, refetchInterval: 10_000 })
   const s = stats.data
@@ -220,14 +225,14 @@ export function OverviewPage() {
           <AiOps />
         </Col>
 
-        <Col xs={24} xl={12}>
+        <Col xs={24} xl={16}>
           <Card title={t('topRules')} style={{ height: '100%' }}>
             {s?.topRules.length ? (
-              <BarList items={s.topRules.map(r => ({ key: r.ruleId, label: <Typography.Text ellipsis title={r.ruleId}>{r.ruleTitle ?? r.ruleId}</Typography.Text>, value: r.count, color: series }))} />
+              <BarList items={s.topRules.map(r => ({ key: r.ruleId, label: <Typography.Text ellipsis title={r.ruleId}>{r.ruleTitle ?? r.ruleId}</Typography.Text>, value: r.count, color: series, to: `/rules?q=${encodeURIComponent(r.ruleId)}` }))} />
             ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noAlerts24h')} />}
           </Card>
         </Col>
-        <Col xs={24} xl={12}>
+        <Col xs={24} xl={8}>
           <Card title={t('offlineAssets', { n: offline.length })} style={{ height: '100%' }} extra={<Link to="/assets">{t('viewAll')}</Link>}>
             {offline.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('allOnline')} />

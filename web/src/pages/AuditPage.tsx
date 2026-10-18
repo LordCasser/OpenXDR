@@ -3,7 +3,7 @@ import { Alert, Input, Table, Tag } from 'antd'
 import { useState } from 'react'
 import { fetchAudit, type AuditRow } from '../api'
 import { LoadError } from '../components/LoadError'
-import { FilterCard, Page } from '../components/Page'
+import { FilterCard, Page, STICKY_HEADER } from '../components/Page'
 import { fmtTime } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
@@ -66,6 +66,7 @@ export function AuditPage() {
       <FilterCard onReset={draft || q ? () => { setDraft(''); setQ('') } : undefined} filters={<Input.Search allowClear style={{ width: 300, maxWidth: '100%' }} aria-label={t('auditSearchHint')} value={draft} placeholder={t('auditSearchHint')} onSearch={v => setQ(v.trim())} onChange={e => { setDraft(e.target.value); if (!e.target.value) setQ('') }} />}>
         {data?.truncated && <Alert type="info" banner showIcon title={t('listTruncated', { n: data.items.length })} />}
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<AuditRow>
+          sticky={STICKY_HEADER}
           scroll={{ x: 1100 }}
           size="small"
           rowKey="id"

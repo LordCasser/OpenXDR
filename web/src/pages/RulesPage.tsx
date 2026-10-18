@@ -6,7 +6,7 @@ import { fetchRules, type RuleRow } from '../api'
 import { LoadError } from '../components/LoadError'
 import { AttackMatrix } from '../components/AttackMatrix'
 import { CLASS_KEY, SeverityTag } from '../components/format'
-import { FilterCard, Page } from '../components/Page'
+import { FilterCard, Page, STICKY_HEADER } from '../components/Page'
 import { useI18n } from '../i18n'
 
 // 检测规则：规则库热重载，这里看到的就是引擎里正在跑的版本；
@@ -43,6 +43,7 @@ export function RulesPage() {
       }
     >
       {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<RuleRow>
+          sticky={STICKY_HEADER}
         scroll={{ x: 850 }}
         size="small"
         rowKey="id"

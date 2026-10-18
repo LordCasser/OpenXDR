@@ -121,7 +121,7 @@ export function AssetDetailPage() {
   const commands = useQuery({ queryKey: ['commands', 'asset', id], queryFn: () => fetchCommands({ assetId: id! }), enabled: !!asset })
 
   const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
-  useEffect(() => { if (incidents.data) saveQueue(incidents.data.items.map(r => r.id)) }, [incidents.data])
+  useEffect(() => { if (incidents.data) saveQueue(incidents.data.items) }, [incidents.data])
   useRemember(asset && { to: `/assets/${asset.id}`, label: asset.hostname, kind: 'asset' })
 
   if (assets.isPending) return <Skeleton active style={{ marginTop: 24 }} />

@@ -10,7 +10,7 @@ import { useKeys } from '../app/shortcuts'
 import { useCanChat, useHandoff } from '../components/Handoff'
 import { HostLink } from '../components/HostLink'
 import { IncidentGraph } from '../components/IncidentGraph'
-import { neighbors } from '../components/incidentQueue'
+import { neighbors, type QueueItem } from '../components/incidentQueue'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
@@ -48,6 +48,24 @@ function AlertTimeline({ alerts }: { alerts: AlertRow[] }) {
         ),
       }))}
     />
+  )
+}
+
+// 侧栏队列：来时列表里的前后几条，当前这条高亮，点一下切过去；和 J / K 是同一份顺序
+function QueueCard({ items, index }: { items: QueueItem[]; index: number }) {
+  const { t } = useI18n()
+  const from = Math.max(0, Math.min(index - 3, items.length - 7))
+  return (
+    <Card title={t('queueTitle')} size="small" extra={<Typography.Text type="secondary">{index + 1} / {items.length}</Typography.Text>}
+      styles={{ body: { padding: 6 } }}>
+      {items.slice(from, from + 7).map((q, i) => {
+        const body = <><SeverityTag value={q.severity} /><Typography.Text ellipsis style={{ flex: 1 }}>{q.title ?? q.id}</Typography.Text></>
+        return from + i === index
+          ? <div key={q.id} className="queue-row queue-current" aria-current="page">{body}</div>
+          : <Link key={q.id} to={`/incidents/${q.id}`} className="queue-row">{body}</Link>
+      })}
+      <Typography.Text type="secondary" className="queue-hint"><kbd>J</kbd><kbd>K</kbd> {t('queueHint')}</Typography.Text>
+    </Card>
   )
 }
 
@@ -171,6 +189,7 @@ export function IncidentDetailPage() {
         </Col>
         <Col xs={24} xl={8}>
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            {queue.total > 1 && queue.index >= 0 && <QueueCard items={queue.items} index={queue.index} />}
             <Card title={t('basicInfo')}>
               <Descriptions column={1} size="small">
                 <Descriptions.Item label="ID"><Typography.Text className="mono" copyable style={{ fontSize: 12 }}>{inc.id}</Typography.Text></Descriptions.Item>

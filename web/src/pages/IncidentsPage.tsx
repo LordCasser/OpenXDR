@@ -9,10 +9,11 @@ import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { useCanChat, useHandoff } from '../components/Handoff'
 import { saveQueue } from '../components/incidentQueue'
 import { useRowLink } from '../components/rowLink'
+import { useFlash } from '../components/useFlash'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
-import { FilterCard, Page } from '../components/Page'
+import { FilterCard, Page, STICKY_HEADER } from '../components/Page'
 import { useI18n, type MsgKey } from '../i18n'
 
 const VERDICT: Record<string, { key: MsgKey; status: 'error' | 'warning' | 'success' }> = {
@@ -46,9 +47,10 @@ export function IncidentsPage() {
   const actable = (r: IncidentSummary) => !done(r) && canAct(r.groupId)
   const selected = rows.filter(r => selectedKeys.includes(r.id) && actable(r)).map(r => r.id)
   useEffect(() => { setSelected([]); setResolving(null) }, [status, page])
-  useEffect(() => { if (query.data) saveQueue(query.data.items.map(r => r.id)) }, [query.data])
+  useEffect(() => { if (query.data) saveQueue(query.data.items) }, [query.data])
   const canChat = useCanChat()
   const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
+  const flash = useFlash(query.data?.items, r => r.id, r => `${r.status}|${r.aiVerdict?.verdict}|${r.alertCount}|${r.severity}`, `${status}|${page}`)
   const handoff = useHandoff()
   // 多选交给 AI：一个会话属于一个组，选中的必须同组
   const picked = rows.filter(r => selected.includes(r.id))
@@ -121,9 +123,10 @@ export function IncidentsPage() {
       >
         {query.isError ? <LoadError error={query.error} onRetry={() => query.refetch()} /> : (
           <Table<IncidentSummary>
+          sticky={STICKY_HEADER}
           scroll={{ x: 1100 }}
             rowKey="id"
-            rowClassName="row-link"
+            rowClassName={r => (flash.has(r.id) ? 'row-link row-flash' : 'row-link')}
             onRow={rowLink}
             loading={query.isPending}
             dataSource={rows}

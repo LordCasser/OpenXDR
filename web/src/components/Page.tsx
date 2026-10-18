@@ -37,6 +37,9 @@ export function Page({ title, subtitle, extra, crumb, children }: {
   )
 }
 
+// 长列表的表头吸在顶栏下面（顶栏高 56），往下翻也知道每列是什么
+export const STICKY_HEADER = { offsetHeader: 56 }
+
 // 列表卡片：筛选条单独一行在表格上方，右侧放计数或次要操作
 export function FilterCard({ filters, extra, onReset, children }: { filters: ReactNode; extra?: ReactNode; onReset?: () => void; children: ReactNode }) {
   const { t } = useI18n()

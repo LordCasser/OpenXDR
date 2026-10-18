@@ -1,5 +1,6 @@
 import { Tooltip, Typography, theme } from 'antd'
 import { useLayoutEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { useTheme } from '../app/theme'
 
 // 图表配色：单序列只用分类色第 1 位（蓝），亮暗各取校验通过的一档；级别用固定状态色
@@ -20,11 +21,11 @@ export const SEVERITY_COLOR: Record<number, string> = {
 export const compact = (n: number) =>
   n < 1000 ? String(n) : n < 1e6 ? `${+(n / 1e3).toFixed(n < 1e4 ? 1 : 0)}K` : `${+(n / 1e6).toFixed(1)}M`
 
-// 取整刻度：上限落在 1/2/5×10^k 上
+// 取整刻度：四格，每格步长落在 1/2/5×10^k 上，计数类数据的刻度永远是整数（不会出现 12.5）
 function niceMax(v: number) {
-  if (v <= 4) return 4
-  const p = 10 ** Math.floor(Math.log10(v))
-  return [1, 2, 5, 10].map(m => m * p).find(m => m >= v)!
+  const raw = Math.max(1, Math.ceil(v / 4))
+  const p = 10 ** Math.floor(Math.log10(raw))
+  return [1, 2, 5, 10].map(m => m * p).find(m => m >= raw)! * 4
 }
 
 function useWidth() {
@@ -101,9 +102,9 @@ export function ColumnChart({ data, height = 200, xLabel, tip, dim }: {
   )
 }
 
-// 横向条形：标签在左、数值在柱端，颜色由调用方给（级别用状态色，排名用序列色）
+// 横向条形：标签在左、数值在柱端，颜色由调用方给（级别用状态色，排名用序列色）；给了 to 整行可点
 export function BarList({ items, max, dim, labelWidth = '38%' }: {
-  items: { key: string; label: React.ReactNode; value: number; color: string }[]
+  items: { key: string; label: React.ReactNode; value: number; color: string; to?: string }[]
   max?: number
   dim?: boolean
   labelWidth?: string
@@ -112,15 +113,20 @@ export function BarList({ items, max, dim, labelWidth = '38%' }: {
   const top = max ?? Math.max(1, ...items.map(i => i.value))
   return (
     <div className="bar-list" style={{ opacity: dim ? 0.5 : 1, '--label-w': labelWidth } as React.CSSProperties}>
-      {items.map(i => (
-        <div key={i.key} className="bar-row">
-          <div className="bar-label">{i.label}</div>
-          <div className="bar-track">
-            <div className="bar-fill" style={{ width: `calc((100% - 56px) * ${i.value / top})`, minWidth: i.value ? 4 : 0, background: i.color }} />
-            <Typography.Text style={{ fontSize: 12, color: token.colorTextSecondary, fontVariantNumeric: 'tabular-nums' }}>{i.value.toLocaleString()}</Typography.Text>
-          </div>
-        </div>
-      ))}
+      {items.map(i => {
+        const row = (
+          <>
+            <div className="bar-label">{i.label}</div>
+            <div className="bar-track">
+              <div className="bar-fill" style={{ width: `calc((100% - 56px) * ${i.value / top})`, minWidth: i.value ? 4 : 0, background: i.color }} />
+              <Typography.Text style={{ fontSize: 12, color: token.colorTextSecondary, fontVariantNumeric: 'tabular-nums' }}>{i.value.toLocaleString()}</Typography.Text>
+            </div>
+          </>
+        )
+        return i.to
+          ? <Link key={i.key} to={i.to} className="bar-row bar-row-link">{row}</Link>
+          : <div key={i.key} className="bar-row">{row}</div>
+      })}
     </div>
   )
 }

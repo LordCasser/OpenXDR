@@ -9,7 +9,7 @@ import { HostLink } from '../components/HostLink'
 import { LoadError } from '../components/LoadError'
 import { eventSummary } from '../components/eventSummary'
 import { CLASS_KEY, fmtTime } from '../components/format'
-import { FilterCard, Page } from '../components/Page'
+import { FilterCard, Page, STICKY_HEADER } from '../components/Page'
 import { useI18n } from '../i18n'
 
 // 日志检索：告警只是线索，取证要能沿着一个 IP、一段命令行翻出原始遥测
@@ -89,6 +89,7 @@ export function EventsPage() {
       >
         {data?.truncated && <Alert type="info" banner showIcon title={t('listTruncated', { n: data.items.length })} />}
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<EventRow>
+          sticky={STICKY_HEADER}
           scroll={{ x: 950 }}
           size="small"
           rowKey="id"

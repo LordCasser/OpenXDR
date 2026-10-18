@@ -103,6 +103,8 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .bar-list { display: flex; flex-direction: column; gap: 12px; }
 .bar-row { display: grid; grid-template-columns: var(--label-w, 38%) 1fr; align-items: center; gap: 12px; }
 .bar-label { min-width: 0; overflow: hidden; }
+.bar-row-link { color: inherit; margin: -4px -8px; padding: 4px 8px; border-radius: 6px; }
+.bar-row-link:hover { background: var(--ant-color-fill-quaternary); color: inherit; }
 .bar-track { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .bar-fill { height: 12px; border-radius: 0 4px 4px 0; }
 .mini-list { margin: 6px 0 16px; }
@@ -155,7 +157,7 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 .funnel { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; }
 .funnel-stage { min-width: 0; padding: 18px 20px; border-radius: 10px; }
 .funnel-foot { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 20px; padding-top: 14px; border-top: 1px dashed var(--ant-color-border-secondary); }
-.funnel-value { font-size: 34px; font-weight: 650; line-height: 1.2; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.funnel-value { font-size: 34px; font-weight: 650; line-height: 1.2; margin-top: 6px; }
 .funnel-arrow { width: 92px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
 .action-row { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 8px; color: inherit; }
 .action-row:hover { background: var(--ant-color-fill-quaternary); }
@@ -167,8 +169,14 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 }
 
 /* ATT&CK 矩阵：每个战术一列 */
-.matrix { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
-.matrix-head { padding: 8px; border-radius: 6px; margin-bottom: 8px; text-align: center; }
+.matrix-scroll { overflow-x: auto; padding-bottom: 4px; }
+.matrix { display: grid; gap: 8px; min-width: min-content; }
+.matrix-head { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px 8px; margin-bottom: 8px; border-bottom: 2px solid; text-align: center; }
+.matrix-cells { display: flex; flex-direction: column; gap: 4px; }
+.matrix-cell { display: block; padding: 3px 0; border-radius: 4px; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; transition: filter .15s; }
+.matrix-cell:hover { filter: brightness(.92); }
+.matrix-cell:focus-visible { outline: 2px solid var(--ant-color-primary); outline-offset: 1px; }
+.matrix-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 
 /* 窄屏导航使用抽屉，给内容保留完整宽度。 */
 .app-content { padding: 24px; }
@@ -236,3 +244,13 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 .welcome-composer .ant-input { border: 0; box-shadow: none !important; padding: 4px 0; resize: none; }
 .welcome-hint { display: block; padding: 0 16px 10px; font-size: 12px; }
 .row-link { cursor: pointer; }
+/* 表格里的数字等宽，列内上下对齐 */
+.ant-table { font-variant-numeric: tabular-nums; }
+@keyframes row-flash { from { background: var(--ant-color-warning-bg); } to { background: transparent; } }
+.row-flash > td { animation: row-flash 4s ease-out; }
+@media (prefers-reduced-motion: reduce) { .row-flash > td { animation: none; background: var(--ant-color-warning-bg); } }
+.queue-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; color: inherit; min-width: 0; }
+.queue-row .ant-tag { margin: 0; flex: none; }
+a.queue-row:hover { background: var(--ant-color-fill-quaternary); color: inherit; }
+.queue-current { background: var(--ant-control-item-bg-active); font-weight: 500; }
+.queue-hint { display: block; padding: 6px 8px 2px; font-size: 12px; }

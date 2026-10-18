@@ -1,16 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImportOutlined, PlusOutlined } from '@ant-design/icons'
-import { App, Button, Input, Select, Space, Table, Tag, Typography } from 'antd'
+import { ImportOutlined, PlusOutlined, RobotOutlined } from '@ant-design/icons'
+import { App, Button, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { assignAsset, fetchAssets, unassignAsset, type Asset } from '../api'
 import { useSession } from '../app/session'
+import { useCanChat, useHandoff } from '../components/Handoff'
 import { ImportHostsModal } from '../components/ImportHostsModal'
 import { LoadError } from '../components/LoadError'
 import { AddHostModal } from '../components/AddHostModal'
 import { errText, HostStateBadge, hostState } from '../components/format'
-import { FilterCard, Page } from '../components/Page'
+import { FilterCard, Page, STICKY_HEADER } from '../components/Page'
 import { useRowLink } from '../components/rowLink'
 import { useI18n } from '../i18n'
 
@@ -37,6 +38,10 @@ export function AssetsPage() {
   const { data, isPending, isFetching, isError, error, dataUpdatedAt, refetch } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
 
   const rowLink = useRowLink<Asset>(a => `/assets/${a.id}`)
+  // 批量：多台同组主机一起交给 AI 巡检；管理员可以一起移组
+  const [selected, setSelected] = useState<string[]>([])
+  const canChat = useCanChat()
+  const handoff = useHandoff()
   const imported = (a: Asset) => hostState(a) === 'imported'
   const rows = (data ?? []).filter(a =>
     (!q || a.hostname.toLowerCase().includes(q.toLowerCase()) || a.ipAddrs?.some(ip => ip.includes(q))) &&
@@ -60,6 +65,21 @@ export function AssetsPage() {
     }
   }
 
+  const picked = (data ?? []).filter(a => selected.includes(a.id))
+  const pickedGroup = picked[0]?.groupId
+  const sameGroup = picked.length > 0 && picked.every(a => a.groupId && a.groupId === pickedGroup)
+  const handTo = () => handoff.start(pickedGroup!, [], t('handoffHostsTitle', { n: picked.length }),
+    t('handoffHostsPrompt', { hosts: picked.map(a => `${a.hostname} (${a.id})`).join(', ') }))
+  const moveMany = (target: string) => modal.confirm({
+    title: t('regroupManyConfirm', { n: picked.length }),
+    content: picked.some(a => a.groupId) ? t('regroupLeaveMany') : undefined,
+    onOk: async () => {
+      for (const a of picked) if ((a.groupId ?? UNGROUPED) !== target) await doMove(a, target)
+      setSelected([])
+    },
+  })
+  const anyChat = groups.some(g => canChat(g.id))
+
   const groupOptions = [{ value: UNGROUPED, label: t('ungrouped') }, ...groups.map(g => ({ value: g.id, label: g.name }))]
   const total = data?.length ?? 0
   const up = (data ?? []).filter(a => hostState(a) === 'online').length
@@ -71,7 +91,21 @@ export function AssetsPage() {
       <AddHostModal open={adding} onClose={() => setAdding(false)} />
       <FilterCard
         onReset={q || groupFilter || draft ? () => { setDraft(''); setParams({}, { replace: true }) } : undefined}
-        extra={<Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} />}
+        extra={(
+          <Space wrap>
+            <Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} />
+            {selected.length > 0 && (
+              <>
+                <Typography.Text type="secondary">{t('batchSelected', { n: selected.length })}</Typography.Text>
+                <Tooltip title={!sameGroup ? t('handoffSameGroup') : picked.length > 10 ? t('handoffMax') : undefined}>
+                  <Button size="small" type="primary" icon={<RobotOutlined />} loading={handoff.busy}
+                    disabled={!sameGroup || picked.length > 10 || !canChat(pickedGroup)} onClick={handTo}>{t('handoffToAI')}</Button>
+                </Tooltip>
+                {isAdmin && <Select size="small" style={{ width: 160 }} placeholder={t('moveToGroup')} value={null} options={groupOptions} onChange={moveMany} />}
+              </>
+            )}
+          </Space>
+        )}
         filters={
           <Space wrap>
             <Input.Search allowClear style={{ width: 280 }} placeholder={t('assetSearchHint')} value={draft} onSearch={v => setFilter({ q: v })} onChange={e => { setDraft(e.target.value); if (!e.target.value) setFilter({ q: '' }) }} />
@@ -80,11 +114,13 @@ export function AssetsPage() {
         }
       >
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<Asset>
+          sticky={STICKY_HEADER}
           scroll={{ x: 1100 }}
           locale={{ emptyText: <EmptyHint title={t(q || groupFilter ? 'noMatch' : 'noAssets')} hint={q || groupFilter ? undefined : t('noAssetsHint')} /> }}
           rowKey="id"
           rowClassName="row-link"
           onRow={rowLink}
+          rowSelection={anyChat || isAdmin ? { selectedRowKeys: selected, onChange: keys => setSelected(keys as string[]) } : undefined}
           loading={isPending}
           dataSource={rows}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
