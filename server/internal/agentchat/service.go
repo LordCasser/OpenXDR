@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -43,6 +44,18 @@ type Service struct {
 	Timeout time.Duration
 	// 规则 UUID 换标题；视图里只有 rule_id，模型自己查不到规则名
 	Rules interface{ TitleOf(id string) string }
+	// running 后台运行中的对话：停机时等它们把终态写完再退出
+	running sync.WaitGroup
+}
+
+// Wait 等后台对话收尾（Base 取消后它们会尽快落终态），最多等到 ctx 结束
+func (s *Service) Wait(ctx context.Context) {
+	done := make(chan struct{})
+	go func() { s.running.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }
 
 // QueryIdentity 给出组的只读查询 DSN，未开通返回空。
@@ -96,7 +109,9 @@ func (s *Service) Start(ctx context.Context, id uuid.UUID, u *ent.User, prompt s
 	if base == nil {
 		base = context.Background()
 	}
+	s.running.Add(1)
 	go func() {
+		defer s.running.Done()
 		if _, err := s.run(base, session, u, prompt, nil); err != nil {
 			slog.Warn("对话运行结束于错误", "session", id, "err", err)
 		}
@@ -147,6 +162,9 @@ func (s *Service) claim(ctx context.Context, id uuid.UUID, u *ent.User, prompt s
 	return session, nil
 }
 
+// interruptedNote 服务重启打断本轮时留给用户的说明
+const interruptedNote = "服务重启打断了本轮，已完成的步骤都已保存，直接接着发送即可继续"
+
 // run 跑完一轮并落终态。有人点停止时会话回到 idle，可以接着问；其余失败记 failed。
 func (s *Service) run(ctx context.Context, session *ent.AgentSession, u *ent.User, prompt string, emit piruntime.Observer) (result *piruntime.Result, retErr error) {
 	id := session.ID
@@ -165,6 +183,12 @@ func (s *Service) run(ctx context.Context, session *ent.AgentSession, u *ent.Use
 				slog.Error("补齐被停止的工具调用失败", "session", id, "err", err)
 			}
 			result, retErr = nil, nil
+		case s.Base != nil && s.Base.Err() != nil:
+			// 进程退出（发版滚动重启）打断的不是会话的错：同停止一样补齐、回到 idle，用户接着发送就能继续
+			if err := s.closeDangling(finish, id, &seq); err != nil {
+				slog.Error("补齐被中断的工具调用失败", "session", id, "err", err)
+			}
+			update.SetError(interruptedNote)
 		case retErr != nil:
 			update.SetStatus("failed").SetError(retErr.Error())
 		}
@@ -377,8 +401,8 @@ func (s *Service) request(ctx context.Context, session *ent.AgentSession, prompt
 		return piruntime.Request{}, err
 	}
 	guide := ""
-	if data["subjects"] != nil {
-		guide = subjectsPrompt
+	if subjects, ok := data["subjects"].([]map[string]any); ok {
+		guide = subjectsPrompt + roster(subjects)
 	}
 	inventoryJSON, err := marshal(data)
 	if err != nil {

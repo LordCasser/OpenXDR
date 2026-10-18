@@ -224,3 +224,39 @@ func TestStartAndCancel(t *testing.T) {
 		t.Fatalf("应补齐被停止的工具调用：%d 条", len(msgs))
 	}
 }
+
+// 进程退出（发版滚动重启）打断本轮：会话回到 idle 并说明原因，停在半截的工具调用补上结果，可以接着发送
+func TestShutdownInterrupt(t *testing.T) {
+	ctx, db := testdb.New(t)
+	group := db.Group.Create().SetName("g").SaveX(ctx)
+	user := db.User.Create().SetUsername("a").SetPasswordHash("unused").SetRole("admin").SaveX(ctx)
+	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(user.Username).SetModel("test").SetStatus("idle").SetTitle("").SaveX(ctx)
+	started := make(chan struct{})
+	base, shutdown := context.WithCancel(context.Background())
+	service := &Service{DB: db, Base: base}
+	service.Runtime = fakeRunner{func(ctx context.Context, r piruntime.Request, h piruntime.Handler, o piruntime.Observer) (*piruntime.Result, error) {
+		call := `{"role":"assistant","content":[{"type":"toolCall","id":"c1","name":"exec","arguments":{}}],"stopReason":"toolUse"}`
+		if err := o(ctx, piruntime.Event{Type: "event", Event: json.RawMessage(`{"type":"message_end","message":` + call + `}`)}); err != nil {
+			return nil, err
+		}
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}
+	if err := service.Start(ctx, session.ID, user, "检查"); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	shutdown()
+	deadline := time.Now().Add(10 * time.Second)
+	for db.AgentSession.GetX(ctx, session.ID).Status == "running" && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	got := db.AgentSession.GetX(ctx, session.ID)
+	if got.Status != "idle" || got.Error == nil || *got.Error != interruptedNote {
+		t.Fatalf("重启打断后应回到 idle 并说明原因：%+v", got)
+	}
+	if n := db.SessionMessage.Query().CountX(ctx); n != 2 {
+		t.Fatalf("应补齐被打断的工具调用：%d 条", n)
+	}
+}

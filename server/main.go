@@ -401,6 +401,7 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = httpServer.Shutdown(shutdownCtx)
+	chat.Wait(shutdownCtx)
 	grpcDone := make(chan struct{})
 	go func() { grpcServer.GracefulStop(); close(grpcDone) }()
 	select {
