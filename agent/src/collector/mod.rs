@@ -719,6 +719,14 @@ mod tests {
             .unwrap();
         let mut reg = ProcessRegistry::default();
         let root = child.id();
+        // spawn 返回时子进程可能还没 exec，那时 /proc/<pid>/environ 仍是父进程的环境；等它换成 sleep
+        let environ = format!("/proc/{root}/environ");
+        for _ in 0..200 {
+            if std::fs::read(&environ).is_ok_and(|e| e.windows(5).any(|w| w == b"cmd-1")) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         assert_eq!(
             launch(&mut reg, root, std::process::id()).as_deref(),
             Some("cmd-1")
