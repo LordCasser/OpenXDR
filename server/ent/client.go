@@ -29,6 +29,7 @@ import (
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
+	"openxdr/server/ent/memory"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
 	"openxdr/server/ent/session"
@@ -88,6 +89,8 @@ type Client struct {
 	Incident *IncidentClient
 	// Intel is the client for interacting with the Intel builders.
 	Intel *IntelClient
+	// Memory is the client for interacting with the Memory builders.
+	Memory *MemoryClient
 	// ProcessBaseline is the client for interacting with the ProcessBaseline builders.
 	ProcessBaseline *ProcessBaselineClient
 	// Report is the client for interacting with the Report builders.
@@ -137,6 +140,7 @@ func (c *Client) init() {
 	c.IPInfo = NewIPInfoClient(c.config)
 	c.Incident = NewIncidentClient(c.config)
 	c.Intel = NewIntelClient(c.config)
+	c.Memory = NewMemoryClient(c.config)
 	c.ProcessBaseline = NewProcessBaselineClient(c.config)
 	c.Report = NewReportClient(c.config)
 	c.Session = NewSessionClient(c.config)
@@ -257,6 +261,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IPInfo:          NewIPInfoClient(cfg),
 		Incident:        NewIncidentClient(cfg),
 		Intel:           NewIntelClient(cfg),
+		Memory:          NewMemoryClient(cfg),
 		ProcessBaseline: NewProcessBaselineClient(cfg),
 		Report:          NewReportClient(cfg),
 		Session:         NewSessionClient(cfg),
@@ -304,6 +309,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IPInfo:          NewIPInfoClient(cfg),
 		Incident:        NewIncidentClient(cfg),
 		Intel:           NewIntelClient(cfg),
+		Memory:          NewMemoryClient(cfg),
 		ProcessBaseline: NewProcessBaselineClient(cfg),
 		Report:          NewReportClient(cfg),
 		Session:         NewSessionClient(cfg),
@@ -346,7 +352,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
 		c.AuditLog, c.Command, c.CommandPolicy, c.EnrollToken, c.Event, c.Finding,
 		c.Group, c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Intel,
-		c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
+		c.Memory, c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
 		c.Suppression, c.Task, c.TaskRun, c.User, c.Zone,
 	} {
 		n.Use(hooks...)
@@ -360,7 +366,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
 		c.AuditLog, c.Command, c.CommandPolicy, c.EnrollToken, c.Event, c.Finding,
 		c.Group, c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Intel,
-		c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
+		c.Memory, c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
 		c.Suppression, c.Task, c.TaskRun, c.User, c.Zone,
 	} {
 		n.Intercept(interceptors...)
@@ -406,6 +412,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Incident.mutate(ctx, m)
 	case *IntelMutation:
 		return c.Intel.mutate(ctx, m)
+	case *MemoryMutation:
+		return c.Memory.mutate(ctx, m)
 	case *ProcessBaselineMutation:
 		return c.ProcessBaseline.mutate(ctx, m)
 	case *ReportMutation:
@@ -2985,6 +2993,139 @@ func (c *IntelClient) mutate(ctx context.Context, m *IntelMutation) (Value, erro
 	}
 }
 
+// MemoryClient is a client for the Memory schema.
+type MemoryClient struct {
+	config
+}
+
+// NewMemoryClient returns a client for the Memory from the given config.
+func NewMemoryClient(c config) *MemoryClient {
+	return &MemoryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `memory.Hooks(f(g(h())))`.
+func (c *MemoryClient) Use(hooks ...Hook) {
+	c.hooks.Memory = append(c.hooks.Memory, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `memory.Intercept(f(g(h())))`.
+func (c *MemoryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Memory = append(c.inters.Memory, interceptors...)
+}
+
+// Create returns a builder for creating a Memory entity.
+func (c *MemoryClient) Create() *MemoryCreate {
+	mutation := newMemoryMutation(c.config, OpCreate)
+	return &MemoryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Memory entities.
+func (c *MemoryClient) CreateBulk(builders ...*MemoryCreate) *MemoryCreateBulk {
+	return &MemoryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MemoryClient) MapCreateBulk(slice any, setFunc func(*MemoryCreate, int)) *MemoryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MemoryCreateBulk{err: fmt.Errorf("calling to MemoryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MemoryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MemoryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Memory.
+func (c *MemoryClient) Update() *MemoryUpdate {
+	mutation := newMemoryMutation(c.config, OpUpdate)
+	return &MemoryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MemoryClient) UpdateOne(_m *Memory) *MemoryUpdateOne {
+	mutation := newMemoryMutation(c.config, OpUpdateOne, withMemory(_m))
+	return &MemoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MemoryClient) UpdateOneID(id uuid.UUID) *MemoryUpdateOne {
+	mutation := newMemoryMutation(c.config, OpUpdateOne, withMemoryID(id))
+	return &MemoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Memory.
+func (c *MemoryClient) Delete() *MemoryDelete {
+	mutation := newMemoryMutation(c.config, OpDelete)
+	return &MemoryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MemoryClient) DeleteOne(_m *Memory) *MemoryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MemoryClient) DeleteOneID(id uuid.UUID) *MemoryDeleteOne {
+	builder := c.Delete().Where(memory.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MemoryDeleteOne{builder}
+}
+
+// Query returns a query builder for Memory.
+func (c *MemoryClient) Query() *MemoryQuery {
+	return &MemoryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMemory},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Memory entity by its id.
+func (c *MemoryClient) Get(ctx context.Context, id uuid.UUID) (*Memory, error) {
+	return c.Query().Where(memory.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MemoryClient) GetX(ctx context.Context, id uuid.UUID) *Memory {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MemoryClient) Hooks() []Hook {
+	return c.hooks.Memory
+}
+
+// Interceptors returns the client interceptors.
+func (c *MemoryClient) Interceptors() []Interceptor {
+	return c.inters.Memory
+}
+
+func (c *MemoryClient) mutate(ctx context.Context, m *MemoryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MemoryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MemoryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MemoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MemoryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Memory mutation op: %q", m.Op())
+	}
+}
+
 // ProcessBaselineClient is a client for the ProcessBaseline schema.
 type ProcessBaselineClient struct {
 	config
@@ -4320,13 +4461,14 @@ type (
 	hooks struct {
 		AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog, Command,
 		CommandPolicy, EnrollToken, Event, Finding, Group, GroupMember, HostCredential,
-		IPInfo, Incident, Intel, ProcessBaseline, Report, Session, SessionMessage,
-		Setting, Suppression, Task, TaskRun, User, Zone []ent.Hook
+		IPInfo, Incident, Intel, Memory, ProcessBaseline, Report, Session,
+		SessionMessage, Setting, Suppression, Task, TaskRun, User, Zone []ent.Hook
 	}
 	inters struct {
 		AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog, Command,
 		CommandPolicy, EnrollToken, Event, Finding, Group, GroupMember, HostCredential,
-		IPInfo, Incident, Intel, ProcessBaseline, Report, Session, SessionMessage,
-		Setting, Suppression, Task, TaskRun, User, Zone []ent.Interceptor
+		IPInfo, Incident, Intel, Memory, ProcessBaseline, Report, Session,
+		SessionMessage, Setting, Suppression, Task, TaskRun, User,
+		Zone []ent.Interceptor
 	}
 )

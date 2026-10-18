@@ -224,6 +224,18 @@ func (f IntelFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntelMutation", m)
 }
 
+// The MemoryFunc type is an adapter to allow the use of ordinary
+// function as Memory mutator.
+type MemoryFunc func(context.Context, *ent.MemoryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MemoryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MemoryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MemoryMutation", m)
+}
+
 // The ProcessBaselineFunc type is an adapter to allow the use of ordinary
 // function as ProcessBaseline mutator.
 type ProcessBaselineFunc func(context.Context, *ent.ProcessBaselineMutation) (ent.Value, error)

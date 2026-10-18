@@ -69,6 +69,7 @@ const router = createBrowserRouter([
       { path: 'reports', ...page(() => import('./pages/ReportsPage'), 'ReportsPage') },
       { path: 'tasks', ...page(() => import('./pages/TasksPage'), 'TasksPage') },
       { path: 'findings', ...page(() => import('./pages/FindingsPage'), 'FindingsPage') },
+      { path: 'memories', ...page(() => import('./pages/MemoriesPage'), 'MemoriesPage') },
       { path: 'approvals', ...page(() => import('./pages/ApprovalsPage'), 'ApprovalsPage') },
       { path: 'rules', ...page(() => import('./pages/RulesPage'), 'RulesPage') },
       // ATT&CK 矩阵并入检测规则页，老链接跳到对应标签

@@ -478,6 +478,25 @@ async function send(method: string, url: string, body?: unknown): Promise<Respon
   return r
 }
 
+export interface MemoryRow {
+  id: string
+  groupId: string
+  assetId: string | null
+  hostname?: string
+  content: string
+  source: 'ai' | 'human'
+  author: string
+  sessionId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// 组内长期记忆：AI 在会话里记下的环境知识，人可以补充、改正、删除
+export const fetchMemories = () => get<MemoryRow[]>('/api/memories')
+export const createMemory = (body: { groupId: string; assetId?: string; content: string }) => send('POST', '/api/memories', body)
+export const updateMemory = (id: string, content: string) => send('PATCH', `/api/memories/${id}`, { content })
+export const deleteMemory = (id: string) => send('DELETE', `/api/memories/${id}`)
+
 export const fetchGroups = () => get<GroupRow[]>('/api/groups')
 export const createGroup = async (name: string): Promise<GroupRow> =>
   (await send('POST', '/api/groups', { name })).json()

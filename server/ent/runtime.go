@@ -21,6 +21,7 @@ import (
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
+	"openxdr/server/ent/memory"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
 	"openxdr/server/ent/schema"
@@ -325,6 +326,22 @@ func init() {
 	intelDescID := intelFields[0].Descriptor()
 	// intel.DefaultID holds the default value on creation for the id field.
 	intel.DefaultID = intelDescID.Default.(func() uuid.UUID)
+	memoryFields := schema.Memory{}.Fields()
+	_ = memoryFields
+	// memoryDescCreatedAt is the schema descriptor for created_at field.
+	memoryDescCreatedAt := memoryFields[1].Descriptor()
+	// memory.DefaultCreatedAt holds the default value on creation for the created_at field.
+	memory.DefaultCreatedAt = memoryDescCreatedAt.Default.(func() time.Time)
+	// memoryDescUpdatedAt is the schema descriptor for updated_at field.
+	memoryDescUpdatedAt := memoryFields[2].Descriptor()
+	// memory.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	memory.DefaultUpdatedAt = memoryDescUpdatedAt.Default.(func() time.Time)
+	// memory.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	memory.UpdateDefaultUpdatedAt = memoryDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// memoryDescID is the schema descriptor for id field.
+	memoryDescID := memoryFields[0].Descriptor()
+	// memory.DefaultID holds the default value on creation for the id field.
+	memory.DefaultID = memoryDescID.Default.(func() uuid.UUID)
 	processbaselineFields := schema.ProcessBaseline{}.Fields()
 	_ = processbaselineFields
 	// processbaselineDescID is the schema descriptor for id field.

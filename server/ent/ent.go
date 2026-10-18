@@ -24,6 +24,7 @@ import (
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
+	"openxdr/server/ent/memory"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
 	"openxdr/server/ent/session"
@@ -118,6 +119,7 @@ func checkColumn(t, c string) error {
 			ipinfo.Table:          ipinfo.ValidColumn,
 			incident.Table:        incident.ValidColumn,
 			intel.Table:           intel.ValidColumn,
+			memory.Table:          memory.ValidColumn,
 			processbaseline.Table: processbaseline.ValidColumn,
 			report.Table:          report.ValidColumn,
 			session.Table:         session.ValidColumn,

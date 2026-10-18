@@ -48,6 +48,8 @@ type Tx struct {
 	Incident *IncidentClient
 	// Intel is the client for interacting with the Intel builders.
 	Intel *IntelClient
+	// Memory is the client for interacting with the Memory builders.
+	Memory *MemoryClient
 	// ProcessBaseline is the client for interacting with the ProcessBaseline builders.
 	ProcessBaseline *ProcessBaselineClient
 	// Report is the client for interacting with the Report builders.
@@ -217,6 +219,7 @@ func (tx *Tx) init() {
 	tx.IPInfo = NewIPInfoClient(tx.config)
 	tx.Incident = NewIncidentClient(tx.config)
 	tx.Intel = NewIntelClient(tx.config)
+	tx.Memory = NewMemoryClient(tx.config)
 	tx.ProcessBaseline = NewProcessBaselineClient(tx.config)
 	tx.Report = NewReportClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)

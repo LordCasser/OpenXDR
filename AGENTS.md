@@ -138,7 +138,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
   抑制与情报都可撤销、有有效期、持续累计命中计数；所有登录与处置操作落审计日志。
 - **AI 边界**：旧 triage 仍使用受限调查工具与最多 6 轮研判；Pi 会话使用
   `agentchat` / `commandgate`：exec 绑定组、名单与审批，query 仅使用组专属只读视图身份，
-  report、track（运维待办）与 identify（服务调查结论）绑定会话归组。Pi 不注册本机 shell/文件工具，模型不能改写身份或来源。
+  report、track（运维待办）、identify（服务调查结论）与 remember / forget（组内长期记忆，人工优先、AI 只能删自己写的）绑定会话归组。Pi 不注册本机 shell/文件工具，模型不能改写身份或来源。
   模型输出与工具结果视为不可信输入；配置和接口见 `docs/pi-backend.md`。
 - **Rust 特性**：默认构建不依赖任何外部二进制（protoc 由 crate 分发）；
   `ebpf`/`xdp` 是可选特性，CI 单独构建。写采集端代码注意 `cfg(target_os)` 分支，

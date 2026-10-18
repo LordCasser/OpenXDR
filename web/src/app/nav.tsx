@@ -1,7 +1,5 @@
 import {
-  AimOutlined, AlertOutlined, AuditOutlined, DeploymentUnitOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined,
-  DashboardOutlined, FileSearchOutlined, FileTextOutlined, RobotOutlined, SafetyOutlined, SearchOutlined, SettingOutlined, StopOutlined,
-  TeamOutlined, ToolOutlined, UserOutlined,
+  AimOutlined, AlertOutlined, AuditOutlined, BulbOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined, DashboardOutlined, DeploymentUnitOutlined, FileSearchOutlined, FileTextOutlined, RobotOutlined, SafetyOutlined, SearchOutlined, SettingOutlined, StopOutlined, TeamOutlined, ToolOutlined, UserOutlined,
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import type { MsgKey } from '../i18n'
@@ -48,6 +46,7 @@ export const NAV: (NavItem | NavGroup)[] = [
     items: [
       { path: '/reports', key: 'navReports', icon: <FileTextOutlined />, hotkey: 'r' },
       { path: '/tasks', key: 'navTasks', icon: <ClockCircleOutlined />, hotkey: 't' },
+      { path: '/memories', key: 'navMemories', icon: <BulbOutlined /> },
       { path: '/approvals', key: 'navApprovals', icon: <CheckCircleOutlined />, groupAdmin: true, hotkey: 'p' },
     ],
   },

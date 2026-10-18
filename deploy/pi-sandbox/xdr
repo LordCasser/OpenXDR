@@ -32,6 +32,9 @@ usage() {
   xdr track <主机名> <key> <low|medium|high> <open|resolved|withdrawn> <标题> <详情>
   xdr identify <主机名> <tcp/端口|udp/端口> <high|medium|low> <服务名> <依据与结论>
   xdr egress <主机名> <公网地址> <high|medium|low> <用途> <依据与结论>
+  xdr memories                           本组长期记忆（id、来源、主机、内容）
+  xdr remember [主机名|-] <内容>          记下以后用得上的环境事实（- 表示整个组）
+  xdr forget <记忆 id>                   删掉过时的 AI 记忆
   xdr report <标题> <Markdown 文件>       保存最终报告
 U
 }
@@ -57,6 +60,19 @@ case "$cmd" in
   egress)
     [ $# -ge 5 ] || { usage; exit 2; }
     call egress "$(jq -cn --arg h "$(host_id "$1")" --arg ip "$2" --arg r "$3" --arg n "$4" --arg note "$5" '{host:$h,ip:$ip,risk:$r,name:$n,note:$note}')" ;;
+  memories) context | jq -r '(.memories // [])[] | [.id, .source, (.host // "-"), .content] | @tsv' ;;
+  remember)
+    if [ $# -ge 2 ]; then
+      host=""; [ "$1" = "-" ] || host=$(host_id "$1")
+      call remember "$(jq -cn --arg h "$host" --arg c "$2" 'if $h == "" then {content:$c} else {host:$h,content:$c} end')"
+    elif [ $# -eq 1 ]; then
+      call remember "$(jq -cn --arg c "$1" '{content:$c}')"
+    else
+      usage; exit 2
+    fi ;;
+  forget)
+    [ $# -ge 1 ] || { usage; exit 2; }
+    call forget "$(jq -cn --arg i "$1" '{id:$i}')" ;;
   report)
     [ $# -ge 2 ] && [ -f "$2" ] || { usage; exit 2; }
     call report "$(jq -cn --arg t "$1" --rawfile m "$2" '{title:$t,markdown:$m}')" ;;
