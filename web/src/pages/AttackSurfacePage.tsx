@@ -53,18 +53,18 @@ export function AttackSurfacePage() {
       {query.isError ? <LoadError error={query.error} onRetry={() => query.refetch()} /> : (
         <Flex vertical gap={16}>
           <Row gutter={[16, 16]}>
-            <Col xs={12} lg={6} xl={4}><Stat label={t('surfInternet')} value={s?.summary.internet ?? '-'} tone={s?.summary.internet ? token.colorError : undefined} /></Col>
-            <Col xs={12} lg={6} xl={4}><Stat label={t('surfDmz')} value={s?.summary.dmz ?? '-'} tone={s?.summary.dmz ? token.colorWarning : undefined} /></Col>
-            <Col xs={12} lg={6} xl={4}><Stat label={t('surfInternal')} value={s?.summary.internal ?? '-'} /></Col>
-            <Col xs={12} lg={6} xl={4}><Stat label={t('surfHigh')} value={s?.summary.high ?? '-'} tone={s?.summary.high ? token.colorError : undefined} /></Col>
-            <Col xs={12} lg={6} xl={4}><Stat label={t('surfBlind')} value={s?.summary.blind ?? '-'} tone={s?.summary.blind ? token.colorWarning : undefined} /></Col>
+            <Col xs={12} md={8} xl={{ flex: '20%' }}><Stat label={t('surfInternet')} value={s?.summary.internet ?? '-'} tone={s?.summary.internet ? token.colorError : undefined} /></Col>
+            <Col xs={12} md={8} xl={{ flex: '20%' }}><Stat label={t('surfDmz')} value={s?.summary.dmz ?? '-'} tone={s?.summary.dmz ? token.colorWarning : undefined} /></Col>
+            <Col xs={12} md={8} xl={{ flex: '20%' }}><Stat label={t('surfInternal')} value={s?.summary.internal ?? '-'} /></Col>
+            <Col xs={12} md={8} xl={{ flex: '20%' }}><Stat label={t('surfHigh')} value={s?.summary.high ?? '-'} tone={s?.summary.high ? token.colorError : undefined} /></Col>
+            <Col xs={12} md={8} xl={{ flex: '20%' }}><Stat label={t('surfBlind')} value={s?.summary.blind ?? '-'} tone={s?.summary.blind ? token.colorWarning : undefined} /></Col>
           </Row>
           {!!s?.summary.noInventory.length && (
             <Alert type="info" showIcon title={t('surfNoInventory', { n: s.summary.noInventory.length, hosts: s.summary.noInventory.slice(0, 8).join('、') })} />
           )}
           <Card title={t('exposuresTitle')} styles={{ body: { padding: 0 } }}
             extra={<Space wrap>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{view === 'graph' ? t('surfaceGraphHint') : t('portGuessHint')}</Typography.Text>
+              <Typography.Text className="card-hint" type="secondary" style={{ fontSize: 12 }}>{view === 'graph' ? t('surfaceGraphHint') : t('portGuessHint')}</Typography.Text>
               {view === 'graph' && <Space size={6}><Switch size="small" checked={hideLow} onChange={setHideLow} aria-label={t('hideLowRisk')} />{t('hideLowRisk')}</Space>}
               <Segmented size="small" value={view} onChange={v => setView(v as 'graph' | 'list')}
                 options={[{ value: 'graph', label: t('viewGraph') }, { value: 'list', label: t('viewList') }]} />

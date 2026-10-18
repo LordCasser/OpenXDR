@@ -44,7 +44,7 @@ export function RulesPage() {
     >
       {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<RuleRow>
           sticky={STICKY_HEADER}
-        scroll={{ x: 850 }}
+        scroll={{ x: 900 }}
         size="small"
         rowKey="id"
         loading={isPending}
@@ -58,7 +58,7 @@ export function RulesPage() {
           { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} />, sorter: (a, b) => a.severity - b.severity },
           { title: t('thClass'), dataIndex: 'classUid', width: 110, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v || t('allClasses')) },
           { title: t('thPlatform'), dataIndex: 'product', width: 110, render: v => v || '-' },
-          { title: t('thDataSource'), width: 140, render: (_, r) => (r.ingested ? <Tag>{r.source}</Tag> : <Tag color="warning">{t('noDataSource')}</Tag>) },
+          { title: t('thDataSource'), width: 190, render: (_, r) => (r.ingested ? <Tag>{r.source}</Tag> : <Tag color="warning">{t('noDataSource')}</Tag>) },
         ]}
       />}
     </FilterCard>

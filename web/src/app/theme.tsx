@@ -19,6 +19,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     <ThemeContext.Provider value={{ dark, toggle }}>
       <ConfigProvider
         locale={locale === 'zh' ? zhCN : enUS}
+        // 两个汉字的按钮不插空格：「保存」「关闭」和其他按钮读起来一致
+        button={{ autoInsertSpace: false }}
         theme={{
           algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
           token: {

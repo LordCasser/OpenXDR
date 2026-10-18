@@ -317,3 +317,15 @@ a.queue-row:hover { background: var(--ant-color-fill-quaternary); color: inherit
 .worker-typing i:nth-child(3) { animation-delay: .4s; }
 @keyframes worker-typing { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .worker-pulse, .worker-typing i { animation: none; } }
+
+/* 日志摘要的复制按钮只在悬停或键盘聚焦时出现，免得每行都挂一个蓝色图标；触屏没有悬停，照常显示 */
+@media (hover: hover) {
+  .ev-copy .ant-typography-copy { opacity: 0; transition: opacity .15s; }
+  .ant-table-row:hover .ev-copy .ant-typography-copy, .ev-copy .ant-typography-copy:focus-visible { opacity: 1; }
+}
+
+/* 窄屏卡片头放不下标题和操作时折行，长说明文字收起，标题不被挤掉 */
+@media (max-width: 700px) {
+  .ant-card-head-wrapper { flex-wrap: wrap; row-gap: 4px; padding: 8px 0; }
+  .card-hint { display: none; }
+}

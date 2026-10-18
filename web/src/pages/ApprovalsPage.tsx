@@ -53,7 +53,7 @@ function PolicyCard({ groupId, origin, rows }: { groupId: string; origin: 'ai' |
         rowKey="id"
         pagination={false}
         dataSource={rows.filter(p => p.origin === origin)}
-        locale={{ emptyText: t('policyEmpty') }}
+        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('policyEmpty')} /> }}
         columns={[
           { dataIndex: 'pattern', render: v => <code className="cmd-cell">{v}</code> },
           {

@@ -231,7 +231,7 @@ export function AssetDetailPage() {
                   label: t('tabCommands'),
                   children: (
                     <Table size="small" rowKey="id" loading={commands.isPending} dataSource={commands.data ?? []} pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                      locale={{ emptyText: t('noCommands') }}
+                      locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noCommands')} /> }}
                       columns={[
                         { title: t('thTime'), dataIndex: 'createdAt', render: fmtTime, width: 170 },
                         { title: t('thAction'), dataIndex: 'kind', width: 120, render: v => commandKind(v, t) },
@@ -265,8 +265,8 @@ export function AssetDetailPage() {
               <Descriptions.Item label={t('agentVersion')}>{asset.agentVersion ?? '-'}</Descriptions.Item>
               <Descriptions.Item label={t('firstSeen')}>{fmtTime(asset.firstSeen)}</Descriptions.Item>
               <Descriptions.Item label={t('thLastSeen')}>{asset.agentId ? fmtTime(asset.lastSeen) : '—'}</Descriptions.Item>
-              <Descriptions.Item label="Agent ID">{asset.agentId ? <Typography.Text className="mono" copyable ellipsis style={{ fontSize: 12, maxWidth: 200 }}>{asset.agentId}</Typography.Text> : '-'}</Descriptions.Item>
-              <Descriptions.Item label="ID"><Typography.Text className="mono" copyable ellipsis style={{ fontSize: 12, maxWidth: 200 }}>{asset.id}</Typography.Text></Descriptions.Item>
+              <Descriptions.Item label="Agent ID">{asset.agentId ? <Typography.Text className="mono" copyable ellipsis style={{ maxWidth: 200 }}>{asset.agentId}</Typography.Text> : '-'}</Descriptions.Item>
+              <Descriptions.Item label="ID"><Typography.Text className="mono" copyable ellipsis style={{ maxWidth: 200 }}>{asset.id}</Typography.Text></Descriptions.Item>
             </Descriptions>
           </Card>
         </Col>

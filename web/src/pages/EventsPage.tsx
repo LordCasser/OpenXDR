@@ -159,7 +159,7 @@ export function EventsPage() {
                   <span className="ev-summary">
                     {!wideTable && <EventKind classUid={r.classUid} compact />}
                     {act && <span className={`ev-act ev-act-${act.tone}`}>{act.label}</span>}
-                    <Typography.Text className="mono" copyable={{ text, onCopy: e => e?.stopPropagation() }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ flex: 1, minWidth: 0 }}>
+                    <Typography.Text className="mono ev-copy" copyable={{ text, onCopy: e => e?.stopPropagation() }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ flex: 1, minWidth: 0 }}>
                       {text}
                     </Typography.Text>
                   </span>

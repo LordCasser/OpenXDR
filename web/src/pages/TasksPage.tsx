@@ -143,7 +143,7 @@ function Runs({ runs, loading }: { runs: TaskRunRow[]; loading: boolean }) {
       loading={loading}
       dataSource={runs}
       pagination={{ pageSize: 10, hideOnSinglePage: true }}
-      locale={{ emptyText: t('noTaskRuns') }}
+      locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noTaskRuns')} /> }}
       columns={[
         { title: t('thStartedAt'), dataIndex: 'startedAt', render: fmtTime, width: 170 },
         { title: t('thFinishedAt'), dataIndex: 'finishedAt', render: fmtTime, width: 170 },

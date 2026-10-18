@@ -237,7 +237,7 @@ export function IncidentDetailPage() {
             {queue.total > 1 && queue.index >= 0 && <QueueCard items={queue.items} index={queue.index} />}
             <Card title={t('basicInfo')}>
               <Descriptions column={1} size="small">
-                <Descriptions.Item label="ID"><Typography.Text className="mono" copyable style={{ fontSize: 12 }}>{inc.id}</Typography.Text></Descriptions.Item>
+                <Descriptions.Item label="ID"><Typography.Text className="mono" copyable ellipsis style={{ maxWidth: 220 }}>{inc.id}</Typography.Text></Descriptions.Item>
                 <Descriptions.Item label={t('thStatus')}><IncidentStatusTag value={inc.status} /></Descriptions.Item>
                 <Descriptions.Item label={t('thSeverity')}><SeverityTag value={inc.severity} /></Descriptions.Item>
                 <Descriptions.Item label={t('thCreatedAt')}>{fmtTime(inc.createdAt)}</Descriptions.Item>

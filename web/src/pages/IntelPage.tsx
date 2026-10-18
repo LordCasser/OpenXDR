@@ -1,6 +1,6 @@
 import { ImportOutlined, SyncOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Flex, Form, Input, InputNumber, List, Modal, Popconfirm, Space, Spin, Switch, Table, Tag, Typography } from 'antd'
+import { App, Button, Card, Empty, Flex, Form, Input, InputNumber, List, Modal, Popconfirm, Space, Spin, Switch, Table, Tag, Typography } from 'antd'
 import { useRef, useState } from 'react'
 import { deleteIntel, fetchIntel, fetchIntelFeeds, importIntel, saveIntelFeeds, syncIntelFeeds, type IntelRow } from '../api'
 import { useSession } from '../app/session'
@@ -73,7 +73,7 @@ function FeedsCard() {
         rowKey="id"
         dataSource={data?.hits ?? []}
         pagination={{ pageSize: 10, hideOnSinglePage: true }}
-        locale={{ emptyText: t('intelFeedNoHits') }}
+        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('intelFeedNoHits')} /> }}
         columns={[
           { title: t('thKind'), dataIndex: 'kind', width: 90, render: v => <Tag>{v}</Tag> },
           { title: t('thValue'), dataIndex: 'value', render: (v, r) => <span className="mono" title={r.note ?? ''}>{v}</span> },
@@ -134,7 +134,7 @@ export function IntelPage() {
           loading={isPending}
           dataSource={data ?? []}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
-          locale={{ emptyText: t('noIntel') }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIntel')} /> }}
           columns={[
             { title: t('thKind'), dataIndex: 'kind', width: 90, render: v => <Tag>{v}</Tag> },
             { title: t('thValue'), dataIndex: 'value', render: (v, r) => <span className="mono" title={r.note ?? ''}>{v}</span> },
