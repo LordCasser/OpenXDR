@@ -117,7 +117,8 @@ Agent 将待签私钥写入 `agent.key.pending`；申请被拒绝不覆盖已有
 
 - `GET /api/host-import/status`：`credentialStorage`、`sshEnrollment`、`aiParsing` 能力状态。
 - `POST /api/host-import/extract`：multipart `groupId`、`file` → `{document,images:[{name,dataUrl}]}`；仅组管理员可用，敏感响应禁止缓存。
-- `POST /api/host-import/analyze`：`{groupId,document,images}` → `{hosts}`；主机含可编辑元数据、`lines`、`images`（从 1 开始的图像编号）、`issues`、`needsReview` 及可选 `credentialToken`，不返回秘密。
+- `POST /api/host-import/analyze`：`{groupId,document,images}` → 后台任务 `{id,status}`，立即返回；模型在服务端跑，关掉窗口、换页、刷新都不打断。同一组同时只有一份在解析（409），全局并发 2（429）。
+- `GET /api/host-import/analyze?groupId=`：读自己在这个组最近一次的提取，`status` 为 none / running / done / failed，done 时 `result` 为 `{hosts}`：主机含可编辑元数据、`lines`、`images`（从 1 开始的图像编号）、`issues`、`needsReview` 及可选 `credentialToken`，不返回秘密。文档原文只在内存里交给模型、不落库；结果只存封存后的凭据令牌，一小时后清掉，确认导入后立即清掉。`DELETE` 同路径放弃这次结果。
 - `POST /api/host-import/confirm`：`{groupId,hosts,confirmed:true}` → `{assetIds}`；无模型调用。移除 `credentialToken` 表示不保存该凭据。重复主机、过期引用、跨用户/组引用及现有资产冲突均拒绝。
 - `POST /api/host-import/preview`：`{groupId,document,images}` → `{digest,hosts}`，hosts 不包含秘密。
 - `POST /api/host-import/commit`：`{groupId,document,digest}` → `{assetIds}`，重新解析原文并

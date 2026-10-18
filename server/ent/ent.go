@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"openxdr/server/ent/agentsession"
+	"openxdr/server/ent/aijob"
 	"openxdr/server/ent/aiusage"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/approval"
@@ -101,6 +102,7 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			aijob.Table:           aijob.ValidColumn,
 			aiusage.Table:         aiusage.ValidColumn,
 			agentsession.Table:    agentsession.ValidColumn,
 			alert.Table:           alert.ValidColumn,

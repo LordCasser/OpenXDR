@@ -332,8 +332,11 @@ export interface EventExplanation {
   related: { id: string; why: string }[]
 }
 export const fetchRelatedEvents = (id: string) => get<RelatedGroup[]>(`/api/events/${id}/related`)
-export const explainEvent = async (id: string, lang: string): Promise<EventExplanation> =>
-  (await send('POST', `/api/events/${id}/explain?lang=${lang}`)).json()
+// 后台 AI 任务：发起后立即返回，结果在服务端，前端轮询；换页、刷新都能接着看
+export interface AIJob<T> { id?: string; status: 'none' | 'running' | 'done' | 'failed'; result?: T; error?: string; createdAt?: string; finishedAt?: string }
+export const fetchExplain = (id: string, lang: string) => get<AIJob<EventExplanation>>(`/api/events/${id}/explain?lang=${lang}`)
+export const startExplain = async (id: string, lang: string, refresh = false): Promise<AIJob<EventExplanation>> =>
+  (await send('POST', `/api/events/${id}/explain?lang=${lang}${refresh ? '&refresh=1' : ''}`)).json()
 
 export const searchEvents = (params: {
   assetId?: string
@@ -776,11 +779,13 @@ export interface HostImportPreview { hosts: ReviewedHost[] }
 export interface HostCredential extends ImportedHost { id: string; assetId: string }
 export const fetchHostImportStatus = () => get<{ credentialStorage: boolean; sshEnrollment: boolean; aiParsing: boolean }>('/api/host-import/status')
 export const fetchHostCredentials = (groupId: string) => get<HostCredential[]>(`/api/host-import/credentials?groupId=${encodeURIComponent(groupId)}`)
-export async function previewHostImport(groupId: string, document: string, images: HostDocumentImage[] = []): Promise<HostImportPreview> {
+export async function startHostImport(groupId: string, document: string, images: HostDocumentImage[] = []): Promise<AIJob<HostImportPreview>> {
   const r = await post('/api/host-import/analyze', { groupId, document, images })
   if (!r.ok) await fail(r)
   return r.json()
 }
+export const fetchHostImportJob = (groupId: string) => get<AIJob<HostImportPreview>>(`/api/host-import/analyze?groupId=${encodeURIComponent(groupId)}`)
+export const discardHostImportJob = (groupId: string) => send('DELETE', `/api/host-import/analyze?groupId=${encodeURIComponent(groupId)}`)
 export async function commitHostImport(groupId: string, hosts: ReviewedHost[]): Promise<{ assetIds: string[] }> {
   const r = await post('/api/host-import/confirm', { groupId, hosts, confirmed: true })
   if (!r.ok) await fail(r)

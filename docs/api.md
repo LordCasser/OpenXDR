@@ -24,7 +24,8 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | GET | `/api/incidents/{id}/report` | 事件报告（Markdown 附件下载）：判定、攻击链、涉及实体、告警时间线、处置记录、处置建议 |
 | GET | `/api/events` | 原始事件检索，参数见下 |
 | GET | `/api/events/{id}/related` | 与这条日志有确定关联的日志，按关联方式分组：ancestor 父进程链 / process 同一进程 / child 子进程 / connection 同一连接 / peer 别的主机连同一远端 / nearby 同主机前后两分钟；只取调用者可见的资产 |
-| POST | `/api/events/{id}/explain?lang=` | 问 AI（analyst）：模型读这条日志与上面的候选，返回判定（benign / suspicious / malicious / unknown）、结论、依据、下一步，以及从候选里挑出的相关日志；未配置研判与标注模型时 503 |
+| POST | `/api/events/{id}/explain?lang=&refresh=` | 问 AI（analyst）：发起后台解读并立即返回任务 `{id,status,result,error}`。模型读这条日志与上面的候选，`result` 含判定（benign / suspicious / malicious / unknown）、结论、依据、下一步，以及从候选里挑出的相关日志。已有在跑的或已有结果时直接返回它，`refresh=1` 才重新解读；未配置研判与标注模型时 503 |
+| GET | `/api/events/{id}/explain?lang=` | 读自己对这条日志的最近一次解读：`status` 为 none / running / done / failed；前端在 running 时轮询。解读按发起人存，保留 7 天 |
 | GET | `/api/stats` | 概览：24h 降噪漏斗、告警趋势、按级别的告警分布（`alertsBySeverity`）、Top 规则、资产在线率；`reviewIncidents` 为需人工复核的事件数（口径同 `status=review`） |
 | GET | `/api/rules` | 引擎当前加载的规则（热重载后即时反映），含数据源覆盖标记与 ATT&CK 标签 |
 | GET | `/api/attack` | ATT&CK 覆盖矩阵：按杀伤链顺序的战术列与技术格，含未打标签、无数据源的规则数 |

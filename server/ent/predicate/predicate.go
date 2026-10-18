@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// AIJob is the predicate function for aijob builders.
+type AIJob func(*sql.Selector)
+
 // AIUsage is the predicate function for aiusage builders.
 type AIUsage func(*sql.Selector)
 

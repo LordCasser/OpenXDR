@@ -52,14 +52,43 @@ func TestAIHostImportReviewedSnapshot(t *testing.T) {
 	if w := send(viewer, "/api/host-import/analyze", body); w.Code != 403 || calls != 0 {
 		t.Fatal("未授权请求调用模型")
 	}
+	// 提取在后台跑：POST 立即返回，按组轮询 GET 拿结果
 	w := send(owner, "/api/host-import/analyze", body)
-	if w.Code != 200 {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"running"`) {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	var preview hostimport.Analysis
-	if json.Unmarshal(w.Body.Bytes(), &preview) != nil {
-		t.Fatal("预览解码失败")
+	poll := func(u *ent.User) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/api/host-import/analyze?groupId="+group.ID.String(), nil)
+		r = r.WithContext(auth.WithUser(r.Context(), u))
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if strings.Contains(w.Body.String(), "ai-secret-marker") {
+			t.Fatal("API 泄露密码")
+		}
+		return w
 	}
+	var job struct {
+		Status string
+		Result hostimport.Analysis
+	}
+	for i := 0; i < 100 && job.Status != "done"; i++ {
+		time.Sleep(20 * time.Millisecond)
+		if json.Unmarshal(poll(owner).Body.Bytes(), &job) != nil {
+			t.Fatal("提取结果解码失败")
+		}
+	}
+	if job.Status != "done" {
+		t.Fatalf("提取没跑完：%+v", job)
+	}
+	if poll(viewer).Code != 403 {
+		t.Fatal("非组管理员读到了提取结果")
+	}
+	for _, j := range db.AIJob.Query().AllX(ctx) {
+		if raw, _ := json.Marshal(j); strings.Contains(string(raw), "ai-secret-marker") {
+			t.Fatal("任务结果里出现明文密码")
+		}
+	}
+	preview := job.Result
 	if db.Asset.Query().CountX(ctx) != 0 || db.HostCredential.Query().CountX(ctx) != 0 {
 		t.Fatal("预览提前入库")
 	}
@@ -85,6 +114,9 @@ func TestAIHostImportReviewedSnapshot(t *testing.T) {
 	}
 	if strings.Contains(string(credential.Sealed), "ai-secret-marker") {
 		t.Fatal("数据库出现明文")
+	}
+	if db.AIJob.Query().CountX(ctx) != 0 {
+		t.Fatal("导入完成后提取结果应清掉")
 	}
 	if db.Asset.Query().OnlyX(ctx).Hostname != "reviewed-app" {
 		t.Fatal("未保存人工修正")

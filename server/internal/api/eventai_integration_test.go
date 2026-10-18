@@ -109,15 +109,52 @@ func TestEventAI(t *testing.T) {
 		t.Errorf("同一远端只应关联到本组的 db: %v", peers)
 	}
 
-	resp, _ = http.Post(ts.URL+"/api/events/"+target.ID.String()+"/explain", "application/json", nil)
-	var x struct {
-		Verdict string
-		Related []struct{ ID uuid.UUID }
+	// 解读在后台跑：POST 立即返回 running，轮询 GET 直到 done；请求本身断不断都不影响
+	explainURL := ts.URL + "/api/events/" + target.ID.String() + "/explain"
+	type job struct {
+		ID     uuid.UUID
+		Status string
+		Error  string
+		Result struct {
+			Verdict string
+			Related []struct{ ID uuid.UUID }
+		}
 	}
-	_ = json.NewDecoder(resp.Body).Decode(&x)
-	resp.Body.Close()
-	if resp.StatusCode != 200 || x.Verdict != "malicious" || len(x.Related) != 1 || x.Related[0].ID != conn.ID || llmCalls != 1 {
-		t.Fatalf("解读不对: %d %+v", resp.StatusCode, x)
+	read := func(resp *http.Response) job {
+		var j job
+		_ = json.NewDecoder(resp.Body).Decode(&j)
+		resp.Body.Close()
+		return j
+	}
+	wait := func() job {
+		for range 100 {
+			resp, _ := http.Get(explainURL)
+			if j := read(resp); j.Status != "running" {
+				return j
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatal("解读一直没跑完")
+		return job{}
+	}
+	resp, _ = http.Post(explainURL, "application/json", nil)
+	if first := read(resp); resp.StatusCode != 200 || first.Status != "running" {
+		t.Fatalf("发起解读应立即返回 running: %d %+v", resp.StatusCode, first)
+	}
+	x := wait()
+	if x.Status != "done" || x.Result.Verdict != "malicious" || len(x.Result.Related) != 1 || x.Result.Related[0].ID != conn.ID || llmCalls != 1 {
+		t.Fatalf("解读不对: %+v", x)
+	}
+	// 已有结果时再发起直接给这份，不重复调模型；refresh=1 才重来
+	if resp, _ := http.Post(explainURL, "application/json", nil); read(resp).ID != x.ID || llmCalls != 1 {
+		t.Fatal("已有结果不应重复调用模型")
+	}
+	resp, _ = http.Post(explainURL+"?refresh=1", "application/json", nil)
+	if again := read(resp); again.ID == x.ID {
+		t.Fatal("refresh=1 应重新发起")
+	}
+	if wait().Status != "done" || llmCalls != 2 {
+		t.Fatal("重新解读没有跑")
 	}
 
 	hiddenEvent := mk(hidden, now, nil, nil, "", `{}`)

@@ -1,8 +1,8 @@
-import { CheckOutlined, DeleteOutlined, EyeOutlined, FileTextOutlined, KeyOutlined, ReloadOutlined, RocketOutlined, UploadOutlined } from '@ant-design/icons'
+import { CheckOutlined, DeleteOutlined, EyeOutlined, FileTextOutlined, KeyOutlined, LoadingOutlined, ReloadOutlined, RocketOutlined, UploadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Checkbox, Flex, Image, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Typography, Upload } from 'antd'
-import { useRef, useState } from 'react'
-import { extractHostDocument, commitHostImport, deleteHostCredential, enrollHostCredential, fetchHostCredentials, fetchHostImportStatus, previewHostImport, type HostDocumentImage, type HostCredential, type HostImportPreview, type ImportedHost, type ReviewedHost } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import { extractHostDocument, commitHostImport, deleteHostCredential, enrollHostCredential, fetchHostCredentials, discardHostImportJob, fetchHostImportJob, fetchHostImportStatus, startHostImport, type AIJob, type HostDocumentImage, type HostCredential, type HostImportPreview, type ImportedHost, type ReviewedHost } from '../api'
 import { useSession } from '../app/session'
 import { errText } from './format'
 import { useI18n } from '../i18n'
@@ -34,10 +34,35 @@ export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: ()
     client.invalidateQueries({ queryKey: ['groups'] })
     client.invalidateQueries({ queryKey: ['host-credentials'] })
   }
-  const parse = useMutation({ mutationFn: () => previewHostImport(selectedGroup!, document, images), onSuccess: result => { setConfirmed(false); setPreview({ hosts: result.hosts.map(h => ({ ...h, reviewId: crypto.randomUUID() })) }) }, onError: e => message.error(errText(e, t)) })
+  // AI 提取在服务端后台跑：这里发起后轮询本组最近一次的结果。关掉窗口、换页都不打断，
+  // 回来时自动带回结果（原文不在服务端保存，需要对照原文时重新粘贴或上传）
+  const jobKey = ['host-import-job', selectedGroup]
+  const job = useQuery({
+    queryKey: jobKey, queryFn: () => fetchHostImportJob(selectedGroup!), enabled: open && !!selectedGroup,
+    refetchInterval: q => (q.state.data?.status === 'running' ? 2000 : false),
+  })
+  const running = job.data?.status === 'running'
+  const applied = useRef('')
+  useEffect(() => {
+    const j = job.data
+    if (!open || j?.status !== 'done' || !j.result || !j.id || applied.current === j.id) return
+    applied.current = j.id
+    setConfirmed(false)
+    setPreview({ hosts: j.result.hosts.map(h => ({ ...h, reviewId: crypto.randomUUID() })) })
+  }, [open, job.data])
+  const parse = useMutation({
+    mutationFn: () => startHostImport(selectedGroup!, document, images),
+    onSuccess: (j: AIJob<HostImportPreview>) => { setPreview(undefined); setConfirmed(false); client.setQueryData(jobKey, j) },
+    onError: e => message.error(errText(e, t)),
+  })
+  const discard = () => {
+    setPreview(undefined); setConfirmed(false)
+    client.setQueryData(jobKey, { status: 'none' })
+    void discardHostImportJob(selectedGroup!).catch(e => message.error(errText(e, t)))
+  }
   const save = useMutation({
     mutationFn: () => commitHostImport(selectedGroup!, preview!.hosts),
-    onSuccess: result => { setFilename(''); setDocument(''); setImages([]); setImageOpen(false); setPreview(undefined); setConfirmed(false); setTab('credentials'); refresh(); message.success(t('hostImportSaved', { n: result.assetIds.length })) },
+    onSuccess: result => { setFilename(''); setDocument(''); setImages([]); setImageOpen(false); setPreview(undefined); setConfirmed(false); setTab('credentials'); client.setQueryData(jobKey, { status: 'none' }); refresh(); message.success(t('hostImportSaved', { n: result.assetIds.length })) },
     onError: e => message.error(errText(e, t)),
   })
   const install = useMutation({
@@ -51,7 +76,7 @@ export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: ()
   const close = () => {
     if (busy) return
     setFilename(''); setDocument(''); setImages([]); setImageOpen(false); setPreview(undefined); setConfirmed(false); setTarget(undefined); setFingerprint('')
-    setTab('import'); parse.reset(); save.reset(); install.reset(); onClose()
+    setTab('import'); parse.reset(); save.reset(); install.reset(); applied.current = ''; onClose()
   }
   const edit = (id: string | undefined, patch: Partial<ReviewedHost>) => {
     setConfirmed(false)
@@ -117,9 +142,12 @@ export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: ()
             <div ref={sourceRef}><Input.TextArea aria-label={t('hostImportDocument')} autoComplete="off" spellCheck={false} rows={10} value={document} placeholder={t('hostImportExample')} disabled={busy}
               onChange={e => { setDocument(e.target.value); setFilename(''); setPreview(undefined); setConfirmed(false) }} /></div>
             <Space wrap>
-              <Button icon={<EyeOutlined aria-hidden />} loading={parse.isPending} disabled={!secure || !selectedGroup || (!document.trim() && !images.length) || busy || !status.data?.aiParsing} onClick={() => parse.mutate()}>{t('hostImportPreview')}</Button>
+              <Button icon={<EyeOutlined aria-hidden />} loading={parse.isPending} disabled={!secure || !selectedGroup || (!document.trim() && !images.length) || busy || running || !status.data?.aiParsing} onClick={() => parse.mutate()}>{t('hostImportPreview')}</Button>
               <Button type="primary" icon={<CheckOutlined aria-hidden />} loading={save.isPending} disabled={!secure || !preview?.hosts.length || !confirmed || busy} onClick={() => save.mutate()}>{t('hostImportConfirm')}</Button>
             </Space>
+            {running && <Alert type="info" showIcon icon={<LoadingOutlined />} title={t('hostImportRunning')} description={t('aiBackgroundHint')} />}
+            {job.data?.status === 'failed' && !preview && <Alert type="warning" showIcon title={job.data.error || t('hostImportFailed')} />}
+            {preview && !document && !images.length && <Alert type="info" showIcon title={t('hostImportRestored')} action={<Button size="small" onClick={discard}>{t('hostImportDiscard')}</Button>} />}
             {preview && <Typography.Text role="status">{t('hostPreviewCount', { n: preview.hosts.length })}</Typography.Text>}
             {preview && <Checkbox checked={confirmed} disabled={busy || !preview.hosts.length} onChange={e => setConfirmed(e.target.checked)}>{t('hostReviewConfirm')}</Checkbox>}
             {preview && <Table<ReviewedHost> rowKey="reviewId" size="small" scroll={{ x: 1550 }} columns={reviewColumns} dataSource={preview.hosts} pagination={{ pageSize: 10 }} />}
