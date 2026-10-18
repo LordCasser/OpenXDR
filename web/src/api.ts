@@ -234,6 +234,14 @@ export interface Suppression {
   sessionId: string | null
   reviewedBy: string | null
   reviewedAt: string | null
+  // 字段条件（AND）：只压字段对得上的命中；为空表示整条规则
+  conditions: SuppressCondition[] | null
+}
+
+export interface SuppressCondition {
+  field: string
+  op: 'equals' | 'contains' | 'endswith'
+  value: string
 }
 
 export const reviewSuppression = (id: string, decision: 'approve' | 'reject') =>
@@ -262,6 +270,7 @@ export async function createSuppression(body: {
   assetId?: string | null
   reason?: string
   expiresInDays?: number
+  conditions?: SuppressCondition[]
 }): Promise<Suppression> {
   const r = await post('/api/suppressions', body)
   if (!r.ok) await fail(r)

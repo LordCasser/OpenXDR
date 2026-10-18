@@ -32,6 +32,8 @@ const (
 	FieldLastMatchedAt = "last_matched_at"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldConditions holds the string denoting the conditions field in the database.
+	FieldConditions = "conditions"
 	// FieldSessionID holds the string denoting the session_id field in the database.
 	FieldSessionID = "session_id"
 	// FieldReviewedBy holds the string denoting the reviewed_by field in the database.
@@ -54,6 +56,7 @@ var Columns = []string{
 	FieldMatchedCount,
 	FieldLastMatchedAt,
 	FieldStatus,
+	FieldConditions,
 	FieldSessionID,
 	FieldReviewedBy,
 	FieldReviewedAt,

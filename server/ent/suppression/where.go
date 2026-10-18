@@ -615,6 +615,16 @@ func StatusContainsFold(v string) predicate.Suppression {
 	return predicate.Suppression(sql.FieldContainsFold(FieldStatus, v))
 }
 
+// ConditionsIsNil applies the IsNil predicate on the "conditions" field.
+func ConditionsIsNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldIsNull(FieldConditions))
+}
+
+// ConditionsNotNil applies the NotNil predicate on the "conditions" field.
+func ConditionsNotNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotNull(FieldConditions))
+}
+
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
 func SessionIDEQ(v uuid.UUID) predicate.Suppression {
 	return predicate.Suppression(sql.FieldEQ(FieldSessionID, v))

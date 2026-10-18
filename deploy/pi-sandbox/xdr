@@ -35,7 +35,9 @@ usage() {
   xdr memories                           本组长期记忆（实时，含本轮刚记下的；id、来源、主机、内容）
   xdr remember [主机名|-] <内容>          记下以后用得上的环境事实（- 表示整个组）
   xdr forget <记忆 id>                   删掉过时的 AI 记忆
-  xdr suppress <主机名> <规则 id> <理由> [天数]  提议抑制反复误报的规则（组管理员批准后生效，默认 30 天）
+  xdr suppress <主机名> <规则 id> <理由> <天数> <条件>...
+                                         提议抑制反复误报的命中（组管理员批准后生效）。条件 1–3 个，AND：
+                                         字段=值（等于）、字段~=值（包含）、字段$=值（结尾），字段为事件体 dot path
   xdr report <标题> <Markdown 文件>       保存最终报告
 U
 }
@@ -75,8 +77,18 @@ case "$cmd" in
     [ $# -ge 1 ] || { usage; exit 2; }
     call forget "$(jq -cn --arg i "$1" '{id:$i}')" ;;
   suppress)
-    [ $# -ge 3 ] || { usage; exit 2; }
-    call suppress "$(jq -cn --arg h "$(host_id "$1")" --arg r "$2" --arg why "$3" --argjson d "${4:-30}" '{host:$h,rule_id:$r,reason:$why,days:$d}')" ;;
+    [ $# -ge 5 ] || { usage; exit 2; }
+    host=$(host_id "$1"); rule=$2; why=$3; days=$4; shift 4
+    conds='[]'
+    for c in "$@"; do
+      if [[ $c =~ ^([a-z0-9_.]+)(\$=|~=|=)(.+)$ ]]; then
+        case ${BASH_REMATCH[2]} in '$=') op=endswith ;; '~=') op=contains ;; *) op=equals ;; esac
+        conds=$(jq -c --arg f "${BASH_REMATCH[1]}" --arg o "$op" --arg v "${BASH_REMATCH[3]}" '. + [{field:$f,op:$o,value:$v}]' <<<"$conds")
+      else
+        echo "条件格式不对：$c（字段=值、字段~=值、字段\$=值）" >&2; exit 2
+      fi
+    done
+    call suppress "$(jq -cn --arg h "$host" --arg r "$rule" --arg why "$why" --argjson d "$days" --argjson c "$conds" '{host:$h,rule_id:$r,reason:$why,days:$d,conditions:$c}')" ;;
   report)
     [ $# -ge 2 ] && [ -f "$2" ] || { usage; exit 2; }
     call report "$(jq -cn --arg t "$1" --rawfile m "$2" '{title:$t,markdown:$m}')" ;;

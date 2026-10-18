@@ -41,26 +41,26 @@ func TestStoreReloadAndFlush(t *testing.T) {
 	store.Reload(ctx)
 
 	// 过期规则不压制
-	if store.Suppressed("r-stale", nil, now) {
+	if store.Suppressed("r-stale", nil, nil, now) {
 		t.Error("过期抑制规则不应压制")
 	}
 	// 全局规则压制任意资产
-	if !store.Suppressed("r-global", nil, now) {
+	if !store.Suppressed("r-global", nil, nil, now) {
 		t.Error("全局规则应压制空资产")
 	}
 	// 限定资产的规则：匹配资产压制，其他资产与空资产不压制
-	if !store.Suppressed("r-scoped", &assetID, now) {
+	if !store.Suppressed("r-scoped", &assetID, nil, now) {
 		t.Error("限定资产规则应压制该资产")
 	}
 	other := uuid.New()
-	if store.Suppressed("r-scoped", &other, now) {
+	if store.Suppressed("r-scoped", &other, nil, now) {
 		t.Error("限定资产规则不应压制其他资产")
 	}
-	if store.Suppressed("r-scoped", nil, now) {
+	if store.Suppressed("r-scoped", nil, nil, now) {
 		t.Error("限定资产规则不应压制空资产")
 	}
 	// 未登记的规则不压制
-	if store.Suppressed("r-unknown", nil, now) {
+	if store.Suppressed("r-unknown", nil, nil, now) {
 		t.Error("未登记规则不应压制")
 	}
 

@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"openxdr/server/ent/predicate"
+	"openxdr/server/ent/schema"
 	"openxdr/server/ent/suppression"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 )
@@ -186,6 +188,24 @@ func (_u *SuppressionUpdate) SetNillableStatus(v *string) *SuppressionUpdate {
 	return _u
 }
 
+// SetConditions sets the "conditions" field.
+func (_u *SuppressionUpdate) SetConditions(v []schema.SuppressCondition) *SuppressionUpdate {
+	_u.mutation.SetConditions(v)
+	return _u
+}
+
+// AppendConditions appends value to the "conditions" field.
+func (_u *SuppressionUpdate) AppendConditions(v []schema.SuppressCondition) *SuppressionUpdate {
+	_u.mutation.AppendConditions(v)
+	return _u
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (_u *SuppressionUpdate) ClearConditions() *SuppressionUpdate {
+	_u.mutation.ClearConditions()
+	return _u
+}
+
 // SetSessionID sets the "session_id" field.
 func (_u *SuppressionUpdate) SetSessionID(v uuid.UUID) *SuppressionUpdate {
 	_u.mutation.SetSessionID(v)
@@ -328,6 +348,17 @@ func (_u *SuppressionUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(suppression.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Conditions(); ok {
+		_spec.SetField(suppression.FieldConditions, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedConditions(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, suppression.FieldConditions, value)
+		})
+	}
+	if _u.mutation.ConditionsCleared() {
+		_spec.ClearField(suppression.FieldConditions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.SessionID(); ok {
 		_spec.SetField(suppression.FieldSessionID, field.TypeUUID, value)
@@ -524,6 +555,24 @@ func (_u *SuppressionUpdateOne) SetNillableStatus(v *string) *SuppressionUpdateO
 	return _u
 }
 
+// SetConditions sets the "conditions" field.
+func (_u *SuppressionUpdateOne) SetConditions(v []schema.SuppressCondition) *SuppressionUpdateOne {
+	_u.mutation.SetConditions(v)
+	return _u
+}
+
+// AppendConditions appends value to the "conditions" field.
+func (_u *SuppressionUpdateOne) AppendConditions(v []schema.SuppressCondition) *SuppressionUpdateOne {
+	_u.mutation.AppendConditions(v)
+	return _u
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (_u *SuppressionUpdateOne) ClearConditions() *SuppressionUpdateOne {
+	_u.mutation.ClearConditions()
+	return _u
+}
+
 // SetSessionID sets the "session_id" field.
 func (_u *SuppressionUpdateOne) SetSessionID(v uuid.UUID) *SuppressionUpdateOne {
 	_u.mutation.SetSessionID(v)
@@ -696,6 +745,17 @@ func (_u *SuppressionUpdateOne) sqlSave(ctx context.Context) (_node *Suppression
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(suppression.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Conditions(); ok {
+		_spec.SetField(suppression.FieldConditions, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedConditions(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, suppression.FieldConditions, value)
+		})
+	}
+	if _u.mutation.ConditionsCleared() {
+		_spec.ClearField(suppression.FieldConditions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.SessionID(); ok {
 		_spec.SetField(suppression.FieldSessionID, field.TypeUUID, value)

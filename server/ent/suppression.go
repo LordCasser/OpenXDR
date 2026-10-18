@@ -3,7 +3,9 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
+	"openxdr/server/ent/schema"
 	"openxdr/server/ent/suppression"
 	"strings"
 	"time"
@@ -36,6 +38,8 @@ type Suppression struct {
 	LastMatchedAt *time.Time `json:"last_matched_at,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// Conditions holds the value of the "conditions" field.
+	Conditions []schema.SuppressCondition `json:"conditions,omitempty"`
 	// SessionID holds the value of the "session_id" field.
 	SessionID *uuid.UUID `json:"session_id,omitempty"`
 	// ReviewedBy holds the value of the "reviewed_by" field.
@@ -52,6 +56,8 @@ func (*Suppression) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case suppression.FieldAssetID, suppression.FieldSessionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
+		case suppression.FieldConditions:
+			values[i] = new([]byte)
 		case suppression.FieldMatchedCount:
 			values[i] = new(sql.NullInt64)
 		case suppression.FieldRuleID, suppression.FieldReason, suppression.FieldCreatedBy, suppression.FieldStatus, suppression.FieldReviewedBy:
@@ -138,6 +144,14 @@ func (_m *Suppression) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case suppression.FieldConditions:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field conditions", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Conditions); err != nil {
+					return fmt.Errorf("unmarshal field conditions: %w", err)
+				}
 			}
 		case suppression.FieldSessionID:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
@@ -230,6 +244,9 @@ func (_m *Suppression) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("conditions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Conditions))
 	builder.WriteString(", ")
 	if v := _m.SessionID; v != nil {
 		builder.WriteString("session_id=")

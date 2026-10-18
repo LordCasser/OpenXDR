@@ -6,8 +6,10 @@ import { useSession } from '../app/session'
 import { HostLink } from '../components/HostLink'
 import { Page } from '../components/Page'
 import { fmtTime, errText } from '../components/format'
-import { useI18n } from '../i18n'
+import { useI18n, type MsgKey } from '../i18n'
 import { LoadError } from '../components/LoadError'
+
+const OP: Record<string, MsgKey> = { equals: 'supOpEquals', contains: 'supOpContains', endswith: 'supOpEndswith' }
 
 // 抑制规则：最怕被遗忘——列出压掉的次数，让长期无人过问的抑制显形
 export function SuppressionsPage() {
@@ -58,6 +60,12 @@ export function SuppressionsPage() {
               render: (v: Suppression['status']) => <Tag color={v === 'proposed' ? 'gold' : v === 'rejected' ? 'default' : 'green'}>{t(v === 'proposed' ? 'supProposed' : v === 'rejected' ? 'supRejected' : 'supActive')}</Tag>,
             },
             { title: t('thScope'), dataIndex: 'assetId', width: 130, render: v => (v ? <HostLink id={v} /> : <Tag color="warning">{t('allHosts')}</Tag>) },
+            {
+              title: t('supConditions'), dataIndex: 'conditions', width: 260,
+              render: (v: Suppression['conditions']) => (v?.length
+                ? v.map(c => <div key={c.field + c.op + c.value} className="mono" style={{ fontSize: 12 }}>{c.field} {t(OP[c.op])} {c.value}</div>)
+                : <Tag color="warning">{t('supWholeRule')}</Tag>),
+            },
             { title: t('reason'), dataIndex: 'reason', ellipsis: true, render: v => v ?? '-' },
             { title: t('thMatched'), dataIndex: 'matchedCount', width: 100, align: 'right', sorter: (a, b) => a.matchedCount - b.matchedCount },
             { title: t('thLastMatched'), dataIndex: 'lastMatchedAt', width: 170, render: fmtTime },

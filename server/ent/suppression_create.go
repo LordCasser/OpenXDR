@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"openxdr/server/ent/schema"
 	"openxdr/server/ent/suppression"
 	"time"
 
@@ -136,6 +137,12 @@ func (_c *SuppressionCreate) SetNillableStatus(v *string) *SuppressionCreate {
 	if v != nil {
 		_c.SetStatus(*v)
 	}
+	return _c
+}
+
+// SetConditions sets the "conditions" field.
+func (_c *SuppressionCreate) SetConditions(v []schema.SuppressCondition) *SuppressionCreate {
+	_c.mutation.SetConditions(v)
 	return _c
 }
 
@@ -339,6 +346,10 @@ func (_c *SuppressionCreate) createSpec() (*Suppression, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(suppression.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.Conditions(); ok {
+		_spec.SetField(suppression.FieldConditions, field.TypeJSON, value)
+		_node.Conditions = value
 	}
 	if value, ok := _c.mutation.SessionID(); ok {
 		_spec.SetField(suppression.FieldSessionID, field.TypeUUID, value)

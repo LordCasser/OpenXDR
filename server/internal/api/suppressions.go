@@ -31,6 +31,8 @@ type suppressionRow struct {
 	SessionID  *uuid.UUID `json:"sessionId"`
 	ReviewedBy *string    `json:"reviewedBy"`
 	ReviewedAt *time.Time `json:"reviewedAt"`
+	// Conditions 字段条件（AND），空表示整条规则
+	Conditions []suppress.Condition `json:"conditions"`
 }
 
 func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, rules *sigma.Engine) {
@@ -59,6 +61,7 @@ func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, 
 				Reason: s.Reason, CreatedBy: s.CreatedBy, ExpiresAt: s.ExpiresAt,
 				MatchedCount: s.MatchedCount, LastMatchedAt: s.LastMatchedAt,
 				Status: s.Status, SessionID: s.SessionID, ReviewedBy: s.ReviewedBy, ReviewedAt: s.ReviewedAt,
+				Conditions: s.Conditions,
 			}
 			// 列一串 UUID 没法用，带上规则标题
 			if title := rules.TitleOf(s.RuleID); title != "" {
@@ -77,9 +80,15 @@ func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, 
 			Reason  string     `json:"reason"`
 			// 有效期天数，0 表示长期有效
 			ExpiresInDays int `json:"expiresInDays"`
+			// 只压字段对得上的命中，空表示整条规则
+			Conditions []suppress.Condition `json:"conditions"`
 		}
 		if json.NewDecoder(r.Body).Decode(&body) != nil || body.RuleID == "" {
 			http.Error(w, "ruleId 必填", http.StatusBadRequest)
+			return
+		}
+		if err := suppress.Validate(body.Conditions); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if !suppressionAllowed(w, r, db, body.AssetID) {
@@ -90,6 +99,9 @@ func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, 
 			SetRuleID(body.RuleID).
 			SetNillableAssetID(body.AssetID).
 			SetCreatedBy(audit.Actor(r.Context()))
+		if len(body.Conditions) > 0 {
+			create.SetConditions(body.Conditions)
+		}
 		if body.Reason != "" {
 			create.SetReason(body.Reason)
 		}
@@ -107,7 +119,7 @@ func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, 
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, suppressionRow{
 			ID: s.ID, CreatedAt: s.CreatedAt, RuleID: s.RuleID, AssetID: s.AssetID,
-			Reason: s.Reason, CreatedBy: s.CreatedBy, ExpiresAt: s.ExpiresAt,
+			Reason: s.Reason, CreatedBy: s.CreatedBy, ExpiresAt: s.ExpiresAt, Status: s.Status, Conditions: s.Conditions,
 		})
 	})
 

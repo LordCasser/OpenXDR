@@ -30,7 +30,7 @@ func TestSuppressionReview(t *testing.T) {
 
 	store := suppress.New(client, time.Hour)
 	store.Reload(ctx)
-	if store.Suppressed("probe", &host.ID, time.Now()) {
+	if store.Suppressed("probe", &host.ID, nil, time.Now()) {
 		t.Fatal("提议在批准前不能生效")
 	}
 	h := Handler(client, loadRules(t), response.NewHub(client, false), store, intel.New(client, time.Hour), nil)
@@ -56,7 +56,7 @@ func TestSuppressionReview(t *testing.T) {
 	if got.Status != "active" || got.ReviewedBy == nil || got.ExpiresAt.Before(time.Now().Add(29*24*time.Hour)) {
 		t.Fatalf("批准后应生效、有效期从批准时重新算: %+v", got)
 	}
-	if !store.Suppressed("probe", &host.ID, time.Now()) {
+	if !store.Suppressed("probe", &host.ID, nil, time.Now()) {
 		t.Fatal("批准后应立即生效")
 	}
 	if code := review(asLead, "reject"); code != http.StatusConflict {

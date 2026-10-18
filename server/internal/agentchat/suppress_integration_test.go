@@ -20,13 +20,23 @@ func TestSuppressProposal(t *testing.T) {
 	host := db.Asset.Create().SetHostname("pve1").SetGroupID(group.ID).SaveX(ctx)
 	stranger := db.Asset.Create().SetHostname("x").SetGroupID(other.ID).SaveX(ctx)
 	session := db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator("a").SetModel("m").SetStatus("running").SaveX(ctx)
-	db.Alert.Create().SetTs(time.Now()).SetRuleID("probe").SetSeverity(2).SetAssetID(host.ID).SaveX(ctx)
+	ev := db.Event.Create().SetTs(time.Now()).SetClassUID(4003).SetSource("agent").SetAssetID(host.ID).
+		SetRaw(json.RawMessage(`{"query":{"hostname":"4mrf9fwf.doggygo.top"}}`)).SaveX(ctx)
+	db.Alert.Create().SetTs(time.Now()).SetRuleID("probe").SetSeverity(2).SetAssetID(host.ID).SetEventID(ev.ID).SaveX(ctx)
 	cmd := db.Command.Create().SetKind("exec").SetAssetID(host.ID).SaveX(ctx)
 	db.Alert.Create().SetTs(time.Now()).SetRuleID("own").SetSeverity(2).SetAssetID(host.ID).SetCommandID(cmd.ID).SaveX(ctx)
 	s := &Service{DB: db}
-	propose := func(host, rule string) (string, error) {
+	proposeWith := func(host, rule, conds string) (string, error) {
 		return s.tool(ctx, session, commandgate.Request{}, "suppress", json.RawMessage(
-			`{"host":"`+host+`","rule_id":"`+rule+`","reason":"cron 每天 04:30 跑端口巡检脚本，例行业务","days":30}`))
+			`{"host":"`+host+`","rule_id":"`+rule+`","reason":"vpn-proxy 每天 10:58 解析订阅域名，例行业务","days":30,"conditions":`+conds+`}`))
+	}
+	domain := `[{"field":"query.hostname","op":"endswith","value":".doggygo.top"}]`
+	propose := func(host, rule string) (string, error) { return proposeWith(host, rule, domain) }
+	if _, err := proposeWith(host.ID.String(), "probe", `[]`); err == nil {
+		t.Fatal("不带条件应拒绝：不能整条规则压掉")
+	}
+	if _, err := proposeWith(host.ID.String(), "probe", `[{"field":"query.hostname","op":"equals","value":"made-up.top"}]`); err == nil {
+		t.Fatal("对不上任何真实命中的条件应拒绝")
 	}
 	if _, err := propose(stranger.ID.String(), "probe"); err == nil {
 		t.Fatal("别组主机应拒绝")
@@ -48,8 +58,15 @@ func TestSuppressProposal(t *testing.T) {
 	if out, _ := propose(host.ID.String(), "probe"); !strings.Contains(out, "pending") {
 		t.Fatalf("已有待批准的不重复提: %s", out)
 	}
+	if len(p.Conditions) != 1 || p.Conditions[0].Value != ".doggygo.top" {
+		t.Fatalf("条件应落库: %+v", p.Conditions)
+	}
 	db.Suppression.UpdateOne(p).SetStatus("rejected").SetReviewedAt(time.Now()).ExecX(ctx)
 	if out, _ := propose(host.ID.String(), "probe"); !strings.Contains(out, "rejected") {
 		t.Fatalf("30 天内拒绝过的不再接受: %s", out)
+	}
+	// 被拒的是别的条件时，更窄的新提议照常接受
+	if out, err := proposeWith(host.ID.String(), "probe", `[{"field":"query.hostname","op":"equals","value":"4mrf9fwf.doggygo.top"}]`); err != nil || !strings.Contains(out, "proposed") {
+		t.Fatalf("条件不同的提议应接受: %s %v", out, err)
 	}
 }

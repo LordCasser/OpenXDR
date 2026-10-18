@@ -160,7 +160,9 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		if !learning || ev.Ts.Sub(since) < e.LearningPeriod {
 			continue
 		}
-		if e.Suppress.Suppressed(sigma.RuleNewProcess, &k.asset, ev.Ts) {
+		var raw map[string]any
+		_ = json.Unmarshal(ev.Raw, &raw)
+		if e.Suppress.Suppressed(sigma.RuleNewProcess, &k.asset, raw, ev.Ts) {
 			continue
 		}
 		alerts = append(alerts, e.DB.Alert.Create().

@@ -33,11 +33,22 @@ func (Suppression) Fields() []ent.Field {
 		field.Time("last_matched_at").Optional().Nillable(),
 		// active 生效 / proposed AI 提议、等组管理员批准 / rejected 被拒绝。只有 active 进抑制索引
 		field.String("status").Default("active"),
+		// 字段条件（AND）：只压掉事件体里这些字段对得上的命中，比如只压某个域名、某条命令行。
+		// 为空表示整条规则都压——范围大，AI 的提议不允许为空
+		field.JSON("conditions", []SuppressCondition{}).Optional(),
 		// 提议它的 AI 会话
 		field.UUID("session_id", uuid.UUID{}).Optional().Nillable(),
 		field.String("reviewed_by").Optional().Nillable(),
 		field.Time("reviewed_at").Optional().Nillable(),
 	}
+}
+
+// SuppressCondition 一条字段条件：事件体的 dot path 取值与 value 比较，不区分大小写
+type SuppressCondition struct {
+	Field string `json:"field"`
+	// equals / contains / endswith
+	Op    string `json:"op"`
+	Value string `json:"value"`
 }
 
 func (Suppression) Indexes() []ent.Index {

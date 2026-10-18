@@ -21,6 +21,7 @@ type entry struct {
 	id      uuid.UUID
 	assetID *uuid.UUID // nil = 对所有资产生效
 	expires *time.Time
+	conds   []Condition // 全部满足才压，空表示整条规则
 }
 
 type Store struct {
@@ -77,6 +78,7 @@ func (s *Store) Reload(ctx context.Context) {
 			id:      r.ID,
 			assetID: r.AssetID,
 			expires: r.ExpiresAt,
+			conds:   r.Conditions,
 		})
 	}
 	s.mu.Lock()
@@ -84,12 +86,12 @@ func (s *Store) Reload(ctx context.Context) {
 	s.mu.Unlock()
 }
 
-// Suppressed 判断某条规则在某资产上是否被抑制。命中时累加计数。
-func (s *Store) Suppressed(ruleID string, assetID *uuid.UUID, now time.Time) bool {
+// Suppressed 判断某条规则在某资产上的这次命中是否被抑制（raw 是事件体，用来比对字段条件）。命中时累加计数。
+func (s *Store) Suppressed(ruleID string, assetID *uuid.UUID, raw map[string]any, now time.Time) bool {
 	s.mu.RLock()
 	entries := s.byRule[ruleID]
 	s.mu.RUnlock()
-	if id := matchRule(entries, assetID, now); id != nil {
+	if id := matchRule(entries, assetID, raw, now); id != nil {
 		s.hit(*id, now)
 		return true
 	}
@@ -97,8 +99,8 @@ func (s *Store) Suppressed(ruleID string, assetID *uuid.UUID, now time.Time) boo
 }
 
 // matchRule 返回 entries 里第一条对给定资产/时间有效的抑制规则 id；
-// 过期或资产不匹配的条目跳过，全部不成立则返回 nil。
-func matchRule(entries []entry, assetID *uuid.UUID, now time.Time) *uuid.UUID {
+// 过期、资产不匹配或字段条件对不上的条目跳过，全部不成立则返回 nil。
+func matchRule(entries []entry, assetID *uuid.UUID, raw map[string]any, now time.Time) *uuid.UUID {
 	for i := range entries {
 		e := &entries[i]
 		if e.expires != nil && now.After(*e.expires) {
@@ -106,6 +108,9 @@ func matchRule(entries []entry, assetID *uuid.UUID, now time.Time) *uuid.UUID {
 		}
 		// 抑制规则限定了资产时，只对该资产生效
 		if e.assetID != nil && (assetID == nil || *e.assetID != *assetID) {
+			continue
+		}
+		if !Matches(e.conds, raw) {
 			continue
 		}
 		return &e.id

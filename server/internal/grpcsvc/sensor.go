@@ -137,7 +137,7 @@ func (s *SensorServer) ingest(ctx context.Context, batch *pb.FlowBatch, deduper 
 		eventCreates = append(eventCreates, ec)
 
 		for _, h := range intel.Detections(s.Rules.Evaluate(classUID, osByIP[f.SrcIp], rawMap), s.Intel.Match(rawMap, ts)) {
-			if s.Suppress.Suppressed(h.RuleID, assetID, ts) {
+			if s.Suppress.Suppressed(h.RuleID, assetID, rawMap, ts) {
 				continue
 			}
 			fingerprint := h.RuleID + "|" + f.SrcIp

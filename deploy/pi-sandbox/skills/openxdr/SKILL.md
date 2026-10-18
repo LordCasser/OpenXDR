@@ -30,7 +30,8 @@ xdr memories                                # 本组长期记忆（实时，含�
 xdr remember pve1 '每天 04:30 cron 跑 /root/port-check.sh，用 /dev/tcp 探测内网端口，是例行巡检'
 xdr remember - '10.1.1.100 是 pve1 上的 LXC 203（网关：Caddy + docker），不是独立主机'
 xdr forget <记忆 id>                         # 删掉被现场证据推翻的 AI 记忆
-xdr suppress pve1 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90 'cron 每天 04:30 跑 /root/port-check.sh，用 /dev/tcp 探测内网端口，例行巡检' 30
+xdr suppress pve1 8f1d3b56-7a29-4e03-b5c8-1d4f9e2a7b60 'VM100 vpn-proxy 每天 10:58 解析订阅域名，例行业务' 30 'query.hostname$=.doggygo.top'
+xdr suppress pve1 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90 'Termix 面板每分钟 SSH 健康检查' 30 'process.cmd_line~=__TERMIX_EXIT' 'dst_endpoint.port=22'
 xdr report '标题' report.md                 # 最终报告（Markdown 文件）
 ```
 
@@ -93,7 +94,9 @@ SELECT e.ts, e.raw->'process'->>'cmd_line' FROM alerts a JOIN events e ON e.id=a
 确认后用 `xdr egress` 记录用途与风险；只能记这台主机确实连过的公网地址，查不清就写进报告。
 
 **提议抑制**：某条规则在某台主机上反复误报，而且你查证过是正常业务（哪个进程、什么命令、多久一次、属于什么业务），
-用 `xdr suppress` 提议抑制（只能单台主机、最长 90 天），组管理员批准后才生效。一次性的误报写进结论即可，不要提；
+用 `xdr suppress` 提议抑制（只能单台主机、最长 90 天），组管理员批准后才生效。必须带字段条件把范围收窄到良性的那部分
+（具体域名、命令行特征、对端地址），条件要对得上告警事件里的实际值——先用 `xdr sql` 查告警对应事件的字段；
+不能整条规则压掉：比如 DNS 服务器上的可疑后缀规则管着全网的查询，只能压具体域名。一次性的误报写进结论即可，不要提；
 被拒绝过的不要再提。平台指令（包括你自己的命令）触发的告警本来就不进事件，不需要抑制。
 
 最后用 `xdr report` 交一份报告：结论在前，证据在后，未验证事项单独列出。

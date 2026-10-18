@@ -234,7 +234,7 @@ func (s *Server) build(ctx context.Context, in incoming, deduper *dedup.Deduper)
 
 	var created []*ent.AlertCreate
 	for _, h := range intel.Detections(s.Rules.Evaluate(ClassApplicationActivity, assetOS, rawMap), s.Intel.Match(rawMap, msg.Ts)) {
-		if s.Suppress.Suppressed(h.RuleID, assetID, msg.Ts) {
+		if s.Suppress.Suppressed(h.RuleID, assetID, rawMap, msg.Ts) {
 			continue
 		}
 		fingerprint := h.RuleID + "|" + origin

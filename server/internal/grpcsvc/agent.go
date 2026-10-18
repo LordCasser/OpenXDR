@@ -320,7 +320,7 @@ func (s *Server) ReportEvents(stream pb.AgentService_ReportEventsServer) error {
 		}
 		for _, h := range hits {
 			// 抑制先于去重：被压掉的命中不该占用去重槽位
-			if s.Suppress.Suppressed(h.RuleID, assetID, ts) {
+			if s.Suppress.Suppressed(h.RuleID, assetID, rawMap, ts) {
 				continue
 			}
 			fingerprint := h.RuleID + fpSuffix
@@ -351,7 +351,7 @@ func (s *Server) ReportEvents(stream pb.AgentService_ReportEventsServer) error {
 				return err
 			}
 			if s.countAuthFailures(ctx, *assetID, ev.Username, ts) >= bruteforceThreshold &&
-				!s.Suppress.Suppressed(sigma.RuleBruteforceSuccess, assetID, ts) {
+				!s.Suppress.Suppressed(sigma.RuleBruteforceSuccess, assetID, rawMap, ts) {
 				fingerprint := sigma.RuleBruteforceSuccess + "|" + ev.Username
 				if !deduper.Hit(fingerprint, ts) {
 					alertID := uuid.Must(uuid.NewV7())

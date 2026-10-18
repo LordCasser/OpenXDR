@@ -107,7 +107,7 @@ WHERE class_uid=3002 AND asset_id=$1 AND username=$2 AND ts >= $3
 		}
 	}
 	for _, hit := range hits {
-		if p.Suppress.Suppressed(hit.RuleID, e.AssetID, e.Timestamp) {
+		if p.Suppress.Suppressed(hit.RuleID, e.AssetID, raw, e.Timestamp) {
 			continue
 		}
 		created, err := p.upsertAlert(ctx, tx, e, hit, command)
