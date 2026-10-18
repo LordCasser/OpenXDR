@@ -10,6 +10,9 @@ Restart=always
 RestartSec=3
 # 访问 Docker 靠 sandboxd 用户的附加组 docker；不另设 Group=，否则读不到属组 sandboxd 的证书与密钥
 User=sandboxd
+# 系统用户没有家目录，docker CLI 的配置目录放到运行时目录
+RuntimeDirectory=sandboxd
+Environment=DOCKER_CONFIG=/run/sandboxd
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
