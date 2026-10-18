@@ -1,0 +1,61 @@
+#!/bin/bash
+# xdr：沙箱通往 OpenXDR 的唯一出口。凭会话工具令牌调用本会话的工具，
+# 组、身份、高风险命令名单与审批、审计都在平台一侧，这里只做参数整理与输出格式化。
+set -euo pipefail
+: "${XDR_URL:?未设置 XDR_URL}" "${XDR_TOKEN:?未设置 XDR_TOKEN}"
+CACHE=/tmp/xdr-context.json
+
+call() { # 工具名 参数JSON
+  local resp
+  resp=$(curl -sS --max-time 900 -H "Authorization: Bearer $XDR_TOKEN" -H 'Content-Type: application/json' \
+    -d "$(jq -cn --arg n "$1" --argjson a "$2" '{name:$n,args:$a}')" "$XDR_URL/api/sandbox/tool") || { echo "调用平台失败" >&2; exit 2; }
+  if ! jq -e . >/dev/null 2>&1 <<<"$resp"; then echo "$resp" >&2; exit 2; fi
+  if jq -e 'has("error")' >/dev/null <<<"$resp"; then jq -r .error <<<"$resp" >&2; exit 1; fi
+  jq -r .output <<<"$resp"
+}
+
+context() { [ -s "$CACHE" ] || call context '{}' > "$CACHE"; cat "$CACHE"; }
+
+host_id() { # 主机名或资产 ID
+  if [[ $1 =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then echo "$1"; return; fi
+  local id; id=$(context | jq -r --arg h "$1" '.assets[] | select(.hostname==$h) | .id' | head -1)
+  [ -n "$id" ] || { echo "本组没有主机 $1，用 xdr hosts 查看" >&2; exit 1; }
+  echo "$id"
+}
+
+usage() {
+  cat <<'U'
+用法：
+  xdr hosts                              本组主机（主机名、角色、重要程度、区域）
+  xdr context                            平台给的组内数据：资产、规则名、待办、交来的事件（JSON）
+  xdr exec <主机名> <命令> [超时秒]       在主机上执行命令（高风险命令会等管理员批准）
+  xdr sql <只读SQL>                      查本组只读视图，输出 TSV（首行列名）
+  xdr track <主机名> <key> <low|medium|high> <open|resolved|withdrawn> <标题> <详情>
+  xdr identify <主机名> <tcp/端口|udp/端口> <high|medium|low> <服务名> <依据与结论>
+  xdr report <标题> <Markdown 文件>       保存最终报告
+U
+}
+
+cmd=${1:-}; shift || true
+case "$cmd" in
+  hosts) context | jq -r '.assets[] | [.hostname, (.role // "-"), (.criticality // "-" | tostring), (.zone.name // .zone.kind), (.os // "-")] | @tsv' | column -t -s $'\t' ;;
+  context) context | jq . ;;
+  exec)
+    [ $# -ge 2 ] || { usage; exit 2; }
+    out=$(call exec "$(jq -cn --arg h "$(host_id "$1")" --arg c "$2" --argjson t "${3:-60}" '{host:$h,cmd:$c,timeout:$t}')")
+    jq -r '"[status=\(.status) exit=\(.exit_code // "-")\(if .truncated then " truncated" else "" end)]", (.stdout // ""), (if (.stderr // "") != "" then "[stderr]\n" + .stderr else empty end)' <<<"$out" ;;
+  sql)
+    [ $# -ge 1 ] || { usage; exit 2; }
+    out=$(call query "$(jq -cn --arg s "$1" '{sql:$s}')")
+    jq -r '(.columns | @tsv), (.rows[] | map(if type == "object" or type == "array" then tojson else (. // "" | tostring) end) | @tsv), (if .truncated then "[truncated]" else empty end)' <<<"$out" ;;
+  track)
+    [ $# -ge 6 ] || { usage; exit 2; }
+    call track "$(jq -cn --arg h "$(host_id "$1")" --arg k "$2" --arg sv "$3" --arg st "$4" --arg t "$5" --arg d "$6" '{host:$h,key:$k,severity:$sv,status:$st,title:$t,detail:$d}')" ;;
+  identify)
+    [ $# -ge 5 ] || { usage; exit 2; }
+    call identify "$(jq -cn --arg h "$(host_id "$1")" --arg p "$2" --arg r "$3" --arg n "$4" --arg note "$5" '{host:$h,port:$p,risk:$r,name:$n,note:$note}')" ;;
+  report)
+    [ $# -ge 2 ] && [ -f "$2" ] || { usage; exit 2; }
+    call report "$(jq -cn --arg t "$1" --rawfile m "$2" '{title:$t,markdown:$m}')" ;;
+  *) usage; [ -z "$cmd" ] || exit 2 ;;
+esac

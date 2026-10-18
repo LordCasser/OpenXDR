@@ -1,0 +1,7 @@
+{
+  "defaultProvider": "openxdr-glm",
+  "defaultModel": "GLM-5.3-Flash",
+  "defaultThinkingLevel": "high",
+  "defaultProjectTrust": "always",
+  "quietStartup": true
+}

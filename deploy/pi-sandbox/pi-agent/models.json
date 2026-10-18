@@ -1,0 +1,52 @@
+{
+  "providers": {
+    "openxdr-glm": {
+      "baseUrl": "http://10.1.1.100:18008/v1",
+      "api": "openai-completions",
+      "authHeader": false,
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "thinkingFormat": "chat-template",
+        "chatTemplateKwargs": {
+          "enable_thinking": {
+            "$var": "thinking.enabled"
+          },
+          "reasoning_effort": {
+            "$var": "thinking.effort",
+            "omitWhenOff": true
+          },
+          "preserve_thinking": true
+        }
+      },
+      "models": [
+        {
+          "id": "GLM-5.3-Flash",
+          "name": "GLM 5.3 Flash UNCENSORED FP8 (A800-02, 512K, Vision)",
+          "contextWindow": 524288,
+          "maxTokens": 32768,
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "thinkingLevelMap": {
+            "off": "none",
+            "minimal": "low",
+            "low": "low",
+            "medium": "high",
+            "high": "high",
+            "xhigh": "max",
+            "max": "max"
+          }
+        }
+      ],
+      "apiKey": "not-required"
+    }
+  }
+}

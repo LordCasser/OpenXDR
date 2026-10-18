@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"openxdr/server/ent"
@@ -16,6 +17,7 @@ import (
 	"openxdr/server/ent/report"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/internal/agentchat"
+	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 )
 
@@ -162,6 +164,29 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	})
+	// 沙箱原型：给会话发起人签发工具令牌，会话外的 Pi 凭它经 /api/sandbox/tool 调用本会话的工具
+	mux.HandleFunc("POST /api/agent-sessions/{id}/sandbox-token", func(w http.ResponseWriter, r *http.Request) {
+		session, ok := getByPath(w, r, "id", "session", db.AgentSession.Get)
+		if !ok || !requireGroup(w, r, db, session.GroupID, "analyst") {
+			return
+		}
+		u := auth.From(r.Context())
+		if session.Initiator != u.Username {
+			http.Error(w, "只能为自己发起的会话签发", 403)
+			return
+		}
+		if service == nil {
+			http.Error(w, "Pi 未启用", 503)
+			return
+		}
+		token, expires, err := service.IssueSandboxToken(r.Context(), session, u)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		audit.Log(r.Context(), db, r, "sandbox_token_issued", session.ID.String(), "有效至 "+expires.Format(time.RFC3339))
+		writeJSON(w, map[string]any{"token": token, "expiresAt": expires})
 	})
 	mux.HandleFunc("GET /api/agent-reports", func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.URL.Query().Get("groupId"))
