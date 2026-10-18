@@ -22,6 +22,8 @@ type agentConfig struct {
 	CollectNetwork *bool `json:"collectNetwork,omitempty"`
 	// 监听端口与云环境清单，资产图谱与攻击面的数据来源
 	CollectInventory *bool `json:"collectInventory,omitempty"`
+	// 周期行为折叠：同一父进程反复执行同一条命令改为按 10 分钟汇总，缺省开
+	CollapsePeriodic *bool `json:"collapsePeriodic,omitempty"`
 }
 
 func mapAgentConfig(api *http.ServeMux, db *ent.Client) {

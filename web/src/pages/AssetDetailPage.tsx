@@ -42,6 +42,7 @@ const SWITCHES: { name: keyof AgentConfig; key: MsgKey }[] = [
   { name: 'collectPersist', key: 'cfgPersist' },
   { name: 'collectNetwork', key: 'cfgNetwork' },
   { name: 'collectInventory', key: 'cfgInventory' },
+  { name: 'collapsePeriodic', key: 'cfgCollapse' },
 ]
 
 // 采集配置：开关缺省全开；目录为空表示用 agent 内置的敏感目录清单

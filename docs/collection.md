@@ -294,8 +294,25 @@ region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实�
 | `collectPersist` | true | 无消费者 | 控制 persistwatch |
 | `collectNetwork` | true | 控制 DNS 采集；网络连接仅 eBPF 构建有 | 控制 netwatch_win |
 | `collectInventory` | true | 控制 inventory | 控制 inventory_win |
+| `collapsePeriodic` | true | 周期行为折叠（见下） | 同左 |
 | `fileWatchDirs` | []（内置清单） | 覆盖 fswatch 默认目录 | 覆盖 fswatch_win 默认目录 |
 | （进程采集） | — | 无开关，按降级链选择 | 无开关，无条件启动 |
+
+### 周期行为折叠
+
+宿主机上大量进程事件来自周期性的守护与监控：PVE 防火墙每几秒导出规则、状态守护进程轮询存储、
+监控面板经 SSH 每隔几秒跑一遍 `ps`。生产两台 PVE 上这类进程占了一半以上的事件。所有进程采集路径
+（eBPF、netlink、ETW、轮询）都经 `collector::emit_process` 出口，在这里折叠（`collector/periodic.rs`）：
+
+- **认定**：键是「父进程路径 + 父命令行 + 子进程路径 + 子命令行」，10 分钟窗口内出现 20 次以上即认定为周期行为
+- **折叠**：之后这个键的启动与退出不再逐条上报，每 10 分钟报一条汇总（OCSF 1007，`activity_id` 99，
+  `periodic.count` 与首末时间，进程与父进程字段照常，规则按进程字段判断时汇总事件一样能命中）；
+  一小时没再出现的键忘掉，再出现重新逐条上报
+- **从不折叠**：父进程未知的进程、平台指令拉起的进程树（server 要逐条核对指令归属）
+- **血缘不丢**：被折叠进程的启动事件压在注册表里。它一旦拉起不是周期行为的子进程，或发起网络连接、
+  DNS 查询，压着的启动事件（连同被折叠的祖先）先补发，事件保留原本的启动时间，server 按 GUID 串血缘
+
+关掉 `collapsePeriodic` 即恢复逐条上报。
 
 ## sensor（全流量探针，仅 Linux）
 

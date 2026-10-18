@@ -15,7 +15,7 @@ use super::inventory_linux::Scanner;
 use super::netwatch::{self, ConnInfo, ConnSampler};
 use super::{
     ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, ProcessRegistry, container,
-    netlink, poll, process_event, seeded_registry, username_of,
+    emit_process, netlink, poll, seeded_registry, username_of,
 };
 use crate::pb::AgentEvent;
 
@@ -142,14 +142,14 @@ async fn run_ebpf(
                         continue;
                     }
                     let ev = unsafe { std::ptr::read_unaligned(b.as_ptr() as *const ExecEvent) };
-                    let event = {
+                    let events = {
                         let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
                         to_agent_event(&agent_id, &mut reg, &ev)
                     };
-                    if let Some(event) = event
-                        && !tx.send(event)
-                    {
-                        return;
+                    for event in events {
+                        if !tx.send(event) {
+                            return;
+                        }
                     }
                 }
             }
@@ -174,14 +174,14 @@ async fn run_ebpf(
                         continue;
                     }
                     let ev = unsafe { std::ptr::read_unaligned(b.as_ptr() as *const ExitEvent) };
-                    let event = {
+                    let events = {
                         let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
                         to_exit_event(&agent_id, &mut reg, &ev)
                     };
-                    if let Some(event) = event
-                        && !tx.send(event)
-                    {
-                        return;
+                    for event in events {
+                        if !tx.send(event) {
+                            return;
+                        }
                     }
                 }
             }
@@ -293,8 +293,11 @@ async fn spawn_conn_readers(
                     let Some(event) = to_conn_event(&agent_id, &state, &ev) else {
                         continue;
                     };
-                    if !tx.send(event) {
-                        return;
+                    let revealed = lock(&state.registry).take_outbox();
+                    for event in revealed.into_iter().chain([event]) {
+                        if !tx.send(event) {
+                            return;
+                        }
                     }
                 }
             }
@@ -383,8 +386,13 @@ fn conn_info(
     dst: IpAddr,
     dport: u16,
 ) -> ConnInfo {
+    // 连接归到被折叠的进程上：它（和被折叠的祖先）压着的启动事件转入待发，由发送循环带出去
     let known = (pid != 0)
-        .then(|| lock(&state.registry).known(pid))
+        .then(|| {
+            let mut reg = lock(&state.registry);
+            reg.reveal(pid);
+            reg.known(pid)
+        })
         .flatten();
     let name = known
         .as_ref()
@@ -450,7 +458,12 @@ fn dns_resolver(
         if at.elapsed() >= OWNER_TTL {
             return None;
         }
-        let known = lock(&registry).known(pid);
+        // 查询归到被折叠的进程上：压着的启动事件转入待发，下一次进程或网络事件发送时带出去
+        let known = {
+            let mut reg = lock(&registry);
+            reg.reveal(pid);
+            reg.known(pid)
+        };
         Some(match known {
             Some(k) => Origin {
                 pid,
@@ -530,7 +543,7 @@ fn to_agent_event(
     agent_id: &str,
     registry: &mut ProcessRegistry,
     ev: &ExecEvent,
-) -> Option<AgentEvent> {
+) -> Vec<AgentEvent> {
     let name = cstr(&ev.comm);
     let exe = cstr(&ev.filename);
     // exec 瞬间从 /proc 补充命令行和父进程；短命进程可能已退场，拿不到就算了
@@ -551,7 +564,7 @@ fn to_agent_event(
                 .and_then(|l| l.split_whitespace().nth(1)?.parse().ok())
         });
 
-    process_event(
+    emit_process(
         agent_id,
         registry,
         ACTIVITY_LAUNCH,
@@ -573,8 +586,8 @@ fn to_exit_event(
     agent_id: &str,
     registry: &mut ProcessRegistry,
     ev: &ExitEvent,
-) -> Option<AgentEvent> {
-    process_event(
+) -> Vec<AgentEvent> {
+    emit_process(
         agent_id,
         registry,
         ACTIVITY_TERMINATE,

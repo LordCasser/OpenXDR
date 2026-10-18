@@ -4,7 +4,7 @@ import type { MsgKey, T } from '../i18n'
 type Raw = Record<string, any>
 
 const ACTIVITY: Record<number, Record<number, MsgKey>> = {
-  1007: { 1: 'evLaunch', 2: 'evExit' },
+  1007: { 1: 'evLaunch', 2: 'evExit', 99: 'evPeriodic' },
   1001: { 1: 'evCreate', 3: 'evUpdate', 4: 'evDelete' },
   1005: { 1: 'evLoad', 4: 'evUnload' },
   201002: { 1: 'evCreate', 3: 'evUpdate', 4: 'evDelete' },
@@ -55,6 +55,11 @@ export function eventSummary(classUid: number, raw: unknown, t: T, withAction = 
   switch (classUid) {
     case 1007: {
       const p = r.process ?? {}
+      // 周期行为汇总：谁反复拉起了什么、这个窗口里多少次
+      if (r.activity_id === 99) {
+        return join(act, p.parent_process?.name ? `${p.parent_process.name} →` : undefined, p.name || p.file?.path,
+          p.cmd_line && p.cmd_line !== p.name ? `· ${p.cmd_line}` : undefined, t('evPeriodicCount', { n: r.periodic?.count ?? 0 }))
+      }
       const exit = r.activity_id === 2 && p.exit_code != null ? t('evExitCode', { n: p.exit_code }) : undefined
       const ran = r.activity_id === 2 && typeof r.duration_ms === 'number' ? `· ${fmtDuration(r.duration_ms)}` : undefined
       return join(inContainer(r), act, p.name || p.file?.path, p.cmd_line && p.cmd_line !== p.name ? `· ${p.cmd_line}` : undefined, exit, ran)

@@ -24,6 +24,12 @@ export function EventFacts({ classUid, raw, username }: { classUid: number; raw:
   add('user', t('factUser'), username)
   const container = containerLabel(r.container)
   add('container', t('factContainer'), container && <><Tag variant="filled">{r.container.runtime}</Tag>{container}{r.container.name ? <Typography.Text type="secondary"> · {r.container.uid}</Typography.Text> : null}</>)
+  // 周期行为汇总：折叠了多少次、首末时间
+  if (classUid === 1007 && r.activity_id === 99 && r.periodic) {
+    const time = (ms?: number) => (ms ? new Date(ms).toLocaleTimeString() : '-')
+    add('periodic', t('factPeriodic'), t('factPeriodicValue', { n: r.periodic.count, from: time(r.periodic.first_time), to: time(r.periodic.last_time) }))
+    add('parent', t('factParent'), p.parent_process?.cmd_line && mono(p.parent_process.cmd_line))
+  }
   if (classUid === 1007 && r.activity_id === 2 && typeof r.duration_ms === 'number') {
     const duration = fmtDuration(r.duration_ms)
     add('exit', t('factExit'), p.exit_code != null ? t('factExitValue', { code: p.exit_code, duration }) : t('factExitUnknown', { duration }))

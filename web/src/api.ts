@@ -754,6 +754,7 @@ export interface AgentConfig {
   collectPersist?: boolean
   collectNetwork?: boolean
   collectInventory?: boolean
+  collapsePeriodic?: boolean
 }
 
 export const fetchAgentConfig = (assetId: string) => get<AgentConfig>(`/api/assets/${assetId}/config`)
