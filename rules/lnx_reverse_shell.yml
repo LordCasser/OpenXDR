@@ -16,10 +16,11 @@ logsource:
   product: linux
 detection:
   # 套接字接到 shell 的输入输出：>& / &> /dev/tcp、0< /dev/tcp（stdin 来自套接字）、
-  # > /dev/tcp/… 0<&1（stdin 跟随），或 <> 双向打开后又把输出写回 3 号及以上 fd（exec 5<> … >&5、196<> … >&196）。
-  # 只读的 banner 抓取（exec 3<> … head <&3）与无关的 2>&1 都不算
+  # > /dev/tcp/… 0<&1（stdin 跟随），或 <> 双向打开后把 shell 接到 3 号及以上 fd：stderr 写回套接字（2>&5），
+  # 或 sh / bash / eval 的输入输出重定向到它（sh <&196、eval "$c" >&3）。
+  # 只读的 banner 抓取（exec 3<> … head <&3）、往套接字写一个 HTTP 请求再读回（printf … >&3; head <&3）与无关的 2>&1 都不算
   devsock_shell_io:
-    CommandLine|re: '(>&|&>|0<)\s*/dev/(tcp|udp)/|/dev/(tcp|udp)/\S+\s+0[<>]&1|<>\s*/dev/(tcp|udp)/.*[0-9]?>&([3-9]|[1-9][0-9]+)'
+    CommandLine|re: '(>&|&>|0<)\s*/dev/(tcp|udp)/|/dev/(tcp|udp)/\S+\s+0[<>]&1|<>\s*/dev/(tcp|udp)/.*(\b2>&([3-9]|[1-9][0-9]+)|\b((ba|z|k|da)?sh|eval)\b[^;|&]*[<>]&([3-9]|[1-9][0-9]+))'
   explicit:
     CommandLine|contains:
       - 'bash -i >&'

