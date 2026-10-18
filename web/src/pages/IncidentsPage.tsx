@@ -124,7 +124,7 @@ export function IncidentsPage() {
                 {adoptable.length > 0 && (
                   <Button size="small" type="primary" ghost loading={adopting} onClick={adoptVerdicts}>{t('adoptVerdicts', { n: adoptable.length })}</Button>
                 )}
-                <Button size="small" onClick={() => setResolving('closed')}>{t('close')}</Button>
+                <Button size="small" onClick={() => setResolving('closed')}>{t('markTrue')}</Button>
                 <Button size="small" danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>
               </>
             )}
@@ -191,7 +191,7 @@ export function IncidentsPage() {
                 render: (_: unknown, r: IncidentSummary) => actable(r) && (
                   <Space size={0} className="row-actions">
                     {canChat(r.groupId) && <Button type="link" size="small" icon={<RobotOutlined />} onClick={() => handTo([r])}>AI</Button>}
-                    <Button type="link" size="small" onClick={() => { setSelected([r.id]); setResolving('closed') }}>{t('close')}</Button>
+                    <Button type="link" size="small" onClick={() => { setSelected([r.id]); setResolving('closed') }}>{t('markTrue')}</Button>
                     <Button type="link" size="small" danger onClick={() => { setSelected([r.id]); setResolving('false_positive') }}>{t('markFpShort')}</Button>
                   </Space>
                 ),

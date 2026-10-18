@@ -153,7 +153,7 @@ export function IncidentDetailPage() {
               {canAct && !done && verdictStatus(inc.aiVerdict) && (
                 <Button type="primary" ghost onClick={() => changeStatus(verdictStatus(inc.aiVerdict)!, '')}>{t('adoptVerdict')}</Button>
               )}
-              {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('close')}</Button>}
+              {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('markTrue')}</Button>}
               {canAct && !done && <Button danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>}
               {canAct && done && <Button onClick={() => changeStatus('open')}>{t('reopen')}</Button>}
             </>
@@ -161,7 +161,7 @@ export function IncidentDetailPage() {
             <Dropdown trigger={['click']} menu={{
               items: [
                 { key: 'export', icon: <DownloadOutlined />, label: t('exportReport') },
-                ...(canAct && !done ? [{ key: 'closed', label: t('close') }, { key: 'false_positive', label: t('markFp'), danger: true }] : []),
+                ...(canAct && !done ? [{ key: 'closed', label: t('markTrue') }, { key: 'false_positive', label: t('markFp'), danger: true }] : []),
                 ...(canAct && done ? [{ key: 'open', label: t('reopen') }] : []),
               ],
               onClick: ({ key }) => {
