@@ -38,26 +38,26 @@ export function Hero24() {
   const copy =
     locale === "zh-CN"
       ? {
-          badge: "开源 · EDR + NDR + SIEM + AI 运维",
+          badge: "开源 XDR",
           headline: "纳管即运维，",
           headlineAccent: "纳管即安全。",
           description:
-            "主机装上 agent、划进组，就自动获得持续采集、层层降噪的检测、每日巡检和一个能动手的 AI 助手。一万条告警进来，三个真事件出去；危险的命令，等你点头。",
+            "装上 agent，分好组，剩下的交给它。\n检测、降噪、巡检、处置，一次到位。\n真正危险的那一步，等你点头。",
           github: "在 GitHub 查看",
-          pipeline: "往下滚，亲手试一试",
-          evidence: "一套平台覆盖",
-          partners: ["端点", "全流量", "日志", "AI 运维", "审批与审计"],
+          pipeline: "看看它怎么工作",
+          evidence: "一个平台，全都看见",
+          partners: ["端点", "流量", "日志", "AI", "审计"],
         }
       : {
-          badge: "Open source · EDR + NDR + SIEM + AI ops",
+          badge: "Open-source XDR",
           headline: "Onboarded means operated.",
           headlineAccent: "Onboarded means secured.",
           description:
-            "Install the agent, put the host in a group, and it gets continuous collection, layered detection, daily inspections and an AI assistant that does the work. Ten thousand alerts in, three real incidents out — and dangerous commands wait for your nod.",
+            "Install the agent. Pick a group. That's it.\nDetection, triage, daily checkups and response, all in place.\nAnd the risky part waits for your nod.",
           github: "View on GitHub",
-          pipeline: "Scroll down and try it",
-          evidence: "One platform across",
-          partners: ["ENDPOINT", "NETWORK", "LOGS", "AI OPS", "APPROVAL & AUDIT"],
+          pipeline: "See how it works",
+          evidence: "One platform. Everything in view.",
+          partners: ["ENDPOINT", "NETWORK", "LOGS", "AI", "AUDIT"],
         };
 
   useEffect(() => {
@@ -139,7 +139,7 @@ export function Hero24() {
 
           <motion.p
             variants={item}
-            className="mt-6 max-w-lg text-base leading-relaxed text-neutral-300 sm:text-lg"
+            className="mt-6 max-w-xl whitespace-pre-line text-base leading-relaxed text-neutral-300 sm:text-lg"
           >
             {copy.description}
           </motion.p>
@@ -166,7 +166,7 @@ export function Hero24() {
           </motion.div>
 
           <motion.div variants={item} className="mt-14 w-full">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-neutral-500">
+            <p className={`text-xs font-medium uppercase text-neutral-500 ${locale === "zh-CN" ? "tracking-[0.06em]" : "tracking-[0.18em]"}`}>
               {copy.evidence}
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-3">

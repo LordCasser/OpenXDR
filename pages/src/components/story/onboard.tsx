@@ -23,15 +23,15 @@ function stageOf(tick: number, i: number) {
 
 const COPY = {
   "zh-CN": {
-    kicker: "纳管",
+    kicker: "接入",
     title: (
       <>
-        第一步，
+        一份文档，
         <br />
-        把运维文档拖进来。
+        <span className="text-neutral-500">整个机房上线。</span>
       </>
     ),
-    body: "不用逐台登录装 agent。交接文档里写着有哪些主机、怎么登录，OpenXDR 就从那里开始：识别主机与凭据、加密保存、按组纳管，主机上线即进入检测与巡检。",
+    body: "不用逐台登录。把交接文档拖进来，\n主机和凭据自动识别、加密保存、按组接入。\n上线那一刻，检测和巡检就开始了。",
     docName: "运维交接.md",
     docHeading: "生产环境主机",
     docHint: "拖住这份文档，放进导入框",
@@ -49,24 +49,24 @@ const COPY = {
     steps: ["SSH 登录", "下发 agent", "签发主机证书", "上线"],
     queued: "排队",
     online: "在线",
-    done: "3 台主机已纳管，进入「生产」组。今晚 02:00 出第一份巡检报告。",
+    done: "3 台主机已接入「生产」组。明早十点，第一份巡检报告。",
     replay: "重来一次",
     notes: [
-      "凭据 AES-256-GCM 加密落库，模型永远看不到原文",
-      "每台主机一张绑定身份的证书，失陷主机冒充不了别人",
-      "之后的 agent 升级自动完成，不用再登录主机",
+      "凭据加密落库，模型永远看不到原文",
+      "每台主机一张专属证书，谁也冒充不了谁",
+      "以后的升级，自动完成",
     ],
   },
   en: {
     kicker: "Onboard",
     title: (
       <>
-        Step one:
+        One document.
         <br />
-        drop in your ops doc.
+        <span className="text-neutral-500">Your whole fleet, online.</span>
       </>
     ),
-    body: "No logging into hosts one by one. Your handover doc already lists the hosts and how to reach them — OpenXDR starts there: it finds hosts and credentials, encrypts them, onboards by group, and every host goes straight into detection and inspection.",
+    body: "No logging in host by host. Drop in your handover doc.\nHosts and credentials are found, encrypted and onboarded by group.\nDetection and checkups start the moment they're online.",
     docName: "ops-handover.md",
     docHeading: "Production hosts",
     docHint: "Grab this document and drop it into the import box",
@@ -84,12 +84,12 @@ const COPY = {
     steps: ["SSH login", "Ship agent", "Issue host cert", "Online"],
     queued: "Queued",
     online: "Online",
-    done: "3 hosts onboarded into group “prod”. First inspection report tonight at 02:00.",
+    done: "3 hosts onboarded into “prod”. First checkup report tomorrow at 10:00.",
     replay: "Replay",
     notes: [
-      "Credentials are AES-256-GCM encrypted; the model never sees them",
-      "Every host gets an identity-bound certificate — a compromised host can't impersonate others",
-      "Later agent upgrades happen automatically, no more logins",
+      "Credentials encrypted at rest. The model never sees them",
+      "One identity-bound certificate per host. No host can pose as another",
+      "Upgrades from here on happen on their own",
     ],
   },
 };

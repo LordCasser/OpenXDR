@@ -30,7 +30,7 @@ export default function Footer12() {
             {
               title: "平台",
               links: [
-                { label: "纳管", href: "#onboard" },
+                { label: "接入", href: "#onboard" },
                 { label: "安全", href: "#secure" },
                 { label: "运维", href: "#operate" },
                 { label: "开始", href: "#start" },

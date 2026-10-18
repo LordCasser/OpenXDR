@@ -13,19 +13,19 @@ const ICONS = [Cpu, ShieldCheck, Filter, Zap, ScrollText, Network];
 
 const COPY = {
   "zh-CN": {
-    kicker: "闭环",
+    kicker: "日常",
     title: (
       <>
-        每天清晨，
+        每天早上，
         <br />
-        <span className="text-neutral-500">报告已经在等你。</span>
+        <span className="text-neutral-500">报告已经写好。</span>
       </>
     ),
-    body: "预设任务按 cron 巡检全组主机：复查遗留待办、登记新问题、交一份报告。需要人拍板的，才推送给你。",
+    body: "预设任务每天巡检全组：复查待办，登记新问题，写成一份报告。\n只有需要你拍板的，才会来打扰你。",
     demo: "示例",
     report: {
       title: "生产组 · 每日主机巡检",
-      time: "02:00 · 自动运行",
+      time: "10:00 · 自动运行",
       stats: [
         ["3", "主机"],
         ["2", "已处理"],
@@ -39,16 +39,16 @@ const COPY = {
         [true, "三台主机时间同步、监听端口无异常"],
       ],
     },
-    capsTitle: "装上之后你得到的",
+    capsTitle: "装上之后，你会得到",
     caps: [
-      ["采集不挑环境", "eBPF / ETW 可选，不可用时自动降级到 netlink、fanotify、轮询，宁弱勿假"],
-      ["检测有据可查", "Sigma 兼容规则、ATT&CK 矩阵、公开情报订阅，CI 用真实攻击语料守住检测能力"],
-      ["层层降噪", "去重、可撤销抑制、实体关联、UEBA 首次出现、AI 带工具研判"],
-      ["处置一键到位", "结束进程、隔离主机，全局开关与隔离放行清单兜底"],
-      ["人始终拍板", "高风险命令阻塞审批，登录、审批、处置全部落审计"],
-      ["能上生产", "mTLS 主机绑定证书、JetStream 分片队列、Patroni + VIP 高可用"],
+      ["哪里都能装", "eBPF、ETW 优先，不可用就自动降级。宁可少看，绝不看错"],
+      ["检测，有据可查", "Sigma 规则、ATT&CK 矩阵、公开情报。每次提交都用真实攻击回放验证"],
+      ["噪音，层层滤掉", "去重、可撤销的抑制、实体关联、首次出现、AI 研判"],
+      ["处置，一键到位", "结束进程、隔离主机。总开关和放行清单兜底"],
+      ["决定权，始终在你", "高风险命令等你批准。登录、审批、处置，全部留痕"],
+      ["为生产而生", "mTLS 主机证书、分片队列、Patroni 高可用"],
     ],
-    startTitle: "五分钟跑起来",
+    startTitle: "五分钟，跑起来。",
     consoleAt: "控制台",
     copy: "复制",
     copied: "已复制",
@@ -58,19 +58,19 @@ const COPY = {
     license: "Apache-2.0 开源",
   },
   en: {
-    kicker: "Closing the loop",
+    kicker: "Every day",
     title: (
       <>
         Every morning,
         <br />
-        <span className="text-neutral-500">the report is already waiting.</span>
+        <span className="text-neutral-500">the report is already written.</span>
       </>
     ),
-    body: "Preset tasks inspect every host in the group on a cron schedule: re-check open findings, log new ones, file a report. Only what needs a human gets pushed to you.",
+    body: "Preset tasks check every host in the group, every day: revisit open findings, log new ones, write it all up.\nOnly what needs your call comes to you.",
     demo: "Sample",
     report: {
       title: "prod · Daily host inspection",
-      time: "02:00 · scheduled",
+      time: "10:00 · scheduled",
       stats: [
         ["3", "hosts"],
         ["2", "handled"],
@@ -84,16 +84,16 @@ const COPY = {
         [true, "Time sync and listening ports normal on all hosts"],
       ],
     },
-    capsTitle: "What you get once it's installed",
+    capsTitle: "What you get",
     caps: [
-      ["Collection that adapts", "eBPF / ETW optional, falls back to netlink, fanotify or polling — weaker beats fake"],
-      ["Detection you can verify", "Sigma rules, ATT&CK matrix, public intel feeds; CI replays real attack commands"],
-      ["Layered noise reduction", "Dedup, revocable suppression, entity correlation, UEBA first-seen, tool-using AI triage"],
-      ["One-click response", "Kill processes, isolate hosts — guarded by a global switch and an isolation allowlist"],
-      ["Humans stay in charge", "High-risk commands block for approval; logins, approvals and responses are audited"],
-      ["Production-ready", "mTLS host-bound certs, sharded JetStream queues, Patroni + VIP high availability"],
+      ["Runs anywhere", "eBPF and ETW first, graceful fallback when missing. Seeing less beats seeing wrong"],
+      ["Detection you can verify", "Sigma rules, ATT&CK matrix, public intel. Every commit replays real attacks"],
+      ["Noise, filtered out", "Dedup, revocable suppression, entity correlation, first-seen, AI triage"],
+      ["Response in one click", "Kill processes, isolate hosts. A global switch and an allowlist keep it safe"],
+      ["You always decide", "High-risk commands wait for approval. Logins, approvals, responses — all on record"],
+      ["Built for production", "mTLS host certs, sharded queues, Patroni high availability"],
     ],
-    startTitle: "Up in five minutes",
+    startTitle: "Up and running in five minutes.",
     consoleAt: "console at",
     copy: "Copy",
     copied: "Copied",

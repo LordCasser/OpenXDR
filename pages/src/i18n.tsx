@@ -13,12 +13,12 @@ const pageMetadata = {
   en: {
     title: "OpenXDR - Onboarded means operated and secured",
     description:
-      "Open-source XDR: onboard a host and it gets continuous detection, layered noise reduction, daily inspections and an AI assistant that does the work — with dangerous commands waiting for your approval.",
+      "Open-source XDR. Install the agent, pick a group, and detection, triage, daily checkups and response fall into place. The risky part waits for your nod.",
   },
   "zh-CN": {
     title: "OpenXDR - 纳管即运维，纳管即安全",
     description:
-      "开源 XDR：主机纳管后自动获得持续检测、层层降噪、每日巡检和能动手的 AI 助手，危险命令等你批准。",
+      "开源 XDR。装上 agent，分好组，检测、降噪、巡检与处置一次到位。真正危险的那一步，等你点头。",
   },
 } satisfies Record<Locale, { title: string; description: string }>;
 

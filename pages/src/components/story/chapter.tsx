@@ -37,7 +37,7 @@ export function ChapterHead({
       <h2 className="mt-5 text-3xl font-medium leading-[1.08] tracking-[-0.03em] text-white sm:text-5xl">
         {title}
       </h2>
-      <p className="mt-5 text-base leading-relaxed text-neutral-400 sm:text-lg">
+      <p className="mt-5 whitespace-pre-line text-base leading-relaxed text-neutral-400 sm:text-lg">
         {body}
       </p>
     </motion.div>

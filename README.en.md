@@ -11,7 +11,7 @@ An open-source XDR platform: EDR + SIEM + network traffic analysis, with AI-driv
 and it immediately gets continuous collection, detection, daily inspection and an AI assistant you can talk to.
 People make the calls instead of digging through alert lists.
 
-**Ten thousand alerts in, three real incidents out.**
+**Noise stops here. What's left is worth your time.**
 
 > Detailed documentation under `docs/` is currently written in Chinese.
 
