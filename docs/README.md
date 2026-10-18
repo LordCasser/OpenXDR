@@ -12,6 +12,7 @@
 
 | 文档 | 内容 | 什么时候读 |
 |---|---|---|
+| [install.md](install.md) | 一行安装：准备、安装、核对、接上 AI 与主机、升级备份、常见问题，附给 AI agent 的说明 | 第一次装、升级 |
 | [deployment.md](deployment.md) | 部署与使用：启动、接入主机、日志与情报、抑制与处置、mTLS、配置项全表 | 部署、接入主机、查配置项 |
 | [architecture.md](architecture.md) | 总体架构：数据通路、降噪四道闸、关键设计决策、身份与安全、模块地图 | 第一次了解系统；做任何跨模块改动前 |
 | [collection.md](collection.md) | 采集端详解：agent（Linux/Windows 各采集路径与降级链）、sensor（抓包后端与协议解析）、配置下发 | 改 `agent/`、`sensor/`；评估采集覆盖面 |

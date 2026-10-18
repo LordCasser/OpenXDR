@@ -96,6 +96,11 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
   `windows.rs`、`registry.rs` 等文件时注意 cfg 分支别破编译）。
 - web：`npm run build`。容器镜像：server 与 web 的 Dockerfile 都要能构建。
 
+发版（.github/workflows/release.yml）：推 `v*` 标签即编 agent（Linux musl 静态 + eBPF、Windows）与 sensor，
+把 agent 安装包、默认规则与预设任务打进 server 镜像，推 `ghcr.io/yaklang/openxdr-{server,web}`（amd64 / arm64），
+再建 GitHub Release（附 `deploy/install/` 的一行安装脚本与编排文件，说明取 `deploy/install/RELEASE_NOTES.md`
+加 CHANGELOG 对应版本）。改安装流程时同步 `docs/install.md`，它也是给用户 AI agent 的安装说明。
+
 ## 代码组织（server/internal）
 
 每个包职责单一，按处理链顺序排列：
