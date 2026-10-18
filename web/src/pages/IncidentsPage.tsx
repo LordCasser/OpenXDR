@@ -13,7 +13,7 @@ import { useFlash } from '../components/useFlash'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
-import { FilterCard, Page, STICKY_HEADER } from '../components/Page'
+import { FilterCard, Page, STICKY_HEADER, WIDE_ONLY, useWideTable } from '../components/Page'
 import { useI18n, type MsgKey } from '../i18n'
 
 const VERDICT: Record<string, { key: MsgKey; status: 'error' | 'warning' | 'success' }> = {
@@ -49,6 +49,7 @@ export function IncidentsPage() {
   useEffect(() => { setSelected([]); setResolving(null) }, [status, page])
   useEffect(() => { if (query.data) saveQueue(query.data.items) }, [query.data])
   const canChat = useCanChat()
+  const wideTable = useWideTable()
   const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
   const flash = useFlash(query.data?.items, r => r.id, r => `${r.status}|${r.aiVerdict?.verdict}|${r.alertCount}|${r.severity}`, `${status}|${page}`)
   const handoff = useHandoff()
@@ -124,7 +125,7 @@ export function IncidentsPage() {
         {query.isError ? <LoadError error={query.error} onRetry={() => query.refetch()} /> : (
           <Table<IncidentSummary>
           sticky={STICKY_HEADER}
-          scroll={{ x: 1100 }}
+          scroll={wideTable ? { x: 1100 } : undefined}
             rowKey="id"
             rowClassName={r => (flash.has(r.id) ? 'row-link row-flash' : 'row-link')}
             onRow={rowLink}
@@ -143,11 +144,11 @@ export function IncidentsPage() {
             } : undefined}
             columns={[
               { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
-              { title: t('thTitle'), dataIndex: 'title', ellipsis: true, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
-              { title: t('group'), dataIndex: 'groupId', width: 140, ellipsis: true, render: v => groups.find(g => g.id === v)?.name ?? '-' },
+              { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
+              { responsive: WIDE_ONLY, title: t('group'), dataIndex: 'groupId', width: 140, ellipsis: true, render: v => groups.find(g => g.id === v)?.name ?? '-' },
               { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
               {
-                title: t('thVerdict'), width: 150,
+                responsive: WIDE_ONLY, title: t('thVerdict'), width: 150,
                 render: (_, r) => {
                   const v = VERDICT[r.aiVerdict?.verdict ?? '']
                   if (!v) return <Badge status="default" text={t('waitingVerdict')} />
@@ -158,10 +159,10 @@ export function IncidentsPage() {
                   )
                 },
               },
-              { title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
-              { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
+              { responsive: WIDE_ONLY, title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
+              { responsive: WIDE_ONLY, title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
               ...(anyActable ? [{
-                title: '', width: 170,
+                responsive: WIDE_ONLY, title: '', width: 170,
                 // 单条处理不用先勾选：直接点，弹窗写结论
                 render: (_: unknown, r: IncidentSummary) => actable(r) && (
                   <Space size={0} className="row-actions">

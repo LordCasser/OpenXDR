@@ -9,7 +9,7 @@ import { HostLink } from '../components/HostLink'
 import { LoadError } from '../components/LoadError'
 import { eventSummary } from '../components/eventSummary'
 import { CLASS_KEY, fmtTime } from '../components/format'
-import { FilterCard, Page, STICKY_HEADER } from '../components/Page'
+import { FilterCard, Page, STICKY_HEADER, WIDE_ONLY, useWideTable } from '../components/Page'
 import { useI18n } from '../i18n'
 
 // 日志检索：告警只是线索，取证要能沿着一个 IP、一段命令行翻出原始遥测
@@ -34,6 +34,7 @@ export function EventsPage() {
   useEffect(() => setDraft(filter.q), [filter.q])
   const { data, isFetching, isError, error, refetch, dataUpdatedAt } = useQuery({ queryKey: ['events', filter], queryFn: () => searchEvents(filter) })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
+  const wideTable = useWideTable()
 
   return (
     <Page title={t('navEvents')} subtitle={t('eventsSubtitle')}>
@@ -90,7 +91,7 @@ export function EventsPage() {
         {data?.truncated && <Alert type="info" banner showIcon title={t('listTruncated', { n: data.items.length })} />}
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<EventRow>
           sticky={STICKY_HEADER}
-          scroll={{ x: 950 }}
+          scroll={wideTable ? { x: 950 } : undefined}
           size="small"
           rowKey="id"
           loading={isFetching}
@@ -117,9 +118,9 @@ export function EventsPage() {
             ),
           }}
           columns={[
-            { title: t('thTime'), dataIndex: 'ts', render: fmtTime, width: 170 },
-            { title: t('thClass'), dataIndex: 'classUid', width: 100, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v) },
-            { title: t('thHostname'), dataIndex: 'assetId', width: 130, render: v => <HostLink id={v} /> },
+            { title: t('thTime'), dataIndex: 'ts', render: v => (wideTable ? fmtTime(v) : fmtTime(v).slice(11)), width: wideTable ? 170 : 84 },
+            { responsive: WIDE_ONLY, title: t('thClass'), dataIndex: 'classUid', width: 100, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v) },
+            { responsive: WIDE_ONLY, title: t('thHostname'), dataIndex: 'assetId', width: 130, render: v => <HostLink id={v} /> },
             {
               title: t('thSummary'), key: 'summary', ellipsis: { showTitle: false },
               render: (_, r) => {
@@ -131,7 +132,7 @@ export function EventsPage() {
                 )
               },
             },
-            { title: t('thUser'), dataIndex: 'username', width: 110, render: v => v || '-' },
+            { responsive: WIDE_ONLY, title: t('thUser'), dataIndex: 'username', width: 110, render: v => v || '-' },
           ]}
         />}
       </FilterCard>

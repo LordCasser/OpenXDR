@@ -11,7 +11,7 @@ import { useTheme } from '../app/theme'
 import { Ago } from '../components/Ago'
 import { GettingStarted } from '../components/GettingStarted'
 import { LoadError } from '../components/LoadError'
-import { Page } from '../components/Page'
+import { Page, WIDE_ONLY, useWideTable } from '../components/Page'
 import { saveQueue } from '../components/incidentQueue'
 import { useRowLink } from '../components/rowLink'
 import { BarList, ColumnChart, SEVERITY_COLOR, compact, useSeriesColor } from '../components/charts'
@@ -135,6 +135,8 @@ export function OverviewPage() {
   const incidents = useQuery({ queryKey: ['incidents', 'review', 'overview'], queryFn: () => fetchIncidents({ status: 'review', limit: 6 }), refetchInterval: 30_000 })
   const findings = useQuery({ queryKey: ['findings', 'open'], queryFn: () => fetchFindings('open'), refetchInterval: 60_000 })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
+  // 手机上标题换行完整显示，不截断成看不出是什么的半句
+  const wideTable = useWideTable()
   const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
   useEffect(() => { if (incidents.data) saveQueue(incidents.data.items) }, [incidents.data])
   const isGroupAdmin = group?.role === 'admin'
@@ -212,10 +214,10 @@ export function OverviewPage() {
                 locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIncidents')} /> }}
                 columns={[
                   { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
-                  { title: t('thTitle'), dataIndex: 'title', ellipsis: true, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
+                  { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
                   { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
-                  { title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
-                  { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
+                  { responsive: WIDE_ONLY, title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
+                  { responsive: WIDE_ONLY, title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
                 ]}
               />
             )}

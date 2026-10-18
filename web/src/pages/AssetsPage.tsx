@@ -11,7 +11,7 @@ import { ImportHostsModal } from '../components/ImportHostsModal'
 import { LoadError } from '../components/LoadError'
 import { AddHostModal } from '../components/AddHostModal'
 import { errText, HostStateBadge, hostState } from '../components/format'
-import { FilterCard, Page, STICKY_HEADER } from '../components/Page'
+import { FilterCard, Page, STICKY_HEADER, WIDE_ONLY, useWideTable } from '../components/Page'
 import { useRowLink } from '../components/rowLink'
 import { useI18n } from '../i18n'
 
@@ -37,6 +37,7 @@ export function AssetsPage() {
   const canAdd = groups.some(g => g.role === 'admin')
   const { data, isPending, isFetching, isError, error, dataUpdatedAt, refetch } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
 
+  const wideTable = useWideTable()
   const rowLink = useRowLink<Asset>(a => `/assets/${a.id}`)
   // 批量：多台同组主机一起交给 AI 巡检；管理员可以一起移组
   const [selected, setSelected] = useState<string[]>([])
@@ -115,7 +116,7 @@ export function AssetsPage() {
       >
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<Asset>
           sticky={STICKY_HEADER}
-          scroll={{ x: 1100 }}
+          scroll={wideTable ? { x: 1100 } : undefined}
           locale={{ emptyText: <EmptyHint title={t(q || groupFilter ? 'noMatch' : 'noAssets')} hint={q || groupFilter ? undefined : t('noAssetsHint')} /> }}
           rowKey="id"
           rowClassName="row-link"
@@ -131,15 +132,15 @@ export function AssetsPage() {
               render: (_, a) => <HostStateBadge asset={a} />,
             },
             { title: t('thHostname'), dataIndex: 'hostname', sorter: (a, b) => a.hostname.localeCompare(b.hostname), render: (v, a) => <Link to={`/assets/${a.id}`}>{v}</Link> },
-            { title: 'OS', dataIndex: 'os', width: 100, render: v => v ?? '-' },
-            { title: t('thIP'), dataIndex: 'ipAddrs', render: v => v?.length ? <Typography.Text copyable={{ text: v.join(', ') }}>{v.join(', ')}</Typography.Text> : '-' },
+            { responsive: WIDE_ONLY, title: 'OS', dataIndex: 'os', width: 100, render: v => v ?? '-' },
+            { responsive: WIDE_ONLY, title: t('thIP'), dataIndex: 'ipAddrs', render: v => v?.length ? <Typography.Text copyable={{ text: v.join(', ') }}>{v.join(', ')}</Typography.Text> : '-' },
             {
-              title: t('group'), dataIndex: 'groupId', width: 200,
+              responsive: WIDE_ONLY, title: t('group'), dataIndex: 'groupId', width: 200,
               render: (v, a) => isAdmin
                 ? <Select size="small" style={{ width: 170 }} value={v ?? UNGROUPED} options={groupOptions} onChange={g => move(a, g)} />
                 : groups.find(g => g.id === v)?.name ?? <Tag>{t('ungrouped')}</Tag>,
             },
-            { title: t('thSource'), dataIndex: 'agentId', width: 90, render: (v, a) => <Tag>{v ? 'agent' : t(imported(a) ? 'hostImportedSource' : 'sourceLog')}</Tag> },
+            { responsive: WIDE_ONLY, title: t('thSource'), dataIndex: 'agentId', width: 90, render: (v, a) => <Tag>{v ? 'agent' : t(imported(a) ? 'hostImportedSource' : 'sourceLog')}</Tag> },
             { title: t('thLastSeen'), dataIndex: 'lastSeen', width: 180, render: (v, a) => imported(a) ? '—' : <Ago iso={v} />, sorter: (a, b) => a.lastSeen.localeCompare(b.lastSeen) },
           ]}
         />}

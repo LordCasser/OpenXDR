@@ -16,7 +16,7 @@ import { useRowLink } from '../components/rowLink'
 import { useCanActIn, useSession } from '../app/session'
 import { AssetProfileView } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
-import { Page } from '../components/Page'
+import { Page, WIDE_ONLY, useWideTable } from '../components/Page'
 import { eventSummary } from '../components/eventSummary'
 import {
   CLASS_KEY, CommandStatusTag, HostStateBadge, IncidentStatusTag, SeverityTag, commandKind, errText, fmtTime,
@@ -120,6 +120,8 @@ export function AssetDetailPage() {
   const events = useQuery({ queryKey: ['events', 'asset', id], queryFn: () => searchEvents({ assetId: id, hours: 168 }), enabled: !!asset })
   const commands = useQuery({ queryKey: ['commands', 'asset', id], queryFn: () => fetchCommands({ assetId: id! }), enabled: !!asset })
 
+  // 手机上标题换行完整显示，不截断成看不出是什么的半句
+  const wideTable = useWideTable()
   const rowLink = useRowLink<IncidentSummary>(r => `/incidents/${r.id}`)
   useEffect(() => { if (incidents.data) saveQueue(incidents.data.items) }, [incidents.data])
   useRemember(asset && { to: `/assets/${asset.id}`, label: asset.hostname, kind: 'asset' })
@@ -185,9 +187,9 @@ export function AssetDetailPage() {
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIncidents')} /> }}
                       columns={[
                         { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
-                        { title: t('thTitle'), dataIndex: 'title', ellipsis: true, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
+                        { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
-                        { title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
+                        { responsive: WIDE_ONLY, title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
                       ]} />
                   ),
                 },

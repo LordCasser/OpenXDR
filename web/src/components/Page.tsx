@@ -1,5 +1,6 @@
 import { ClearOutlined, HomeOutlined } from '@ant-design/icons'
-import { Breadcrumb, Button, Card, Flex, Typography } from 'antd'
+import { Breadcrumb, Button, Card, Flex, Grid, Typography } from 'antd'
+import type { Breakpoint } from 'antd'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { crumbsOf } from '../app/nav'
@@ -36,6 +37,10 @@ export function Page({ title, subtitle, extra, crumb, children }: {
     </div>
   )
 }
+
+// 窄屏表格：次要列加 responsive: WIDE_ONLY 在手机上收起，表格也不再强撑固定宽度，留下的关键列（级别、标题、状态）能完整显示
+export const WIDE_ONLY: Breakpoint[] = ['md']
+export const useWideTable = () => !!Grid.useBreakpoint().md
 
 // 长列表的表头吸在顶栏下面（顶栏高 56），往下翻也知道每列是什么
 export const STICKY_HEADER = { offsetHeader: 56 }
