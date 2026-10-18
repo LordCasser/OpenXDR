@@ -1,6 +1,6 @@
 # 构建上下文是仓库根目录：server 需要 proto/ 生成代码已提交。
 # 镜像自带默认规则、预设任务与 agent 安装包（发版时注入），开箱即用；挂载目录并设 RULES_PATH / TASKS_PATH / AGENT_DIST_DIR 可覆盖
-FROM golang:1.25-alpine AS build
+FROM golang:1.26-alpine AS build
 # 网络受限时可指向镜像源，例如 --build-arg GOPROXY=https://goproxy.cn,direct
 ARG GOPROXY=https://proxy.golang.org,direct
 ENV GOPROXY=${GOPROXY}

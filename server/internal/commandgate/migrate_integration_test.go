@@ -67,8 +67,10 @@ func TestUpgradeDefaults(t *testing.T) {
 		if err := UpgradeDefaults(ctx, db); err != nil {
 			t.Fatal(err)
 		}
-		got := db.CommandPolicy.Query().Order(commandpolicy.ByPattern()).Select(commandpolicy.FieldPattern).StringsX(ctx)
+		// 在 Go 里排序再比：库里的排序随 collation 变（CI 的 en_US 与本地的 C 对标点排法不同）
+		got := db.CommandPolicy.Query().Select(commandpolicy.FieldPattern).StringsX(ctx)
 		want := []string{pattern, old + "x"}
+		slices.Sort(got)
 		slices.Sort(want)
 		if !slices.Equal(got, want) {
 			t.Fatalf("升级结果不对：%q", got)
