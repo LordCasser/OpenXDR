@@ -1,5 +1,5 @@
 import {
-  BellOutlined, CheckCircleOutlined, CompassOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SunOutlined, TeamOutlined,
+  BellOutlined, CheckCircleOutlined, CheckOutlined, CompassOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SunOutlined, TeamOutlined,
   TranslationOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -15,7 +15,7 @@ import { CommandPalette } from './CommandPalette'
 import { NAV, crumbsOf, type NavItem } from './nav'
 import { useSession } from './session'
 import { ShortcutHelp, useGlobalKeys } from './shortcuts'
-import { useTheme } from './theme'
+import { useTheme, type ThemeMode } from './theme'
 import { TourProvider, useTour } from './tour'
 
 // 菜单上的待办计数：与态势总览共用同一份查询缓存，不额外打接口
@@ -86,7 +86,7 @@ function ApprovalBell() {
 // 侧栏底部的账号入口：主题、语言、退出收在一个菜单里，顶栏只留搜索与待办
 function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void }) {
   const { t, locale, setLocale } = useI18n()
-  const { dark, toggle } = useTheme()
+  const { dark, mode, setMode } = useTheme()
   const { me, signOut } = useSession()
   const { token } = theme.useToken()
   const { message } = App.useApp()
@@ -107,7 +107,13 @@ function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void })
       placement="topLeft"
       menu={{
         items: [
-          { key: 'theme', icon: dark ? <SunOutlined /> : <MoonOutlined />, label: dark ? t('lightMode') : t('darkMode') },
+          {
+            key: 'theme', icon: dark ? <MoonOutlined /> : <SunOutlined />, label: t('appearance'),
+            children: (['system', 'light', 'dark'] as const).map(m => ({
+              key: `mode:${m}`, label: t(m === 'system' ? 'modeSystem' : m === 'light' ? 'modeLight' : 'modeDark'),
+              icon: mode === m ? <CheckOutlined /> : <span style={{ display: 'inline-block', width: 14 }} />,
+            })),
+          },
           { key: 'language', icon: <TranslationOutlined />, label: locale === 'zh' ? 'English' : '中文' },
           ...(notifySupported ? [{ key: 'notify', icon: <BellOutlined />, label: t(notify ? 'desktopNotifyOff' : 'desktopNotifyOn') }] : []),
           { type: 'divider' },
@@ -117,7 +123,7 @@ function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void })
           { key: 'logout', icon: <LogoutOutlined />, label: t('logout') },
         ],
         onClick: ({ key }) => {
-          if (key === 'theme') toggle()
+          if (key.startsWith('mode:')) setMode(key.slice(5) as ThemeMode)
           else if (key === 'language') setLocale(locale === 'zh' ? 'en' : 'zh')
           else if (key === 'notify') void toggleNotify()
           else if (key === 'tour') tour.start()
