@@ -3,8 +3,10 @@ import { Hero24 } from "@/components/blocks/hero-24";
 import Navigation15 from "@/components/blocks/navigation-15";
 import { Assistant } from "@/components/story/assistant";
 import { Closing } from "@/components/story/closing";
+import { Features } from "@/components/story/features";
 import { Funnel } from "@/components/story/funnel";
 import { Onboard } from "@/components/story/onboard";
+import { Surface } from "@/components/story/surface";
 import { useLocale } from "@/i18n";
 
 export default function App() {
@@ -24,6 +26,8 @@ export default function App() {
         <Onboard />
         <Funnel />
         <Assistant />
+        <Surface />
+        <Features />
         <Closing />
       </main>
       <Footer12 />

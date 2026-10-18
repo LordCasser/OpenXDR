@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Copy, Cpu, Filter, Network, ScrollText, ShieldCheck, Zap } from "lucide-react";
+import { ArrowRight, Check, Copy } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { useCopy } from "@/i18n";
@@ -8,8 +8,6 @@ const REPO = "https://github.com/yaklang/OpenXDR";
 const quickstart = (comment: string) => `git clone ${REPO}.git && cd OpenXDR
 docker compose up -d
 # ${comment} http://localhost:5173`;
-
-const ICONS = [Cpu, ShieldCheck, Filter, Zap, ScrollText, Network];
 
 const COPY = {
   "zh-CN": {
@@ -39,15 +37,6 @@ const COPY = {
         [true, "三台主机时间同步、监听端口无异常"],
       ],
     },
-    capsTitle: "装上之后，你会得到",
-    caps: [
-      ["哪里都能装", "eBPF、ETW 优先，不可用就自动降级。宁可少看，绝不看错"],
-      ["检测，有据可查", "Sigma 规则、ATT&CK 矩阵、公开情报。每次提交都用真实攻击回放验证"],
-      ["噪音，层层滤掉", "去重、可撤销的抑制、实体关联、首次出现、AI 研判"],
-      ["处置，一键到位", "结束进程、隔离主机。总开关和放行清单兜底"],
-      ["决定权，始终在你", "高风险命令等你批准。登录、审批、处置，全部留痕"],
-      ["为生产而生", "mTLS 主机证书、分片队列、Patroni 高可用"],
-    ],
     startTitle: "五分钟，跑起来。",
     consoleAt: "控制台",
     copy: "复制",
@@ -84,15 +73,6 @@ const COPY = {
         [true, "Time sync and listening ports normal on all hosts"],
       ],
     },
-    capsTitle: "What you get",
-    caps: [
-      ["Runs anywhere", "eBPF and ETW first, graceful fallback when missing. Seeing less beats seeing wrong"],
-      ["Detection you can verify", "Sigma rules, ATT&CK matrix, public intel. Every commit replays real attacks"],
-      ["Noise, filtered out", "Dedup, revocable suppression, entity correlation, first-seen, AI triage"],
-      ["Response in one click", "Kill processes, isolate hosts. A global switch and an allowlist keep it safe"],
-      ["You always decide", "High-risk commands wait for approval. Logins, approvals, responses — all on record"],
-      ["Built for production", "mTLS host certs, sharded queues, Patroni high availability"],
-    ],
     startTitle: "Up and running in five minutes.",
     consoleAt: "console at",
     copy: "Copy",
@@ -118,7 +98,7 @@ export function Closing() {
     <section id="start" className="relative scroll-mt-20 px-4 py-28 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1400px]">
         <div className="grid gap-14 lg:grid-cols-2 lg:items-center">
-          <ChapterHead index="04" kicker={t.kicker} title={t.title} body={t.body} />
+          <ChapterHead index="05" kicker={t.kicker} title={t.title} body={t.body} />
 
           <motion.article
             initial={{ opacity: 0, y: 30, rotate: 1.5 }}
@@ -165,26 +145,6 @@ export function Closing() {
           </motion.article>
         </div>
 
-        <h3 className="mt-32 text-sm uppercase tracking-[0.2em] text-neutral-500">{t.capsTitle}</h3>
-        <div className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-3">
-          {t.caps.map(([title, desc], i) => {
-            const Icon = ICONS[i];
-            return (
-              <motion.div
-                key={title}
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.06, duration: 0.6 }}
-                className="bg-neutral-950 p-6 transition-colors hover:bg-neutral-900"
-              >
-                <Icon className="h-5 w-5 text-emerald-300" />
-                <p className="mt-4 font-medium text-white">{title}</p>
-                <p className="mt-2 text-sm leading-relaxed text-neutral-400">{desc}</p>
-              </motion.div>
-            );
-          })}
-        </div>
 
         <div className="mt-32 grid gap-10 lg:grid-cols-2 lg:items-end">
           <div>
