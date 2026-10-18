@@ -182,6 +182,26 @@ func (_u *AlertUpdate) ClearLastTs() *AlertUpdate {
 	return _u
 }
 
+// SetCommandID sets the "command_id" field.
+func (_u *AlertUpdate) SetCommandID(v uuid.UUID) *AlertUpdate {
+	_u.mutation.SetCommandID(v)
+	return _u
+}
+
+// SetNillableCommandID sets the "command_id" field if the given value is not nil.
+func (_u *AlertUpdate) SetNillableCommandID(v *uuid.UUID) *AlertUpdate {
+	if v != nil {
+		_u.SetCommandID(*v)
+	}
+	return _u
+}
+
+// ClearCommandID clears the value of the "command_id" field.
+func (_u *AlertUpdate) ClearCommandID() *AlertUpdate {
+	_u.mutation.ClearCommandID()
+	return _u
+}
+
 // SetEvent sets the "event" edge to the Event entity.
 func (_u *AlertUpdate) SetEvent(v *Event) *AlertUpdate {
 	return _u.SetEventID(v.ID)
@@ -279,6 +299,12 @@ func (_u *AlertUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.LastTsCleared() {
 		_spec.ClearField(alert.FieldLastTs, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CommandID(); ok {
+		_spec.SetField(alert.FieldCommandID, field.TypeUUID, value)
+	}
+	if _u.mutation.CommandIDCleared() {
+		_spec.ClearField(alert.FieldCommandID, field.TypeUUID)
 	}
 	if _u.mutation.EventCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -537,6 +563,26 @@ func (_u *AlertUpdateOne) ClearLastTs() *AlertUpdateOne {
 	return _u
 }
 
+// SetCommandID sets the "command_id" field.
+func (_u *AlertUpdateOne) SetCommandID(v uuid.UUID) *AlertUpdateOne {
+	_u.mutation.SetCommandID(v)
+	return _u
+}
+
+// SetNillableCommandID sets the "command_id" field if the given value is not nil.
+func (_u *AlertUpdateOne) SetNillableCommandID(v *uuid.UUID) *AlertUpdateOne {
+	if v != nil {
+		_u.SetCommandID(*v)
+	}
+	return _u
+}
+
+// ClearCommandID clears the value of the "command_id" field.
+func (_u *AlertUpdateOne) ClearCommandID() *AlertUpdateOne {
+	_u.mutation.ClearCommandID()
+	return _u
+}
+
 // SetEvent sets the "event" edge to the Event entity.
 func (_u *AlertUpdateOne) SetEvent(v *Event) *AlertUpdateOne {
 	return _u.SetEventID(v.ID)
@@ -664,6 +710,12 @@ func (_u *AlertUpdateOne) sqlSave(ctx context.Context) (_node *Alert, err error)
 	}
 	if _u.mutation.LastTsCleared() {
 		_spec.ClearField(alert.FieldLastTs, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CommandID(); ok {
+		_spec.SetField(alert.FieldCommandID, field.TypeUUID, value)
+	}
+	if _u.mutation.CommandIDCleared() {
+		_spec.ClearField(alert.FieldCommandID, field.TypeUUID)
 	}
 	if _u.mutation.EventCleared() {
 		edge := &sqlgraph.EdgeSpec{

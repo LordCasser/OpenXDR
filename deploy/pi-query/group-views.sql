@@ -27,7 +27,7 @@ CREATE OR REPLACE VIEW :"schema".events WITH (security_barrier) AS
 
 -- 告警：只含本组资产
 CREATE OR REPLACE VIEW :"schema".alerts WITH (security_barrier) AS
-  SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id
+  SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id
   FROM public.alerts
   WHERE asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id');
 

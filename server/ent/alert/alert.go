@@ -29,6 +29,8 @@ const (
 	FieldCount = "count"
 	// FieldLastTs holds the string denoting the last_ts field in the database.
 	FieldLastTs = "last_ts"
+	// FieldCommandID holds the string denoting the command_id field in the database.
+	FieldCommandID = "command_id"
 	// EdgeEvent holds the string denoting the event edge name in mutations.
 	EdgeEvent = "event"
 	// EdgeAsset holds the string denoting the asset edge name in mutations.
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldIncidentID,
 	FieldCount,
 	FieldLastTs,
+	FieldCommandID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -136,6 +139,11 @@ func ByCount(opts ...sql.OrderTermOption) OrderOption {
 // ByLastTs orders the results by the last_ts field.
 func ByLastTs(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastTs, opts...).ToFunc()
+}
+
+// ByCommandID orders the results by the command_id field.
+func ByCommandID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCommandID, opts...).ToFunc()
 }
 
 // ByEventField orders the results by event field.

@@ -77,7 +77,7 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 	if chat != nil && chat.Gate != nil {
 		gate = chat.Gate
 	}
-	mapCommands(mux, db, hub, selfEndpoints, gate)
+	mapCommands(mux, db, rules, hub, selfEndpoints, gate)
 	mapCommandPolicy(mux, db, gate)
 	mapAgentSessions(mux, db, chat)
 	mapSuppressions(mux, db, suppressions, rules)

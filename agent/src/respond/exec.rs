@@ -27,6 +27,8 @@ pub async fn run(cmd: &Command) -> Outcome {
     };
 
     let mut child = match shell(&cmd.cmd)
+        // 采集端按它认出指令拉起的进程树（只认 agent 直接子进程上的这个变量，别的进程自己设没用）
+        .env(crate::collector::COMMAND_ENV, &cmd.id)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

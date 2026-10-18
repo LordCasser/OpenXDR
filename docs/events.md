@@ -46,6 +46,8 @@ agent 侧组装（`agent/src/collector/mod.rs:233` `process_event`）。
 - 顶层 protobuf 另带 `process_guid` / `parent_process_guid` / `username`
 - 进程在容器或 Proxmox 虚拟机里时（Linux 按 cgroup 识别），顶层加
   `"container": { "runtime": "docker|podman|containerd|cri-o|lxc|qemu|nspawn", "uid": "<容器 ID 前 12 位或 VMID>", "name": "<名字，读不到省略>" }`
+- 平台下发的指令拉起的进程（及其后代）顶层带 `"platform_command": { "uid": "<指令 ID>" }`，网络与 DNS 事件同样带，
+  见 [检测链路 · 平台指令触发的告警](detection.md#平台指令触发的告警servercmdorigin)
 - **退出事件复用启动时的进程 GUID**（注册表查得到就填同一个），血缘不断；
   eBPF（exit_group）与 netlink 路径的退出事件带 `exit_code`（被信号杀掉的为 null）；
   知道启动时间的（启动事件或启动快照里见过）带 `process.created_time`（毫秒）与顶层 `duration_ms`；

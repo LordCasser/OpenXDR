@@ -115,6 +115,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `api` / `auth` / `audit`：REST API、认证与 RBAC、审计日志
 - `janitor`：原始事件保留期清理、低危良性事件到期自动结案
 - `assetmap`：资产图谱与攻击面——设备清单物化、依赖边聚合、区域与暴露判定、AI 标注（单活增量扫描事件）
+- `cmdorigin`：核对事件上的平台指令标记（agent 给指令拉起的进程树打标），通过的告警挂到指令上、不进关联与研判
 - `review`：需人工复核的统一口径（通知、总览计数、列表筛选与自动结案共用）
 - `testdb`：集成测试共享的 Postgres 连接与清表（仅 `integration` tag 编译）
 - `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`gencerts`（证书工具）、`sandboxd`（Pi 沙箱守护进程，见 `deploy/pi-sandbox`）

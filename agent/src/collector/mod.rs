@@ -71,6 +71,9 @@ mod persistwatch;
 #[cfg(target_os = "windows")]
 mod windows;
 
+/// 平台指令 ID 的环境变量：respond/exec 拉起指令时设置，进程采集据此给指令进程树打标
+pub const COMMAND_ENV: &str = "OPENXDR_COMMAND_ID";
+
 /// 上报缓冲。server 每条事件要等三副本确认，单流约千条每秒；定时任务齐发时
 /// 宿主机两秒内能冒出两千多条进程事件，缓冲得兜住这种尖峰慢慢排空，而不是丢
 const SINK_CAPACITY: usize = 16 * 1024;
@@ -247,7 +250,8 @@ fn seeded_registry() -> ProcessRegistry {
                 full_name(name.trim_end(), exe.as_deref()),
                 exe.as_deref(),
             );
-            registry.annotate(pid, container::started(pid), container::of(pid));
+            // 早于 agent 启动的进程不可能是本次运行下发的指令
+            registry.annotate(pid, container::started(pid), container::of(pid), None);
         }
     }
     registry
@@ -264,6 +268,34 @@ fn full_name<'a>(name: &'a str, exe: Option<&'a str>) -> &'a str {
         }
         _ => name,
     }
+}
+
+/// 新进程所属的平台指令：agent 自己直接拉起的进程看环境变量（只信 agent 的直接子进程，
+/// 别的进程自己设这个变量没用），其余沿父进程继承
+fn command_of(registry: &ProcessRegistry, pid: u32, ppid: Option<u32>) -> Option<Arc<str>> {
+    let ppid = ppid?;
+    if ppid == std::process::id() {
+        return command_env(pid);
+    }
+    registry.command_of(ppid)
+}
+
+#[cfg(target_os = "linux")]
+fn command_env(pid: u32) -> Option<Arc<str>> {
+    let environ = std::fs::read(format!("/proc/{pid}/environ")).ok()?;
+    let prefix = format!("{COMMAND_ENV}=");
+    environ
+        .split(|b| *b == 0)
+        .find_map(|kv| kv.strip_prefix(prefix.as_bytes()))
+        .and_then(|v| std::str::from_utf8(v).ok())
+        .filter(|v| !v.is_empty() && v.len() <= 64)
+        .map(Arc::from)
+}
+
+/// Windows 读不到别的进程的环境变量，指令打标只在 Linux 上做
+#[cfg(not(target_os = "linux"))]
+fn command_env(_pid: u32) -> Option<Arc<str>> {
+    None
 }
 
 #[cfg(target_os = "linux")]
@@ -351,29 +383,32 @@ fn process_event(
     // 配不上启动事件、也说不出是谁，只是噪声
     let known;
     let now = SystemTime::now();
-    let (guid, parent_guid, name, exe, started, container) = if activity == ACTIVITY_TERMINATE {
-        known = registry.known(pid)?;
-        registry.forget(pid);
-        (
-            known.guid,
-            ppid.and_then(|p| registry.guid_of(p)),
-            if name.is_empty() {
-                known.name.as_str()
-            } else {
-                name
-            },
-            exe.or(known.exe.as_deref()),
-            known.started,
-            known.container.clone(),
-        )
-    } else {
-        let name = full_name(name, exe);
-        let (guid, parent) = registry.register(pid, ppid);
-        let container = container_of(pid);
-        registry.describe(pid, name, exe);
-        registry.annotate(pid, Some(now), container.clone());
-        (guid, parent, name, exe, None, container)
-    };
+    let (guid, parent_guid, name, exe, started, container, command) =
+        if activity == ACTIVITY_TERMINATE {
+            known = registry.known(pid)?;
+            registry.forget(pid);
+            (
+                known.guid,
+                ppid.and_then(|p| registry.guid_of(p)),
+                if name.is_empty() {
+                    known.name.as_str()
+                } else {
+                    name
+                },
+                exe.or(known.exe.as_deref()),
+                known.started,
+                known.container.clone(),
+                known.command.clone(),
+            )
+        } else {
+            let name = full_name(name, exe);
+            let command = command_of(registry, pid, ppid);
+            let (guid, parent) = registry.register(pid, ppid);
+            let container = container_of(pid);
+            registry.describe(pid, name, exe);
+            registry.annotate(pid, Some(now), container.clone(), command.clone());
+            (guid, parent, name, exe, None, container, command)
+        };
     let mut raw = serde_json::json!({
         "activity_id": activity,
         "process": {
@@ -391,6 +426,9 @@ fn process_event(
     });
     if let Some(c) = &container {
         raw["container"] = c.to_json();
+    }
+    if let Some(id) = &command {
+        raw["platform_command"] = serde_json::json!({ "uid": id.as_ref() });
     }
     // 退出事件带上启动时间与运行时长；启动时间不知道（快照里读不到）就都不写
     if let Some(started) = started {
@@ -562,6 +600,54 @@ mod tests {
         assert_eq!(v["process"]["pid"], 300);
         assert_eq!(v["process"]["exit_code"], 137);
         assert_eq!(v["process"]["uid"], launch.process_guid);
+    }
+
+    /// 指令打标：agent 直接拉起的进程看环境变量，后代沿血缘继承；别的进程设了同名变量也不算
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn platform_command_tagging() {
+        let launch = |reg: &mut ProcessRegistry, pid: u32, ppid: u32| {
+            let evt = process_event(
+                "a",
+                reg,
+                ACTIVITY_LAUNCH,
+                ProcessInfo {
+                    pid,
+                    name: "sh",
+                    ppid: Some(ppid),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
+            v["platform_command"]["uid"].as_str().map(str::to_string)
+        };
+        let mut child = std::process::Command::new("sleep")
+            .arg("5")
+            .env(COMMAND_ENV, "cmd-1")
+            .spawn()
+            .unwrap();
+        let mut reg = ProcessRegistry::default();
+        let root = child.id();
+        assert_eq!(
+            launch(&mut reg, root, std::process::id()).as_deref(),
+            Some("cmd-1")
+        );
+        assert_eq!(
+            launch(&mut reg, 900_001, root).as_deref(),
+            Some("cmd-1"),
+            "子进程继承"
+        );
+        assert_eq!(
+            launch(&mut reg, 900_002, 900_001).as_deref(),
+            Some("cmd-1"),
+            "孙进程继承"
+        );
+        // 不是 agent 直接拉起的：环境变量不作数
+        let mut other = ProcessRegistry::default();
+        assert_eq!(launch(&mut other, root, 1), None);
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     /// 被内核截成 15 字节的进程名换回完整文件名；本来就短、或与文件名对不上的保持原样

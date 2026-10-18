@@ -17,6 +17,7 @@ import (
 
 	"openxdr/server/ent"
 	"openxdr/server/ent/asset"
+	"openxdr/server/internal/cmdorigin"
 	"openxdr/server/internal/dedup"
 	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
@@ -30,7 +31,9 @@ import (
 
 type Server struct {
 	pb.UnimplementedAgentServiceServer
-	DB          *ent.Client
+	DB *ent.Client
+	// SQL 核对平台指令标记用；不配置时不认指令标记，照常告警
+	SQL         cmdorigin.Querier
 	Rules       *sigma.Engine
 	DedupWindow time.Duration
 	Hub         *response.Hub
@@ -306,12 +309,23 @@ func (s *Server) ReportEvents(stream pb.AgentService_ReportEventsServer) error {
 			}
 		}
 
-		for _, h := range intel.Detections(s.Rules.Evaluate(int(ev.ClassUid), assetOS, rawMap), s.Intel.Match(rawMap, ts)) {
+		hits := intel.Detections(s.Rules.Evaluate(int(ev.ClassUid), assetOS, rawMap), s.Intel.Match(rawMap, ts))
+		var command *uuid.UUID
+		if len(hits) > 0 {
+			var err error
+			if command, err = cmdorigin.Of(ctx, s.SQL, rawMap, assetID, ts); err != nil {
+				return status.Errorf(codes.Unavailable, "核对平台指令失败: %v", err)
+			}
+		}
+		for _, h := range hits {
 			// 抑制先于去重：被压掉的命中不该占用去重槽位
 			if s.Suppress.Suppressed(h.RuleID, assetID, ts) {
 				continue
 			}
 			fingerprint := h.RuleID + fpSuffix
+			if command != nil {
+				fingerprint += "|cmd:" + command.String()
+			}
 			if deduper.Hit(fingerprint, ts) {
 				continue
 			}
@@ -323,6 +337,7 @@ func (s *Server) ReportEvents(stream pb.AgentService_ReportEventsServer) error {
 				SetSeverity(h.Severity).
 				SetEventID(eventID).
 				SetNillableAssetID(assetID).
+				SetNillableCommandID(command).
 				SetLastTs(ts))
 			deduper.Track(fingerprint, alertID, ts)
 		}

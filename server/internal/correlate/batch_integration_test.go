@@ -258,3 +258,21 @@ func TestCorrelateBatchLineage(t *testing.T) {
 		t.Errorf("B 应经血缘归入 incident，得到 %v", got.IncidentID)
 	}
 }
+
+// 平台指令触发的告警挂在指令上，不组成事件
+func TestCorrelateSkipsCommandAlerts(t *testing.T) {
+	ctx, client := testdb.New(t)
+	asset := client.Asset.Create().SetHostname("host-a").SaveX(ctx)
+	cmd := client.Command.Create().SetKind("exec").SetAssetID(asset.ID).SaveX(ctx)
+	evt := client.Event.Create().SetTs(time.Now()).SetClassUID(1007).SetSource("agent").
+		SetRaw(json.RawMessage(`{"process":{"name":"sh","pid":1}}`)).SaveX(ctx)
+	al := client.Alert.Create().SetTs(time.Now()).SetRuleID("r").SetSeverity(4).SetEventID(evt.ID).
+		SetAssetID(asset.ID).SetCommandID(cmd.ID).SaveX(ctx)
+	eng := &Engine{DB: client, Rules: &sigma.Engine{}, Window: 30 * time.Minute, MaxGraphNodes: 50}
+	if err := eng.batch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := client.Incident.Query().CountX(ctx); n != 0 || client.Alert.GetX(ctx, al.ID).IncidentID != nil {
+		t.Fatalf("指令告警不应组成事件: incidents=%d", n)
+	}
+}

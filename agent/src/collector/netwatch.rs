@@ -62,6 +62,8 @@ pub struct ConnInfo {
     pub container: Option<Arc<Container>>,
     /// 目的地址最近一次被解析时的域名（agent 自己看到的 DNS 应答），没见过就不写
     pub hostname: Option<String>,
+    /// 发起连接的进程属于哪条平台指令
+    pub command: Option<Arc<str>>,
 }
 
 /// 组装一条连接事件。conn_tuple 与 sensor 同一格式（发起方在前），
@@ -84,6 +86,9 @@ pub fn conn_event(agent_id: &str, info: &ConnInfo) -> AgentEvent {
     }
     if let Some(c) = &info.container {
         raw["container"] = c.to_json();
+    }
+    if let Some(id) = &info.command {
+        raw["platform_command"] = serde_json::json!({ "uid": id.as_ref() });
     }
     // 拿不到就不写，不编造
     if let Some(name) = info.name.as_deref().filter(|n| !n.is_empty()) {
@@ -144,6 +149,7 @@ mod tests {
                 dport: 443,
                 container: None,
                 hostname: Some("github.com".into()),
+                command: Some("01a1-cmd".into()),
             },
         );
         assert_eq!(evt.class_uid, CLASS_NETWORK);
@@ -157,6 +163,7 @@ mod tests {
         assert_eq!(v["process"]["name"], "curl");
         assert_eq!(v["process"]["file"]["path"], "/usr/bin/curl");
         assert_eq!(v["dst_endpoint"]["hostname"], "github.com");
+        assert_eq!(v["platform_command"]["uid"], "01a1-cmd");
         assert!(v.get("container").is_none());
     }
 
@@ -182,6 +189,7 @@ mod tests {
                     name: Some("dns".into()),
                 })),
                 hostname: None,
+                command: None,
             },
         );
         assert_eq!(evt.conn_tuple, "udp:10.0.0.7:40000>10.0.0.2:53");
@@ -217,6 +225,7 @@ mod tests {
             dport: 5432,
             container: None,
             hostname: None,
+            command: None,
         }
     }
 
@@ -237,6 +246,7 @@ mod tests {
                 dport: 80,
                 container: None,
                 hostname: None,
+                command: None,
             },
         );
         assert!(evt.process_guid.is_empty());

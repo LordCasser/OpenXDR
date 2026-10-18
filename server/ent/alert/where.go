@@ -96,6 +96,11 @@ func LastTs(v time.Time) predicate.Alert {
 	return predicate.Alert(sql.FieldEQ(FieldLastTs, v))
 }
 
+// CommandID applies equality check predicate on the "command_id" field. It's identical to CommandIDEQ.
+func CommandID(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldEQ(FieldCommandID, v))
+}
+
 // TsEQ applies the EQ predicate on the "ts" field.
 func TsEQ(v time.Time) predicate.Alert {
 	return predicate.Alert(sql.FieldEQ(FieldTs, v))
@@ -419,6 +424,56 @@ func LastTsIsNil() predicate.Alert {
 // LastTsNotNil applies the NotNil predicate on the "last_ts" field.
 func LastTsNotNil() predicate.Alert {
 	return predicate.Alert(sql.FieldNotNull(FieldLastTs))
+}
+
+// CommandIDEQ applies the EQ predicate on the "command_id" field.
+func CommandIDEQ(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldEQ(FieldCommandID, v))
+}
+
+// CommandIDNEQ applies the NEQ predicate on the "command_id" field.
+func CommandIDNEQ(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldNEQ(FieldCommandID, v))
+}
+
+// CommandIDIn applies the In predicate on the "command_id" field.
+func CommandIDIn(vs ...uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldIn(FieldCommandID, vs...))
+}
+
+// CommandIDNotIn applies the NotIn predicate on the "command_id" field.
+func CommandIDNotIn(vs ...uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldNotIn(FieldCommandID, vs...))
+}
+
+// CommandIDGT applies the GT predicate on the "command_id" field.
+func CommandIDGT(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldGT(FieldCommandID, v))
+}
+
+// CommandIDGTE applies the GTE predicate on the "command_id" field.
+func CommandIDGTE(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldGTE(FieldCommandID, v))
+}
+
+// CommandIDLT applies the LT predicate on the "command_id" field.
+func CommandIDLT(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldLT(FieldCommandID, v))
+}
+
+// CommandIDLTE applies the LTE predicate on the "command_id" field.
+func CommandIDLTE(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldLTE(FieldCommandID, v))
+}
+
+// CommandIDIsNil applies the IsNil predicate on the "command_id" field.
+func CommandIDIsNil() predicate.Alert {
+	return predicate.Alert(sql.FieldIsNull(FieldCommandID))
+}
+
+// CommandIDNotNil applies the NotNil predicate on the "command_id" field.
+func CommandIDNotNil() predicate.Alert {
+	return predicate.Alert(sql.FieldNotNull(FieldCommandID))
 }
 
 // HasEvent applies the HasEdge predicate on the "event" edge.

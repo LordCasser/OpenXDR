@@ -44,6 +44,7 @@ struct Entry {
     exe: Option<String>,
     started: Option<SystemTime>,
     container: Option<Arc<Container>>,
+    command: Option<Arc<str>>,
 }
 
 /// 注册表里记得的进程身份，退出事件靠它说清是谁退出了。
@@ -53,6 +54,8 @@ pub struct Known {
     pub exe: Option<String>,
     pub started: Option<SystemTime>,
     pub container: Option<Arc<Container>>,
+    /// 拉起它的平台指令 ID（指令进程及其后代）
+    pub command: Option<Arc<str>>,
 }
 
 impl ProcessRegistry {
@@ -74,6 +77,7 @@ impl ProcessRegistry {
                 exe: None,
                 started: None,
                 container: None,
+                command: None,
             },
         );
 
@@ -99,17 +103,24 @@ impl ProcessRegistry {
         }
     }
 
-    /// 记下启动时间（退出时算运行时长）与所在容器。
+    /// 记下启动时间（退出时算运行时长）、所在容器与拉起它的平台指令。
     pub fn annotate(
         &mut self,
         pid: u32,
         started: Option<SystemTime>,
         container: Option<Arc<Container>>,
+        command: Option<Arc<str>>,
     ) {
         if let Some(e) = self.guids.get_mut(&pid) {
             e.started = started;
             e.container = container;
+            e.command = command;
         }
+    }
+
+    /// pid 所属的平台指令，子进程沿血缘继承
+    pub fn command_of(&self, pid: u32) -> Option<Arc<str>> {
+        self.guids.get(&pid).and_then(|e| e.command.clone())
     }
 
     /// 进程退出后删掉登记。不删的话表满时会按登记先后清理，最先被清掉的恰恰是
@@ -126,6 +137,7 @@ impl ProcessRegistry {
             exe: e.exe.clone(),
             started: e.started,
             container: e.container.clone(),
+            command: e.command.clone(),
         })
     }
 

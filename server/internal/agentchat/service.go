@@ -510,13 +510,14 @@ func (s *Service) recorder(id uuid.UUID, seq *int, emit piruntime.Observer) piru
 // queryDescription 与 queryrole 的视图定义同一口径，改视图时一起改。
 const queryDescription = "通过当前组专属只读数据库身份查询授权视图，最多返回 200 行和 8 KiB。" +
 	"视图：assets(id, hostname, os, ip_addrs, last_seen)；" +
-	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id)；" +
+	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id)；" +
 	"incidents(id, created_at, status, title, ai_verdict)；" +
 	"events(id, ts, class_uid, source, asset_id, username, conn_tuple, raw)；" +
 	"commands(id, created_at, asset_id, cmd, status, exit_code, stdout)。" +
 	"rule_id 的规则名见系统提示数据里的 rule_titles，不要去 JSON 字段里找；incidents.title 只是首条告警的标题，不等于规则名。" +
+	"alerts.command_id 不为空的是平台下发的指令（包括你自己执行的命令）触发的，来源已知，统计威胁时排除（AND a.command_id IS NULL）。" +
 	"按主机拆告警可直接用：SELECT h.hostname, a.rule_id, a.severity, sum(a.count) AS hits FROM alerts a " +
-	"JOIN assets h ON h.id = a.asset_id WHERE a.last_ts > now() - interval '24 hours' GROUP BY 1, 2, 3 ORDER BY 1, 4 DESC；" +
+	"JOIN assets h ON h.id = a.asset_id WHERE a.last_ts > now() - interval '24 hours' AND a.command_id IS NULL GROUP BY 1, 2, 3 ORDER BY 1, 4 DESC；" +
 	"status 为 triaged 表示 AI 已研判、尚未人工结案。不确定列名时先查 information_schema.columns，不猜测；" +
 	"优先聚合与字段投影，避免 SELECT *、graph、raw 等大字段；events 查询务必带 ts 范围。"
 

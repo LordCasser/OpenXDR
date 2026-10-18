@@ -406,7 +406,7 @@ fn conn_info(
         inbound: false,
         pid,
         guid: known.as_ref().map(|k| k.guid),
-        exe: known.and_then(|k| k.exe),
+        exe: known.as_ref().and_then(|k| k.exe.clone()),
         name,
         src,
         sport,
@@ -414,6 +414,7 @@ fn conn_info(
         dport,
         container,
         hostname: dnswatch::hostname_of(dst),
+        command: known.as_ref().and_then(|k| k.command.clone()),
     }
 }
 
@@ -457,6 +458,7 @@ fn dns_resolver(
                 name: Some(k.name).filter(|n| !n.is_empty()),
                 exe: k.exe,
                 container: k.container,
+                command: k.command,
             },
             None => Origin {
                 pid,
@@ -466,6 +468,7 @@ fn dns_resolver(
                     .map(|s| s.trim_end().to_string()),
                 exe: None,
                 container: container::of(pid),
+                command: None,
             },
         })
     })

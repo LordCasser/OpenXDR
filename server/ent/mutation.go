@@ -1773,6 +1773,7 @@ type AlertMutation struct {
 	count           *int
 	addcount        *int
 	last_ts         *time.Time
+	command_id      *uuid.UUID
 	clearedFields   map[string]struct{}
 	event           *uuid.UUID
 	clearedevent    bool
@@ -2269,6 +2270,55 @@ func (m *AlertMutation) ResetLastTs() {
 	delete(m.clearedFields, alert.FieldLastTs)
 }
 
+// SetCommandID sets the "command_id" field.
+func (m *AlertMutation) SetCommandID(u uuid.UUID) {
+	m.command_id = &u
+}
+
+// CommandID returns the value of the "command_id" field in the mutation.
+func (m *AlertMutation) CommandID() (r uuid.UUID, exists bool) {
+	v := m.command_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommandID returns the old "command_id" field's value of the Alert entity.
+// If the Alert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AlertMutation) OldCommandID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommandID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommandID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommandID: %w", err)
+	}
+	return oldValue.CommandID, nil
+}
+
+// ClearCommandID clears the value of the "command_id" field.
+func (m *AlertMutation) ClearCommandID() {
+	m.command_id = nil
+	m.clearedFields[alert.FieldCommandID] = struct{}{}
+}
+
+// CommandIDCleared returns if the "command_id" field was cleared in this mutation.
+func (m *AlertMutation) CommandIDCleared() bool {
+	_, ok := m.clearedFields[alert.FieldCommandID]
+	return ok
+}
+
+// ResetCommandID resets all changes to the "command_id" field.
+func (m *AlertMutation) ResetCommandID() {
+	m.command_id = nil
+	delete(m.clearedFields, alert.FieldCommandID)
+}
+
 // ClearEvent clears the "event" edge to the Event entity.
 func (m *AlertMutation) ClearEvent() {
 	m.clearedevent = true
@@ -2384,7 +2434,7 @@ func (m *AlertMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AlertMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.ts != nil {
 		fields = append(fields, alert.FieldTs)
 	}
@@ -2408,6 +2458,9 @@ func (m *AlertMutation) Fields() []string {
 	}
 	if m.last_ts != nil {
 		fields = append(fields, alert.FieldLastTs)
+	}
+	if m.command_id != nil {
+		fields = append(fields, alert.FieldCommandID)
 	}
 	return fields
 }
@@ -2433,6 +2486,8 @@ func (m *AlertMutation) Field(name string) (ent.Value, bool) {
 		return m.Count()
 	case alert.FieldLastTs:
 		return m.LastTs()
+	case alert.FieldCommandID:
+		return m.CommandID()
 	}
 	return nil, false
 }
@@ -2458,6 +2513,8 @@ func (m *AlertMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldCount(ctx)
 	case alert.FieldLastTs:
 		return m.OldLastTs(ctx)
+	case alert.FieldCommandID:
+		return m.OldCommandID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Alert field %s", name)
 }
@@ -2522,6 +2579,13 @@ func (m *AlertMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLastTs(v)
+		return nil
+	case alert.FieldCommandID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommandID(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Alert field %s", name)
@@ -2592,6 +2656,9 @@ func (m *AlertMutation) ClearedFields() []string {
 	if m.FieldCleared(alert.FieldLastTs) {
 		fields = append(fields, alert.FieldLastTs)
 	}
+	if m.FieldCleared(alert.FieldCommandID) {
+		fields = append(fields, alert.FieldCommandID)
+	}
 	return fields
 }
 
@@ -2617,6 +2684,9 @@ func (m *AlertMutation) ClearField(name string) error {
 		return nil
 	case alert.FieldLastTs:
 		m.ClearLastTs()
+		return nil
+	case alert.FieldCommandID:
+		m.ClearCommandID()
 		return nil
 	}
 	return fmt.Errorf("unknown Alert nullable field %s", name)
@@ -2649,6 +2719,9 @@ func (m *AlertMutation) ResetField(name string) error {
 		return nil
 	case alert.FieldLastTs:
 		m.ResetLastTs()
+		return nil
+	case alert.FieldCommandID:
+		m.ResetCommandID()
 		return nil
 	}
 	return fmt.Errorf("unknown Alert field %s", name)

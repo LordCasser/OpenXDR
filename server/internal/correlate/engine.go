@@ -53,8 +53,9 @@ func (e *Engine) Run(ctx context.Context) {
 }
 
 func (e *Engine) batch(ctx context.Context) error {
+	// 平台指令触发的告警挂在指令上，不组成事件：来源已知，发起与审批都有记录
 	pending, err := e.DB.Alert.Query().
-		Where(alert.IncidentIDIsNil()).
+		Where(alert.IncidentIDIsNil(), alert.CommandIDIsNil()).
 		Order(ent.Asc(alert.FieldTs)).
 		Limit(500).
 		WithEvent().

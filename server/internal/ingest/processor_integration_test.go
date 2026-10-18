@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -102,5 +103,65 @@ level: high
 	}
 	if len(alerts) != 1 || alerts[0].Count != 2 {
 		t.Fatalf("跨处理器应合并为一条 count=2 告警，实际 %#v", alerts)
+	}
+}
+
+// 平台指令拉起的进程触发的告警挂在指令上、单独去重；标记核对不上（别的资产的、不存在的、早已结束的指令）照常告警
+func TestPlatformCommandAlerts(t *testing.T) {
+	p, client, db := testProcessor(t)
+	defer client.Close()
+	defer db.Close()
+	ctx := context.Background()
+	_, _ = db.Exec(`TRUNCATE commands CASCADE`)
+	dir := t.TempDir()
+	rule := `title: Test
+id: 22222222-2222-4222-8222-222222222222
+status: test
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains: probe-marker
+  condition: selection
+level: high
+`
+	if err := os.WriteFile(filepath.Join(dir, "rule.yml"), []byte(rule), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p.Rules = sigma.LoadDir(dir)
+	asset := client.Asset.Create().SetHostname("pve1").SaveX(ctx)
+	other := client.Asset.Create().SetHostname("pve2").SaveX(ctx)
+	now := time.Now()
+	running := client.Command.Create().SetKind("exec").SetAssetID(asset.ID).SetCreatedAt(now.Add(-time.Minute)).SaveX(ctx)
+	elsewhere := client.Command.Create().SetKind("exec").SetAssetID(other.ID).SetCreatedAt(now.Add(-time.Minute)).SaveX(ctx)
+	stale := client.Command.Create().SetKind("exec").SetAssetID(asset.ID).SetCreatedAt(now.Add(-3 * time.Hour)).
+		SetCompletedAt(now.Add(-2 * time.Hour)).SaveX(ctx)
+
+	for i, tag := range []string{running.ID.String(), "", uuid.NewString(), elsewhere.ID.String(), stale.ID.String()} {
+		raw := `{"process":{"cmd_line":"probe-marker"}}`
+		if tag != "" {
+			raw = `{"process":{"cmd_line":"probe-marker"},"platform_command":{"uid":"` + tag + `"}}`
+		}
+		e := Envelope{Version: EnvelopeVersion, ID: StableID(t.Name(), strconv.Itoa(i)), PartitionKey: asset.ID.String(), AssetID: &asset.ID,
+			Timestamp: now.Add(time.Duration(i) * time.Second), ClassUID: 1007, Source: "agent", AssetOS: "linux", Raw: json.RawMessage(raw)}
+		if err := p.Process(ctx, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alerts := client.Alert.Query().AllX(ctx)
+	var tagged, plain int
+	for _, a := range alerts {
+		switch {
+		case a.CommandID != nil && *a.CommandID == running.ID && a.Count == 1:
+			tagged++
+		case a.CommandID == nil && a.Count == 4:
+			plain++
+		default:
+			t.Fatalf("意外的告警: %+v", a)
+		}
+	}
+	if tagged != 1 || plain != 1 {
+		t.Fatalf("应有一条挂在指令上的告警、一条照常告警（4 次）: %+v", alerts)
 	}
 }

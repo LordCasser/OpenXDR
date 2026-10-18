@@ -24,6 +24,8 @@ func (Alert) Fields() []ent.Field {
 		field.UUID("incident_id", uuid.UUID{}).Optional().Nillable(),
 		field.Int("count").Default(1),
 		field.Time("last_ts").Optional().Nillable(),
+		// 平台下发的指令（人工或 AI exec）拉起的进程触发的告警：照常留痕、挂在指令上，不进事件关联与研判
+		field.UUID("command_id", uuid.UUID{}).Optional().Nillable(),
 	}
 }
 
@@ -39,5 +41,6 @@ func (Alert) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("incident_id"),
 		index.Fields("asset_id", "ts"),
+		index.Fields("command_id"),
 	}
 }

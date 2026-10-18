@@ -17,6 +17,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/processbaseline"
+	"openxdr/server/internal/cmdorigin"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
 )
@@ -88,11 +89,12 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 	}
 	e.cursor = events[len(events)-1].Ts
 
-	// 批内去重，同一组合保留最早那条事件
+	// 批内去重，同一组合保留最早那条事件。平台指令拉起的进程不进基线也不报：
+	// AI 或人下发的指令跑过一个新程序，不该让以后别人再跑它时变成「见过的」
 	fresh := map[comboKey]*ent.Event{}
 	for _, ev := range events {
 		exe := exePath(ev.Raw)
-		if exe == "" {
+		if exe == "" || commanded(ev.Raw) {
 			continue
 		}
 		k := comboKey{*ev.AssetID, exe}
@@ -181,6 +183,16 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		slog.Info("UEBA 首次出现告警", "count", len(alerts))
 	}
 	return len(events), nil
+}
+
+// commanded 进程是否由平台下发的指令拉起（agent 打的标记）
+func commanded(raw json.RawMessage) bool {
+	var doc map[string]any
+	if json.Unmarshal(raw, &doc) != nil {
+		return false
+	}
+	_, ok := cmdorigin.Tag(doc)
+	return ok
 }
 
 // exePath 从进程事件里取可执行文件路径，取不到返回空。

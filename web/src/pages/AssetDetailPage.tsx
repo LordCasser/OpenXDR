@@ -1,14 +1,14 @@
 import { ArrowLeftOutlined, RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Col, Descriptions, Empty, Form, Result, Row, Select, Skeleton, Space, Switch, Table, Tabs, Tag, Typography,
+  Alert, App, Button, Card, Col, Descriptions, Empty, Form, Result, Row, Select, Skeleton, Space, Switch, Table, Tabs, Tag, Tooltip, Typography,
   theme,
 } from 'antd'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
   createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchFindings, fetchIncidents, saveAgentConfig, searchEvents,
-  type AgentConfig, type FindingRow, type IncidentSummary,
+  type AgentConfig, type CommandRow, type FindingRow, type IncidentSummary,
 } from '../api'
 import { useRemember } from '../app/recent'
 import { saveQueue } from '../components/incidentQueue'
@@ -237,6 +237,12 @@ export function AssetDetailPage() {
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <CommandStatusTag value={v} /> },
                         { title: t('thCreatedBy'), dataIndex: 'issuedBy', width: 110 },
                         { title: t('thResult'), dataIndex: 'detail', ellipsis: true },
+                        {
+                          title: t('thDetections'), dataIndex: 'detections', width: 220,
+                          render: (v: CommandRow['detections']) => v?.length
+                            ? <Tooltip title={t('commandDetectionsHint')}>{v.map(d => <Tag key={d.ruleId} color="orange" variant="filled">{d.title || d.ruleId} ×{d.count}</Tag>)}</Tooltip>
+                            : null,
+                        },
                       ]} />
                   ),
                 },

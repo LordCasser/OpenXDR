@@ -36,7 +36,7 @@ func TestPiGroupAPI(t *testing.T) {
 	gate := &commandgate.Gate{DB: db}
 	mapAgentSessions(mux, db, &agentchat.Service{DB: db, AI: func() (string, string, string) { return "", "", "test" }, Runtime: apiPiRunner{}})
 	mapCommandPolicy(mux, db, gate)
-	mapCommands(mux, db, response.NewHub(db, false), nil, gate)
+	mapCommands(mux, db, nil, response.NewHub(db, false), nil, gate)
 	handler := auth.Middleware(db, mux)
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, bytes.NewBufferString(body))

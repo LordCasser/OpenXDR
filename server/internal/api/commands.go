@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -8,11 +9,13 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	entalert "openxdr/server/ent/alert"
 	entcommand "openxdr/server/ent/command"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/response"
+	"openxdr/server/internal/sigma"
 )
 
 type commandRow struct {
@@ -30,6 +33,44 @@ type commandRow struct {
 	Stdout      *string    `json:"stdout,omitempty"`
 	Stderr      *string    `json:"stderr,omitempty"`
 	Truncated   bool       `json:"truncated,omitempty"`
+	// Detections 这条指令拉起的进程触发的检测，按规则汇总：来源已知，不进事件
+	Detections []commandDetection `json:"detections,omitempty"`
+}
+
+type commandDetection struct {
+	RuleID string `json:"ruleId"`
+	Title  string `json:"title,omitempty"`
+	Count  int    `json:"count"`
+}
+
+// withDetections 给指令行补上它触发的检测
+func withDetections(ctx context.Context, db *ent.Client, rules *sigma.Engine, rows []commandRow) error {
+	ids := make([]uuid.UUID, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	var hits []struct {
+		CommandID uuid.UUID `json:"command_id"`
+		RuleID    string    `json:"rule_id"`
+		Sum       int       `json:"sum"`
+	}
+	if err := db.Alert.Query().Where(entalert.CommandIDIn(ids...)).
+		GroupBy(entalert.FieldCommandID, entalert.FieldRuleID).
+		Aggregate(ent.Sum(entalert.FieldCount)).Scan(ctx, &hits); err != nil {
+		return err
+	}
+	by := map[uuid.UUID][]commandDetection{}
+	for _, h := range hits {
+		d := commandDetection{RuleID: h.RuleID, Count: h.Sum}
+		if rules != nil {
+			d.Title = rules.TitleOf(h.RuleID)
+		}
+		by[h.CommandID] = append(by[h.CommandID], d)
+	}
+	for i := range rows {
+		rows[i].Detections = by[rows[i].ID]
+	}
+	return nil
 }
 
 func toRow(c *ent.Command) commandRow {
@@ -51,7 +92,7 @@ type issueBody struct {
 	TimeoutMS   uint32     `json:"timeoutMs"`
 }
 
-func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndpoints []string, gate *commandgate.Gate) {
+func mapCommands(api *http.ServeMux, db *ent.Client, rules *sigma.Engine, hub *response.Hub, selfEndpoints []string, gate *commandgate.Gate) {
 	api.HandleFunc("POST /api/commands", func(w http.ResponseWriter, r *http.Request) {
 		var body issueBody
 		if json.NewDecoder(r.Body).Decode(&body) != nil {
@@ -114,7 +155,12 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 		}
 		audit.Log(r.Context(), db, r, "command_issued", cmd.ID.String(), detail)
 		w.WriteHeader(http.StatusAccepted)
-		writeJSON(w, toRow(cmd))
+		rows := []commandRow{toRow(cmd)}
+		if err := withDetections(r.Context(), db, rules, rows); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, rows[0])
 	})
 
 	api.HandleFunc("GET /api/commands/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -167,6 +213,10 @@ func mapCommands(api *http.ServeMux, db *ent.Client, hub *response.Hub, selfEndp
 		out := make([]commandRow, len(cmds))
 		for i, c := range cmds {
 			out[i] = toRow(c)
+		}
+		if err := withDetections(r.Context(), db, rules, out); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		writeJSON(w, out)
 	})

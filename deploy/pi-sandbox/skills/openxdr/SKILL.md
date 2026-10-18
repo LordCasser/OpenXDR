@@ -38,7 +38,7 @@ xdr report '标题' report.md                 # 最终报告（Markdown 文件�
 |---|---|
 | assets | id, hostname, os, ip_addrs, agent_id, first_seen, last_seen |
 | events | id, ts, class_uid, source, asset_id, username, conn_tuple, raw(jsonb) |
-| alerts | id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id |
+| alerts | id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id |
 | incidents | id, created_at, status, title, ai_verdict(jsonb), graph(jsonb) |
 | commands | id, created_at, completed_at, kind, status, asset_id, incident_id, issued_by, detail, cmd, exit_code, stdout, stderr, truncated |
 
@@ -49,6 +49,8 @@ xdr report '标题' report.md                 # 最终报告（Markdown 文件�
   - 网络（4001）：`raw->'dst_endpoint'->>'ip'`、`->>'port'`、`->>'hostname'`（agent 解析过的域名）、`raw->'process'->>'name'`；
     `raw->'connection_info'->>'direction'`（outbound / inbound，入站时 src 是对端、进程是本机服务）、`->>'protocol_name'`（tcp / udp）
   - DNS（4003）：`raw->'query'->>'hostname'`、`->>'type'`、`->>'rcode_id'`（3 是 NXDOMAIN，没有表示无应答）、`raw->'answers'`、`raw->'process'->>'name'`
+  - 平台指令：`alerts.command_id` 不为空、或事件带 `raw->'platform_command'->>'uid'` 的，是平台下发的指令（包括你自己执行的 `xdr exec`）
+    拉起的进程触发的——来源已知，统计威胁时排除（`AND command_id IS NULL`），不要把自己的巡检命令当成可疑活动报告
   - 容器：任何事件都可能带 `raw->'container'`（`->>'runtime'` docker / lxc / qemu…、`->>'uid'`、`->>'name'`），说明进程在哪个容器或虚拟机里
   - 文件（1001）：`raw->'file'->>'path'`；认证（3002）：`raw->>'status_id'`（1 成功 2 失败）
   - 不确定结构时先 `SELECT raw FROM events WHERE ... LIMIT 1` 看一条，再写正式查询。
@@ -60,7 +62,7 @@ xdr report '标题' report.md                 # 最终报告（Markdown 文件�
 ```sql
 -- 某主机 24 小时内命中的规则
 SELECT a.rule_id, a.severity, sum(a.count) hits FROM alerts a JOIN assets h ON h.id=a.asset_id
-WHERE h.hostname='pve1' AND a.last_ts > now()-interval '24 hours' GROUP BY 1,2 ORDER BY 3 DESC;
+WHERE h.hostname='pve1' AND a.last_ts > now()-interval '24 hours' AND a.command_id IS NULL GROUP BY 1,2 ORDER BY 3 DESC;
 -- 某告警对应的原始事件
 SELECT e.ts, e.raw->'process'->>'cmd_line' FROM alerts a JOIN events e ON e.id=a.event_id WHERE a.incident_id='<id>';
 ```

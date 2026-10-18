@@ -658,6 +658,8 @@ const zh = {
   factQuery: '查询',
   factAnswers: '应答',
   pivotProcess: '同一进程的日志',
+  thDetections: '触发检测',
+  commandDetectionsHint: '这条指令拉起的进程命中的检测规则。来源已知，不组成安全事件，也不计入态势统计',
   // 情报订阅
   intelFeeds: '情报订阅',
   intelFeedsHint: '内置公开情报源，每 {n} 小时自动更新。内网地址不入库，手工录入的同值情报优先。',
@@ -1603,6 +1605,8 @@ const en = {
   factQuery: 'Query',
   factAnswers: 'Answers',
   pivotProcess: 'Logs of this process',
+  thDetections: 'Detections',
+  commandDetectionsHint: 'Detection rules hit by processes this command started. Known origin: they do not form incidents or count toward overview stats',
   intelFeeds: 'Intel feeds',
   intelFeedsHint: 'Built-in public feeds, refreshed every {n} hours. Private addresses are dropped; manually entered IOCs take precedence.',
   intelFeedSync: 'Sync now',

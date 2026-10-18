@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"openxdr/server/internal/cmdorigin"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
@@ -98,11 +99,17 @@ WHERE class_uid=3002 AND asset_id=$1 AND username=$2 AND ts >= $3
 			hits = append(hits, intel.Hit{RuleID: sigma.RuleBruteforceSuccess, Severity: 5})
 		}
 	}
+	var command *uuid.UUID
+	if len(hits) > 0 {
+		if command, err = cmdorigin.Of(ctx, tx, raw, e.AssetID, e.Timestamp); err != nil {
+			return err
+		}
+	}
 	for _, hit := range hits {
 		if p.Suppress.Suppressed(hit.RuleID, e.AssetID, e.Timestamp) {
 			continue
 		}
-		created, err := p.upsertAlert(ctx, tx, e, hit)
+		created, err := p.upsertAlert(ctx, tx, e, hit, command)
 		if err != nil {
 			return err
 		}
@@ -113,10 +120,14 @@ WHERE class_uid=3002 AND asset_id=$1 AND username=$2 AND ts >= $3
 	return tx.Commit()
 }
 
-func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit intel.Hit) (bool, error) {
+func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit intel.Hit, command *uuid.UUID) (bool, error) {
 	fingerprint := hit.RuleID + "|" + e.PartitionKey + e.FingerprintSuffix
 	if hit.RuleID == sigma.RuleBruteforceSuccess {
 		fingerprint += "|" + e.Username
+	}
+	// 指令触发的告警单独去重：否则之后同规则的真实命中会被并进这条「已知来源」的告警里
+	if command != nil {
+		fingerprint += "|cmd:" + command.String()
 	}
 	// 同一指纹的所有集群节点在事务内串行，窗口判断与告警计数不会竞争。
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, fingerprint); err != nil {
@@ -139,8 +150,8 @@ func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit
 
 	alertID = uuid.Must(uuid.NewV7())
 	if _, err := tx.ExecContext(ctx, `INSERT INTO alerts
-  (id, ts, rule_id, severity, event_id, asset_id, count, last_ts)
-VALUES ($1,$2,$3,$4,$5,$6,1,$2)`, alertID, e.Timestamp, hit.RuleID, hit.Severity, e.ID, nullUUID(e.AssetID)); err != nil {
+  (id, ts, rule_id, severity, event_id, asset_id, count, last_ts, command_id)
+VALUES ($1,$2,$3,$4,$5,$6,1,$2,$7)`, alertID, e.Timestamp, hit.RuleID, hit.Severity, e.ID, nullUUID(e.AssetID), nullUUID(command)); err != nil {
 		return false, err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO alert_dedup_state(fingerprint,alert_id,first_ts,last_ts)

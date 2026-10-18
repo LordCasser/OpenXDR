@@ -92,6 +92,7 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
                     dport,
                     container: None,
                     hostname: None,
+                    command: None,
                 },
             ));
         })

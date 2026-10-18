@@ -89,7 +89,8 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 		// 24h 告警：一次取回 ts 与 count，趋势分桶在内存里做。
 		// 告警是去重后的产物，量级与事件表差着窗口倍数，直接拉没有压力。
 		alerts, err := db.Alert.Query().
-			Where(entalert.TsGTE(since)).
+			// 平台指令触发的告警来源已知，不算进态势统计（挂在指令记录上看）
+			Where(entalert.TsGTE(since), entalert.CommandIDIsNil()).
 			Where(s.alert()...).
 			Select(entalert.FieldTs, entalert.FieldCount, entalert.FieldSeverity).
 			All(ctx)
@@ -115,7 +116,8 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 			Sum    int    `json:"sum"`
 		}
 		if err := db.Alert.Query().
-			Where(entalert.TsGTE(since)).
+			// 平台指令触发的告警来源已知，不算进态势统计（挂在指令记录上看）
+			Where(entalert.TsGTE(since), entalert.CommandIDIsNil()).
 			Where(s.alert()...).
 			GroupBy(entalert.FieldRuleID).
 			Aggregate(ent.Sum(entalert.FieldCount)).

@@ -44,6 +44,7 @@ pub struct Origin {
     pub name: Option<String>,
     pub exe: Option<String>,
     pub container: Option<Arc<Container>>,
+    pub command: Option<Arc<str>>,
 }
 
 pub type Resolver = Arc<dyn Fn(u16) -> Option<Origin> + Send + Sync>;
@@ -610,6 +611,9 @@ fn dns_event(
         if let Some(exe) = &o.exe {
             raw["process"]["file"] = serde_json::json!({ "path": exe });
         }
+        if let Some(id) = &o.command {
+            raw["platform_command"] = serde_json::json!({ "uid": id.as_ref() });
+        }
     }
     if let Some(c) = container {
         raw["container"] = c.to_json();
@@ -744,6 +748,7 @@ mod tests {
             name: Some("curl".into()),
             exe: None,
             container: None,
+            command: None,
         };
         let c = Container {
             runtime: "lxc",

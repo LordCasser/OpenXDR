@@ -37,6 +37,8 @@ type Alert struct {
 	Count int `json:"count,omitempty"`
 	// LastTs holds the value of the "last_ts" field.
 	LastTs *time.Time `json:"last_ts,omitempty"`
+	// CommandID holds the value of the "command_id" field.
+	CommandID *uuid.UUID `json:"command_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AlertQuery when eager-loading is set.
 	Edges        AlertEdges `json:"edges"`
@@ -94,7 +96,7 @@ func (*Alert) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case alert.FieldEventID, alert.FieldAssetID, alert.FieldIncidentID:
+		case alert.FieldEventID, alert.FieldAssetID, alert.FieldIncidentID, alert.FieldCommandID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case alert.FieldSeverity, alert.FieldCount:
 			values[i] = new(sql.NullInt64)
@@ -177,6 +179,13 @@ func (_m *Alert) assignValues(columns []string, values []any) error {
 				_m.LastTs = new(time.Time)
 				*_m.LastTs = value.Time
 			}
+		case alert.FieldCommandID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field command_id", values[i])
+			} else if value.Valid {
+				_m.CommandID = new(uuid.UUID)
+				*_m.CommandID = *value.S.(*uuid.UUID)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -258,6 +267,11 @@ func (_m *Alert) String() string {
 	if v := _m.LastTs; v != nil {
 		builder.WriteString("last_ts=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.CommandID; v != nil {
+		builder.WriteString("command_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteByte(')')
 	return builder.String()

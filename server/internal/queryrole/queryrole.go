@@ -183,7 +183,7 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
   SELECT id, ts, class_uid, source, asset_id, username, conn_tuple, raw
   FROM public.events WHERE ` + inGroup,
 		`CREATE OR REPLACE VIEW ` + schema + `.alerts WITH (security_barrier) AS
-  SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id
+  SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id
   FROM public.alerts WHERE ` + inGroup,
 		`CREATE OR REPLACE VIEW ` + schema + `.incidents WITH (security_barrier) AS
   SELECT i.id, i.created_at, i.status, i.title, i.ai_verdict, i.graph

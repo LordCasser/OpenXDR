@@ -283,6 +283,7 @@ func main() {
 	dist := &enroll.Dist{Dir: os.Getenv("AGENT_DIST_DIR")}
 	pb.RegisterAgentServiceServer(grpcServer, &grpcsvc.Server{
 		DB:          client,
+		SQL:         db,
 		Rules:       rules,
 		DedupWindow: dedupWindow,
 		Hub:         hub,

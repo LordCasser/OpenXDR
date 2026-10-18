@@ -198,6 +198,8 @@ export interface CommandRow {
   issuedBy: string
   detail: string | null
   completedAt: string | null
+  // 这条指令拉起的进程触发的检测（来源已知，不进事件）
+  detections?: { ruleId: string; title?: string; count: number }[]
 }
 
 export const fetchCommands = (filter: { incidentId?: string; assetId?: string }) =>
