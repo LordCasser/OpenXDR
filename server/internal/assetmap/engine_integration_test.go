@@ -102,6 +102,40 @@ func TestEngineMaterializesLinksAndInventory(t *testing.T) {
 	}
 }
 
+// agent 在服务端看到的入站：发起方未纳管才记（发起方由地址解析、进程不记），纳管的发起方已有自己的出站
+func TestEngineInboundLinks(t *testing.T) {
+	ctx, client := testdb.New(t)
+	db, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	group, _ := client.Group.Create().SetName("prod").Save(ctx)
+	client.Asset.Create().SetHostname("web-01").SetIPAddrs([]string{"10.0.0.1"}).SetGroupID(group.ID).SaveX(ctx)
+	dbHost := client.Asset.Create().SetHostname("db-01").SetIPAddrs([]string{"10.0.0.2"}).SetGroupID(group.ID).SaveX(ctx)
+	inbound := func(src string) {
+		client.Event.Create().SetTs(time.Now().Add(-time.Minute)).SetClassUID(classNetwork).SetSource("agent").SetAssetID(dbHost.ID).
+			SetConnTuple("tcp:" + src + ":50000>10.0.0.2:5432").
+			SetRaw(json.RawMessage(`{"connection_info":{"direction":"inbound"},"src_endpoint":{"ip":"` + src + `","port":50000},"dst_endpoint":{"ip":"10.0.0.2","port":5432},"process":{"name":"postgres"}}`)).
+			SaveX(ctx)
+	}
+	inbound("10.0.0.9")
+	inbound("10.0.0.1")
+	// 宿主机上容器之间的入站（目的不是宿主机自己的地址）不算这台资产的依赖
+	client.Event.Create().SetTs(time.Now().Add(-time.Minute)).SetClassUID(classNetwork).SetSource("agent").SetAssetID(dbHost.ID).
+		SetRaw(json.RawMessage(`{"connection_info":{"direction":"inbound"},"src_endpoint":{"ip":"172.18.0.3","port":1},"dst_endpoint":{"ip":"172.18.0.2","port":5432}}`)).
+		SaveX(ctx)
+	e := &Engine{DB: client, SQL: db, Interval: time.Second}
+	e.cursor = e.loadCursor(ctx)
+	if _, err := e.batch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	links := client.AssetLink.Query().AllX(ctx)
+	if len(links) != 1 || links[0].SrcIP != "10.0.0.9" || links[0].SrcAssetID != nil || links[0].Process != "" || links[0].DstIP != "10.0.0.2" {
+		t.Fatalf("入站依赖边: %+v", links)
+	}
+}
+
 // 清单到了的新资产当轮标注；人工锁定的字段不被覆盖；编造的对端被丢弃；
 // 模型输出坏了不写入、隔一个周期再试。
 func TestAnnotateRespectsLocksAndFacts(t *testing.T) {

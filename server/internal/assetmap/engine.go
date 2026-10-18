@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -116,6 +117,12 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	managed := map[netip.Addr]bool{}
+	for _, ips := range own {
+		for _, ip := range ips {
+			managed[ip] = true
+		}
+	}
 
 	links := map[linkKey]*linkAgg{}
 	type snapshot struct {
@@ -137,22 +144,35 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 			tuple = *ev.ConnTuple
 		}
 		c, ok := connOf(ev.Raw, tuple)
+		if !ok {
+			continue
+		}
+		srcAsset, process := ev.AssetID, c.process
 		var ownIPs []netip.Addr
 		if ev.AssetID != nil {
 			ownIPs = own[*ev.AssetID]
 		}
-		if !ok || !dependency(c, ownIPs) {
-			continue
-		}
-		// 新版 agent 随连接带进程名；旧版只有 GUID，回查同一进程的启动事件
-		process := c.process
-		if process == "" && ev.ProcessGUID != nil {
-			process = names[*ev.ProcessGUID]
+		if c.inbound {
+			// 入站只补发起方未纳管的那部分：发起方纳管时它自己的出站已经记过这条依赖。
+			// 只认连到宿主机自己地址上的：宿主机上容器的服务（docker 网桥、LXC）不是这台资产的服务。
+			// 发起方由地址解析，进程是本机服务端，不是发起方，不记
+			if managed[c.src] || !slices.Contains(ownIPs, c.dst) || !dependency(c, nil) {
+				continue
+			}
+			srcAsset, process = nil, ""
+		} else {
+			if !dependency(c, ownIPs) {
+				continue
+			}
+			// 新版 agent 随连接带进程名；旧版只有 GUID，回查同一进程的启动事件
+			if process == "" && ev.ProcessGUID != nil {
+				process = names[*ev.ProcessGUID]
+			}
 		}
 		k := linkKey{c.src.String(), c.dst.String(), c.port, c.proto, process}
 		agg := links[k]
 		if agg == nil {
-			agg = &linkAgg{srcAsset: ev.AssetID, first: ev.Ts}
+			agg = &linkAgg{srcAsset: srcAsset, first: ev.Ts}
 			links[k] = agg
 		}
 		agg.count++

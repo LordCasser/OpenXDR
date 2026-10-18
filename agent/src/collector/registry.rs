@@ -2,10 +2,32 @@
 //! 进程血缘全靠这张表——父进程的 GUID 从这里查，查不到说明父进程早于 agent 启动。
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::SystemTime;
 
 use uuid::Uuid;
 
-/// pid 上限量级，超过则清理最早的条目，防止长跑进程无限占用内存
+/// 进程所在的容器或虚拟机（Linux 按 cgroup 识别），事件里原样写成 container 对象
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Container {
+    /// docker / podman / containerd / cri-o / lxc / qemu / nspawn
+    pub runtime: &'static str,
+    /// 容器 ID（docker 系取前 12 位）或 Proxmox 的 VMID
+    pub uid: String,
+    pub name: Option<String>,
+}
+
+impl Container {
+    pub fn to_json(&self) -> serde_json::Value {
+        let mut v = serde_json::json!({ "runtime": self.runtime, "uid": self.uid });
+        if let Some(name) = &self.name {
+            v["name"] = name.as_str().into();
+        }
+        v
+    }
+}
+
+/// 安全上限：条目随进程退出删除，正常只有存活进程；漏掉退出事件的条目超限时清掉最早的一半
 const MAX_ENTRIES: usize = 1 << 16;
 
 #[derive(Default)]
@@ -20,6 +42,8 @@ struct Entry {
     // 启动时记下名字与路径：退出探针触发时进程已在退出途中，只剩 pid 可查
     name: String,
     exe: Option<String>,
+    started: Option<SystemTime>,
+    container: Option<Arc<Container>>,
 }
 
 /// 注册表里记得的进程身份，退出事件靠它说清是谁退出了。
@@ -27,6 +51,8 @@ pub struct Known {
     pub guid: Uuid,
     pub name: String,
     pub exe: Option<String>,
+    pub started: Option<SystemTime>,
+    pub container: Option<Arc<Container>>,
 }
 
 impl ProcessRegistry {
@@ -46,6 +72,8 @@ impl ProcessRegistry {
                 seq,
                 name: String::new(),
                 exe: None,
+                started: None,
+                container: None,
             },
         );
 
@@ -71,12 +99,33 @@ impl ProcessRegistry {
         }
     }
 
+    /// 记下启动时间（退出时算运行时长）与所在容器。
+    pub fn annotate(
+        &mut self,
+        pid: u32,
+        started: Option<SystemTime>,
+        container: Option<Arc<Container>>,
+    ) {
+        if let Some(e) = self.guids.get_mut(&pid) {
+            e.started = started;
+            e.container = container;
+        }
+    }
+
+    /// 进程退出后删掉登记。不删的话表满时会按登记先后清理，最先被清掉的恰恰是
+    /// 早于 agent 启动的长驻服务，它们之后的网络连接就挂不回进程树了
+    pub fn forget(&mut self, pid: u32) {
+        self.guids.remove(&pid);
+    }
+
     /// 查 pid 当前登记的身份。查不到说明既没见过它启动、也不在启动快照里。
     pub fn known(&self, pid: u32) -> Option<Known> {
         self.guids.get(&pid).map(|e| Known {
             guid: e.guid,
             name: e.name.clone(),
             exe: e.exe.clone(),
+            started: e.started,
+            container: e.container.clone(),
         })
     }
 
@@ -140,6 +189,19 @@ mod tests {
             ("sshd", Some("/usr/sbin/sshd"))
         );
         assert!(reg.known(9).is_none());
+    }
+
+    /// 退出后删掉登记；长驻进程不会因为短命进程多而被挤出注册表
+    #[test]
+    fn forget_and_long_lived_survive() {
+        let mut reg = ProcessRegistry::default();
+        reg.seed(1, "systemd", None);
+        for pid in 2..(MAX_ENTRIES as u32 * 3) {
+            reg.register(pid, Some(1));
+            reg.forget(pid);
+        }
+        assert!(reg.known(1).is_some(), "长驻进程应一直在表里");
+        assert!(reg.known(2).is_none());
     }
 
     /// 每次 register 分配独立 GUID。

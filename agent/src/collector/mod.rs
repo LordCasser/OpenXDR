@@ -19,6 +19,12 @@ mod registry;
 #[cfg(target_os = "linux")]
 mod authwatch;
 
+#[cfg(target_os = "linux")]
+mod container;
+
+#[cfg(target_os = "linux")]
+mod dnswatch;
+
 // 资产清单（监听端口 + 云环境）：共用部分与云探测跨平台，监听表按平台取
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod cloud;
@@ -39,7 +45,7 @@ mod kmodwatch;
 mod netlink;
 
 pub use config::Config;
-pub use registry::ProcessRegistry;
+pub use registry::{Container, ProcessRegistry};
 
 // eBPF 采集是可选特性；关掉它 Linux 走 netlink，构建不需要 nightly。
 // 网络采集（TCP 出站）：Linux 只在 eBPF 模式下提供，Windows 走 ETW Kernel-Network；
@@ -135,6 +141,12 @@ pub fn spawn(agent_id: String, cfg: Config) -> mpsc::Receiver<AgentEvent> {
     #[cfg(target_os = "windows")]
     tokio::spawn(windows::run(agent_id, sink, registry));
 
+    // DNS 采集只靠 AF_PACKET，默认构建也有；eBPF 构建由 linux.rs 拉起，好按 UDP 事件归属进程
+    #[cfg(all(target_os = "linux", not(feature = "ebpf")))]
+    if cfg.collect_network {
+        dnswatch::spawn(agent_id.clone(), sink.clone(), None);
+    }
+
     // Linux 默认走三环的 netlink proc connector：内核主动推送 exec 事件，
     // 不漏短命进程，也不需要 eBPF 工具链。权限不足时才退到轮询。
     #[cfg(all(target_os = "linux", not(feature = "ebpf")))]
@@ -217,6 +229,7 @@ pub struct ProcessInfo<'a> {
 }
 
 /// 用 /proc 快照预登记现有进程，之后派生的子进程才能找到父。
+/// 启动时间与容器也一并记下：长驻服务退出时才说得清跑了多久、是哪个容器里的
 #[cfg(target_os = "linux")]
 fn seeded_registry() -> ProcessRegistry {
     let mut registry = ProcessRegistry::default();
@@ -229,10 +242,38 @@ fn seeded_registry() -> ProcessRegistry {
             let exe = std::fs::read_link(format!("/proc/{pid}/exe"))
                 .ok()
                 .map(|p| p.to_string_lossy().into_owned());
-            registry.seed(pid, name.trim_end(), exe.as_deref());
+            registry.seed(
+                pid,
+                full_name(name.trim_end(), exe.as_deref()),
+                exe.as_deref(),
+            );
+            registry.annotate(pid, container::started(pid), container::of(pid));
         }
     }
     registry
+}
+
+/// 内核的进程名（comm）最多 15 个字节，长名字会被截断（ip6tables-restore → ip6tables-resto）。
+/// 截断的名字是可执行文件名的前缀时，换回完整文件名
+fn full_name<'a>(name: &'a str, exe: Option<&'a str>) -> &'a str {
+    const COMM_MAX: usize = 15;
+    let base = exe.and_then(|e| e.rsplit(['/', '\\']).next());
+    match base {
+        Some(base) if name.len() == COMM_MAX && base.len() > COMM_MAX && base.starts_with(name) => {
+            base
+        }
+        _ => name,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn container_of(pid: u32) -> Option<Arc<Container>> {
+    container::of(pid)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn container_of(_pid: u32) -> Option<Arc<Container>> {
+    None
 }
 
 /// Linux 进程采集路径共用：按 pid 解析进程属主。
@@ -309,8 +350,10 @@ fn process_event(
     // 退出事件只认见过的进程，名字与路径从启动时的登记补上；没见过的退出
     // 配不上启动事件、也说不出是谁，只是噪声
     let known;
-    let (guid, parent_guid, name, exe) = if activity == ACTIVITY_TERMINATE {
+    let now = SystemTime::now();
+    let (guid, parent_guid, name, exe, started, container) = if activity == ACTIVITY_TERMINATE {
         known = registry.known(pid)?;
+        registry.forget(pid);
         (
             known.guid,
             ppid.and_then(|p| registry.guid_of(p)),
@@ -320,13 +363,18 @@ fn process_event(
                 name
             },
             exe.or(known.exe.as_deref()),
+            known.started,
+            known.container.clone(),
         )
     } else {
+        let name = full_name(name, exe);
         let (guid, parent) = registry.register(pid, ppid);
+        let container = container_of(pid);
         registry.describe(pid, name, exe);
-        (guid, parent, name, exe)
+        registry.annotate(pid, Some(now), container.clone());
+        (guid, parent, name, exe, None, container)
     };
-    let raw = serde_json::json!({
+    let mut raw = serde_json::json!({
         "activity_id": activity,
         "process": {
             "pid": pid,
@@ -341,10 +389,21 @@ fn process_event(
             },
         },
     });
+    if let Some(c) = &container {
+        raw["container"] = c.to_json();
+    }
+    // 退出事件带上启动时间与运行时长；启动时间不知道（快照里读不到）就都不写
+    if let Some(started) = started {
+        let ms =
+            |t: SystemTime| t.duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        raw["process"]["created_time"] = ms(started).into();
+        raw["duration_ms"] =
+            (now.duration_since(started).unwrap_or_default().as_millis() as u64).into();
+    }
 
     Some(AgentEvent {
         agent_id: agent_id.to_string(),
-        ts_unix_ns: SystemTime::now()
+        ts_unix_ns: now
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos() as i64,
@@ -503,6 +562,53 @@ mod tests {
         assert_eq!(v["process"]["pid"], 300);
         assert_eq!(v["process"]["exit_code"], 137);
         assert_eq!(v["process"]["uid"], launch.process_guid);
+    }
+
+    /// 被内核截成 15 字节的进程名换回完整文件名；本来就短、或与文件名对不上的保持原样
+    #[test]
+    fn full_name_restores_truncated_comm() {
+        assert_eq!(
+            full_name("ip6tables-resto", Some("/usr/sbin/ip6tables-restore")),
+            "ip6tables-restore"
+        );
+        assert_eq!(full_name("bash", Some("/usr/bin/bash")), "bash");
+        assert_eq!(
+            full_name("python3.11-scri", Some("/usr/bin/python3.11")),
+            "python3.11-scri"
+        );
+        assert_eq!(full_name("abcdefghijklmno", None), "abcdefghijklmno");
+    }
+
+    /// 退出事件带运行时长与启动时间，并从注册表删掉登记
+    #[test]
+    fn terminate_reports_duration_and_forgets() {
+        let mut reg = ProcessRegistry::default();
+        process_event(
+            "a",
+            &mut reg,
+            ACTIVITY_LAUNCH,
+            ProcessInfo {
+                pid: 400,
+                name: "job",
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let exit = process_event(
+            "a",
+            &mut reg,
+            ACTIVITY_TERMINATE,
+            ProcessInfo {
+                pid: 400,
+                exit_code: Some(3),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&exit.raw_json).unwrap();
+        assert_eq!(v["process"]["exit_code"], 3);
+        assert!(v["duration_ms"].is_u64() && v["process"]["created_time"].is_u64());
+        assert!(reg.known(400).is_none(), "退出后应删掉登记");
     }
 
     /// 早于 agent 启动的进程由快照登记，退出时照样报出名字；

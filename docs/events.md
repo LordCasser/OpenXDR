@@ -10,8 +10,8 @@ OpenXDR 采用 OCSF 风格事件模型。本文列出所有事件类别、字段
 | 1001 | 文件活动（File System Activity） | agent | Linux fswatch（fanotify/inotify）、Windows fswatch_win、persistwatch 文件/计划任务部分 |
 | 1007 | 进程活动（Process Activity） | agent | Linux eBPF/netlink/轮询、Windows ETW/轮询（启动+退出） |
 | 3002 | 认证（Authentication） | agent | Linux wtmp/btmp；Windows Security 4624/4625/4720/4726/4732/1102/4648/4719 |
-| 4001 | 网络活动（Network Activity） | agent / sensor | agent netwatch 出站连接（Linux eBPF / Windows ETW Kernel-Network）；sensor 非 DNS 会话 |
-| 4003 | DNS 活动（DNS Activity） | sensor | 会话带 dns_query 时判定 |
+| 4001 | 网络活动（Network Activity） | agent / sensor | agent netwatch 连接（Linux eBPF：TCP 出入站、UDP 出站；Windows ETW Kernel-Network：TCP 出站）；sensor 非 DNS 会话 |
+| 4003 | DNS 活动（DNS Activity） | agent / sensor | agent dnswatch 本机与容器的 DNS 问答（Linux）；sensor 会话带 dns_query 时判定 |
 | 1005 | 模块活动（Module Activity） | agent | Linux kmodwatch（/proc/modules diff） |
 | 5001 | 设备清单（Device Inventory Info） | agent | inventory：监听端口与云环境快照，供资产图谱与攻击面 |
 | 201002 | 注册表值活动（Registry Value Activity） | agent | Windows persistwatch 注册表键/服务快照 |
@@ -44,9 +44,12 @@ agent 侧组装（`agent/src/collector/mod.rs:233` `process_event`）。
 ```
 
 - 顶层 protobuf 另带 `process_guid` / `parent_process_guid` / `username`
+- 进程在容器或 Proxmox 虚拟机里时（Linux 按 cgroup 识别），顶层加
+  `"container": { "runtime": "docker|podman|containerd|cri-o|lxc|qemu|nspawn", "uid": "<容器 ID 前 12 位或 VMID>", "name": "<名字，读不到省略>" }`
 - **退出事件复用启动时的进程 GUID**（注册表查得到就填同一个），血缘不断；
-  netlink 路径的退出事件带 `exit_code`；ETW Stop 与轮询消失 pid 的退出事件
-  只有 pid 等少量字段（进程已退场，补不到细节）
+  eBPF（exit_group）与 netlink 路径的退出事件带 `exit_code`（被信号杀掉的为 null）；
+  知道启动时间的（启动事件或启动快照里见过）带 `process.created_time`（毫秒）与顶层 `duration_ms`；
+  ETW Stop 与轮询消失 pid 的退出事件只有 pid 等少量字段（进程已退场，补不到细节）
 - 字段质量随采集路径变化，写规则时注意：
   - Linux eBPF/netlink：username 由 /proc status 的 uid 查 /etc/passwd 解析
     （passwd 查不到退化为 uid 数字串）；exe 路径来自内核或
@@ -130,21 +133,31 @@ CommandLine 匹配因此可以直接作用于脚本内容。分片（MessageTota
 Kernel-Network `netwatch_win.rs`，订阅 TcpConnect 事件 12，端口为网络字节序
 已换算）——两路归一化完全同构（共用 `netwatch::conn_event` 组装与 60s
 同目标采样去重），带进程血缘。Windows 侧与进程采集共享同一张 GUID 注册表，
-网络事件的 process_guid 与进程血缘一致；loopback/未指定地址不报，UDP 不做：
+网络事件的 process_guid 与进程血缘一致；loopback/未指定地址不报。Windows 只有 TCP 出站，
+Linux 另有 TCP 入站与 UDP 出站：
 
 ```json
 {
   "activity_id": 1,
   "connection_info": { "direction": "outbound", "protocol_name": "tcp" },
   "src_endpoint": { "ip": "...", "port": 51234 },
-  "dst_endpoint": { "ip": "...", "port": 443 },
-  "process": { "pid": 1234, "uid": "<进程 GUID>", "name": "curl", "file": { "path": "/usr/bin/curl" } }
+  "dst_endpoint": { "ip": "...", "port": 443, "hostname": "github.com" },
+  "process": { "pid": 1234, "uid": "<进程 GUID>", "name": "curl", "file": { "path": "/usr/bin/curl" } },
+  "container": { "runtime": "docker", "uid": "4f1c2a3b5d6e", "name": "termix" }
 }
 ```
 
+- `direction`：`outbound` 时 src 是本机、进程是发起方；`inbound` 时 src 是对端、dst 是本机服务，
+  进程是监听该端口的服务进程（按监听表查，查不到省略）
+- `protocol_name`：`tcp` / `udp`，与 `conn_tuple` 前缀一致；UDP 的源端口可能是 0（首个数据报才绑定端口）
+- `dst_endpoint.hostname`：目的地址最近被本机解析过时的域名（agent 自己看到的 DNS 应答），没见过就省略；
+  参与域名情报碰撞
+- `container`：同 1007
+
 `process.name` / `process.file.path` 取自进程注册表（Linux 注册表没有名字时现读
 `/proc/<pid>/comm`），拿不到就省略。早于 agent 启动的长驻进程没有启动事件可回查，
-资产图谱的依赖边靠这两个字段知道是哪个进程发起的连接。
+资产图谱的依赖边靠这两个字段知道是哪个进程发起的连接；容器里的进程在依赖边上记成「容器/进程」。
+入站只给资产图谱补发起方未纳管的依赖（发起方纳管时它自己的出站已经记过）。
 
 **sensor 会话**（server 侧归一化，`grpcsvc/sensor.go:168-214`）——带流量统计：
 
@@ -177,7 +190,25 @@ Kernel-Network `netwatch_win.rs`，订阅 TcpConnect 事件 12，端口为网络
 
 ## 4003 DNS 活动
 
-sensor 会话中 `dns_query` 非空时判定为 4003（`sensor.go:24-28,79-82`），
+**agent dnswatch**（Linux，`agent/src/collector/dnswatch.rs`）——一问一答一条事件，带发起进程与容器：
+
+```json
+{
+  "activity_id": 6,
+  "query": { "hostname": "github.com", "type": "A", "rcode_id": 0 },
+  "answers": [ { "type": "CNAME", "rdata": "x.github.com", "ttl": 60 }, { "type": "A", "ip": "20.205.243.166", "ttl": 30 } ],
+  "src_endpoint": { "ip": "10.1.1.10", "port": 40445 },
+  "dst_endpoint": { "ip": "10.1.1.1", "port": 53 },
+  "process": { "pid": 1234, "uid": "<进程 GUID>", "name": "curl" },
+  "container": { "runtime": "lxc", "uid": "203", "name": "dns" }
+}
+```
+
+- `activity_id`：6 一问一答，1 只有查询（5 秒没等到应答），此时没有 `rcode_id` 与 `answers`
+- 只收本机与本机容器发起的查询；同一 (客户端, 域名, 类型) 60 秒内只报一次
+- `process` 只在 eBPF 构建里有（按源端口取 UDP 发送事件的进程）；`conn_tuple` 为 `udp:客户端>服务器:53`
+
+**sensor 会话**中 `dns_query` 非空时判定为 4003（`sensor.go:24-28,79-82`），
 在 4001 字段基础上加：
 
 ```json

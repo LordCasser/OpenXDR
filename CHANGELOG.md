@@ -18,6 +18,9 @@
 
 - agent：进程启停（eBPF → netlink → ETW → 轮询自动降级）、敏感文件（fanotify / inotify / ReadDirectoryChangesW）、
   持久化点快照、登录与安全日志、网络出站、内核模块加载。
+- agent 细粒度采集（Linux）：TCP 入站（归属到监听服务进程）与 UDP 出站；本机与容器的 DNS 问答（AF_PACKET，按源端口归属进程），
+  出站连接回填解析过的域名；进程与连接带所属容器（docker / LXC / QEMU 等）；退出事件带退出码与运行时长；
+  长名字进程不再被截成 15 字节；注册表随进程退出删除，长驻服务的连接不再挂不回进程树。
 - sensor：AF_PACKET v3 / AF_XDP 双后端，DNS、TLS（SNI / JA3 / JA3S / 证书）、HTTP 元数据。
 - syslog 接入（UDP + TCP，RFC3164 / RFC5424）；入库前脱敏。
 

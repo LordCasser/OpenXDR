@@ -44,8 +44,12 @@ xdr report '标题' report.md                 # 最终报告（Markdown 文件�
 
 - **events 查询必须带 ts 范围**，表很大。
 - `raw` 是 jsonb，用路径取字段，**不要**对 `raw::text` 做截取或 LIKE 切片：
-  - 进程（class_uid 1007）：`raw->'process'->>'name'`、`->>'cmd_line'`、`->'file'->>'path'`、`->'parent_process'->>'pid'`
-  - 网络（4001）：`raw->'dst_endpoint'->>'ip'`、`->>'port'`、`raw->'process'->>'name'`
+  - 进程（class_uid 1007）：`raw->'process'->>'name'`、`->>'cmd_line'`、`->'file'->>'path'`、`->'parent_process'->>'pid'`；
+    退出事件（`raw->>'activity_id'='2'`）有 `raw->'process'->>'exit_code'`、`raw->>'duration_ms'`
+  - 网络（4001）：`raw->'dst_endpoint'->>'ip'`、`->>'port'`、`->>'hostname'`（agent 解析过的域名）、`raw->'process'->>'name'`；
+    `raw->'connection_info'->>'direction'`（outbound / inbound，入站时 src 是对端、进程是本机服务）、`->>'protocol_name'`（tcp / udp）
+  - DNS（4003）：`raw->'query'->>'hostname'`、`->>'type'`、`->>'rcode_id'`（3 是 NXDOMAIN，没有表示无应答）、`raw->'answers'`、`raw->'process'->>'name'`
+  - 容器：任何事件都可能带 `raw->'container'`（`->>'runtime'` docker / lxc / qemu…、`->>'uid'`、`->>'name'`），说明进程在哪个容器或虚拟机里
   - 文件（1001）：`raw->'file'->>'path'`；认证（3002）：`raw->>'status_id'`（1 成功 2 失败）
   - 不确定结构时先 `SELECT raw FROM events WHERE ... LIMIT 1` 看一条，再写正式查询。
 - 规则名：`xdr context | jq '.rule_titles'`，rule_id 对应的中文标题在这里，不要猜。

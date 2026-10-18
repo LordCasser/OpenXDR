@@ -1,22 +1,25 @@
 package assetmap
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/netip"
 	"slices"
 	"strings"
 )
 
-// conn 一条网络事件的两端
+// conn 一条网络事件的两端：src 是发起方
 type conn struct {
 	src, dst netip.Addr
 	port     int
 	proto    string
 	process  string
+	// inbound agent 在服务端看到的入站：进程是本机的服务进程，不是发起方
+	inbound bool
 }
 
 // connOf 从网络事件取出两端。agent 与 sensor 的事件体同一约定：src_endpoint / dst_endpoint。
-// 协议取 conn_tuple 的前缀，缺省按 tcp。
+// 协议取 conn_tuple 的前缀，缺省按 tcp。进程在容器里时记成「容器/进程」，图上分得清是哪个容器发起的
 func connOf(raw json.RawMessage, tuple string) (conn, bool) {
 	var body struct {
 		Src struct {
@@ -29,6 +32,14 @@ func connOf(raw json.RawMessage, tuple string) (conn, bool) {
 		Process struct {
 			Name string `json:"name"`
 		} `json:"process"`
+		Container struct {
+			UID     string `json:"uid"`
+			Name    string `json:"name"`
+			Runtime string `json:"runtime"`
+		} `json:"container"`
+		Info struct {
+			Direction string `json:"direction"`
+		} `json:"connection_info"`
 	}
 	if json.Unmarshal(raw, &body) != nil {
 		return conn{}, false
@@ -42,7 +53,11 @@ func connOf(raw json.RawMessage, tuple string) (conn, bool) {
 	if p, _, ok := strings.Cut(tuple, ":"); ok && (p == "tcp" || p == "udp") {
 		proto = p
 	}
-	return conn{src.Unmap(), dst.Unmap(), body.Dst.Port, proto, clean(body.Process.Name, 64)}, true
+	process := clean(body.Process.Name, 64)
+	if label := clean(cmp.Or(body.Container.Name, strings.TrimSpace(body.Container.Runtime+" "+body.Container.UID)), 64); label != "" && process != "" {
+		process = label + "/" + process
+	}
+	return conn{src.Unmap(), dst.Unmap(), body.Dst.Port, proto, process, body.Info.Direction == "inbound"}, true
 }
 
 // dependency 这条连接算不算资产间的依赖。own 是上报 agent 所在资产的地址，sensor 事件为空。

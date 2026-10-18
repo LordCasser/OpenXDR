@@ -1,10 +1,11 @@
-import { FieldTimeOutlined, FilterOutlined } from '@ant-design/icons'
+import { ApartmentOutlined, FieldTimeOutlined, FilterOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, Button, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchAssets, searchEvents, type EventRow } from '../api'
 import { Refreshed } from '../components/Ago'
+import { EventFacts } from '../components/EventFacts'
 import { HostLink } from '../components/HostLink'
 import { LoadError } from '../components/LoadError'
 import { eventSummary } from '../components/eventSummary'
@@ -100,11 +101,17 @@ export function EventsPage() {
           // 点整行展开；展开后可以顺着这条往外翻：只看这台主机，或看同主机前后 5 分钟的全部日志
           expandable={{
             expandRowByClick: true,
-            expandedRowRender: r => (
+            expandedRowRender: r => {
+              const guid: string | undefined = (r.raw as { process?: { uid?: string } } | null)?.process?.uid
+              return (
               <>
                 <Space size={8} wrap style={{ marginBottom: 8 }}>
                   {r.assetId && r.assetId !== filter.assetId && (
                     <Button size="small" icon={<FilterOutlined />} onClick={() => setFilter({ assetId: r.assetId! })}>{t('pivotHost')}</Button>
+                  )}
+                  {/* 进程 GUID 出现在它自己的启停、子进程、连接与 DNS 事件里：按它全文检索就是这个进程的全部活动 */}
+                  {guid && guid !== filter.q && (
+                    <Button size="small" icon={<ApartmentOutlined />} onClick={() => setFilter({ q: guid, classUid: 0, source: '', from: '', to: '', hours: 168 })}>{t('pivotProcess')}</Button>
                   )}
                   <Button size="small" icon={<FieldTimeOutlined />} onClick={() => setFilter({
                     assetId: r.assetId ?? '', q: '', classUid: 0, source: '',
@@ -113,9 +120,11 @@ export function EventsPage() {
                   })}>{t('pivotAround')}</Button>
                   <Typography.Text copyable={{ text: JSON.stringify(r.raw, null, 2) }} type="secondary" style={{ fontSize: 12 }}>{t('rawEvent')}</Typography.Text>
                 </Space>
+                <EventFacts classUid={r.classUid} raw={r.raw} username={r.username} />
                 <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre>
               </>
-            ),
+              )
+            },
           }}
           columns={[
             { title: t('thTime'), dataIndex: 'ts', render: v => (wideTable ? fmtTime(v) : fmtTime(v).slice(11)), width: wideTable ? 170 : 84 },

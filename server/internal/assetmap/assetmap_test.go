@@ -3,6 +3,7 @@ package assetmap
 import (
 	"encoding/json"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -113,6 +114,17 @@ func TestConnOf(t *testing.T) {
 	}
 	if _, ok := connOf(json.RawMessage(`{"dst_endpoint":{"ip":"10.0.0.2","port":0}}`), ""); ok {
 		t.Fatal("缺源地址或端口非法应丢弃")
+	}
+	// 容器里的进程记成「容器/进程」，没有名字用运行时与 ID；入站标出来
+	for raw, want := range map[string]string{
+		`"container":{"runtime":"docker","uid":"4f1c2a3b5d6e","name":"termix"}`: "termix/node",
+		`"container":{"runtime":"lxc","uid":"203"}`:                             "lxc 203/node",
+		`"connection_info":{"direction":"inbound"}`:                             "node",
+	} {
+		c, ok := connOf(json.RawMessage(`{"src_endpoint":{"ip":"10.0.0.1"},"dst_endpoint":{"ip":"10.0.0.2","port":80},"process":{"name":"node"},`+raw+`}`), "")
+		if !ok || c.process != want || c.inbound != strings.Contains(raw, "inbound") {
+			t.Fatalf("%s: %+v", raw, c)
+		}
 	}
 }
 

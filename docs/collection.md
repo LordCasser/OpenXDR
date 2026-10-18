@@ -8,7 +8,7 @@ syslog 接入的服务端行为见 [detection.md](detection.md)。
 
 | 数据源 | 部署位置 | 产出 | 传输 |
 |---|---|---|---|
-| agent（Rust） | 每台被监控主机（Linux / Windows） | 进程（启动+退出）、文件、认证、网络、注册表五类事件 | gRPC 双向流 :8081 |
+| agent（Rust） | 每台被监控主机（Linux / Windows） | 进程（启动+退出）、文件、认证、网络（TCP 出入站、UDP 出站）、DNS、注册表等事件 | gRPC 双向流 :8081 |
 | sensor（Rust） | 核心交换机镜像口（仅 Linux） | 会话元数据（DNS 查询/应答、TLS SNI/JA3/JA3S/证书元数据、HTTP），不存 PCAP | gRPC 客户端流 :8081 |
 | syslog | 任意网络设备/主机 | 非结构化日志 | UDP+TCP 同端口（默认不启用） |
 
@@ -40,7 +40,11 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 
 - pid → UUID v4 GUID 映射，父 GUID 由 ppid 查表得到；父早于 agent 启动则为空
   （`collector/registry.rs:24-38`）
-- 上限 65536 条，超出按序号淘汰最旧一半（`registry.rs:9,33-36`）
+- 进程退出即删除登记，表里正常只有存活进程；漏掉退出事件的条目超过 65536 条时
+  按序号淘汰最旧一半。早先只靠淘汰，宿主机每天几十万次 exec，两小时就把早于 agent
+  启动的长驻服务挤出表，之后它们的网络连接有三分之一挂不回进程（`registry.rs`）
+- 每条登记还记着启动时间与所在容器：退出事件据此给出运行时长与容器，
+  网络与 DNS 事件按 pid 取到同一份容器信息
 - pid 复用语义：新登记直接覆盖旧条目（`registry.rs:30-31`）
 - 启动时用 /proc（Linux）或 sysinfo（Windows）快照 seed 预登记现有进程
   （`collector/mod.rs`、`windows.rs` `seeded_registry`）
@@ -85,7 +89,16 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
   轮询兜底下进程类规则基本无法命中，这是环境性降级，不是规则问题
 - **进程退出事件**（activity_id=2 Terminate）：netlink 解析 `PROC_EVENT_EXIT`
   （含 exit_code，`netlink.rs:24,139`）；轮询 diff 消失的 pid；eBPF 挂
-  `sched_process_exit`。退出事件复用启动时的进程 GUID（见上节）
+  `sched_process_exit`，退出码由 `syscalls:sys_enter_exit_group` 记下（取低 8 位，与 `$?` 一致；
+  被信号杀掉的进程不走 exit_group，退出码为空；内核没开 syscall tracepoint 时只降级这一项）。
+  退出事件复用启动时的进程 GUID（见上节），并带 `process.created_time` 与 `duration_ms`
+- **进程名**：内核的 comm 最多 15 字节，截断名是可执行文件名前缀时换回完整文件名
+  （`ip6tables-resto` → `ip6tables-restore`）
+- **容器归属**（`container.rs`）：按 `/proc/<pid>/cgroup` 认出 docker / podman / containerd / cri-o 容器、
+  Proxmox 的 LXC 容器（`/lxc/<VMID>`、`lxc.payload.<VMID>`）与 QEMU 虚拟机进程（`qemu.slice/<VMID>.scope`）、
+  systemd-nspawn，事件里写成 `container: {runtime, uid, name}`。名字读 docker 容器配置与
+  `/etc/pve/lxc|qemu-server/<VMID>.conf`，读不到只给 ID。agent 必须跑在宿主机的 cgroup 命名空间里
+  （systemd 服务即是；放进容器跑要 `--cgroupns=host`），否则看到的是相对路径
 - **username**：eBPF/netlink 路径从 `/proc/<pid>/status` 读 real uid，
   再查 `/etc/passwd` 解析成用户名（结果带缓存）；passwd 查不到退化为
   uid 数字串，与轮询路径一致（`mod.rs:185` `username_of`）
@@ -135,15 +148,31 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 
 ### 网络采集（netwatch，仅 eBPF 构建）
 
-- tracepoint `sock:inet_sock_set_state`，内核侧只收
-  `newstate==TCP_SYN_SENT && protocol==TCP`——本机主动发起的 TCP 出站
-  （`agent/ebpf/src/main.rs`）
-- 用户侧丢 loopback；按 (目的IP, 目的端口) 60 秒去重，表满 4096 清过期
-  （`linux.rs`、`netwatch.rs:17-43`）
-- 带 pid → 进程 GUID，网络事件直接挂进血缘；`conn_tuple` 与 sensor 同格式，
-  横向移动关联与网络规则零改动复用（`netwatch.rs:57-81`）
-- 默认构建（netlink 模式）**无网络采集**——proc connector 没有网络事件，
-  `collect_network` 开关在非 eBPF 构建下无任何效果
+- **TCP 出站**：tracepoint `sock:inet_sock_set_state` 在 `SYN_SENT` 记下发起进程，
+  到 `ESTABLISHED`/`CLOSE` 拿到真实源端口再上报（`agent/ebpf/src/main.rs`）
+- **TCP 入站**：同一 tracepoint 上子套接字 `SYN_RECV → ESTABLISHED` 即一条建立成功的入站。
+  握手在软中断里完成没有进程上下文，用户态按本机端口查监听表找服务进程（查不到才重扫，每秒最多一次）；
+  容器自己网络命名空间里的监听在宿主机监听表里看不到，那类入站不归属进程
+- **UDP 出站**：kprobe `udp_sendmsg` / `udpv6_sendmsg`，目标优先取 `msg_name`（未连接套接字的 sendto），
+  否则取套接字上 connect 的对端；内核里按 (进程, 目标) 60 秒采样（LRU 8192），源端口 53 的回包直接丢弃。
+  用户态再丢掉从本机 UDP 服务端口发出的回包（NTP、syslog、corosync 之类），以及组播、广播。
+  目的端口 53 的发送不成网络事件，只记「源端口 → 进程」给 DNS 采集归属（见下节）
+- 用户侧丢 loopback；按 (对端IP, 端口) 60 秒去重，出站 / 入站 / UDP 各一张表，表满 4096 清过期
+- 带 pid → 进程 GUID 与容器，网络事件直接挂进血缘；`connection_info.direction` 区分 inbound / outbound，
+  `conn_tuple` 与 sensor 同格式（发起方在前，`tcp:` / `udp:` 前缀），横向移动关联与网络规则零改动复用
+- 出站目的地址最近被本机解析过的，带上 `dst_endpoint.hostname`（DNS 采集的应答缓存，按 TTL 记 1 分钟～1 小时）
+- 默认构建（netlink 模式）**无网络连接采集**——proc connector 没有网络事件；DNS 采集不依赖 eBPF，照常工作
+
+### DNS 采集（dnswatch，Linux）
+
+- AF_PACKET 抓本机经过的报文，经典 BPF 过滤器在内核里只放行 UDP 53（IPv4 不收分片，IPv6 不看扩展头），
+  用户态不碰别的包。按 (客户端, 源端口, 事务 ID) 配对查询与应答，同一报文在 veth / 网桥 / 物理口 / lo
+  各抓到一份只算一次；应答到了再等 1 秒上报（等 eBPF 的进程归属就位），5 秒没应答按无应答上报
+- 只收本机自己（客户端地址是本机地址）与本机容器（报文经 `veth*` 接口）的查询；网桥上转发的虚拟机流量、
+  别的主机来问本机 DNS 服务的查询都不收。Proxmox LXC 的接口名 `veth<VMID>i<n>` 直接认出容器
+- 发起进程按源端口取 eBPF UDP 事件记下的进程；默认构建只有地址没有进程
+- 同一 (客户端, 域名, 类型) 60 秒内只报一次；应答里的 A / AAAA 地址进缓存，给出站连接回填域名
+- 事件字段与 sensor 的 DNS 事件同一约定（`query.hostname`、`answers[].ip`），DNS 规则与情报域名碰撞对两路一视同仁
 
 ### 内核模块监控（kmodwatch）
 
@@ -261,7 +290,7 @@ region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实�
 | `collectFiles` | true | 控制 fswatch | 控制 fswatch_win |
 | `collectAuth` | true | 控制 authwatch | 控制 authwatch_win |
 | `collectPersist` | true | 无消费者 | 控制 persistwatch |
-| `collectNetwork` | true | 仅 eBPF 构建有效 | 无消费者 |
+| `collectNetwork` | true | 控制 DNS 采集；网络连接仅 eBPF 构建有 | 控制 netwatch_win |
 | `collectInventory` | true | 控制 inventory | 控制 inventory_win |
 | `fileWatchDirs` | []（内置清单） | 覆盖 fswatch 默认目录 | 覆盖 fswatch_win 默认目录 |
 | （进程采集） | — | 无开关，按降级链选择 | 无开关，无条件启动 |

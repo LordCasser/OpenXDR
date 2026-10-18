@@ -1,20 +1,22 @@
-//! TCP 出站连接采集的用户态侧：eBPF inet_sock_set_state 事件的采样与组装。
+//! 网络连接采集的用户态侧：eBPF（TCP 出站 / 入站、UDP 出站）与 Windows ETW 事件的采样与组装。
 //!
 //! 补的是无 sensor 小部署的网络盲区。同一目标的高频连接在窗口内只报一次——
 //! 网络事件的价值在"连了谁"，不在"连了多少次"，次数是流量探针的活。
 
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use uuid::Uuid;
 
+use super::Container;
 use crate::pb::AgentEvent;
 
 /// OCSF Network Activity
 const CLASS_NETWORK: u32 = 4001;
 
-/// 同一 (目标地址, 端口) 的上报间隔
+/// 同一 (对端地址, 端口) 的上报间隔
 const SAMPLE_WINDOW: Duration = Duration::from_secs(60);
 
 /// 采样表条目上限，超过即清理过期项，防止扫描行为撑爆内存
@@ -44,6 +46,10 @@ impl ConnSampler {
 }
 
 pub struct ConnInfo {
+    /// tcp / udp
+    pub proto: &'static str,
+    /// 入站：src 是对端，dst 是本机服务，进程是监听它的服务进程
+    pub inbound: bool,
     pub pid: u32,
     pub guid: Option<Uuid>,
     /// 进程名与路径：长驻进程早于 agent 启动，server 回查不到它的启动事件，只能随连接带上
@@ -53,18 +59,32 @@ pub struct ConnInfo {
     pub sport: u16,
     pub dst: IpAddr,
     pub dport: u16,
+    pub container: Option<Arc<Container>>,
+    /// 目的地址最近一次被解析时的域名（agent 自己看到的 DNS 应答），没见过就不写
+    pub hostname: Option<String>,
 }
 
-/// 组装一条出站连接事件。conn_tuple 与 sensor 同一格式，
+/// 组装一条连接事件。conn_tuple 与 sensor 同一格式（发起方在前），
 /// 横向移动关联（ConnTupleContains）对两路数据一视同仁。
 pub fn conn_event(agent_id: &str, info: &ConnInfo) -> AgentEvent {
+    let direction = if info.inbound { "inbound" } else { "outbound" };
     let mut raw = serde_json::json!({
         "activity_id": 1, // OCSF: Open
-        "connection_info": { "direction": "outbound", "protocol_name": "tcp" },
+        "connection_info": { "direction": direction, "protocol_name": info.proto },
         "src_endpoint": { "ip": info.src.to_string(), "port": info.sport },
         "dst_endpoint": { "ip": info.dst.to_string(), "port": info.dport },
-        "process": { "pid": info.pid, "uid": info.guid.map(|g| g.to_string()) },
     });
+    // 入站找不到服务进程时 pid 为 0：不写进程，不编一个出来
+    if info.pid != 0 {
+        raw["process"] =
+            serde_json::json!({ "pid": info.pid, "uid": info.guid.map(|g| g.to_string()) });
+    }
+    if let Some(hostname) = &info.hostname {
+        raw["dst_endpoint"]["hostname"] = hostname.as_str().into();
+    }
+    if let Some(c) = &info.container {
+        raw["container"] = c.to_json();
+    }
     // 拿不到就不写，不编造
     if let Some(name) = info.name.as_deref().filter(|n| !n.is_empty()) {
         raw["process"]["name"] = name.into();
@@ -83,8 +103,8 @@ pub fn conn_event(agent_id: &str, info: &ConnInfo) -> AgentEvent {
         parent_process_guid: String::new(),
         username: String::new(),
         conn_tuple: format!(
-            "tcp:{}:{}>{}:{}",
-            info.src, info.sport, info.dst, info.dport
+            "{}:{}:{}>{}:{}",
+            info.proto, info.src, info.sport, info.dst, info.dport
         ),
         raw_json: raw.to_string(),
         dropped_events: 0,
@@ -112,6 +132,8 @@ mod tests {
         let evt = conn_event(
             "agent-1",
             &ConnInfo {
+                proto: "tcp",
+                inbound: false,
                 pid: 42,
                 guid: Some(guid),
                 name: Some("curl".into()),
@@ -120,6 +142,8 @@ mod tests {
                 sport: 51000,
                 dst: "1.2.3.4".parse().unwrap(),
                 dport: 443,
+                container: None,
+                hostname: Some("github.com".into()),
             },
         );
         assert_eq!(evt.class_uid, CLASS_NETWORK);
@@ -132,6 +156,68 @@ mod tests {
         assert_eq!(v["process"]["uid"], guid.to_string());
         assert_eq!(v["process"]["name"], "curl");
         assert_eq!(v["process"]["file"]["path"], "/usr/bin/curl");
+        assert_eq!(v["dst_endpoint"]["hostname"], "github.com");
+        assert!(v.get("container").is_none());
+    }
+
+    /// 入站与 UDP：方向、协议写进事件与 conn_tuple，容器原样带上
+    #[test]
+    fn conn_event_inbound_udp() {
+        let evt = conn_event(
+            "agent-1",
+            &ConnInfo {
+                proto: "udp",
+                inbound: true,
+                pid: 9,
+                guid: None,
+                name: Some("named".into()),
+                exe: None,
+                src: "10.0.0.7".parse().unwrap(),
+                sport: 40000,
+                dst: "10.0.0.2".parse().unwrap(),
+                dport: 53,
+                container: Some(Arc::new(Container {
+                    runtime: "lxc",
+                    uid: "203".into(),
+                    name: Some("dns".into()),
+                })),
+                hostname: None,
+            },
+        );
+        assert_eq!(evt.conn_tuple, "udp:10.0.0.7:40000>10.0.0.2:53");
+        let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
+        assert_eq!(v["connection_info"]["direction"], "inbound");
+        assert_eq!(v["connection_info"]["protocol_name"], "udp");
+        assert_eq!(v["container"]["runtime"], "lxc");
+        assert_eq!(v["container"]["uid"], "203");
+        assert_eq!(v["container"]["name"], "dns");
+        assert!(v["dst_endpoint"].get("hostname").is_none());
+
+        let orphan = ConnInfo {
+            pid: 0,
+            name: None,
+            container: None,
+            ..info_inbound()
+        };
+        let v: Value = serde_json::from_str(&conn_event("agent-1", &orphan).raw_json).unwrap();
+        assert!(v.get("process").is_none(), "找不到服务进程时不写 process");
+    }
+
+    fn info_inbound() -> ConnInfo {
+        ConnInfo {
+            proto: "tcp",
+            inbound: true,
+            pid: 1,
+            guid: None,
+            name: None,
+            exe: None,
+            src: "10.0.0.7".parse().unwrap(),
+            sport: 40000,
+            dst: "10.0.0.2".parse().unwrap(),
+            dport: 5432,
+            container: None,
+            hostname: None,
+        }
     }
 
     #[test]
@@ -139,6 +225,8 @@ mod tests {
         let evt = conn_event(
             "agent-1",
             &ConnInfo {
+                proto: "tcp",
+                inbound: false,
                 pid: 7,
                 guid: None,
                 name: None,
@@ -147,6 +235,8 @@ mod tests {
                 sport: 1,
                 dst: "2001:db8::1".parse().unwrap(),
                 dport: 80,
+                container: None,
+                hostname: None,
             },
         );
         assert!(evt.process_guid.is_empty());

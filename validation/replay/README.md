@@ -40,6 +40,10 @@ where ts > now() - interval '15 minutes' group by 1;
 | 文件监控（RDCW / fanotify / inotify） | ✅ RDCW 增改删 | ✅ fanotify 全生命周期+肇事进程 | — | ✅ fanotify 增改删+肇事进程 |
 | 持久化点（注册表/Startup/服务/计划任务） | ✅ 增删，删除带旧值 | ✅（经 fanotify 覆盖 systemd/cron/.ssh） | — | — |
 | 网络（ETW / eBPF 出站） | ✅ ETW TcpConnect + 进程 GUID | ✅ eBPF 捕获 10.0.0.1:4444 | — | ✅ eBPF 完整五元组+进程 GUID |
+| 网络入站 / UDP 出站（eBPF SYN_RECV→ESTABLISHED、kprobe udp_sendmsg） | — | ✅ 入站归属到监听进程（python3 :8000）、UDP 出站 1.1.1.1:123 带进程（docker 特权容器 `--pid=host --cgroupns=host`，6.6 内核，2026-10-18） | — | 未验证 |
+| DNS（AF_PACKET + 经典 BPF） | — | ✅ 问答配对、rcode / 应答入库，按源端口归属到发起 pid，出站连接回填域名（curl → example.org） | — | 未验证 |
+| 退出码与运行时长（eBPF exit_group） | — | ✅ `sh -c "sleep 2; exit 7"` → 退出码 7、2001 ms | — | 未验证 |
+| 容器归属（cgroup） | — | ✅ docker 容器 ID（需 `--cgroupns=host`，否则看到相对路径） | — | 未验证（PVE LXC / QEMU） |
 | 登录（4624/4625 / wtmp-btmp） | ✅ 4625 含失败原因码 | 不适用（WSL 无 wtmp 写入） | 未验证 | ✅ wtmp SSH 登录 |
 | sensor TLS 证书元数据（跨段重组 + x509 解析） | —（sensor 仅 Linux） | ✅ lo 抓自签 TLS1.2 握手，`tls.cert` 全字段入库并触发自签证书告警 | — | 未验证 |
 

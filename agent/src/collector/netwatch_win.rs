@@ -80,6 +80,8 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
             sink.send(netwatch::conn_event(
                 &agent_id,
                 &ConnInfo {
+                    proto: "tcp",
+                    inbound: false,
                     pid,
                     guid: Some(guid),
                     name,
@@ -88,6 +90,8 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
                     sport,
                     dst,
                     dport,
+                    container: None,
+                    hostname: None,
                 },
             ));
         })

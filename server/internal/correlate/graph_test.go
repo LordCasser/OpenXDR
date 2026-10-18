@@ -145,6 +145,12 @@ func TestProcessLabel(t *testing.T) {
 	if got := processLabel(mkEvent(1007, "", "", nil, `{"process":{"name":"bash"}}`)); got != "bash" {
 		t.Errorf("无 pid 的 label = %q", got)
 	}
+	if got := processLabel(mkEvent(1007, "", "", nil, `{"process":{"name":"node","pid":9},"container":{"runtime":"docker","uid":"4f1c2a3b5d6e","name":"termix"}}`)); got != "termix/node (9)" {
+		t.Errorf("容器里的进程: %q", got)
+	}
+	if got := connLabel(mkEvent(4001, "", "x", nil, `{"dst_endpoint":{"ip":"1.2.3.4","port":443,"hostname":"github.com"}}`)); got != "github.com:443" {
+		t.Errorf("回填的域名: %q", got)
+	}
 	if got := processLabel(mkEvent(1007, "", "", nil, `{}`)); got != "process" {
 		t.Errorf("无 process 信息的 label 应退回 process，得到 %q", got)
 	}

@@ -20,8 +20,10 @@
   计划任务 / Defender Exclusions / IFEO / AppInit_DLLs / CLSID COM 劫持 /
   WMI 事件订阅）、登录/安全日志采集（wtmp-btmp / Security 4624-4625 登录、
   4720/4726/4732 账户管理、1102 日志清空、4648 显式凭据、4719 审计策略，
-  以及 PowerShell Operational 4104 脚本块）、网络出站采集（Linux eBPF /
-  Windows ETW Kernel-Network TcpConnect，进程归属，与 sensor 同构 conn_tuple）
+  以及 PowerShell Operational 4104 脚本块）、网络采集（Linux eBPF TCP 出入站与 UDP 出站 /
+  Windows ETW Kernel-Network TcpConnect，进程归属，与 sensor 同构 conn_tuple）、
+  DNS 采集（Linux AF_PACKET + 经典 BPF 只收 UDP 53，按源端口归属进程，回填出站域名）、
+  容器归属（按 cgroup 认 docker / LXC / QEMU 等，事件带 container）
   与内核模块加载监控（Linux /proc/modules diff，class_uid=1005），以及设备清单
   （监听端口与属主进程、云厂商元数据，class_uid=5001，供资产图谱与攻击面）。
   容器或 WSL2 中 netlink 不可用，agent 会主动退回轮询——宁可弱采集也不产假数据。

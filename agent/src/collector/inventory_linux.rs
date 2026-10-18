@@ -35,14 +35,15 @@ pub fn spawn(agent_id: String, sink: EventSink) {
     inventory::spawn(agent_id, sink, move || scanner.scan());
 }
 
+/// 监听表扫描：资产清单定时用，入站连接按本机端口找服务进程也用（linux.rs）
 #[derive(Default)]
-struct Scanner {
+pub(super) struct Scanner {
     prev: BTreeSet<Socket>,
     owners: HashMap<u64, Owner>,
 }
 
 impl Scanner {
-    fn scan(&mut self) -> Vec<Listener> {
+    pub(super) fn scan(&mut self) -> Vec<Listener> {
         let low = ephemeral_low();
         let mut cur = BTreeSet::new();
         for (file, proto) in [

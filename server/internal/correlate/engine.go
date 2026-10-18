@@ -3,6 +3,7 @@
 package correlate
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -388,19 +389,22 @@ func connLabel(evt *ent.Event) string {
 			SNI string `json:"sni"`
 		} `json:"tls"`
 		DstEndpoint struct {
-			IP   string `json:"ip"`
-			Port int    `json:"port"`
+			IP       string `json:"ip"`
+			Port     int    `json:"port"`
+			Hostname string `json:"hostname"`
 		} `json:"dst_endpoint"`
 	}
 	if json.Unmarshal(evt.Raw, &raw) != nil {
 		return "connection"
 	}
-	// 域名比 IP 有信息量，优先展示
+	// 域名比 IP 有信息量，优先展示；agent 按自己看到的 DNS 应答给出站连接回填了域名
 	switch {
 	case raw.Query.Hostname != "":
 		return "DNS " + raw.Query.Hostname
 	case raw.TLS.SNI != "":
 		return raw.TLS.SNI
+	case raw.DstEndpoint.Hostname != "":
+		return fmt.Sprintf("%s:%d", raw.DstEndpoint.Hostname, raw.DstEndpoint.Port)
 	case raw.DstEndpoint.IP != "":
 		return fmt.Sprintf("%s:%d", raw.DstEndpoint.IP, raw.DstEndpoint.Port)
 	default:
@@ -408,18 +412,28 @@ func connLabel(evt *ent.Event) string {
 	}
 }
 
+// processLabel 进程名与 pid；在容器里的前面加容器名，同名进程分得清在哪个容器
 func processLabel(evt *ent.Event) string {
 	var raw struct {
 		Process struct {
 			PID  *int64 `json:"pid"`
 			Name string `json:"name"`
 		} `json:"process"`
+		Container struct {
+			UID     string `json:"uid"`
+			Name    string `json:"name"`
+			Runtime string `json:"runtime"`
+		} `json:"container"`
 	}
 	if json.Unmarshal(evt.Raw, &raw) != nil || raw.Process.Name == "" {
 		return "process"
 	}
+	label := raw.Process.Name
 	if raw.Process.PID != nil {
-		return fmt.Sprintf("%s (%d)", raw.Process.Name, *raw.Process.PID)
+		label = fmt.Sprintf("%s (%d)", raw.Process.Name, *raw.Process.PID)
 	}
-	return raw.Process.Name
+	if c := raw.Container; c.UID != "" {
+		label = cmp.Or(c.Name, c.Runtime+" "+c.UID) + "/" + label
+	}
+	return label
 }
