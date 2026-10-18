@@ -1,5 +1,6 @@
+import { FieldTimeOutlined, FilterOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Input, Select, Space, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchAssets, searchEvents, type EventRow } from '../api'
@@ -94,7 +95,26 @@ export function EventsPage() {
           loading={isFetching}
           dataSource={data?.items ?? []}
           pagination={{ pageSize: 50, hideOnSinglePage: true }}
-          expandable={{ expandedRowRender: r => <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre> }}
+          // 点整行展开；展开后可以顺着这条往外翻：只看这台主机，或看同主机前后 5 分钟的全部日志
+          expandable={{
+            expandRowByClick: true,
+            expandedRowRender: r => (
+              <>
+                <Space size={8} wrap style={{ marginBottom: 8 }}>
+                  {r.assetId && r.assetId !== filter.assetId && (
+                    <Button size="small" icon={<FilterOutlined />} onClick={() => setFilter({ assetId: r.assetId! })}>{t('pivotHost')}</Button>
+                  )}
+                  <Button size="small" icon={<FieldTimeOutlined />} onClick={() => setFilter({
+                    assetId: r.assetId ?? '', q: '', classUid: 0, source: '',
+                    from: new Date(Date.parse(r.ts) - 300_000).toISOString(),
+                    to: new Date(Date.parse(r.ts) + 300_000).toISOString(),
+                  })}>{t('pivotAround')}</Button>
+                  <Typography.Text copyable={{ text: JSON.stringify(r.raw, null, 2) }} type="secondary" style={{ fontSize: 12 }}>{t('rawEvent')}</Typography.Text>
+                </Space>
+                <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre>
+              </>
+            ),
+          }}
           columns={[
             { title: t('thTime'), dataIndex: 'ts', render: fmtTime, width: 170 },
             { title: t('thClass'), dataIndex: 'classUid', width: 100, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v) },
@@ -104,7 +124,7 @@ export function EventsPage() {
               render: (_, r) => {
                 const text = eventSummary(r.classUid, r.raw, t) || r.connTuple || '-'
                 return (
-                  <Typography.Text className="mono" copyable={{ text }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ width: '100%' }}>
+                  <Typography.Text className="mono" copyable={{ text, onCopy: e => e?.stopPropagation() }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ width: '100%' }}>
                     {text}
                   </Typography.Text>
                 )

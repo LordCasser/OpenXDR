@@ -9,6 +9,7 @@ import { fetchAgentSessions, fetchAssets, fetchIncidents } from '../api'
 import { SeverityTag } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 import { NAV, type NavItem } from './nav'
+import { loadRecent } from './recent'
 import { useSession } from './session'
 import { useTheme } from './theme'
 import { useTour } from './tour'
@@ -45,7 +46,9 @@ export function CommandPalette({ open, onClose, onHelp }: { open: boolean; onClo
     const groupAdmin = isAdmin || groups.some(g => g.role === 'admin')
     const pages = NAV.flatMap(n => ('items' in n ? n.items.map(i => ({ ...i, admin: i.admin || n.admin })) : [n]))
       .filter((n: NavItem) => (!n.admin || isAdmin) && (!n.groupAdmin || groupAdmin))
+    const kindIcon = { incident: <AlertOutlined />, asset: <CloudServerOutlined />, session: <MessageOutlined /> }
     const out: Hit[] = [
+      ...(needle ? [] : loadRecent().slice(0, 5).map(r => ({ key: r.to, section: 'paletteSectionRecent' as MsgKey, icon: kindIcon[r.kind], label: r.label, to: r.to }))),
       ...pages.filter(p => match(t(p.key), p.path)).map(p => ({
         key: p.path, section: 'paletteSectionPages' as MsgKey, icon: p.icon, label: t(p.key), to: p.path,
         extra: p.hotkey && <><kbd>G</kbd><kbd>{p.hotkey.toUpperCase()}</kbd></>,

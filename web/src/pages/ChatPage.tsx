@@ -3,7 +3,7 @@ import {
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Alert, App, Button, Card, Col, Drawer, Empty, Flex, Form, Grid, Input, Modal, Result, Row, Segmented, Space, Spin, Tag, Tooltip, Typography, theme,
+  Alert, App, Button, Card, Col, Drawer, Empty, Flex, Grid, Input, Result, Row, Segmented, Space, Spin, Tag, Tooltip, Typography, theme,
 } from 'antd'
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
@@ -11,6 +11,7 @@ import {
   createAgentSession, fetchAgentSession, fetchAgentSessions, fetchApprovals, fetchAssets, fetchSessionMessages,
   startSessionMessage, cancelSession, type AgentSession, type Approval, type PiMessage,
 } from '../api'
+import { useRemember } from '../app/recent'
 import { useSession } from '../app/session'
 import { ChatConversation, textOf, type ChatRow } from '../components/ChatConversation'
 import { ApprovalActions } from '../components/ApprovalActions'
@@ -69,38 +70,35 @@ function InlineApprovals({ rows, hosts, onDecided }: { rows: Approval[]; hosts: 
   ))
 }
 
-function NewSessionModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (s: AgentSession) => void }) {
-  const { t } = useI18n()
-  const { group } = useSession()
-  const [form] = Form.useForm<{ title?: string }>()
-  const [busy, setBusy] = useState(false)
-  const { message } = App.useApp()
-
-  const submit = async (v: { title?: string }) => {
-    if (!group) return
-    setBusy(true)
-    try {
-      onCreated(await createAgentSession({ groupId: group.id, title: v.title?.trim() || undefined }))
-      form.resetFields()
-    } catch (e) {
-      message.error(errText(e, t))
-    } finally {
-      setBusy(false)
-    }
-  }
-
+// 输入框：欢迎页与会话里共用，Enter 发送、Shift+Enter 换行，输入法组字时不发
+function Composer({ value, onChange, onSubmit, disabled, placeholder, inputRef, action }: {
+  value: string
+  onChange: (v: string) => void
+  onSubmit: () => void
+  disabled: boolean
+  placeholder: string
+  inputRef: { current: HTMLTextAreaElement | null }
+  action: ReactNode
+}) {
   return (
-    <Modal open={open} title={t('newChat')} onCancel={onClose} onOk={() => form.submit()} confirmLoading={busy} okText={t('create')} destroyOnHidden>
-      <Form form={form} layout="vertical" onFinish={submit}>
-        <Form.Item label={t('group')}>
-          <Typography.Text strong>{group?.name}</Typography.Text>
-        </Form.Item>
-        <Form.Item name="title" label={t('sessionTitle')} extra={t('sessionTitleHint')}>
-          <Input maxLength={80} />
-        </Form.Item>
-        <Alert type="info" showIcon title={t('sessionExecHint')} />
-      </Form>
-    </Modal>
+    <div className="chat-composer">
+      <Input.TextArea
+        aria-label={placeholder}
+        ref={r => { inputRef.current = r?.resizableTextArea?.textArea ?? null }}
+        value={value}
+        disabled={disabled}
+        autoSize={{ minRows: 2, maxRows: 8 }}
+        placeholder={placeholder}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault()
+            onSubmit()
+          }
+        }}
+      />
+      {action}
+    </div>
   )
 }
 
@@ -134,7 +132,6 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
   const client = useQueryClient()
   const { message } = App.useApp()
   const { token } = theme.useToken()
-  const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -166,6 +163,7 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
     refetchInterval: q => (q.state.data?.status === 'running' ? 1_500 : false),
   })
   const session = current.data
+  useRemember(session?.title ? { to: `/chat/${session.id}`, label: session.title, kind: 'session' } : undefined)
   const isRunning = busy || session?.status === 'running'
   const shown = (sessions.data ?? []).filter(s =>
     (!kind || s.kind === kind) && (!search || (s.title ?? '').toLowerCase().includes(search.toLowerCase())),
@@ -246,6 +244,11 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
     setParams({}, { replace: true })
   }, [params, session, setParams, setPrompt])
 
+  // 宽屏进欢迎页（含点「新对话」）光标直接落在输入框；窄屏不弹键盘
+  useEffect(() => {
+    if (!sessionId && wide) input.current?.focus()
+  }, [sessionId, wide])
+
   useEffect(() => {
     if (follow.current) scrollLatest()
   }, [messages.data, pending, inline.length])
@@ -255,15 +258,19 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
   // 停止：发起人或组管理员；只是写停止请求，后台几秒内收手
   const canStop = !!session && isRunning && (session.initiator === me.username || group?.role === 'admin')
 
-  // 没选会话时点模板：直接新建一个会话，把模板填进去
-  const startWith = async (text: string) => {
-    if (!group || !canChat) return
+  // 欢迎页直接提问：发出时才建会话（标题由首句生成），进会话后自动发出，不留空会话
+  const startWith = async () => {
+    const text = prompt.trim()
+    if (!group || !canChat || !text || busy) return
+    setBusy(true)
     try {
       const s = await createAgentSession({ groupId: group.id })
+      setPrompt('')
       client.invalidateQueries({ queryKey: ['sessions', group.id] })
-      navigate(`/chat/${s.id}?prompt=${encodeURIComponent(text)}`)
+      navigate(`/chat/${s.id}?${new URLSearchParams({ prompt: text, send: '1' })}`)
     } catch (e) {
       message.error(errText(e, t))
+      setBusy(false)
     }
   }
 
@@ -323,7 +330,7 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
         className="chat-sessions"
         title={t('sessions')}
         size="small"
-        extra={canChat && <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setCreating(true)}>{t('newChat')}</Button>}
+        extra={canChat && <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => { navigate('/chat'); setSessionsOpen(false) }}>{t('newChat')}</Button>}
         styles={{ body: { padding: 0, overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column' } }}
       >
         <div className="chat-session-filter">
@@ -378,7 +385,8 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
       {wide ? sessionList : <Drawer title={t('sessions')} open={sessionsOpen} onClose={() => setSessionsOpen(false)} placement="left" size={320} styles={{ body: { padding: 0, display: 'flex' } }}>{sessionList}</Drawer>}
 
       <Card className="chat-main" size="small" styles={{ body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: 0 } }}
-        title={(
+        // 欢迎页不要空标题栏；窄屏仍保留打开会话列表的按钮
+        title={(session || !wide) && (
           <Space style={{ maxWidth: '100%' }}>
             {!wide && <Button type="text" icon={<MenuOutlined />} aria-label={t('sessions')} onClick={() => setSessionsOpen(true)} />}
             {session && <>
@@ -398,7 +406,16 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
               <Typography.Title level={4} style={{ margin: 0 }}>{t('welcomeTitle')}</Typography.Title>
               <Typography.Text type="secondary">{t('welcomeSubtitle', { name: group.name })}</Typography.Text>
             </div>
-            {canChat ? <Templates onPick={startWith} /> : <Alert type="info" showIcon title={t('chatReadonly')} />}
+            {canChat ? (
+              <>
+                <div className="welcome-composer">
+                  <Composer value={prompt} onChange={setPrompt} onSubmit={startWith} disabled={busy} placeholder={t('chatPlaceholder')} inputRef={input}
+                    action={<Button type="primary" icon={<SendOutlined />} loading={busy} disabled={!prompt.trim()} onClick={startWith}>{t('send')}</Button>} />
+                  <Typography.Text type="secondary" className="welcome-hint">{t('sessionExecHint')}</Typography.Text>
+                </div>
+                <Templates onPick={p => { setPrompt(p); input.current?.focus() }} />
+              </>
+            ) : <Alert type="info" showIcon title={t('chatReadonly')} />}
           </Flex>
         ) : (
           <>
@@ -427,41 +444,17 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
 
             </div>
             {away && <Button className="chat-latest" size="small" icon={<ArrowDownOutlined />} onClick={scrollLatest}>{t('backToLatest')}</Button>}
-            <div className="chat-composer" style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}>
-              <Input.TextArea
-                aria-label={t('chatPlaceholder')}
-                ref={r => { input.current = r?.resizableTextArea?.textArea ?? null }}
-                value={prompt}
-                disabled={!canSend}
-                autoSize={{ minRows: 2, maxRows: 8 }}
+            <div style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+              <Composer value={prompt} onChange={setPrompt} onSubmit={() => submit()} disabled={!canSend} inputRef={input}
                 placeholder={canSend ? t('chatPlaceholder') : isRunning ? t('runningInBackground') : t('chatReadonly')}
-                onChange={e => setPrompt(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    submit()
-                  }
-                }}
-              />
-              {canStop ? (
-                <Button danger icon={<StopOutlined />} onClick={stop}>{t('stop')}</Button>
-              ) : (
-                <Button type="primary" icon={<SendOutlined />} disabled={!canSend || !prompt.trim()} onClick={() => submit()}>{t('send')}</Button>
-              )}
+                action={canStop
+                  ? <Button danger icon={<StopOutlined />} onClick={stop}>{t('stop')}</Button>
+                  : <Button type="primary" icon={<SendOutlined />} disabled={!canSend || !prompt.trim()} onClick={() => submit()}>{t('send')}</Button>} />
             </div>
           </>
         )}
       </Card>
 
-      <NewSessionModal
-        open={creating}
-        onClose={() => setCreating(false)}
-        onCreated={s => {
-          setCreating(false)
-          client.invalidateQueries({ queryKey: ['sessions', group.id] })
-          navigate(`/chat/${s.id}`)
-        }}
-      />
     </div>
   )
 }

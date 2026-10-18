@@ -1,11 +1,11 @@
 import {
-  CheckCircleOutlined, CompassOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SunOutlined, TeamOutlined,
+  BellOutlined, CheckCircleOutlined, CompassOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SunOutlined, TeamOutlined,
   TranslationOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { App, Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout as AntLayout, Menu, Select, Tag, Tooltip, theme } from 'antd'
 import type { MenuProps } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { fetchApprovals, fetchFindings, fetchStats } from '../api'
 import { errText, ROLE_KEY } from '../components/format'
@@ -19,7 +19,7 @@ import { useTheme } from './theme'
 import { TourProvider, useTour } from './tour'
 
 // 菜单上的待办计数：与态势总览共用同一份查询缓存，不额外打接口
-function useNavCounts(): Record<string, number> {
+function useNavCounts(): Record<string, number | undefined> {
   const { group } = useSession()
   const stats = useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 30_000 })
   const findings = useQuery({ queryKey: ['findings', 'open'], queryFn: () => fetchFindings('open'), refetchInterval: 60_000 })
@@ -30,10 +30,32 @@ function useNavCounts(): Record<string, number> {
     refetchInterval: 10_000,
   })
   return {
-    '/incidents': stats.data?.reviewIncidents ?? 0,
-    '/findings': findings.data?.length ?? 0,
-    '/approvals': approvals.data?.filter(a => a.status === 'pending').length ?? 0,
+    '/incidents': stats.data?.reviewIncidents,
+    '/findings': findings.data?.length,
+    '/approvals': approvals.data?.filter(a => a.status === 'pending').length,
   }
+}
+
+// 桌面通知：用户在账号菜单里自己开。标签页不在前台时，待复核事件或待审批变多就弹系统通知，点一下回到对应页面
+const notifySupported = 'Notification' in window
+const notifyOn = () => notifySupported && localStorage.getItem('desktopNotify') === '1' && Notification.permission === 'granted'
+
+function useDesktopAlerts(counts: Record<string, number | undefined>) {
+  const { t } = useI18n()
+  const navigate = useNavigate()
+  const last = useRef(counts)
+  useEffect(() => {
+    const prev = last.current
+    last.current = counts
+    if (!notifyOn() || !document.hidden) return
+    const rose = (path: string) => prev[path] !== undefined && (counts[path] ?? 0) > prev[path]!
+    const fire = (title: string, to: string) => {
+      const n = new Notification(title, { icon: '/favicon.svg', tag: to })
+      n.onclick = () => { window.focus(); navigate(to); n.close() }
+    }
+    if (rose('/incidents')) fire(t('notifyReview', { n: counts['/incidents']! }), '/incidents')
+    if (rose('/approvals')) fire(t('notifyApprovals', { n: counts['/approvals']! }), '/approvals')
+  })
 }
 
 // 待审批数：只有组 admin 能看审批，Pi 正阻塞等着人，所以挂在顶栏
@@ -67,6 +89,16 @@ function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void })
   const { token } = theme.useToken()
   const { message } = App.useApp()
   const tour = useTour()
+  const [notify, setNotify] = useState(notifyOn)
+  const toggleNotify = async () => {
+    if (notify) {
+      localStorage.setItem('desktopNotify', '0')
+      setNotify(false)
+    } else if (await Notification.requestPermission() === 'granted') {
+      localStorage.setItem('desktopNotify', '1')
+      setNotify(true)
+    } else message.warning(t('notifyDenied'))
+  }
   return (
     <Dropdown
       trigger={['click']}
@@ -75,6 +107,7 @@ function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void })
         items: [
           { key: 'theme', icon: dark ? <SunOutlined /> : <MoonOutlined />, label: dark ? t('lightMode') : t('darkMode') },
           { key: 'language', icon: <TranslationOutlined />, label: locale === 'zh' ? 'English' : '中文' },
+          ...(notifySupported ? [{ key: 'notify', icon: <BellOutlined />, label: t(notify ? 'desktopNotifyOff' : 'desktopNotifyOn') }] : []),
           { type: 'divider' },
           { key: 'tour', icon: <CompassOutlined />, label: t('tourStart') },
           { key: 'shortcuts', icon: <span className="menu-kbd">?</span>, label: t('shortcutsTitle') },
@@ -84,6 +117,7 @@ function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void })
         onClick: ({ key }) => {
           if (key === 'theme') toggle()
           else if (key === 'language') setLocale(locale === 'zh' ? 'en' : 'zh')
+          else if (key === 'notify') void toggleNotify()
           else if (key === 'tour') tour.start()
           else if (key === 'shortcuts') onHelp()
           else if (key === 'logout') void signOut().catch(error => message.error(errText(error, t)))
@@ -115,6 +149,7 @@ function Shell() {
   const [palette, setPalette] = useState(false)
   const [help, setHelp] = useState(false)
   const counts = useNavCounts()
+  useDesktopAlerts(counts)
   const mac = /Mac|iPhone|iPad/.test(navigator.platform)
   const compact = collapsed && wide
 

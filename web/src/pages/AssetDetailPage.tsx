@@ -10,6 +10,7 @@ import {
   createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchFindings, fetchIncidents, saveAgentConfig, searchEvents,
   type AgentConfig, type FindingRow,
 } from '../api'
+import { useRemember } from '../app/recent'
 import { useCanActIn, useSession } from '../app/session'
 import { AssetProfileView } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
@@ -116,6 +117,8 @@ export function AssetDetailPage() {
   const findings = useQuery({ queryKey: ['findings', 'all'], queryFn: () => fetchFindings(), enabled: !!asset, select: fs => fs.filter(f => f.assetId === id) })
   const events = useQuery({ queryKey: ['events', 'asset', id], queryFn: () => searchEvents({ assetId: id, hours: 168 }), enabled: !!asset })
   const commands = useQuery({ queryKey: ['commands', 'asset', id], queryFn: () => fetchCommands({ assetId: id! }), enabled: !!asset })
+
+  useRemember(asset && { to: `/assets/${asset.id}`, label: asset.hostname, kind: 'asset' })
 
   if (assets.isPending) return <Skeleton active style={{ marginTop: 24 }} />
   if (assets.isError) return <LoadError error={assets.error} onRetry={() => assets.refetch()} />

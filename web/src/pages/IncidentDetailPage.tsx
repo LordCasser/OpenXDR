@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { HttpError, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
 import { useCanActIn, useSession } from '../app/session'
+import { useRemember } from '../app/recent'
 import { useKeys } from '../app/shortcuts'
 import { useCanChat, useHandoff } from '../components/Handoff'
 import { HostLink } from '../components/HostLink'
@@ -67,6 +68,7 @@ export function IncidentDetailPage() {
   const queue = neighbors(id)
   const step = (to: string | undefined) => to && navigate(`/incidents/${to}`)
   useKeys({ j: () => step(queue.next), k: () => step(queue.prev) })
+  useRemember(inc && { to: `/incidents/${inc.id}`, label: inc.title ?? inc.id, kind: 'incident' })
 
   if (isPending) return <Skeleton active paragraph={{ rows: 12 }} style={{ marginTop: 24 }} />
   if (error instanceof HttpError && error.status === 404) {
