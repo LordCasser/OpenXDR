@@ -1,4 +1,6 @@
-import { AlertOutlined, CloudServerOutlined, MessageOutlined, SearchOutlined } from '@ant-design/icons'
+import {
+  AlertOutlined, CloudServerOutlined, CompassOutlined, MessageOutlined, MoonOutlined, SearchOutlined, SunOutlined, SwapOutlined, TranslationOutlined,
+} from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Input, Modal, Typography, theme } from 'antd'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -8,6 +10,8 @@ import { SeverityTag } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 import { NAV, type NavItem } from './nav'
 import { useSession } from './session'
+import { useTheme } from './theme'
+import { useTour } from './tour'
 
 interface Hit {
   key: string
@@ -15,15 +19,19 @@ interface Hit {
   icon: ReactNode
   label: string
   extra?: ReactNode
-  to: string
+  // 跳转目标或就地执行的操作，二选一
+  to?: string
+  run?: () => void
 }
 
-// 命令面板：Ctrl/⌘+K 打开，一个输入框跳到页面、主机、未结案事件、本组会话
-export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { t } = useI18n()
+// 命令面板：Ctrl/⌘+K 打开，一个输入框跳到页面、主机、未结案事件、本组会话，也能切组、切主题、看导览
+export function CommandPalette({ open, onClose, onHelp }: { open: boolean; onClose: () => void; onHelp: () => void }) {
+  const { t, locale, setLocale } = useI18n()
+  const { dark, toggle } = useTheme()
+  const tour = useTour()
   const { token } = theme.useToken()
   const navigate = useNavigate()
-  const { isAdmin, groups, group } = useSession()
+  const { isAdmin, groups, group, setGroupId } = useSession()
   const [q, setQ] = useState('')
   const [active, setActive] = useState(0)
   const list = useRef<HTMLDivElement>(null)
@@ -38,16 +46,27 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const pages = NAV.flatMap(n => ('items' in n ? n.items.map(i => ({ ...i, admin: i.admin || n.admin })) : [n]))
       .filter((n: NavItem) => (!n.admin || isAdmin) && (!n.groupAdmin || groupAdmin))
     const out: Hit[] = [
-      ...pages.filter(p => match(t(p.key), p.path)).map(p => ({ key: p.path, section: 'paletteSectionPages' as MsgKey, icon: p.icon, label: t(p.key), to: p.path })),
+      ...pages.filter(p => match(t(p.key), p.path)).map(p => ({
+        key: p.path, section: 'paletteSectionPages' as MsgKey, icon: p.icon, label: t(p.key), to: p.path,
+        extra: p.hotkey && <><kbd>G</kbd><kbd>{p.hotkey.toUpperCase()}</kbd></>,
+      })),
       ...(assets.data ?? []).filter(a => needle && match(a.hostname, ...(a.ipAddrs ?? []))).slice(0, 6)
         .map(a => ({ key: a.id, section: 'paletteSectionHosts' as MsgKey, icon: <CloudServerOutlined />, label: a.hostname, extra: a.ipAddrs?.join(', '), to: `/assets/${a.id}` })),
       ...(incidents.data?.items ?? []).filter(i => needle && match(i.title, i.id)).slice(0, 6)
         .map(i => ({ key: i.id, section: 'paletteSectionIncidents' as MsgKey, icon: <AlertOutlined />, label: i.title ?? i.id, extra: <SeverityTag value={i.severity} />, to: `/incidents/${i.id}` })),
       ...(sessions.data ?? []).filter(s => needle && match(s.title)).slice(0, 5)
         .map(s => ({ key: s.id, section: 'paletteSectionSessions' as MsgKey, icon: <MessageOutlined />, label: s.title || t('chatSession'), to: `/chat/${s.id}` })),
+      // 操作的标签随状态变（切暗色 / 切亮色），另配一组中英关键词让人按意图搜得到
+      ...[
+        ...groups.filter(g => g.id !== group?.id).map(g => ({ key: `group:${g.id}`, icon: <SwapOutlined />, label: t('paletteSwitchGroup', { name: g.name }), run: () => setGroupId(g.id) })),
+        { key: 'theme', words: 'theme dark light 主题 暗色 亮色', icon: dark ? <SunOutlined /> : <MoonOutlined />, label: dark ? t('lightMode') : t('darkMode'), run: toggle },
+        { key: 'language', words: 'language 语言', icon: <TranslationOutlined />, label: locale === 'zh' ? 'English' : '中文', run: () => setLocale(locale === 'zh' ? 'en' : 'zh') },
+        { key: 'tour', words: 'tour guide 导览 教程 引导', icon: <CompassOutlined />, label: t('tourStart'), run: tour.start },
+        { key: 'shortcuts', words: 'shortcuts keyboard 快捷键 键盘', icon: <span className="menu-kbd">?</span>, label: t('shortcutsTitle'), extra: <kbd>?</kbd>, run: onHelp },
+      ].filter(a => match(a.label, 'words' in a ? a.words : '')).map(a => ({ ...a, section: 'paletteSectionActions' as MsgKey })),
     ]
     return out
-  }, [q, assets.data, incidents.data, sessions.data, isAdmin, groups, t])
+  }, [q, assets.data, incidents.data, sessions.data, isAdmin, groups, group, setGroupId, dark, toggle, locale, setLocale, tour.start, onHelp, t])
 
   useEffect(() => setActive(0), [q])
   useEffect(() => {
@@ -60,7 +79,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const go = (h: Hit | undefined) => {
     if (!h) return
     onClose()
-    navigate(h.to)
+    if (h.run) h.run()
+    else navigate(h.to!)
   }
 
   return (

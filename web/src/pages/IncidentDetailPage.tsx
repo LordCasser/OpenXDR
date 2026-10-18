@@ -1,13 +1,15 @@
-import { ArrowLeftOutlined, DownloadOutlined, RobotOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, DownOutlined, DownloadOutlined, RobotOutlined, UpOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Col, Descriptions, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Typography } from 'antd'
+import { App, Button, Card, Col, Descriptions, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { HttpError, downloadReport, fetchIncident, setIncidentStatus, type AlertRow } from '../api'
 import { useCanActIn, useSession } from '../app/session'
+import { useKeys } from '../app/shortcuts'
 import { useCanChat, useHandoff } from '../components/Handoff'
 import { HostLink } from '../components/HostLink'
 import { IncidentGraph } from '../components/IncidentGraph'
+import { neighbors } from '../components/incidentQueue'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
@@ -62,6 +64,9 @@ export function IncidentDetailPage() {
   const canAct = useCanActIn(inc?.groupId)
   const canChat = useCanChat()(inc?.groupId)
   const handoff = useHandoff()
+  const queue = neighbors(id)
+  const step = (to: string | undefined) => to && navigate(`/incidents/${to}`)
+  useKeys({ j: () => step(queue.next), k: () => step(queue.prev) })
 
   if (isPending) return <Skeleton active paragraph={{ rows: 12 }} style={{ marginTop: 24 }} />
   if (error instanceof HttpError && error.status === 404) {
@@ -81,6 +86,11 @@ export function IncidentDetailPage() {
     await client.invalidateQueries({ queryKey: ['incident', id] })
     client.invalidateQueries({ queryKey: ['incidents'] })
     if (status === 'false_positive') setSuppressing(true)
+    // 逐条处理：结案后直接转到列表里的下一条；误报要先填抑制，留在本页
+    else if (status === 'closed' && queue.next) {
+      message.success(t('closedNext'))
+      step(queue.next)
+    }
     return true
   }
   const done = inc.status === 'closed' || inc.status === 'false_positive'
@@ -91,6 +101,15 @@ export function IncidentDetailPage() {
       title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} /><SeverityTag value={inc.severity} />{inc.title ?? inc.id}<IncidentStatusTag value={inc.status} /></Space>}
       extra={
         <>
+          {queue.index >= 0 && (
+            <Space size={4}>
+              <Typography.Text type="secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>{queue.index + 1} / {queue.total}</Typography.Text>
+              <Space.Compact>
+                <Tooltip title={t('queuePrev')}><Button aria-label={t('queuePrev')} icon={<UpOutlined />} disabled={!queue.prev} onClick={() => step(queue.prev)} /></Tooltip>
+                <Tooltip title={t('queueNext')}><Button aria-label={t('queueNext')} icon={<DownOutlined />} disabled={!queue.next} onClick={() => step(queue.next)} /></Tooltip>
+              </Space.Compact>
+            </Space>
+          )}
           {canChat && inc.groupId && !done && (
             <Button type="primary" icon={<RobotOutlined />} loading={handoff.busy}
               onClick={() => handoff.start(inc.groupId!, [`incident:${inc.id}`], t('handoffIncidentTitle', { title: inc.title ?? inc.id }), t('handoffIncidentPrompt'))}>

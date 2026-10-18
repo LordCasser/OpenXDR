@@ -7,6 +7,7 @@ import { fetchIncidents, setIncidentStatus, type IncidentSummary } from '../api'
 import { useCanAct, useSession } from '../app/session'
 import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { useCanChat, useHandoff } from '../components/Handoff'
+import { saveQueue } from '../components/incidentQueue'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
@@ -44,6 +45,7 @@ export function IncidentsPage() {
   const actable = (r: IncidentSummary) => !done(r) && canAct(r.groupId)
   const selected = rows.filter(r => selectedKeys.includes(r.id) && actable(r)).map(r => r.id)
   useEffect(() => { setSelected([]); setResolving(null) }, [status, page])
+  useEffect(() => { if (query.data) saveQueue(query.data.items.map(r => r.id)) }, [query.data])
   const canChat = useCanChat()
   const handoff = useHandoff()
   // 多选交给 AI：一个会话属于一个组，选中的必须同组

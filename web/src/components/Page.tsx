@@ -5,7 +5,7 @@ import { Link, useLocation } from 'react-router'
 import { crumbsOf } from '../app/nav'
 import { useI18n } from '../i18n'
 
-// 页面骨架：面包屑 + 标题 + 说明 + 右侧操作，下面是内容。面包屑从菜单配置推，详情页给最后一级
+// 页面骨架：面包屑 + 标题 + 说明 + 右侧操作（标题不再带图标，侧栏已经标明位置），下面是内容。面包屑从菜单配置推，详情页给最后一级
 export function Page({ title, subtitle, extra, crumb, children }: {
   title: ReactNode
   subtitle?: ReactNode
@@ -24,10 +24,10 @@ export function Page({ title, subtitle, extra, crumb, children }: {
   ]
   return (
     <div className="page">
-      <Breadcrumb items={items} style={{ marginBottom: 8 }} />
+      <Breadcrumb items={items} className="page-crumb" />
       <Flex justify="space-between" align="flex-start" gap={16} wrap className="page-head">
         <div>
-          <Typography.Title level={4} className="page-title">{page && <span className="page-title-icon" aria-hidden="true">{page.icon}</span>}{title}</Typography.Title>
+          <Typography.Title level={4} className="page-title">{title}</Typography.Title>
           {subtitle && <Typography.Text type="secondary" className="page-subtitle">{subtitle}</Typography.Text>}
         </div>
         {extra && <Flex gap={8} wrap>{extra}</Flex>}

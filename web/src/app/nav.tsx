@@ -13,6 +13,8 @@ export interface NavItem {
   admin?: boolean
   // 只有某个组的 admin 才用得上（审批只给组 admin）
   groupAdmin?: boolean
+  // G 之后按这个键跳过来（GitHub / Linear 的两段式快捷键）
+  hotkey?: string
 }
 
 export interface NavGroup {
@@ -23,20 +25,20 @@ export interface NavGroup {
 
 // 菜单即信息架构：对话是主入口，原有能力按运营动线归组；面包屑也从这里推
 export const NAV: (NavItem | NavGroup)[] = [
-  { path: '/chat', key: 'navChat', icon: <RobotOutlined /> },
-  { path: '/overview', key: 'navOverview', icon: <DashboardOutlined /> },
+  { path: '/chat', key: 'navChat', icon: <RobotOutlined />, hotkey: 'c' },
+  { path: '/overview', key: 'navOverview', icon: <DashboardOutlined />, hotkey: 'o' },
   {
     key: 'navGroupOps',
     items: [
-      { path: '/incidents', key: 'navIncidents', icon: <AlertOutlined /> },
-      { path: '/findings', key: 'navFindings', icon: <ToolOutlined /> },
-      { path: '/events', key: 'navEvents', icon: <SearchOutlined /> },
+      { path: '/incidents', key: 'navIncidents', icon: <AlertOutlined />, hotkey: 'i' },
+      { path: '/findings', key: 'navFindings', icon: <ToolOutlined />, hotkey: 'f' },
+      { path: '/events', key: 'navEvents', icon: <SearchOutlined />, hotkey: 'e' },
     ],
   },
   {
     key: 'navGroupAssets',
     items: [
-      { path: '/assets', key: 'navAssets', icon: <CloudServerOutlined /> },
+      { path: '/assets', key: 'navAssets', icon: <CloudServerOutlined />, hotkey: 'a' },
       { path: '/asset-map', key: 'navAssetMap', icon: <DeploymentUnitOutlined /> },
       { path: '/attack-surface', key: 'navAttackSurface', icon: <AimOutlined /> },
     ],
@@ -44,15 +46,15 @@ export const NAV: (NavItem | NavGroup)[] = [
   {
     key: 'navGroupAuto',
     items: [
-      { path: '/reports', key: 'navReports', icon: <FileTextOutlined /> },
-      { path: '/tasks', key: 'navTasks', icon: <ClockCircleOutlined /> },
-      { path: '/approvals', key: 'navApprovals', icon: <CheckCircleOutlined />, groupAdmin: true },
+      { path: '/reports', key: 'navReports', icon: <FileTextOutlined />, hotkey: 'r' },
+      { path: '/tasks', key: 'navTasks', icon: <ClockCircleOutlined />, hotkey: 't' },
+      { path: '/approvals', key: 'navApprovals', icon: <CheckCircleOutlined />, groupAdmin: true, hotkey: 'p' },
     ],
   },
   {
     key: 'navGroupDetect',
     items: [
-      { path: '/rules', key: 'navRules', icon: <FileSearchOutlined /> },
+      { path: '/rules', key: 'navRules', icon: <FileSearchOutlined />, hotkey: 'd' },
       { path: '/suppressions', key: 'navSuppressions', icon: <StopOutlined /> },
       { path: '/intel', key: 'navIntel', icon: <SafetyOutlined /> },
     ],

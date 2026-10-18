@@ -8,6 +8,7 @@ import { Link } from 'react-router'
 import { fetchAgentReports, fetchApprovals, fetchAssets, fetchFindings, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks } from '../api'
 import { useSession } from '../app/session'
 import { Ago } from '../components/Ago'
+import { GettingStarted } from '../components/GettingStarted'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { BarList, ColumnChart, SEVERITY_COLOR, compact, useSeriesColor } from '../components/charts'
@@ -143,6 +144,7 @@ export function OverviewPage() {
 
   return (
     <Page title={t('navOverview')} subtitle={t('overviewSubtitle')}>
+      <GettingStarted />
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={16}>
           <Funnel events={s?.events24h ?? 0} alerts={s?.alerts24h ?? 0} incidents={s?.reviewIncidents ?? 0}

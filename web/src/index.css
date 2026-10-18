@@ -4,16 +4,31 @@ body { margin: 0; }
 .mono, code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--ant-color-fill-tertiary); }
 
-.brand { height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 22px; cursor: pointer; }
-.brand-name { font-size: 18px; font-weight: 600; letter-spacing: .5px; color: var(--ant-color-text); }
-.brand-dark { border-bottom: 1px solid rgba(148,163,184,.12); margin-bottom: 8px; }
-.brand-dark .brand-name { color: #f8fafc; }
+.brand { height: 56px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 18px; cursor: pointer; }
+.brand-name { font-size: 17px; font-weight: 600; letter-spacing: .3px; color: var(--ant-color-text); }
+
+/* 外壳：侧栏与顶栏同底色，和内容区之间一条细线；侧栏内部纵向排布，菜单区单独滚动，账号固定在底部 */
+.app-sider { position: sticky !important; top: 0; height: 100dvh; border-inline-end: 1px solid var(--ant-color-border-secondary); }
+.app-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--ant-color-border-secondary); }
+.sider { height: 100%; display: flex; flex-direction: column; }
+.sider-group { flex: none; padding: 0 12px 8px; }
+.sider-menu.ant-menu { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border-inline-end: none !important; padding-bottom: 8px; }
+.sider-menu .ant-menu-item-group-title { padding: 12px 20px 2px !important; font-weight: 500; }
+.sider-menu .ant-menu-item-divider { margin: 8px 12px; }
+.sider-foot { flex: none; padding: 8px; border-top: 1px solid var(--ant-color-border-secondary); }
+.sider-user { width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.sider-user:hover { background: var(--ant-color-fill-tertiary); }
+.sider-user:focus-visible { outline: 2px solid var(--ant-color-primary); outline-offset: -2px; }
+.sider-user-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ant-layout-sider-collapsed .brand, .ant-layout-sider-collapsed .sider-user { justify-content: center; padding-inline: 0; }
 
 .page { max-width: 1600px; margin: 0 auto; }
-.page-head { margin-bottom: 20px; }
-.page-title { margin: 0 !important; font-size: 22px !important; font-weight: 600 !important; letter-spacing: .2px; }
-.page-subtitle { display: block; margin-top: 4px; }
-.ant-card { box-shadow: var(--ant-box-shadow-tertiary); border-color: transparent; }
+.page-crumb { margin-bottom: 6px; font-size: 13px; }
+.page-head { margin-bottom: 16px; }
+.page-title { margin: 0 !important; font-size: 20px !important; font-weight: 600 !important; letter-spacing: .2px; }
+.page-subtitle { display: block; margin-top: 2px; font-size: 13px; }
+/* 卡片用细边框而不是阴影分层，表格密集的页面更干净 */
+.ant-card { box-shadow: none; }
 .filter-bar { padding: 12px 16px; border-bottom: 1px solid var(--ant-color-border-secondary); }
 
 .login-wrap { min-height: 100vh; display: flex; }
@@ -50,7 +65,7 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .verdict-list { margin: 4px 0 12px; padding-left: 22px; }
 
 /* AI 助手：会话列表 + 对话，占满内容区高度 */
-.chat-page { display: flex; gap: 16px; height: calc(100dvh - 64px - 48px); }
+.chat-page { display: flex; gap: 16px; height: calc(100dvh - 56px - 48px); }
 .chat-sessions { width: 300px; flex: none; display: flex; flex-direction: column; }
 .chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .chat-session-item { cursor: pointer; padding: 10px 16px; border-bottom: 1px solid var(--ant-color-border-secondary); }
@@ -167,7 +182,7 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 .markdown-table { max-width: 100%; overflow-x: auto; }
 @media (max-width: 991px) {
   .app-content { padding: 16px; }
-  .chat-page { height: calc(100dvh - 96px); }
+  .chat-page { height: calc(100dvh - 56px - 32px); }
 }
 @media (max-width: 900px) {
   .login-mobile-brand { display: flex; }
@@ -201,6 +216,18 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 .chat-session-entry .session-pin { flex: none; margin-right: 8px; border: 0; background: transparent; font: inherit; }
 .chat-session-entry:hover .session-pin, .chat-session-entry:focus-within .session-pin { opacity: 1; }
 
-.page-title-icon { display: inline-flex; margin-right: 10px; color: var(--ant-color-primary); vertical-align: middle; }
 .report-title-button { max-width: 100%; height: auto; padding: 0; text-align: left; white-space: normal; }
 .report-title-button > span:last-child { overflow-wrap: anywhere; }
+
+/* 菜单待办计数、快捷键帮助与上手清单 */
+.nav-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nav-count { min-width: 20px; padding: 0 6px; border-radius: 10px; font-size: 12px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+  color: var(--ant-color-primary); background: var(--ant-color-primary-bg); }
+.menu-kbd { display: inline-flex; width: 14px; justify-content: center; font-weight: 600; }
+.shortcut-section { display: block; font-size: 12px; margin: 4px 0 8px; }
+.shortcut-section ~ .shortcut-section { margin-top: 16px; }
+.shortcut-grid { display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; align-items: center; }
+.gs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 24px; }
+.gs-step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; }
+.gs-mark { flex: none; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; border: 1px solid transparent; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+.gs-done .gs-mark { font-size: 20px; }

@@ -14,6 +14,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('theme', dark ? 'light' : 'dark')
     setDark(!dark)
   }
+  const panel = dark ? '#121b2c' : '#ffffff'
   return (
     <ThemeContext.Provider value={{ dark, toggle }}>
       <ConfigProvider
@@ -30,24 +31,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Inter, sans-serif',
             colorBgLayout: dark ? '#0b1220' : '#f3f5f9',
             // 暗色下卡片与弹层取同一族蓝灰，不用默认的中性灰，免得和深蓝底色打架
-            ...(dark && { colorBgContainer: '#121b2c', colorBgElevated: '#18233a', colorFillQuaternary: 'rgba(148,163,184,.06)' }),
+            ...(dark && { colorBgContainer: panel, colorBgElevated: '#18233a', colorFillQuaternary: 'rgba(148,163,184,.06)' }),
             colorBorderSecondary: dark ? '#1f2a3d' : '#e8ecf2',
           },
           components: {
-            Layout: { siderBg: '#0f1a2e', headerBg: dark ? '#111a2b' : '#ffffff', bodyBg: dark ? '#0b1220' : '#f3f5f9' },
+            // 侧栏与顶栏跟随主题，和内容区只用一条细线分隔（Vercel / Linear 的做法），不再单独维护一套深色导航配色
+            Layout: { headerHeight: 56, headerPadding: '0 16px', headerBg: panel, lightSiderBg: panel, bodyBg: dark ? '#0b1220' : '#f3f5f9' },
             Menu: {
-              darkItemBg: '#0f1a2e',
-              darkSubMenuItemBg: '#0f1a2e',
-              darkItemSelectedBg: '#2563eb',
-              darkItemColor: 'rgba(226,232,240,.72)',
-              darkItemHoverColor: '#ffffff',
-              darkGroupTitleColor: 'rgba(148,163,184,.7)',
+              itemBg: 'transparent',
+              itemHeight: 34,
+              itemMarginBlock: 2,
+              itemMarginInline: 8,
               itemBorderRadius: 6,
-              itemMarginInline: 10,
-              itemHeight: 38,
+              groupTitleFontSize: 12,
+              iconMarginInlineEnd: 10,
+              activeBarBorderWidth: 0,
             },
-            Card: { headerFontSize: 15, boxShadowTertiary: '0 1px 2px rgba(15,23,42,.04), 0 1px 6px -1px rgba(15,23,42,.06)' },
-            Table: { headerBg: dark ? '#162033' : '#f7f9fc', headerColor: dark ? '#cbd5e1' : '#475569', cellPaddingBlock: 12, headerSplitColor: 'transparent' },
+            Card: { headerFontSize: 15, headerHeight: 52 },
+            Table: { headerBg: dark ? '#162033' : '#f7f9fc', headerColor: dark ? '#cbd5e1' : '#475569', cellPaddingBlock: 10, headerSplitColor: 'transparent' },
             Statistic: { contentFontSize: 28 },
           },
         }}
