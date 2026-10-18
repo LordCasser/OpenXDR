@@ -34,6 +34,8 @@ type Request struct {
 	Tools        []Tool            `json:"tools,omitempty"`
 	MaxTurns     int               `json:"max_turns,omitempty"`
 	MaxTokens    int               `json:"max_tokens,omitempty"`
+	// Context 沙箱模式下的组内数据，沙箱里经 xdr context 读取；本地 runner 模式放在系统提示里，不用这个字段
+	Context json.RawMessage `json:"context,omitempty"`
 }
 
 type Event struct {
@@ -65,11 +67,58 @@ type Runtime struct {
 	Node    string
 	Runner  string
 	Timeout time.Duration
+	// Remote 非空时在远端沙箱里跑（sandboxd），否则在本机起 runner 子进程
+	Remote *Remote
+}
+
+// Sandboxed 是否在沙箱里跑：沙箱里的 Pi 用默认工具加 xdr 命令行，系统提示与数据交付方式不同
+func (r Runtime) Sandboxed() bool { return r.Remote != nil }
+
+// channel 一轮 Pi 的双向 JSONL 通道：写请求与工具结果，读事件
+type channel struct {
+	in   io.WriteCloser
+	out  io.ReadCloser
+	wait func() error
+}
+
+// open 远端沙箱或本机 runner 子进程的 stdin/stdout
+func (r Runtime) open(ctx context.Context) (*channel, error) {
+	if r.Remote != nil {
+		return r.Remote.open(ctx)
+	}
+	node := r.Node
+	if node == "" {
+		node = "node"
+	}
+	cmd := exec.CommandContext(ctx, node, r.Runner)
+	cmd.WaitDelay = time.Second
+	// stderr 不混入 JSONL，也不保留可能含供应商凭据的异常正文。
+	cmd.Stderr = io.Discard
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("启动 Pi 失败: %w", err)
+	}
+	return &channel{stdin, stdout, func() error {
+		if cmd.ProcessState != nil {
+			return nil
+		}
+		if err := cmd.Wait(); err != nil {
+			return fmt.Errorf("Pi 子进程失败: %w", err)
+		}
+		return nil
+	}}, nil
 }
 
 func (r Runtime) Run(ctx context.Context, request Request, handle Handler, observe Observer) (*Result, error) {
-	if r.Runner == "" || observe == nil {
-		return nil, errors.New("Pi 必须配置 runner 与事件记录器")
+	if (r.Runner == "" && r.Remote == nil) || observe == nil {
+		return nil, errors.New("Pi 必须配置 runner 或沙箱，以及事件记录器")
 	}
 	allowed := make(map[string]bool, len(request.Tools))
 	for _, tool := range request.Tools {
@@ -92,32 +141,16 @@ func (r Runtime) Run(ctx context.Context, request Request, handle Handler, obser
 		return nil, err
 	}
 	defer release()
-	node := r.Node
-	if node == "" {
-		node = "node"
-	}
-	cmd := exec.CommandContext(ctx, node, r.Runner)
-	cmd.WaitDelay = time.Second
-	// stderr 不混入 JSONL，也不保留可能含供应商凭据的异常正文。
-	cmd.Stderr = io.Discard
-	stdin, err := cmd.StdinPipe()
+	ch, err := r.open(ctx)
 	if err != nil {
 		return nil, err
 	}
+	stdin, stdout := ch.in, ch.out
 	defer stdin.Close()
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
 	defer stdout.Close()
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("启动 Pi 失败: %w", err)
-	}
 	defer func() {
 		cancel()
-		if cmd.ProcessState == nil {
-			_ = cmd.Wait()
-		}
+		_ = ch.wait()
 	}()
 	encoder := json.NewEncoder(stdin)
 	request.Type = "run"
@@ -193,11 +226,11 @@ func (r Runtime) Run(ctx context.Context, request Request, handle Handler, obser
 		return nil, fmt.Errorf("读取 Pi 事件失败: %w", err)
 	}
 	_ = stdin.Close()
-	if err := cmd.Wait(); err != nil {
+	if err := ch.wait(); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, fmt.Errorf("Pi 子进程失败: %w", err)
+		return nil, err
 	}
 	if result == nil {
 		return nil, errors.New("Pi 退出但未返回结果")

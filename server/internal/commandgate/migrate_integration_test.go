@@ -3,6 +3,8 @@
 package commandgate
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"openxdr/server/ent/commandpolicy"
@@ -49,5 +51,27 @@ func TestMigrateAllowToDeny(t *testing.T) {
 	}
 	if n := count(commandpolicy.OriginAi, commandpolicy.ModeDeny); n["legacy"] != 0 {
 		t.Fatalf("清空的名单被补回：%v", n)
+	}
+}
+
+// 仍是旧写法的默认条目换成新写法；管理员改过的和人工条目不动；再跑一次不变
+func TestUpgradeDefaults(t *testing.T) {
+	ctx, db := testdb.New(t)
+	g := db.Group.Create().SetName("g").SaveX(ctx)
+	i := slices.IndexFunc(DefaultAIDeny, func(p string) bool { return strings.HasPrefix(p, cmdPos) })
+	pattern := DefaultAIDeny[i]
+	old := strings.Replace(pattern, cmdPos, legacyCmdPos, 1)
+	db.CommandPolicy.Create().SetGroupID(g.ID).SetOrigin(commandpolicy.OriginAi).SetMode(commandpolicy.ModeDeny).SetPattern(old).SaveX(ctx)
+	db.CommandPolicy.Create().SetGroupID(g.ID).SetOrigin(commandpolicy.OriginAi).SetMode(commandpolicy.ModeDeny).SetPattern(old + "x").SaveX(ctx)
+	for range 2 {
+		if err := UpgradeDefaults(ctx, db); err != nil {
+			t.Fatal(err)
+		}
+		got := db.CommandPolicy.Query().Order(commandpolicy.ByPattern()).Select(commandpolicy.FieldPattern).StringsX(ctx)
+		want := []string{pattern, old + "x"}
+		slices.Sort(want)
+		if !slices.Equal(got, want) {
+			t.Fatalf("升级结果不对：%q", got)
+		}
 	}
 }

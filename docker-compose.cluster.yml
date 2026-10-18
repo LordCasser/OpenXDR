@@ -31,6 +31,10 @@ x-server: &server
     AI_MODEL: ${AI_MODEL:-}
     AI_API_KEY: ${AI_API_KEY:-}
     PI_MODEL: ${PI_MODEL:-}
+    # 配置后 Pi 在独立沙箱主机的隔离容器里运行，见 docs/pi-backend.md#沙箱模式
+    SANDBOX_URL: ${SANDBOX_URL:-}
+    SANDBOX_KEY: ${SANDBOX_KEY:-}
+    SANDBOX_CA_FILE: ${SANDBOX_CA_FILE:-}
     WEBHOOK_URL: ${WEBHOOK_URL:-}
     WEBHOOK_FORMAT: ${WEBHOOK_FORMAT:-generic}
     SYSLOG_ADDR: ""

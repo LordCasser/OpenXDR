@@ -73,6 +73,10 @@ services:
       AI_MODEL: ${AI_MODEL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       PI_MODEL: ${PI_MODEL:-}
+      # 配置后 Pi 在独立沙箱主机的隔离容器里运行，见 docs/pi-backend.md#沙箱模式
+      SANDBOX_URL: ${SANDBOX_URL:-}
+      SANDBOX_KEY: ${SANDBOX_KEY:-}
+      SANDBOX_CA_FILE: ${SANDBOX_CA_FILE:-}
       TASKS_PATH: /tasks
       # Pi query 工具：手工开通的组 UUID → 只读 DSN；openxdr 账号有 CREATEROLE 时自动开通，可留空
       PI_QUERY_DATABASE_URLS: ${PI_QUERY_DATABASE_URLS:-}

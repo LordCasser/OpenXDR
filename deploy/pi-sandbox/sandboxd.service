@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenXDR Pi 沙箱守护进程
+After=docker.service openxdr-sandbox-firewall.service
+Requires=docker.service openxdr-sandbox-firewall.service
+
+[Service]
+EnvironmentFile=/etc/openxdr/sandboxd.env
+ExecStart=/usr/local/bin/sandboxd
+Restart=always
+RestartSec=3
+# 访问 Docker 靠 sandboxd 用户的附加组 docker；不另设 Group=，否则读不到属组 sandboxd 的证书与密钥
+User=sandboxd
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

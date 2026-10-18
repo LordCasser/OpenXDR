@@ -1,14 +1,18 @@
-# Pi 沙箱原型：默认工具（bash/read/write/edit）+ xdr 命令行，容器里没有任何平台密钥。
-# 唯一的平台凭据是运行时注入的会话工具令牌（XDR_TOKEN），只能调用该会话被允许的工具。
+# Pi 沙箱：Pi 默认工具（bash/read/edit/write）+ xdr 命令行 + Skill，由 sandboxd 按会话起停。
+# 容器里没有任何平台凭据：工具请求经 stdin/stdout 交回平台，网络只放行模型端点（宿主防火墙负责）。
 FROM node:24-bookworm-slim
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
- && apt-get update && apt-get install -y --no-install-recommends bash curl jq ca-certificates python3 bsdextrautils \
+ && apt-get update && apt-get install -y --no-install-recommends bash curl jq ca-certificates python3 bsdextrautils procps \
  && rm -rf /var/lib/apt/lists/*
-RUN npm install -g --registry=$NPM_REGISTRY @earendil-works/pi-coding-agent@0.85.1
-RUN useradd -m -u 10010 agent
+WORKDIR /opt/openxdr-sandbox
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --registry=$NPM_REGISTRY
+COPY bridge.mjs ./
+COPY skills/ ./skills/
 COPY xdr /usr/local/bin/xdr
-COPY --chown=agent:agent pi-agent/ /home/agent/.pi/agent/
+RUN useradd -m -u 10010 agent
 USER agent
-WORKDIR /home/agent/work
-ENTRYPOINT ["pi"]
+ENV HOME=/home/agent XDR_SOCKET=/tmp/xdr/xdr.sock XDR_CONTEXT=/tmp/xdr/context.json
+WORKDIR /home/agent
+ENTRYPOINT ["node", "/opt/openxdr-sandbox/bridge.mjs"]

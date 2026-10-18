@@ -76,6 +76,9 @@ func main() {
 		if err := commandgate.MigrateAllowToDeny(ctx, client); err != nil {
 			return err
 		}
+		if err := commandgate.UpgradeDefaults(ctx, client); err != nil {
+			return err
+		}
 		return ingest.EnsureSchema(ctx, db)
 	}); err != nil {
 		slog.Error("集群处理状态初始化失败", "err", err)
@@ -301,8 +304,22 @@ func main() {
 			slog.Error("删除遗留 dry_run 列失败，多半是仍有视图引用 commands.dry_run：手工开通的组视图需按新版 deploy/pi-query/group-views.sql 重建，其他手工视图需去掉该列，然后重启 server；在此之前该列只是不再被读取", "err", err)
 		}
 	}()
+	piRuntime := piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second}
+	// 配了沙箱就让 Pi 在远端隔离容器里用默认工具干活；没配退回本机 runner 与平台自定义工具
+	if url := os.Getenv("SANDBOX_URL"); url != "" {
+		remote, err := piruntime.NewRemote(url, os.Getenv("SANDBOX_KEY"), os.Getenv("SANDBOX_CA_FILE"))
+		if err != nil {
+			slog.Error("沙箱配置无效", "err", err)
+			os.Exit(1)
+		}
+		if strings.HasPrefix(url, "http://") {
+			slog.Warn("平台与沙箱之间为明文，仅适合受信网络调试")
+		}
+		piRuntime.Remote = remote
+		slog.Info("Pi 在沙箱中运行", "url", url)
+	}
 	chat := &agentchat.Service{Base: ctx, Rules: rules, Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second, Notify: webhook.Send},
-		Runtime: piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second},
+		Runtime: piRuntime, Sandboxed: piRuntime.Sandboxed(),
 		APIBase: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"), Model: os.Getenv("PI_MODEL"), Query: queryRoles}
 	go chat.Recover(ctx)
 	// 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
@@ -354,8 +371,6 @@ func main() {
 	mux.Handle("/metrics", telemetry.Handler(registry))
 	// 接入端点免登录：安装脚本与二进制公开，注册靠令牌
 	mux.Handle("/api/enroll/", enrollSvc.Public(dist))
-	// 沙箱原型的工具入口只认会话工具令牌，不走 cookie 会话
-	mux.Handle("/api/sandbox/tool", api.SandboxTool(chat))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := db.PingContext(r.Context()); err != nil || !events.Ready() {

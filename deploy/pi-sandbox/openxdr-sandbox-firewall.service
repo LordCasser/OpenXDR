@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenXDR Pi 沙箱防火墙
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/openxdr/sandbox-firewall.env
+ExecStart=/bin/sh /usr/local/lib/openxdr/firewall.sh
+
+[Install]
+WantedBy=multi-user.target

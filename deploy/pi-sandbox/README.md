@@ -1,19 +1,46 @@
-# Pi 沙箱（原型）
+# Pi 沙箱
 
-让 Pi 用自己的默认工具（bash/read/write/edit）工作，用 Skill 引导，而不是平台自定义的工具 schema。
-沙箱是独立容器，**没有任何平台密钥**；唯一的凭据是运行时注入的会话工具令牌 `XDR_TOKEN`。
+Pi 在一次性容器里用自己的默认工具（bash / read / edit / write）工作，按 `skills/openxdr/SKILL.md` 工作手册行事；
+平台能力只经容器内的 `xdr` 命令行使用。设计与配置见 [Pi 后端 · 沙箱模式](../../docs/pi-backend.md#沙箱模式)。
 
-- `xdr`：沙箱通往平台的唯一出口，调用 `POST /api/sandbox/tool`（令牌鉴权）。能做什么由令牌绑定的会话决定：
-  组、发起人、高风险命令名单与审批、只读查询身份、审计，与会话内的 Pi 完全相同。
-- 令牌：会话发起人调用 `POST /api/agent-sessions/{id}/sandbox-token` 签发，4 小时有效，库里只存哈希；
-  每次调用按发起人当前的组内角色复核，降权即失效。审批在沙箱调用里最多等 2 分钟。
-- `pi-agent/`：模型与思考配置（GLM 思考 high、跨轮保留），以及 `skills/openxdr/SKILL.md` 工作手册。
+- `bridge.mjs`：容器入口，与 `server/pi-runtime/runner.mjs` 说同一套 JSONL 协议，用 Pi SDK 驱动会话。
+- `xdr`：经 unix socket 把调用交给桥，桥发 `tool_request` 回平台；判权、审批、审计都在平台完成。
+  容器里没有任何平台凭据，也不需要访问平台网络。
+- `server/cmd/sandboxd`：沙箱主机上的守护进程，每轮对话起一个容器，平台断开或超时即删除。
+
+## 部署
+
+沙箱主机应是独立的机器（或 VM），只装 Docker 与 sandboxd，不放任何其他服务。
 
 ```bash
-docker build -t openxdr-pi-sandbox:proto deploy/pi-sandbox
-docker run --rm -e HTTP_PROXY= -e HTTPS_PROXY= -e XDR_URL=https://<控制台> -e XDR_TOKEN=<令牌> \
-  openxdr-pi-sandbox:proto -p "巡检本组主机"
+# 1. 镜像与二进制（在构建机上）
+docker build -t openxdr-pi-sandbox:latest deploy/pi-sandbox
+(cd server && CGO_ENABLED=0 go build -o sandboxd ./cmd/sandboxd)
+
+# 2. 沙箱主机：专用网桥，关闭容器互通
+docker network create -o com.docker.network.bridge.name=br-sandbox \
+  -o com.docker.network.bridge.enable_icc=false openxdr-sandbox
+
+# 3. 防火墙：出口只放行模型端点，sandboxd 端口只对 server 节点开放
+install -D -m 0755 firewall.sh /usr/local/lib/openxdr/firewall.sh
+cat > /etc/openxdr/sandbox-firewall.env <<'X'
+MODEL_ENDPOINTS=10.0.0.5:8000
+PLATFORM_NODES=10.0.0.1 10.0.0.2
+X
+install -m 0644 openxdr-sandbox-firewall.service sandboxd.service /etc/systemd/system/
+
+# 4. sandboxd：TLS 证书私钥与密钥只放在本机，sandboxd 用户需能读取
+useradd -r -s /usr/sbin/nologin -G docker sandboxd
+install -m 0755 sandboxd /usr/local/bin/sandboxd
+cat > /etc/openxdr/sandboxd.env <<'X'
+SANDBOXD_KEY=<至少 32 个字符>
+SANDBOXD_TLS_CERT=/etc/openxdr/sandboxd.crt
+SANDBOXD_TLS_KEY=/etc/openxdr/sandboxd.key
+X
+systemctl daemon-reload && systemctl enable --now openxdr-sandbox-firewall sandboxd
 ```
 
-运行容器时要清掉 Docker 注入的代理变量：Node 不认 `NO_PROXY` 里的网段写法，内网模型请求会被送进代理。
-生产化还需要：按会话起停容器、网络只放行平台 API 与模型端点、资源限额、会话记录回写平台。
+server 侧配置 `SANDBOX_URL=https://<沙箱主机>:8090`、`SANDBOX_KEY`、`SANDBOX_CA_FILE`（签发 sandboxd 证书的 CA）。
+
+Docker 会把宿主代理变量注入容器，sandboxd 起容器时已全部清空：Node 不认 `NO_PROXY` 里的网段写法，
+内网模型请求会被送进代理。

@@ -3,6 +3,7 @@ package commandgate
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -13,7 +14,11 @@ import (
 
 // cmdPos 命令位置：开头、shell 分隔符或引号之后，或 sudo/nohup/xargs 等包装之后，允许绝对路径。
 // 只给与只读命令参数撞名的程序用（last reboot、getent passwd 不该挂起），其余用 \b 宽匹配。
-const cmdPos = `(?:^|[;&|(\x60'"\n]|\b(?:sudo|doas|nohup|exec|xargs)\s)\s*(?:-\S+\s+)*(?:[^\s;&|'"]*/)?`
+const cmdPos = `(?:^|[;&|(\x60'"\n]|\b(?:sudo|doas|nohup|exec|xargs)\s)\s*(?:-\S+\s+)*(?:(?:/usr)?(?:/local)?/s?bin/)?`
+
+// legacyCmdPos 旧版命令位置前缀：允许任意路径，`awk ... "$3==0" /etc/passwd` 这种读文件的命令也会被当成在执行 passwd。
+// 只留着给 UpgradeDefaults 认出库里还是旧写法的默认条目
+const legacyCmdPos = `(?:^|[;&|(\x60'"\n]|\b(?:sudo|doas|nohup|exec|xargs)\s)\s*(?:-\S+\s+)*(?:[^\s;&|'"]*/)?`
 
 // DefaultAIDeny 新建组自带的 AI 高风险命令名单：在整条命令里非锚定搜索，任一段命中即挂起等组管理员批准，
 // 其余命令直接执行。只覆盖破坏性、改配置、停服务与读密钥的操作，只读巡检不受影响。
@@ -78,6 +83,26 @@ func SeedDefaults(ctx context.Context, db *ent.Client, groupID uuid.UUID) error 
 			SetMode(commandpolicy.ModeDeny).SetPattern(pattern)
 	}
 	return db.CommandPolicy.CreateBulk(creates...).Exec(ctx)
+}
+
+// UpgradeDefaults 把各组里仍是旧版默认写法的条目换成新版：只动与旧默认逐字相同的行，管理员改过的不碰；再跑一次没有可换的
+func UpgradeDefaults(ctx context.Context, db *ent.Client) error {
+	total := 0
+	for _, pattern := range DefaultAIDeny {
+		old := strings.Replace(pattern, cmdPos, legacyCmdPos, 1)
+		if old == pattern {
+			continue
+		}
+		n, err := db.CommandPolicy.Update().Where(commandpolicy.PatternEQ(old)).SetPattern(pattern).Save(ctx)
+		if err != nil {
+			return err
+		}
+		total += n
+	}
+	if total > 0 {
+		slog.Info("默认高风险名单已升级到新写法", "rows", total)
+	}
+	return nil
 }
 
 // MigrateAllowToDeny 把旧版 AI 免审批名单换成默认高风险名单：删掉全部 ai/allow 行，

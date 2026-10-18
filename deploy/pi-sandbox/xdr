@@ -1,20 +1,19 @@
 #!/bin/bash
-# xdr：沙箱通往 OpenXDR 的唯一出口。凭会话工具令牌调用本会话的工具，
-# 组、身份、高风险命令名单与审批、审计都在平台一侧，这里只做参数整理与输出格式化。
+# xdr：沙箱里操作受管主机与平台数据的唯一方式。经 unix socket 交给沙箱桥，再由平台判权、审批、审计；
+# 沙箱本身不持有平台凭据，也访问不到平台网络。这里只做参数整理与输出格式化。
 set -euo pipefail
-: "${XDR_URL:?未设置 XDR_URL}" "${XDR_TOKEN:?未设置 XDR_TOKEN}"
-CACHE=/tmp/xdr-context.json
+SOCKET=${XDR_SOCKET:-/tmp/xdr/xdr.sock}
+CONTEXT=${XDR_CONTEXT:-/tmp/xdr/context.json}
 
 call() { # 工具名 参数JSON
   local resp
-  resp=$(curl -sS --max-time 900 -H "Authorization: Bearer $XDR_TOKEN" -H 'Content-Type: application/json' \
-    -d "$(jq -cn --arg n "$1" --argjson a "$2" '{name:$n,args:$a}')" "$XDR_URL/api/sandbox/tool") || { echo "调用平台失败" >&2; exit 2; }
-  if ! jq -e . >/dev/null 2>&1 <<<"$resp"; then echo "$resp" >&2; exit 2; fi
+  resp=$(curl -sS --max-time 1800 --unix-socket "$SOCKET" -H 'Content-Type: application/json' \
+    -d "$(jq -cn --arg n "$1" --argjson a "$2" '{name:$n,args:$a}')" http://xdr/tool) || { echo "xdr 通道不可用" >&2; exit 2; }
   if jq -e 'has("error")' >/dev/null <<<"$resp"; then jq -r .error <<<"$resp" >&2; exit 1; fi
   jq -r .output <<<"$resp"
 }
 
-context() { [ -s "$CACHE" ] || call context '{}' > "$CACHE"; cat "$CACHE"; }
+context() { cat "$CONTEXT"; }
 
 host_id() { # 主机名或资产 ID
   if [[ $1 =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then echo "$1"; return; fi

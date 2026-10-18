@@ -16,11 +16,47 @@
 | `PI_APPROVAL_TIMEOUT_SECONDS` | `600` | AI 和人工 exec 审批等待上限 |
 | `PI_QUERY_DATABASE_URLS` | 空 | JSON 对象：组 UUID → 专属只读 DSN；未配置的组不开放 SQL |
 | `RESPONSE_ENABLED` | `false` | 现有响应总开关，exec 同样受其控制 |
+| `SANDBOX_URL` | 空（本机 runner） | 配置后 Pi 改在 sandboxd 的隔离容器里运行，见下文「沙箱模式」 |
+| `SANDBOX_KEY` | 空 | 与 sandboxd 的共享密钥，至少 32 个字符 |
+| `SANDBOX_CA_FILE` | 空 | 校验 sandboxd 证书的 CA；空用系统根证书 |
 
 Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/identify/report，以及已配置组的 query。identify 把对某个监听服务的调查结论写回资产（来源 investigation，不覆盖人工标注），见 [资产图谱与攻击面](asset-map.md#服务说明与调查)。
 没有新增对外工具执行端口，身份、组和来源均由 Go 绑定，模型不能修改；命令一律真执行，没有演练模式。
 每轮上下文包含本组最多 200 台资产的 UUID、主机名和 OS；超出会标注截断。
 每轮最多「组内主机数 × 20 + 遗留待办数 + 32」次模型调用（32–256），预算写进系统提示让模型留出提交报告的余量，每次输出最多 8192 token。exec 送入模型的 stdout/stderr 各最多 16 KiB，截断标记为 `truncated=true`，Command 记录仍保留原始回执。GLM 显式关闭模板 thinking。未实现费用预算或自动历史压缩。
+
+## 沙箱模式
+
+配置 `SANDBOX_URL` 后，Pi 不再在 server 里跑 `runner.mjs`，而是由独立主机上的 `sandboxd`
+为每轮对话起一个一次性容器（`deploy/pi-sandbox`）。容器里 Pi 用自己的默认工具（bash / read / edit / write），
+按 `openxdr` Skill 工作手册行事；平台能力只通过容器内的 `xdr` 命令行使用
+（`xdr exec / sql / track / identify / report / context`）。
+
+- 协议不变：server 与容器之间仍是 runner 的 JSONL，经 sandboxd 一条全双工 HTTP 流转发。
+  `xdr` 经容器内 unix socket 把调用交给桥，桥发 `tool_request` 回平台——组、发起人、
+  高风险命令名单与审批、只读查询身份、审计全部照旧在 server 一侧完成。
+- 容器不持有任何平台凭据，也不需要访问平台网络；模型端点与凭据随每轮请求传入。
+- 容器限制：只读根文件系统、工作目录 tmpfs、去掉全部能力、禁止提权、限内存 / CPU / 进程数，
+  专用网桥。出口只放行模型端点、入口只放行 server 节点由宿主防火墙负责（`deploy/pi-sandbox/firewall.sh`）。
+- 会话历史每轮随请求带入；上下文接近上限时由 Pi 自带压缩处理。GLM 开启模板思考并跨轮保留。
+- 默认工具在沙箱里可以随意读写、写脚本处理数据，这是这条路比平台工具 schema 稳定的原因：
+  对平台的一切影响仍然只能经过 `xdr`。
+
+sandboxd 配置（环境变量）：
+
+| 环境变量 | 默认值 | 用途 |
+|---|---|---|
+| `SANDBOXD_ADDR` | `:8090` | 监听地址 |
+| `SANDBOXD_KEY` | 必填 | 共享密钥，至少 32 个字符 |
+| `SANDBOXD_TLS_CERT` / `SANDBOXD_TLS_KEY` | 空 | 两者同时配置才启用 TLS；生产必须配置 |
+| `SANDBOX_IMAGE` | `openxdr-pi-sandbox:latest` | 沙箱镜像 |
+| `SANDBOX_NETWORK` | `openxdr-sandbox` | 容器所在 Docker 网络 |
+| `SANDBOX_MEMORY` / `SANDBOX_CPUS` / `SANDBOX_PIDS` | `1g` / `1.5` / `256` | 单个容器的资源上限 |
+| `SANDBOX_WORK_SIZE` | `512m` | 工作目录 tmpfs 大小 |
+| `SANDBOX_MAX_RUNS` | `4` | 同时运行的容器数，满了返回 503 |
+| `SANDBOX_MAX_MINUTES` | `60` | 单个容器最长存活时间 |
+
+部署步骤见 [`deploy/pi-sandbox/README.md`](../deploy/pi-sandbox/README.md)。
 
 ## 前端接口
 

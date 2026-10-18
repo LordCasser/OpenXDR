@@ -230,3 +230,9 @@ func TestEnqueueDuringReconnect(t *testing.T) {
 		t.Fatal("旧 Router 回调应被拒绝")
 	}
 }
+
+func TestStorable(t *testing.T) {
+	if got := storable("bash\x00-c\x00ls\xff"); got != "bash␀-c␀ls�" {
+		t.Fatalf("%q", got)
+	}
+}

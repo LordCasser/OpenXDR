@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -281,9 +282,9 @@ func (h *Hub) Complete(ctx context.Context, agentID uuid.UUID, res *pb.CommandRe
 		return
 	}
 	status := resultStatus(res.Status)
-	upd := h.finishUpdate(id, status, res.Detail).Where(scope, entcommand.StatusIn("pending", "sent", "unknown"))
+	upd := h.finishUpdate(id, status, storable(res.Detail)).Where(scope, entcommand.StatusIn("pending", "sent", "unknown"))
 	if cmd.Kind == "exec" {
-		upd.SetExitCode(res.ExitCode).SetStdout(res.Stdout).SetStderr(res.Stderr).SetTruncated(res.Truncated)
+		upd.SetExitCode(res.ExitCode).SetStdout(storable(res.Stdout)).SetStderr(storable(res.Stderr)).SetTruncated(res.Truncated)
 	}
 	if _, err := upd.Save(ctx); err != nil {
 		slog.Warn("回写指令结果失败", "command", id, "err", err)
@@ -306,4 +307,10 @@ func (h *Hub) PendingFor(ctx context.Context, agentID uuid.UUID) []*ent.Command 
 		return nil
 	}
 	return cmds
+}
+
+// storable 命令输出入库前的整理：Postgres 文本列不收 NUL 字节和非法 UTF-8，读 /proc/*/cmdline 之类的输出常带这些，
+// 原样写会整条回执失败、命令一直卡在已下发。NUL 换成可见的 ␀，非法字节换成替换字符，内容仍可读、不丢
+func storable(s string) string {
+	return strings.ReplaceAll(strings.ToValidUTF8(s, "\uFFFD"), "\x00", "␀")
 }

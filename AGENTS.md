@@ -104,7 +104,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `correlate`：按实体把告警关联成 incident 事件图
 - `ueba`：首次出现检测（先学习后告警）
 - `triage`：旧 AI 研判引擎（带只读调查工具逐个研判 incident）
-- `piruntime` / `agentchat`：Pi 子进程、会话消息、exec/query/report 与后台运行、停止
+- `piruntime` / `agentchat`：Pi 子进程（配置 `SANDBOX_URL` 时经 `cmd/sandboxd` 的隔离容器）、会话消息、exec/query/report 与后台运行、停止
 - `commandgate`：人工与 AI exec 的组权限、命令名单、阻塞审批与审计
 - `schedule` / `report`：`tasks/*.yml` 预设任务按组定时拉起 Pi 会话（系统身份），报告 HTML/PDF 渲染
 - `response`：响应处置（结束进程 / 主机隔离），含自动响应钩子
@@ -115,7 +115,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `assetmap`：资产图谱与攻击面——设备清单物化、依赖边聚合、区域与暴露判定、AI 标注（单活增量扫描事件）
 - `review`：需人工复核的统一口径（通知、总览计数、列表筛选与自动结案共用）
 - `testdb`：集成测试共享的 Postgres 连接与清表（仅 `integration` tag 编译）
-- `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`gencerts`（证书工具）
+- `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`gencerts`（证书工具）、`sandboxd`（Pi 沙箱守护进程，见 `deploy/pi-sandbox`）
 
 数据库实体定义在 `server/ent/schema/`（ent 代码生成，生成物已提交在 `server/ent/` 下）。
 
