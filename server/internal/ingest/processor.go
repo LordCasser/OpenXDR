@@ -86,6 +86,7 @@ ON CONFLICT (id) DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 	if json.Unmarshal(e.Raw, &raw) != nil {
 		raw = map[string]any{}
 	}
+	sigma.WithActor(raw, e.Username)
 	hits := intel.Detections(p.Rules.Evaluate(e.ClassUID, e.AssetOS, raw), p.Intel.Match(raw, e.Timestamp))
 	if e.ClassUID == 3002 && authStatus(raw) == 1 && e.AssetID != nil && e.Username != "" {
 		var failures int

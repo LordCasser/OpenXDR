@@ -1,0 +1,28 @@
+title: Proxmox Guest Hookscript or QEMU Args Set
+id: e188d6b9-44d7-4236-9c22-31fceb20ace9
+status: experimental
+description: |
+  检测给虚拟机或容器设置 hookscript（每次启停都会在宿主机上执行的脚本）或 QEMU 原始参数（--args，
+  可挂宿主机文件、开调试口）——两者都能借虚拟机配置在宿主机上持久执行。
+author: OpenXDR
+tags:
+  - attack.persistence
+  - attack.t1546
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  tool:
+    Image|endswith:
+      - '/qm'
+      - '/pct'
+  set:
+    CommandLine|contains: ' set '
+  risky:
+    CommandLine|contains:
+      - '--args'
+      - '-args '
+      - '--hookscript'
+      - '-hookscript'
+  condition: tool and set and risky
+level: high

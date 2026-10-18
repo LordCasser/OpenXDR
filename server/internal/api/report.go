@@ -283,6 +283,9 @@ func collectReport(r *http.Request, db *ent.Client, rules *sigma.Engine, id uuid
 		if title := rules.TitleOf(a.RuleID); title != "" {
 			rule = title
 		}
+		if author := rules.AuthorOf(a.RuleID); author != "" {
+			rule += "（作者 " + author + "）"
+		}
 		evidence := ""
 		if a.Edges.Event != nil {
 			evidence = string(a.Edges.Event.Raw)

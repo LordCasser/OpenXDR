@@ -49,14 +49,19 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 
 | 维度 | 支持 | 不支持（拒绝加载） |
 |---|---|---|
-| 修饰符 | `contains / startswith / endswith / re / all`（`engine.go:702-704`） | `cidr`、`base64` 等其余一切（`engine.go:668-671`） |
+| 修饰符 | `contains / startswith / endswith / re / all / cidr / windash`，正则标志 `i / m / s` | `base64`、`base64offset`、`fieldref` 等其余一切 |
 | 条件 | `not/and/or`、括号、优先级 not>and>or；`1/all/any of them/pattern*`（`condition.go:9,176-217`） | 统计型条件 `count/min/max/avg/sum/near`（`engine.go:537-539`） |
 | product | `windows / linux / macos`（`engine.go:153-155`） | 其余 product；既无 category 又无 product 的规则（`engine.go:595-606`） |
 | category | 见下方映射表 | 未知 category（报"数据源未覆盖"，`engine.go:588-592`） |
 
-修饰符语义：`re` 强制 `(?i)`；无通配符走 strings 精确/包含/前后缀（小写
+修饰符语义：`re` 强制 `(?i)`（`m`、`s` 标志照常生效）；无通配符走 strings 精确/包含/前后缀（小写
 比较）；有 `*?` 通配符 QuoteMeta 后转正则；值列表默认 OR，`|all` 转 AND；
-值为 `null` 表示字段必须缺失（`engine.go:681-741`）。
+值为 `null` 表示字段必须缺失；`cidr` 按网段匹配地址（含 v4 映射的 v6）；`windash` 把参数前缀的 `-`
+展开成 `-`、`/` 与几种长破折号写法。
+
+字段对齐：除了字段名映射（`fieldMap`），取值约定也要对上——`Initiated: true/false` 翻译成事件里的
+`outbound/inbound`；`User` 取 `actor.user.name`，求值前由信封上的用户名补进去（入库的原始事件不改）；
+父进程字段（`ParentImage`、`ParentCommandLine`）由 agent 在进程启动事件里直接带上。
 
 ### category → class_uid 映射（`engine.go:78-111`）
 
@@ -94,8 +99,14 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 - `go run ./cmd/sigmacheck --strict ../rules`：自带规则必须全部可加载
 - `go run ./cmd/detectcheck --strict`：`validation/` 语料回放过引擎，
   命中规则的 ATT&CK 标注必须与技术一致（检测能力回归的核心防线）
-- 对 SigmaHQ 3141 条规则实测：加载 2149 条（68.4%），其中 1393 条有现成
-  数据源可命中
+- `DATABASE_URL=<只读副本> go run ./cmd/backtest -days 3 <规则目录>`：用近 N 天的真实事件回放规则，
+  按规则报告每天命中次数、涉及主机与样本。新规则上线前必须回测：一天响几百次的不是检测能力，是噪音。
+  按小时分段读取（只读副本上的长查询会和 WAL 回放冲突被取消），平台指令拉起的事件不计
+- SigmaHQ 社区规则：`rules/sigmahq/` 收录 Linux 进程 / 文件 / 网络与 DNS 规则（131 条，DRL 1.1），
+  引入前在生产数据上回测，低价值高频与误报的列在 `excluded.txt` 不引入；同步方式见该目录 README。
+  社区规则的许可要求基于命中的消息保留作者：告警、事件、报告、通知、规则页都带规则作者
+- 对 SigmaHQ 全库实测（2026-10）：Linux 211 条可加载 211 条；Windows 2420 条可加载 2180 条，
+  其余是 PowerShell 脚本 / 模块、命名管道等未接的数据源
 
 ## 威胁情报（`server/internal/intel`）
 

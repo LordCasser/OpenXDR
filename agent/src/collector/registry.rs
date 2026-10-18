@@ -27,6 +27,9 @@ impl Container {
     }
 }
 
+/// 注册表里保留的命令行长度上限：够规则判断父进程，又不让几千个存活进程占太多内存
+const CMD_LINE_MAX: usize = 1024;
+
 /// 安全上限：条目随进程退出删除，正常只有存活进程；漏掉退出事件的条目超限时清掉最早的一半
 const MAX_ENTRIES: usize = 1 << 16;
 
@@ -42,6 +45,7 @@ struct Entry {
     // 启动时记下名字与路径：退出探针触发时进程已在退出途中，只剩 pid 可查
     name: String,
     exe: Option<String>,
+    cmd_line: Option<String>,
     started: Option<SystemTime>,
     container: Option<Arc<Container>>,
     command: Option<Arc<str>>,
@@ -52,6 +56,8 @@ pub struct Known {
     pub guid: Uuid,
     pub name: String,
     pub exe: Option<String>,
+    /// 命令行（截到 CMD_LINE_MAX）：子进程事件带上父进程的命令行，规则才能按父进程判断
+    pub cmd_line: Option<String>,
     pub started: Option<SystemTime>,
     pub container: Option<Arc<Container>>,
     /// 拉起它的平台指令 ID（指令进程及其后代）
@@ -75,6 +81,7 @@ impl ProcessRegistry {
                 seq,
                 name: String::new(),
                 exe: None,
+                cmd_line: None,
                 started: None,
                 container: None,
                 command: None,
@@ -100,6 +107,19 @@ impl ProcessRegistry {
         if let Some(e) = self.guids.get_mut(&pid) {
             e.name = name.to_string();
             e.exe = exe.map(str::to_string);
+        }
+    }
+
+    /// 记下命令行，过长的截断（按字符边界）
+    pub fn set_cmd_line(&mut self, pid: u32, cmd_line: Option<&str>) {
+        if let Some(e) = self.guids.get_mut(&pid) {
+            e.cmd_line = cmd_line.map(|c| {
+                let mut end = c.len().min(CMD_LINE_MAX);
+                while !c.is_char_boundary(end) {
+                    end -= 1;
+                }
+                c[..end].to_string()
+            });
         }
     }
 
@@ -135,6 +155,7 @@ impl ProcessRegistry {
             guid: e.guid,
             name: e.name.clone(),
             exe: e.exe.clone(),
+            cmd_line: e.cmd_line.clone(),
             started: e.started,
             container: e.container.clone(),
             command: e.command.clone(),

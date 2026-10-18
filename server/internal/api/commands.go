@@ -40,6 +40,7 @@ type commandRow struct {
 type commandDetection struct {
 	RuleID string `json:"ruleId"`
 	Title  string `json:"title,omitempty"`
+	Author string `json:"author,omitempty"`
 	Count  int    `json:"count"`
 }
 
@@ -63,7 +64,7 @@ func withDetections(ctx context.Context, db *ent.Client, rules *sigma.Engine, ro
 	for _, h := range hits {
 		d := commandDetection{RuleID: h.RuleID, Count: h.Sum}
 		if rules != nil {
-			d.Title = rules.TitleOf(h.RuleID)
+			d.Title, d.Author = rules.TitleOf(h.RuleID), rules.AuthorOf(h.RuleID)
 		}
 		by[h.CommandID] = append(by[h.CommandID], d)
 	}

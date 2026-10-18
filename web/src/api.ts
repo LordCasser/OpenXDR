@@ -50,6 +50,8 @@ export interface AlertRow {
   severity: number
   ruleId: string
   ruleTitle: string | null
+  // 规则作者：社区规则（DRL 1.1）要求命中展示时保留
+  ruleAuthor?: string
   event: unknown
 }
 
@@ -199,7 +201,7 @@ export interface CommandRow {
   detail: string | null
   completedAt: string | null
   // 这条指令拉起的进程触发的检测（来源已知，不进事件）
-  detections?: { ruleId: string; title?: string; count: number }[]
+  detections?: { ruleId: string; title?: string; author?: string; count: number }[]
 }
 
 export const fetchCommands = (filter: { incidentId?: string; assetId?: string }) =>
@@ -272,7 +274,7 @@ export interface Stats {
   reviewIncidents: number
   incidentsByStatus: Record<string, number>
   alertTrend: { hour: string; count: number }[]
-  topRules: { ruleId: string; ruleTitle: string | null; count: number }[]
+  topRules: { ruleId: string; ruleTitle: string | null; ruleAuthor?: string; count: number }[]
   alertsBySeverity: Record<string, number>
   assetsTotal: number
   assetsOnline: number
@@ -343,6 +345,7 @@ export const fetchAttack = () => get<AttackCoverage>('/api/attack')
 export interface RuleRow {
   id: string
   title: string
+  author?: string
   severity: number
   classUid: number
   product: string

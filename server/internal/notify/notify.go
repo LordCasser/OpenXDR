@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"openxdr/server/ent"
@@ -31,6 +33,8 @@ type Notifier struct {
 	// AI 研判启用时返回 true：等 verdict 出来再推。模型可在控制台随时改，每次判断时取
 	WaitTriage func() bool
 	Client     *http.Client
+	// Rules 查规则作者：社区规则（DRL 1.1）要求基于命中的消息保留作者
+	Rules interface{ AuthorOf(id string) string }
 
 	// 推送目标启用的时刻；未配置目标时为零值
 	start time.Time
@@ -144,6 +148,8 @@ type Message struct {
 	AlertCount int       `json:"alertCount"`
 	Severity   int16     `json:"maxSeverity"`
 	Link       string    `json:"link,omitempty"`
+	// RuleAuthors 命中规则的作者（去重）
+	RuleAuthors []string `json:"ruleAuthors,omitempty"`
 }
 
 func (n *Notifier) message(ctx context.Context, inc *ent.Incident, linkBase string) (Message, error) {
@@ -157,6 +163,11 @@ func (n *Notifier) message(ctx context.Context, inc *ent.Incident, linkBase stri
 	for _, a := range alerts {
 		if a.Severity > m.Severity {
 			m.Severity = a.Severity
+		}
+		if n.Rules != nil {
+			if author := n.Rules.AuthorOf(a.RuleID); author != "" && !slices.Contains(m.RuleAuthors, author) {
+				m.RuleAuthors = append(m.RuleAuthors, author)
+			}
 		}
 	}
 	if inc.Title != nil {
@@ -195,6 +206,9 @@ func text(m Message) string {
 	fmt.Fprintf(&b, "告警 %d 条，最高级别: %s\n", m.AlertCount, sev)
 	if m.Summary != "" {
 		fmt.Fprintf(&b, "%s\n", m.Summary)
+	}
+	if len(m.RuleAuthors) > 0 {
+		fmt.Fprintf(&b, "规则作者: %s\n", strings.Join(m.RuleAuthors, "; "))
 	}
 	if m.Link != "" {
 		fmt.Fprintf(&b, "%s\n", m.Link)

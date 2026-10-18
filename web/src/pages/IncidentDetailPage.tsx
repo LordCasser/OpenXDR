@@ -29,6 +29,7 @@ function evidence(raw: unknown): string {
 
 // 告警按时间排开：每条带级别、规则与关键证据，读起来就是一条攻击经过
 function AlertTimeline({ alerts }: { alerts: AlertRow[] }) {
+  const { t } = useI18n()
   const sevColor = ['', 'gray', 'blue', 'gold', 'orange', 'red']
   return (
     <Timeline
@@ -42,6 +43,7 @@ function AlertTimeline({ alerts }: { alerts: AlertRow[] }) {
               <SeverityTag value={a.severity} />
               <Link to={`/rules?q=${encodeURIComponent(a.ruleId)}`}><Typography.Text strong>{a.ruleTitle ?? a.ruleId}</Typography.Text></Link>
               {a.count > 1 && <Typography.Text type="secondary">×{a.count}</Typography.Text>}
+              {a.ruleAuthor && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('ruleBy', { author: a.ruleAuthor })}</Typography.Text>}
             </Space>
             {evidence(a.event) && <div className="mono timeline-evidence">{evidence(a.event)}</div>}
           </div>
@@ -190,7 +192,7 @@ export function IncidentDetailPage() {
                 columns={[
                   { title: t('thFirst'), dataIndex: 'ts', render: fmtTime, width: 170 },
                   { title: t('thLast'), dataIndex: 'lastTs', render: fmtTime, width: 170 },
-                  { title: t('thRule'), dataIndex: 'ruleTitle', render: (v, a) => <Link to={`/rules?q=${encodeURIComponent(a.ruleId)}`}>{v ?? a.ruleId}</Link>, ellipsis: true },
+                  { title: t('thRule'), dataIndex: 'ruleTitle', render: (v, a) => <Tooltip title={a.ruleAuthor && t('ruleBy', { author: a.ruleAuthor })}><Link to={`/rules?q=${encodeURIComponent(a.ruleId)}`}>{v ?? a.ruleId}</Link></Tooltip>, ellipsis: true },
                   { title: t('thSeverity'), dataIndex: 'severity', render: v => <SeverityTag value={v} />, width: 90 },
                   { title: t('thCount'), dataIndex: 'count', align: 'right', width: 70 },
                   {

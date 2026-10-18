@@ -240,7 +240,7 @@ export function AssetDetailPage() {
                         {
                           title: t('thDetections'), dataIndex: 'detections', width: 220,
                           render: (v: CommandRow['detections']) => v?.length
-                            ? <Tooltip title={t('commandDetectionsHint')}>{v.map(d => <Tag key={d.ruleId} color="orange" variant="filled">{d.title || d.ruleId} ×{d.count}</Tag>)}</Tooltip>
+                            ? <Tooltip title={t('commandDetectionsHint')}>{v.map(d => <Tag key={d.ruleId} color="orange" variant="filled" title={d.author && t('ruleBy', { author: d.author })}>{d.title || d.ruleId} ×{d.count}</Tag>)}</Tooltip>
                             : null,
                         },
                       ]} />

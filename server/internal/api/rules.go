@@ -10,6 +10,7 @@ import (
 type ruleRow struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
+	Author   string `json:"author,omitempty"`
 	Severity int16  `json:"severity"`
 	ClassUID int    `json:"classUid"`
 	Product  string `json:"product"`
@@ -32,7 +33,7 @@ func mapRules(api *http.ServeMux, rules *sigma.Engine) {
 				ingested, source = true, "全部类别"
 			}
 			out[i] = ruleRow{
-				ID: rule.ID, Title: rule.Title, Severity: rule.Severity,
+				ID: rule.ID, Title: rule.Title, Author: rule.Author, Severity: rule.Severity,
 				ClassUID: rule.ClassUID, Product: rule.Product,
 				Ingested: ingested, Source: source,
 				Tactics: rule.Tactics, Techniques: rule.Techniques,

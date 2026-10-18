@@ -250,6 +250,7 @@ fn seeded_registry() -> ProcessRegistry {
                 full_name(name.trim_end(), exe.as_deref()),
                 exe.as_deref(),
             );
+            registry.set_cmd_line(pid, container::cmd_line(pid).as_deref());
             // 早于 agent 启动的进程不可能是本次运行下发的指令
             registry.annotate(pid, container::started(pid), container::of(pid), None);
         }
@@ -282,7 +283,16 @@ fn command_of(registry: &ProcessRegistry, pid: u32, ppid: Option<u32>) -> Option
 
 #[cfg(target_os = "linux")]
 fn command_env(pid: u32) -> Option<Arc<str>> {
-    let environ = std::fs::read(format!("/proc/{pid}/environ")).ok()?;
+    // 刚 exec 完的进程，环境区要过零点几毫秒才读得到（实测最长约 0.4ms）：读到空就稍等再读，最多 5ms。
+    // 只有 agent 自己的直接子进程走到这里，次数很少，不拖累采集
+    let mut environ = Vec::new();
+    for _ in 0..50 {
+        environ = std::fs::read(format!("/proc/{pid}/environ")).ok()?;
+        if !environ.is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_micros(100));
+    }
     let prefix = format!("{COMMAND_ENV}=");
     environ
         .split(|b| *b == 0)
@@ -382,6 +392,8 @@ fn process_event(
     // 退出事件只认见过的进程，名字与路径从启动时的登记补上；没见过的退出
     // 配不上启动事件、也说不出是谁，只是噪声
     let known;
+    // 父进程的名字、路径与命令行（启动事件才有）：规则按父进程判断（ParentImage / ParentCommandLine）不用再回查
+    let mut parent = None;
     let now = SystemTime::now();
     let (guid, parent_guid, name, exe, started, container, command) =
         if activity == ACTIVITY_TERMINATE {
@@ -403,11 +415,13 @@ fn process_event(
         } else {
             let name = full_name(name, exe);
             let command = command_of(registry, pid, ppid);
-            let (guid, parent) = registry.register(pid, ppid);
+            parent = ppid.and_then(|p| registry.known(p));
+            let (guid, parent_guid) = registry.register(pid, ppid);
             let container = container_of(pid);
             registry.describe(pid, name, exe);
+            registry.set_cmd_line(pid, cmd_line);
             registry.annotate(pid, Some(now), container.clone(), command.clone());
-            (guid, parent, name, exe, None, container, command)
+            (guid, parent_guid, name, exe, None, container, command)
         };
     let mut raw = serde_json::json!({
         "activity_id": activity,
@@ -424,6 +438,18 @@ fn process_event(
             },
         },
     });
+    if let Some(p) = parent {
+        let pp = &mut raw["process"]["parent_process"];
+        if !p.name.is_empty() {
+            pp["name"] = p.name.into();
+        }
+        if let Some(exe) = p.exe {
+            pp["file"] = serde_json::json!({ "path": exe });
+        }
+        if let Some(cmd) = p.cmd_line {
+            pp["cmd_line"] = cmd.into();
+        }
+    }
     if let Some(c) = &container {
         raw["container"] = c.to_json();
     }
@@ -497,6 +523,11 @@ mod tests {
             parent.process_guid, child.parent_process_guid,
             "子进程应连到父进程 GUID"
         );
+        let v: Value = serde_json::from_str(&child.raw_json).unwrap();
+        let pp = &v["process"]["parent_process"];
+        assert_eq!(pp["name"], "parent.exe");
+        assert_eq!(pp["file"]["path"], "/x/parent.exe");
+        assert_eq!(pp["cmd_line"], "parent cmd", "规则按父进程命令行判断");
         assert_eq!(child.class_uid, 1007);
         assert!(!parent.process_guid.is_empty());
         assert!(!child.process_guid.is_empty());

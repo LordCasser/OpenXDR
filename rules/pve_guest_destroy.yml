@@ -1,0 +1,20 @@
+title: Proxmox Guest Destroyed
+id: 75885254-afb4-4830-801e-41a6d6a89556
+status: experimental
+description: 检测用 qm / pct 销毁虚拟机或容器（连同磁盘一起删除），破坏性操作。
+author: OpenXDR
+tags:
+  - attack.impact
+  - attack.t1485
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  tool:
+    Image|endswith:
+      - '/qm'
+      - '/pct'
+  destroy:
+    CommandLine|contains: ' destroy '
+  condition: tool and destroy
+level: high

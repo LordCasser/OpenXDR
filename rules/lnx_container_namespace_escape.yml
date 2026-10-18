@@ -1,0 +1,34 @@
+title: Container Namespace Escape Attempt
+id: f14885ca-a2d8-4fca-987f-03d994d85d1a
+status: experimental
+description: |
+  检测容器里的进程用 nsenter / unshare / chroot 或经 /proc/1/root 跳进宿主机命名空间——容器逃逸的常见手法。
+  依赖 agent 在宿主机上按 cgroup 认出的容器归属（container 字段）；QEMU 虚拟机进程在宿主机上，不算容器。
+author: OpenXDR
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  in_container:
+    container.runtime:
+      - docker
+      - podman
+      - containerd
+      - cri-o
+      - lxc
+      - nspawn
+  tool:
+    Image|endswith:
+      - '/nsenter'
+      - '/unshare'
+  host_root:
+    CommandLine|contains:
+      - '/proc/1/root'
+      - 'nsenter -t 1 '
+      - 'nsenter --target 1 '
+      - 'chroot /host'
+  condition: in_container and (tool or host_root)
+level: high

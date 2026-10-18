@@ -1,0 +1,31 @@
+title: Proxmox User, Token or ACL Change
+id: 61f1ff80-ec87-4941-835a-0aa7ed9f82d4
+status: experimental
+description: |
+  检测用 pveum 新建用户 / API 令牌、改密码、改权限——留 PVE 后门账户与提权的命令行方式。
+  正常管理多在 Web 界面里做，命令行改动值得复核。
+author: OpenXDR
+tags:
+  - attack.persistence
+  - attack.t1098
+  - attack.t1136
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  tool:
+    Image|endswith: '/pveum'
+  change:
+    CommandLine|contains:
+      - ' user add'
+      - ' useradd'
+      - ' user token add'
+      - ' user modify'
+      - ' usermod'
+      - ' passwd'
+      - ' acl modify'
+      - ' aclmod'
+      - ' role add'
+      - ' roleadd'
+  condition: tool and change
+level: medium

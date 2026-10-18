@@ -210,6 +210,7 @@ func main() {
 		Settings:   notifySettings,
 		Interval:   time.Duration(getenvInt("WEBHOOK_INTERVAL_SECONDS", 30)) * time.Second,
 		WaitTriage: triageEngine.LLM.Enabled,
+		Rules:      rules,
 	}
 	go cluster.RunLeader(ctx, db, "notify", notifier.Run)
 	silentAfter := time.Duration(getenvInt("AGENT_SILENT_MINUTES", 10)) * time.Minute

@@ -1,0 +1,38 @@
+title: Privileged or Host-Mounted Container Launch
+id: b03fc985-9d70-4dd1-a4a1-0bcaf4019a74
+status: experimental
+description: |
+  检测启动特权容器、共享宿主机 PID 命名空间、把宿主机根目录或 docker.sock 挂进容器、加 SYS_ADMIN 能力——
+  这些容器能直接控制宿主机。运维偶尔会用，但应当有据可查。
+author: OpenXDR
+tags:
+  - attack.execution
+  - attack.t1610
+  - attack.privilege_escalation
+  - attack.t1611
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  runtime:
+    Image|endswith:
+      - '/docker'
+      - '/podman'
+      - '/nerdctl'
+  launch:
+    CommandLine|contains:
+      - ' run '
+      - ' create '
+  dangerous:
+    CommandLine|contains:
+      - '--privileged'
+      - '--pid=host'
+      - '--pid host'
+      - ' -v /:/'
+      - '--volume /:/'
+      - '--volume=/:/'
+      - 'cap-add=SYS_ADMIN'
+      - 'cap-add SYS_ADMIN'
+      - 'docker.sock:/var/run/docker.sock'
+  condition: runtime and launch and dangerous
+level: medium

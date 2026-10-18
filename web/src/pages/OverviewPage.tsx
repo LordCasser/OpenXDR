@@ -230,7 +230,7 @@ export function OverviewPage() {
         <Col xs={24} xl={16}>
           <Card title={t('topRules')} style={{ height: '100%' }}>
             {s?.topRules.length ? (
-              <BarList items={s.topRules.map(r => ({ key: r.ruleId, label: <Typography.Text ellipsis title={r.ruleId}>{r.ruleTitle ?? r.ruleId}</Typography.Text>, value: r.count, color: series, to: `/rules?q=${encodeURIComponent(r.ruleId)}` }))} />
+              <BarList items={s.topRules.map(r => ({ key: r.ruleId, label: <Typography.Text ellipsis title={r.ruleAuthor ? `${r.ruleId} · ${t('ruleBy', { author: r.ruleAuthor })}` : r.ruleId}>{r.ruleTitle ?? r.ruleId}</Typography.Text>, value: r.count, color: series, to: `/rules?q=${encodeURIComponent(r.ruleId)}` }))} />
             ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noAlerts24h')} />}
           </Card>
         </Col>

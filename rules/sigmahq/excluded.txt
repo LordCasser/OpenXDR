@@ -1,0 +1,26 @@
+# 不引入的 SigmaHQ 规则：生产回测（2026-10-18，pve1/pve2 近 3 天 907 万条事件）里每天几十到几万次命中，
+# 全是宿主机自身的正常活动，或与自研规则重复且更不准。sync.sh 同步上游时按此清单剔除。
+# 每天约 3.2 万次：PVE 自身反复执行 ip link show
+linux/process_creation/proc_creation_lnx_system_network_discovery.yml
+# 每天约 3.2 万次：uname
+linux/process_creation/proc_creation_lnx_system_info_discovery.yml
+# 每天约 2 万次：监控脚本 ping 内网主机
+linux/process_creation/proc_creation_lnx_remote_system_discovery.yml
+# 每天约 1 万次：last / who
+linux/process_creation/proc_creation_lnx_system_network_connections_discovery.yml
+# 每天约 170 次：id
+linux/process_creation/proc_creation_lnx_local_account.yml
+# 每天约 150 次：所有 curl 调用
+linux/process_creation/proc_creation_lnx_curl_usage.yml
+# 每天约 50 次：find
+linux/process_creation/proc_creation_lnx_file_and_directory_discovery.yml
+# 每天约 25 次：crontab -l
+linux/process_creation/proc_creation_lnx_crontab_enumeration.yml
+# 误报：把 flock -w 3600 3 当成 pnscan
+linux/process_creation/proc_creation_lnx_pnscan_binary_cli_pattern.yml
+# 所有 rm -f
+linux/process_creation/proc_creation_lnx_file_deletion.yml
+# bash -lc 之类的普通调用
+linux/process_creation/proc_creation_lnx_bash_interactive_shell.yml
+# bash 发起任何连接即判严重：bash /dev/tcp 端口探测都会命中；反弹 shell 由自研 lnx_reverse_shell 按命令行判断
+linux/network_connection/net_connection_lnx_back_connect_shell_dev.yml

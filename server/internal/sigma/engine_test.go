@@ -540,3 +540,55 @@ detection:
 		t.Errorf("未知 ID 的 TitleOf 应为空，得到 %q", got)
 	}
 }
+
+// Sigma 的 Initiated true/false 对上事件的 outbound/inbound；User 由信封上的用户名补到 actor.user.name
+func TestValueMapAndActor(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"net.yml":  "title: t\nid: v-net\nlogsource:\n  category: network_connection\n  product: linux\ndetection:\n  selection:\n    Initiated: 'true'\n    DestinationPort: 4444\n  condition: selection\nlevel: high\n",
+		"user.yml": "title: t\nid: v-user\nlogsource:\n  category: process_creation\n  product: linux\ndetection:\n  selection:\n    User: root\n    CommandLine|contains: whoami\n  condition: selection\nlevel: high\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := LoadDir(dir)
+	hit := func(class int, raw map[string]any) bool { return len(e.Evaluate(class, "linux", raw)) > 0 }
+	conn := func(dir string) map[string]any {
+		return map[string]any{"connection_info": map[string]any{"direction": dir}, "dst_endpoint": map[string]any{"port": 4444.0}}
+	}
+	if !hit(4001, conn("outbound")) || hit(4001, conn("inbound")) {
+		t.Error("Initiated: 'true' 应只命中出站")
+	}
+	proc := map[string]any{"process": map[string]any{"cmd_line": "whoami"}}
+	if hit(1007, proc) {
+		t.Error("没有用户名时 User 条件不应满足")
+	}
+	WithActor(proc, "root")
+	if !hit(1007, proc) {
+		t.Error("补上用户名后 User 条件应满足")
+	}
+}
+
+// cidr 按网段匹配地址；windash 让 - 与 / 及各种长破折号写法的参数都能匹配；正则标志 m / s 生效
+func TestCIDRWindashRegexFlags(t *testing.T) {
+	cidr := selectionFrom(`{"destinationip|cidr": ["10.0.0.0/8", "fd00::/8"]}`)
+	for ip, want := range map[string]bool{"10.1.2.3": true, "::ffff:10.1.2.3": true, "fd00::5": true, "11.0.0.1": false, "not-ip": false} {
+		if got := cidr.branches[0][0].matches(map[string]any{"dst_endpoint": map[string]any{"ip": ip}}); got != want {
+			t.Errorf("cidr %s: got %v", ip, got)
+		}
+	}
+	dash := selectionFrom(`{"commandline|windash|contains": " -enc "}`)
+	for _, cmd := range []string{"powershell -enc AAA", "powershell /enc AAA", "powershell –enc AAA"} {
+		if !dash.branches[0][0].matches(map[string]any{"process": map[string]any{"cmd_line": cmd + " "}}) {
+			t.Errorf("windash 应匹配 %q", cmd)
+		}
+	}
+	multi := selectionFrom(`{"commandline|re|m": "^second$"}`)
+	if !multi.branches[0][0].matches(map[string]any{"process": map[string]any{"cmd_line": "first\nsecond"}}) {
+		t.Error("re|m 应按行匹配")
+	}
+	if _, err := compileFieldTest("destinationip|cidr", "10.0.0.0/33"); err == nil {
+		t.Error("非法网段应拒绝加载")
+	}
+}

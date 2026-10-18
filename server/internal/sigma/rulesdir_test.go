@@ -1,6 +1,10 @@
 package sigma
 
-import "testing"
+import (
+	"io/fs"
+	"path/filepath"
+	"testing"
+)
 
 // 仓库自带的规则必须全部可加载——规则改坏了要在测试里炸，而不是上线后静默跳过。
 func TestRepoRulesAllLoad(t *testing.T) {
@@ -55,10 +59,25 @@ func TestRepoRulesAllLoad(t *testing.T) {
 }
 
 // 自带规则必须全部打了 ATT&CK 标签——矩阵里的空白应当反映真实缺口，
-// 而不是有人忘了写 tags。
+// 而不是有人忘了写 tags。引入的社区规则（rules/sigmahq）原样保留，不在此列
 func TestRepoRulesAllTagged(t *testing.T) {
-	engine, _ := LoadDirReport("../../../rules")
-	for _, r := range engine.Rules() {
+	var own []*Rule
+	_ = filepath.WalkDir("../../../rules", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() && d.Name() == "sigmahq" {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || filepath.Ext(path) != ".yml" {
+			return nil
+		}
+		if r, err := compileFile(path); err == nil {
+			own = append(own, r)
+		}
+		return nil
+	})
+	if len(own) < 40 {
+		t.Fatalf("自研规则只读到 %d 条", len(own))
+	}
+	for _, r := range own {
 		if len(r.Tactics) == 0 {
 			t.Errorf("规则 %s（%s）缺少 attack 战术标签", r.ID, r.Title)
 		}

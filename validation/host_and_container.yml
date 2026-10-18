@@ -1,0 +1,185 @@
+technique: T1611
+name: 宿主机、容器与虚拟化平台
+cases:
+  - name: 容器里 nsenter 进宿主机 PID 1 的命名空间
+    source: 常见容器逃逸手法（HackTricks）
+    class: 1007
+    os: linux
+    event:
+      container: { runtime: docker, uid: "4f1c2a3b5d6e" }
+      process:
+        file: { path: /usr/bin/nsenter }
+        cmd_line: "nsenter -t 1 -m -u -i -n -p -- bash"
+
+  - name: 容器里经 /proc/1/root 读宿主机文件
+    source: 常见容器逃逸手法（HackTricks）
+    class: 1007
+    os: linux
+    event:
+      container: { runtime: lxc, uid: "203" }
+      process:
+        file: { path: /usr/bin/cat }
+        cmd_line: "cat /proc/1/root/etc/shadow"
+
+  - name: 宿主机上运维用 nsenter 进容器不是逃逸（良性对照）
+    source: 运维常规
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        file: { path: /usr/bin/nsenter }
+        cmd_line: "nsenter -t 4123 -n ss -tlnp"
+
+  - name: curl 直接调 Docker 套接字 API
+    source: 常见容器逃逸手法（HackTricks）
+    class: 1007
+    os: linux
+    event:
+      process:
+        file: { path: /usr/bin/curl }
+        cmd_line: "curl --unix-socket /var/run/docker.sock -X POST http://localhost/containers/create -d @evil.json"
+
+  - name: docker CLI 正常使用不报（良性对照）
+    source: 运维常规
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        file: { path: /usr/bin/docker }
+        cmd_line: "docker ps -a"
+
+  - name: 启动挂载宿主机根目录的特权容器
+    technique: T1610
+    source: 常见容器逃逸手法（HackTricks）
+    class: 1007
+    os: linux
+    event:
+      process:
+        file: { path: /usr/bin/docker }
+        cmd_line: "docker run --rm -it --privileged -v /:/host alpine chroot /host sh"
+
+  - name: 普通容器启动不报（良性对照）
+    technique: T1610
+    source: 运维常规
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        file: { path: /usr/bin/docker }
+        cmd_line: "docker run -d --name web -p 8080:80 -v /srv/www:/usr/share/nginx/html nginx"
+
+  - name: 给虚拟机设置 hookscript
+    technique: T1546
+    source: Proxmox 持久化手法
+    class: 1007
+    os: linux
+    event:
+      process:
+        file: { path: /usr/sbin/qm }
+        cmd_line: "qm set 108 --hookscript local:snippets/hook.sh"
+
+  - name: 给虚拟机注入 QEMU 原始参数
+    technique: T1546
+    source: Proxmox 持久化手法
+    class: 1007
+    os: linux
+    event:
+      process:
+        file: { path: /usr/sbin/qm }
+        cmd_line: "qm set 108 --args '-chardev file,id=x,path=/etc/shadow'"
+
+  - name: 调整虚拟机内存不报（良性对照）
+    technique: T1546
+    source: 运维常规
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        file: { path: /usr/sbin/qm }
+        cmd_line: "qm set 108 --memory 8192"
+
+  - name: pveum 新建 API 令牌并授管理员权限
+    technique: T1098
+    source: Proxmox 后门账户手法
+    class: 1007
+    os: linux
+    event:
+      process:
+        file: { path: /usr/sbin/pveum }
+        cmd_line: "pveum user token add root@pam backup --privsep 0"
+
+  - name: pveum 查看用户不报（良性对照）
+    technique: T1098
+    source: 运维常规
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        file: { path: /usr/sbin/pveum }
+        cmd_line: "pveum user list"
+
+  - name: 销毁虚拟机
+    technique: T1485
+    source: Proxmox 破坏性操作
+    class: 1007
+    os: linux
+    event:
+      process:
+        file: { path: /usr/sbin/qm }
+        cmd_line: "qm destroy 113 --purge"
+
+  - name: DNS 隧道：数据编码进长子域名
+    technique: T1071.004
+    source: dnscat2 / iodine 流量特征
+    class: 4003
+    os: linux
+    event:
+      query:
+        hostname: "mzxw6ytboi2dsnrsgezdgnbvgy3tqojqgezdgnbvgy3tqojq.t.evil-dns.example"
+
+  - name: 云负载均衡的长主机名不是隧道（良性对照）
+    technique: T1071.004
+    source: 生产 DNS 采集实测
+    class: 4003
+    os: linux
+    expect: undetected
+    event:
+      query:
+        hostname: "k8s-ingress-a1b2c3d4e5-1234567890.us-east-1.elb.amazonaws.com"
+
+  - name: 公网地址连入本机 SSH
+    technique: T1133
+    source: 暴露面被利用
+    class: 4001
+    os: linux
+    event:
+      connection_info: { direction: inbound, protocol_name: tcp }
+      src_endpoint: { ip: "101.204.148.97", port: 55248 }
+      dst_endpoint: { ip: "10.1.1.2", port: 22 }
+
+  - name: 内网与 Tailscale 地址连 SSH 不报（良性对照）
+    technique: T1133
+    source: 运维常规
+    class: 4001
+    os: linux
+    expect: undetected
+    event:
+      connection_info: { direction: inbound, protocol_name: tcp }
+      src_endpoint: { ip: "100.101.102.103", port: 50202 }
+      dst_endpoint: { ip: "10.1.1.2", port: 22 }
+
+  - name: 本机连出去的 SSH 不是入站（良性对照）
+    technique: T1133
+    source: 运维常规
+    class: 4001
+    os: linux
+    expect: undetected
+    event:
+      connection_info: { direction: outbound, protocol_name: tcp }
+      src_endpoint: { ip: "10.1.1.2", port: 50202 }
+      dst_endpoint: { ip: "8.8.8.8", port: 22 }

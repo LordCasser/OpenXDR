@@ -16,6 +16,9 @@ var attackTactics = []string{
 	"persistence",
 	"privilege-escalation",
 	"defense-evasion",
+	// ATT&CK v18 把防御规避拆成隐匿与削弱防御，新版 SigmaHQ 规则用的是新战术
+	"stealth",
+	"defense-impairment",
 	"credential-access",
 	"discovery",
 	"lateral-movement",

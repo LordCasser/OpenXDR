@@ -22,9 +22,10 @@ type trendBucket struct {
 }
 
 type topRule struct {
-	RuleID    string  `json:"ruleId"`
-	RuleTitle *string `json:"ruleTitle"`
-	Count     int     `json:"count"`
+	RuleID     string  `json:"ruleId"`
+	RuleTitle  *string `json:"ruleTitle"`
+	RuleAuthor string  `json:"ruleAuthor,omitempty"`
+	Count      int     `json:"count"`
 }
 
 type statsResponse struct {
@@ -130,6 +131,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 			if title := rules.TitleOf(t.RuleID); title != "" {
 				rule.RuleTitle = &title
 			}
+			rule.RuleAuthor = rules.AuthorOf(t.RuleID)
 			out.TopRules = append(out.TopRules, rule)
 		}
 		// GroupBy 不带排序保证，内存里排一下取前五
@@ -157,4 +159,5 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 // ruleTitler 只取标题，避免 stats 依赖整个 sigma 引擎的接口面。
 type ruleTitler interface {
 	TitleOf(id string) string
+	AuthorOf(id string) string
 }

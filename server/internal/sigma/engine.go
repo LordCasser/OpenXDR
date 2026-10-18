@@ -16,9 +16,11 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -137,8 +139,10 @@ var levelMap = map[string]int16{
 var aggregateCond = regexp.MustCompile(`\|\s*(count|min|max|avg|sum|near)\b`)
 
 type Rule struct {
-	ID       string
-	Title    string
+	ID    string
+	Title string
+	// Author 规则作者。社区规则（DRL 1.1）要求基于命中产生的消息保留作者，告警、规则页与通知都带上
+	Author   string
 	Severity int16
 	ClassUID int    // 0 = 不限
 	Product  string // logsource product，空表示不限操作系统
@@ -225,12 +229,14 @@ const (
 	matchPrefix
 	matchSuffix
 	matchRegex
+	matchCIDR
 )
 
 type matcher struct {
 	kind    matchKind
 	literal string // 已转小写，与同样转小写的取值比对
 	re      *regexp.Regexp
+	prefix  netip.Prefix
 }
 
 // match 接收原值与其小写形式，小写只在 fieldTest 里算一次。
@@ -244,6 +250,9 @@ func (m matcher) match(value, lower string) bool {
 		return strings.HasPrefix(lower, m.literal)
 	case matchSuffix:
 		return strings.HasSuffix(lower, m.literal)
+	case matchCIDR:
+		addr, err := netip.ParseAddr(value)
+		return err == nil && m.prefix.Contains(addr.Unmap())
 	default:
 		return m.re.MatchString(value)
 	}
@@ -519,6 +528,14 @@ var syntheticTitles = map[string]string{
 	RuleNewProcess:        "New Process First Seen (新进程首次出现)",
 }
 
+// AuthorOf 规则作者，没有写或规则已不在返回空
+func (e *Engine) AuthorOf(ruleID string) string {
+	if r, ok := e.load().byID[ruleID]; ok {
+		return r.Author
+	}
+	return ""
+}
+
 func (e *Engine) TitleOf(ruleID string) string {
 	if r, ok := e.load().byID[ruleID]; ok {
 		return r.Title
@@ -585,6 +602,9 @@ func Compile(data []byte) (*Rule, error) {
 	}
 	if title, ok := doc["title"].(string); ok {
 		rule.Title = title
+	}
+	if author, ok := doc["author"].(string); ok {
+		rule.Author = strings.TrimSpace(author)
 	}
 	if rule.ID == "" {
 		if rule.Title == "" {
@@ -693,6 +713,7 @@ func compileFieldTest(key string, value any) (fieldTest, error) {
 	if mapped, ok := fieldMap[strings.ToLower(field)]; ok {
 		path = mapped
 	}
+	translate := valueMap[strings.ToLower(field)]
 	t := fieldTest{path: strings.Split(path, "."), matchAll: mods["all"]}
 
 	if value == nil {
@@ -704,13 +725,39 @@ func compileFieldTest(key string, value any) (fieldTest, error) {
 		values = []any{value}
 	}
 	for _, v := range values {
-		p, err := buildMatcher(fmt.Sprint(v), mods)
-		if err != nil {
-			return fieldTest{}, err
+		text := fmt.Sprint(v)
+		if mapped, ok := translate[strings.ToLower(text)]; ok {
+			text = mapped
 		}
-		t.patterns = append(t.patterns, p)
+		variants := []string{text}
+		if mods["windash"] {
+			variants = windash(text)
+		}
+		for _, variant := range variants {
+			p, err := buildMatcher(variant, mods)
+			if err != nil {
+				return fieldTest{}, err
+			}
+			t.patterns = append(t.patterns, p)
+		}
 	}
 	return t, nil
+}
+
+// 字段取值的约定也要对齐：Sigma 的 Initiated 是 true（本机发起）/ false，事件里是 outbound / inbound
+var valueMap = map[string]map[string]string{
+	"initiated": {"true": "outbound", "false": "inbound"},
+}
+
+// WithActor 用户名在事件信封上（事件表的 username 列），Sigma 的 User 字段按 actor.user.name 取：
+// 求值前补进去，事件体里已有的不覆盖，入库的原始事件不改
+func WithActor(raw map[string]any, username string) {
+	if username == "" {
+		return
+	}
+	if _, ok := raw["actor"]; !ok {
+		raw["actor"] = map[string]any{"user": map[string]any{"name": username}}
+	}
 }
 
 // 本引擎实现的修饰符。未列出的一律拒绝加载——
@@ -718,11 +765,41 @@ func compileFieldTest(key string, value any) (fieldTest, error) {
 // 而 `condition: not selection` 的规则就会对每个事件误报。
 var knownModifiers = map[string]bool{
 	"contains": true, "startswith": true, "endswith": true, "re": true, "all": true,
+	"cidr": true, "windash": true,
+	// 正则标志：本引擎的正则本来就不区分大小写，i 无需处理；m、s 照常生效
+	"i": true, "m": true, "s": true,
+}
+
+// windashChars Windows 命令行参数的前缀可以写成 - 或 /，还有人用各种长破折号绕过检测
+var windashChars = []string{"-", "/", "–", "—", "―"}
+
+var windashFlag = regexp.MustCompile(`(^|\s)[-/]`)
+
+// windash 把参数前缀（开头或空白之后的 - 或 /）换成每一种写法各生成一个变体
+func windash(value string) []string {
+	out := make([]string, 0, len(windashChars))
+	for _, c := range windashChars {
+		v := windashFlag.ReplaceAllString(value, "${1}"+c)
+		if !slices.Contains(out, v) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func buildMatcher(value string, mods map[string]bool) (matcher, error) {
+	if mods["cidr"] {
+		prefix, err := netip.ParsePrefix(value)
+		return matcher{kind: matchCIDR, prefix: prefix.Masked()}, err
+	}
 	if mods["re"] {
-		re, err := regexp.Compile("(?i)" + value)
+		flags := "(?i"
+		for _, f := range []string{"m", "s"} {
+			if mods[f] {
+				flags += f
+			}
+		}
+		re, err := regexp.Compile(flags + ")" + value)
 		return matcher{kind: matchRegex, re: re}, err
 	}
 

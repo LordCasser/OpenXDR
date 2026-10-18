@@ -14,6 +14,8 @@ const TACTIC: Record<string, [string, string]> = {
   persistence: ['持久化', 'Persistence'],
   'privilege-escalation': ['提权', 'Priv Esc'],
   'defense-evasion': ['防御规避', 'Defense Evasion'],
+  stealth: ['隐匿', 'Stealth'],
+  'defense-impairment': ['削弱防御', 'Defense Impairment'],
   'credential-access': ['凭据访问', 'Cred Access'],
   discovery: ['发现', 'Discovery'],
   'lateral-movement': ['横向移动', 'Lateral Movement'],

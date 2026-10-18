@@ -207,6 +207,18 @@ fn conf_value(text: &str, key: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// /proc 里的命令行，参数之间的 NUL 换成空格；读不到或为空（内核线程）返回 None
+pub fn cmd_line(pid: u32) -> Option<String> {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    let line = raw
+        .split(|c| *c == 0)
+        .filter(|s| !s.is_empty())
+        .map(String::from_utf8_lossy)
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!line.is_empty()).then_some(line)
+}
+
 /// 进程启动时间：/proc/<pid>/stat 第 22 列（开机后的时钟滴答）加开机时间。
 /// 快照里早于 agent 启动的进程靠它算运行时长
 pub fn started(pid: u32) -> Option<SystemTime> {

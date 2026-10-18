@@ -1,0 +1,28 @@
+title: Direct Docker Socket API Access
+id: 4eb51718-c866-4c44-8426-c0d1ad2a8399
+status: experimental
+description: |
+  检测用 curl / socat / nc / 脚本直接访问 Docker 套接字。能写 docker.sock 等于宿主机 root：
+  起一个挂载宿主机根目录的特权容器就出去了。正常管理走 docker CLI，不会手搓 API 请求。
+author: OpenXDR
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  socket:
+    CommandLine|contains: 'docker.sock'
+  client:
+    Image|endswith:
+      - '/curl'
+      - '/wget'
+      - '/socat'
+      - '/nc'
+      - '/ncat'
+      - '/python3'
+      - '/python'
+      - '/perl'
+  condition: socket and client
+level: high

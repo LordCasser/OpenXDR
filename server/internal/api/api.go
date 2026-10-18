@@ -49,14 +49,16 @@ type incidentSummary struct {
 }
 
 type alertRow struct {
-	ID        uuid.UUID       `json:"id"`
-	Ts        time.Time       `json:"ts"`
-	LastTs    *time.Time      `json:"lastTs"`
-	Count     int             `json:"count"`
-	Severity  int16           `json:"severity"`
-	RuleID    string          `json:"ruleId"`
-	RuleTitle *string         `json:"ruleTitle"`
-	Event     json.RawMessage `json:"event"`
+	ID        uuid.UUID  `json:"id"`
+	Ts        time.Time  `json:"ts"`
+	LastTs    *time.Time `json:"lastTs"`
+	Count     int        `json:"count"`
+	Severity  int16      `json:"severity"`
+	RuleID    string     `json:"ruleId"`
+	RuleTitle *string    `json:"ruleTitle"`
+	// RuleAuthor 规则作者：社区规则的许可要求命中展示时保留
+	RuleAuthor string          `json:"ruleAuthor,omitempty"`
+	Event      json.RawMessage `json:"event"`
 }
 
 type incidentDetail struct {
@@ -226,6 +228,7 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			if title := rules.TitleOf(a.RuleID); title != "" {
 				row.RuleTitle = &title
 			}
+			row.RuleAuthor = rules.AuthorOf(a.RuleID)
 			if a.Edges.Event != nil {
 				row.Event = a.Edges.Event.Raw
 			}

@@ -52,8 +52,9 @@ for node in "$first" "$second"; do
     tar -C \"\$tmp\" -xzf -
     for d in rules tasks; do
       mkdir -p \$d
-      cp -f \"\$tmp\"/\$d/* \$d/
-      for f in \$d/*; do [ -e \"\$tmp/\$f\" ] || rm -f \"\$f\"; done
+      # 递归原地覆盖（规则有子目录，如 rules/sigmahq）；目录是 bind mount，不能整个换掉
+      cp -rf \"\$tmp\"/\$d/. \$d/
+      find \$d -type f | while read -r f; do [ -e \"\$tmp/\$f\" ] || rm -f \"\$f\"; done
     done" < "$bundle"
 
   echo "== $node：切换到 $TAG"

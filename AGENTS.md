@@ -45,6 +45,7 @@
 - **proto/**：`agent.proto` / `sensor.proto`，gRPC 契约。Go 侧生成代码已提交在
   `server/pb/`；Rust 侧由 build.rs 在构建时用 `protoc-bin-vendored` 生成（无需装 protoc）。
 - **rules/**：Sigma 兼容检测规则（YAML）。Sigma `tags` 解析成 ATT&CK 战术/技术。
+  `rules/sigmahq/` 是引入的 SigmaHQ 社区规则（DRL 1.1，保留作者；同步与回测流程见其 README）。
 - **validation/**：检测验证语料——真实攻击命令归一化成事件格式，回放过规则引擎对拍。
 - **schema/**：`001_init.sql` 是设计参考 DDL；实际表结构以 `server/ent/schema/` 为准。
 
@@ -118,7 +119,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `cmdorigin`：核对事件上的平台指令标记（agent 给指令拉起的进程树打标），通过的告警挂到指令上、不进关联与研判
 - `review`：需人工复核的统一口径（通知、总览计数、列表筛选与自动结案共用）
 - `testdb`：集成测试共享的 Postgres 连接与清表（仅 `integration` tag 编译）
-- `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`gencerts`（证书工具）、`sandboxd`（Pi 沙箱守护进程，见 `deploy/pi-sandbox`）
+- `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`backtest`（用真实事件回测规则命中量）、`gencerts`（证书工具）、`sandboxd`（Pi 沙箱守护进程，见 `deploy/pi-sandbox`）
 
 数据库实体定义在 `server/ent/schema/`（ent 代码生成，生成物已提交在 `server/ent/` 下）。
 
@@ -144,7 +145,8 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
   Linux CI 上通过 Windows 交叉编译 clippy 来守 Windows 代码。
 - **规则改动**：改 `rules/` 后必须跑 `sigmacheck --strict ../rules` 与
   `detectcheck --strict`；若检测能力变化，同步更新 `validation/` 语料
-  （`expect: undetected` 用于显式记录已知缺口与良性对照）。
+  （`expect: undetected` 用于显式记录已知缺口与良性对照）。新规则上线前用 `cmd/backtest`
+  在真实数据上回测命中量。
 
 ## 测试策略
 

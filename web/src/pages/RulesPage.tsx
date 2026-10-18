@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Input, Select, Space, Table, Tabs, Tag, Tooltip } from 'antd'
+import { Input, Select, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchRules, type RuleRow } from '../api'
@@ -51,7 +51,10 @@ export function RulesPage() {
         dataSource={rows}
         pagination={{ pageSize: 30, hideOnSinglePage: true }}
         columns={[
-          { title: t('thRule'), dataIndex: 'title', render: (v, r) => <Tooltip title={r.id}>{v || r.id}</Tooltip> },
+          {
+            title: t('thRule'), dataIndex: 'title',
+            render: (v, r) => <><Tooltip title={r.id}>{v || r.id}</Tooltip>{r.author && <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{t('ruleBy', { author: r.author })}</Typography.Text>}</>,
+          },
           { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} />, sorter: (a, b) => a.severity - b.severity },
           { title: t('thClass'), dataIndex: 'classUid', width: 110, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v || t('allClasses')) },
           { title: t('thPlatform'), dataIndex: 'product', width: 110, render: v => v || '-' },

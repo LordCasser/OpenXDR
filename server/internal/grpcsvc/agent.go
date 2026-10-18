@@ -309,6 +309,7 @@ func (s *Server) ReportEvents(stream pb.AgentService_ReportEventsServer) error {
 			}
 		}
 
+		sigma.WithActor(rawMap, ev.Username)
 		hits := intel.Detections(s.Rules.Evaluate(int(ev.ClassUid), assetOS, rawMap), s.Intel.Match(rawMap, ts))
 		var command *uuid.UUID
 		if len(hits) > 0 {

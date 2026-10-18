@@ -1,0 +1,36 @@
+title: Inbound Admin Service Connection from Public Address
+id: 295237e9-c112-4351-9594-699ca0521706
+status: experimental
+description: |
+  检测从公网地址建立到本机管理端口的入站连接：SSH、Proxmox Web（8006）、RDP、VNC、未加密的 Docker API、
+  Cockpit。管理面不该对公网开放，能连进来说明暴露了或者正在被利用。内网、CGNAT（含 Tailscale）、回环与链路本地地址不算。
+author: OpenXDR
+tags:
+  - attack.initial_access
+  - attack.t1133
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  selection:
+    Initiated: 'false'
+    DestinationPort:
+      - 22
+      - 8006
+      - 3389
+      - 5900
+      - 2375
+      - 9090
+  private:
+    SourceIp|cidr:
+      - '10.0.0.0/8'
+      - '172.16.0.0/12'
+      - '192.168.0.0/16'
+      - '100.64.0.0/10'
+      - '127.0.0.0/8'
+      - '169.254.0.0/16'
+      - 'fc00::/7'
+      - 'fe80::/10'
+      - '::1/128'
+  condition: selection and not private
+level: high
