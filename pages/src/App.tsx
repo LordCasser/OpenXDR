@@ -5,6 +5,7 @@ import { Assistant } from "@/components/story/assistant";
 import { Closing } from "@/components/story/closing";
 import { Features } from "@/components/story/features";
 import { Funnel } from "@/components/story/funnel";
+import { Learn } from "@/components/story/learn";
 import { Onboard } from "@/components/story/onboard";
 import { Surface } from "@/components/story/surface";
 import { useLocale } from "@/i18n";
@@ -27,6 +28,7 @@ export default function App() {
         <Funnel />
         <Assistant />
         <Surface />
+        <Learn />
         <Features />
         <Closing />
       </main>

@@ -98,7 +98,7 @@ export function Closing() {
     <section id="start" className="relative scroll-mt-20 px-4 py-28 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1400px]">
         <div className="grid gap-14 lg:grid-cols-2 lg:items-center">
-          <ChapterHead index="05" kicker={t.kicker} title={t.title} body={t.body} />
+          <ChapterHead index="06" kicker={t.kicker} title={t.title} body={t.body} />
 
           <motion.article
             initial={{ opacity: 0, y: 30, rotate: 1.5 }}
