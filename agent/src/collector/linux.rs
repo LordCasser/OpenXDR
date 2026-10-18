@@ -327,7 +327,13 @@ fn to_conn_event(agent_id: &str, state: &ConnState, ev: &ConnEvent) -> Option<Ag
             if !lock(&state.tcp_in).should_report(remote, ev.sport) {
                 return None;
             }
-            let pid = lock(&state.listeners).owner(ev.sport).map(|o| o.pid);
+            // tracepoint 不分网络命名空间：目的是宿主机自己的地址才查宿主机的监听表。
+            // 连到容器里服务的（LXC 有自己的地址）按端口查会错归到宿主机上同端口的进程，只认出是哪个容器
+            let pid = if is_host_addr(local) {
+                lock(&state.listeners).owner(ev.sport).map(|o| o.pid)
+            } else {
+                None
+            };
             let mut info = conn_info(
                 state,
                 pid.unwrap_or(0),
@@ -338,6 +344,11 @@ fn to_conn_event(agent_id: &str, state: &ConnState, ev: &ConnEvent) -> Option<Ag
                 ev.sport,
             );
             info.inbound = true;
+            // 域名回填只对出站有意义：入站的目的是本机，那个「域名」只是有人解析过本机地址
+            info.hostname = None;
+            if pid.is_none() {
+                info.container = container::lxc_by_ip(local);
+            }
             Some(netwatch::conn_event(agent_id, &info))
         }
         CONN_UDP_OUT => {
@@ -404,6 +415,25 @@ fn conn_info(
         container,
         hostname: dnswatch::hostname_of(dst),
     }
+}
+
+/// 地址是不是宿主机自己网络命名空间里的地址（含回环）。地址会变（DHCP、新网卡），每分钟刷新
+fn is_host_addr(ip: IpAddr) -> bool {
+    static ADDRS: std::sync::OnceLock<Mutex<(Vec<IpAddr>, Option<Instant>)>> =
+        std::sync::OnceLock::new();
+    let mut addrs = lock(ADDRS.get_or_init(Default::default));
+    if addrs
+        .1
+        .is_none_or(|t| t.elapsed() >= Duration::from_secs(60))
+    {
+        addrs.0 = if_addrs::get_if_addrs()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|i| i.addr.ip())
+            .collect();
+        addrs.1 = Some(Instant::now());
+    }
+    ip.is_loopback() || addrs.0.contains(&ip)
 }
 
 /// DNS 查询源端口的归属保留多久：抓包与 eBPF 事件走两条路，先后差不了几秒

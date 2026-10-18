@@ -43,6 +43,61 @@ pub fn lxc(vmid: &str) -> Arc<Container> {
     })
 }
 
+/// LXC 容器静态地址 → VMID，与读取时间
+type LxcAddresses = (
+    HashMap<std::net::IpAddr, String>,
+    Option<std::time::Instant>,
+);
+
+/// 地址是不是本机某个 Proxmox LXC 容器的静态地址（配置里 netN 的 ip= / ip6=）。
+/// 入站连接的目的地址落在容器上时用它认出容器；DHCP 的容器配置里没有地址，认不出
+#[cfg_attr(not(feature = "ebpf"), allow(dead_code))]
+pub fn lxc_by_ip(ip: std::net::IpAddr) -> Option<Arc<Container>> {
+    static MAP: OnceLock<Mutex<LxcAddresses>> = OnceLock::new();
+    let mut map = MAP
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if map.1.is_none_or(|t| t.elapsed() >= Duration::from_secs(60)) {
+        map.0 = lxc_addresses();
+        map.1 = Some(std::time::Instant::now());
+    }
+    map.0.get(&ip).map(|vmid| lxc(vmid))
+}
+
+fn lxc_addresses() -> HashMap<std::net::IpAddr, String> {
+    let Ok(dir) = std::fs::read_dir("/etc/pve/lxc") else {
+        return HashMap::new();
+    };
+    let mut out = HashMap::new();
+    for entry in dir.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(vmid) = name.strip_suffix(".conf").filter(|id| is_vmid(id)) else {
+            continue;
+        };
+        if let Ok(text) = std::fs::read_to_string(entry.path()) {
+            for ip in conf_addresses(&text) {
+                out.insert(ip, vmid.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// netN 行里的 ip=10.1.1.100/24、ip6=fd00::5/64；dhcp / manual / auto 不是地址
+fn conf_addresses(text: &str) -> Vec<std::net::IpAddr> {
+    text.lines()
+        .take_while(|l| !l.starts_with('['))
+        .filter(|l| l.starts_with("net"))
+        .filter_map(|l| l.split_once(':'))
+        .flat_map(|(_, v)| v.split(','))
+        .filter_map(|kv| {
+            let (k, v) = kv.trim().split_once('=')?;
+            matches!(k, "ip" | "ip6").then(|| v.split('/').next()?.parse().ok())?
+        })
+        .collect()
+}
+
 /// cgroup v2 只有一行 0::<路径>；v1 有多行，取第一条带容器特征的
 fn cgroup_path(cgroup: &str) -> Option<&str> {
     let paths = cgroup.lines().filter_map(|l| l.splitn(3, ':').nth(2));
@@ -236,6 +291,16 @@ mod tests {
         let v1 = format!("12:pids:/user.slice\n11:memory:/docker/{ID}\n0::/\n");
         assert_eq!(cgroup_path(&v1), Some(format!("/docker/{ID}").as_str()));
         assert_eq!(cgroup_path("0::/init.scope\n"), Some("/init.scope"));
+    }
+
+    #[test]
+    fn lxc_conf_addresses() {
+        let conf = "hostname: gw\nnet0: name=eth0,bridge=vmbr0,gw=10.1.1.1,hwaddr=BC:24:11:00:00:01,ip=10.1.1.100/24,type=veth\nnet1: name=eth1,bridge=vmbr1,ip=dhcp,ip6=fd00::5/64\n[snap]\nnet0: name=eth0,ip=10.9.9.9/24\n";
+        let got: Vec<String> = conf_addresses(conf)
+            .iter()
+            .map(|ip| ip.to_string())
+            .collect();
+        assert_eq!(got, ["10.1.1.100", "fd00::5"]);
     }
 
     #[test]

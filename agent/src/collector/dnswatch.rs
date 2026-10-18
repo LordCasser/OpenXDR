@@ -33,6 +33,8 @@ const DUP_WINDOW: Duration = Duration::from_secs(10);
 const MAX_TRACKED: usize = 8192;
 /// 应答地址最多记几个：够做情报碰撞与域名回填
 const MAX_ANSWERS: usize = 8;
+/// sockaddr_ll.sll_pkttype：本机发出的包
+const PACKET_OUTGOING: u8 = 4;
 
 /// DNS 查询的发起进程，由 eBPF 采集按源端口提供
 #[cfg_attr(not(feature = "ebpf"), allow(dead_code))]
@@ -234,7 +236,7 @@ fn run(fd: i32, agent_id: String, sink: EventSink, resolver: Option<Resolver>) {
             )
         };
         if n > 0 {
-            st.packet(&buf[..n as usize], addr.sll_ifindex);
+            st.packet(&buf[..n as usize], addr.sll_ifindex, addr.sll_pkttype);
         }
         st.expire();
     }
@@ -243,7 +245,7 @@ fn run(fd: i32, agent_id: String, sink: EventSink, resolver: Option<Resolver>) {
 }
 
 impl State {
-    fn packet(&mut self, pkt: &[u8], ifindex: i32) {
+    fn packet(&mut self, pkt: &[u8], ifindex: i32, pkttype: u8) {
         let Some((src, sport, dst, dport, payload)) = udp(pkt) else {
             return;
         };
@@ -259,11 +261,18 @@ impl State {
             return;
         }
         let iface = self.ifname(ifindex);
-        // Proxmox 的 LXC 容器接口名是 veth<VMID>i<序号>；docker 的 veth 名是随机的，靠进程归属认容器
-        let container = lxc_of(&iface).map(container::lxc);
-        if !iface.starts_with("veth") && !self.is_local(client) {
+        // veth 是容器与宿主机之间的线：容器发出的包在宿主机这端是收到，送进容器的包是发出。
+        // 只认容器当客户端的方向（容器发出的查询、送回容器的应答）；别的主机来问容器里 DNS 服务的流量
+        // 也经过 veth，但那是别人的查询，不收
+        let from_container =
+            iface.starts_with("veth") && (pkttype == PACKET_OUTGOING) == message.response;
+        if !from_container && !self.is_local(client) {
             return;
         }
+        // Proxmox 的 LXC 容器接口名是 veth<VMID>i<序号>；docker 的 veth 名是随机的，靠进程归属认容器
+        let container = from_container
+            .then(|| lxc_of(&iface).map(container::lxc))
+            .flatten();
         let key = Key {
             client,
             port,
