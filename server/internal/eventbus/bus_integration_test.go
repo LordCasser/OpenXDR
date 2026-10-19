@@ -5,7 +5,6 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -33,12 +32,9 @@ func (testMetrics) Failed(string)                  {}
 func (testMetrics) SetQueuePending(string, uint64) {}
 
 func TestJetStreamPublishConsumeAndDeduplicate(t *testing.T) {
-	url := os.Getenv("NATS_URL")
-	if url == "" {
-		t.Skip("NATS_URL 未配置")
-	}
+	url := isolatedNATS(t)
 	p := &testProcessor{done: make(chan struct{})}
-	bus, err := NewJetStream(url, "integration", 4, 1, 1<<30, time.Hour, p, testMetrics{})
+	bus, err := NewJetStream(url, "integration", 4, 1, 1<<30, 0, p, testMetrics{})
 	if err != nil {
 		t.Fatal(err)
 	}

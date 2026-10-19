@@ -35,6 +35,7 @@ import (
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/grpcsvc"
 	"openxdr/server/internal/hostimport"
+	"openxdr/server/internal/identity/directory"
 	"openxdr/server/internal/ingest"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/janitor"
@@ -46,7 +47,6 @@ import (
 	"openxdr/server/internal/report"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/schedule"
-	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
 	"openxdr/server/internal/syslog"
 	"openxdr/server/internal/telemetry"
@@ -80,11 +80,37 @@ func main() {
 		if err := commandgate.UpgradeDefaults(ctx, client); err != nil {
 			return err
 		}
+		if err := response.EnsureVerificationSchema(ctx, db); err != nil {
+			return err
+		}
 		return ingest.EnsureSchema(ctx, db)
 	}); err != nil {
 		slog.Error("集群处理状态初始化失败", "err", err)
 		os.Exit(1)
 	}
+
+	directoryJobs, err := directory.LoadConfig(os.Getenv("IDENTITY_SOURCES_JSON"), os.Getenv)
+	if err != nil {
+		slog.Error("目录同步配置无效", "err", err)
+		os.Exit(1)
+	}
+	if err := directory.RegisterJobs(ctx, db, directoryJobs); err != nil {
+		slog.Error("目录来源登记失败", "err", err)
+		os.Exit(1)
+	}
+	if len(directoryJobs) > 0 {
+		go cluster.RunLeader(ctx, db, "identity-directories", func(ctx context.Context) {
+			directory.RunWorker(ctx, db, directoryJobs)
+		})
+	}
+	directoryRetention := getenvInt("IDENTITY_RUN_RETENTION_DAYS", 30)
+	if directoryRetention < 0 || directoryRetention > 3650 {
+		slog.Error("IDENTITY_RUN_RETENTION_DAYS 必须为 0 到 3650")
+		os.Exit(1)
+	}
+	go cluster.RunLeader(ctx, db, "identity-maintenance", func(ctx context.Context) {
+		directory.RunMaintenance(ctx, db, time.Duration(directoryRetention)*24*time.Hour)
+	})
 
 	suppressions := suppress.New(client, time.Duration(getenvInt("SUPPRESSION_RELOAD_SECONDS", 30))*time.Second)
 	go suppressions.Run(ctx)
@@ -97,9 +123,10 @@ func main() {
 	go cluster.RunLeader(ctx, db, "intel-feeds", intelFeeds.Run)
 
 	rulesPath := getenv("RULES_PATH", "../rules")
-	rules := sigma.LoadDir(rulesPath)
-	if sec := getenvInt("RULES_RELOAD_SECONDS", 30); sec > 0 {
-		go rules.Watch(ctx, rulesPath, time.Duration(sec)*time.Second)
+	rules, temporalRules, err := loadDetectionRules(ctx, rulesPath, os.Getenv("TEMPORAL_RULES_PATH"), time.Duration(getenvInt("RULES_RELOAD_SECONDS", 30))*time.Second)
+	if err != nil {
+		slog.Error("检测规则快照加载失败", "err", err)
+		os.Exit(1)
 	}
 
 	correlator := &correlate.Engine{
@@ -121,6 +148,7 @@ func main() {
 	go cluster.RunLeader(ctx, db, "ueba", uebaEngine.Run)
 
 	janitorEngine := &janitor.Janitor{
+		SQL:       db,
 		DB:        client,
 		Retention: time.Duration(getenvInt("RETENTION_DAYS", 30)) * 24 * time.Hour,
 		Interval:  time.Duration(getenvInt("RETENTION_INTERVAL_MINUTES", 60)) * time.Minute,
@@ -226,7 +254,7 @@ func main() {
 	registry.MustRegister(prometheus.NewGoCollector(), prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	metrics := telemetry.New(registry)
 	processor := &ingest.Processor{
-		DB: db, Rules: rules, Suppress: suppressions, Intel: intelStore,
+		DB: db, Rules: rules, Temporal: temporalRules, Suppress: suppressions, Intel: intelStore,
 		DedupWindow: dedupWindow, Metrics: metrics,
 	}
 	var events eventbus.Bus = eventbus.NewDirect(processor, metrics)
@@ -236,7 +264,7 @@ func main() {
 		queued, err := eventbus.NewJetStream(natsURL,
 			instance, getenvInt("QUEUE_SHARDS", 32), getenvInt("QUEUE_REPLICAS", 1),
 			int64(getenvInt("QUEUE_MAX_BYTES_GB", 20))*1024*1024*1024,
-			time.Duration(getenvInt("QUEUE_MAX_AGE_HOURS", 168))*time.Hour, processor, metrics)
+			time.Duration(getenvInt("QUEUE_MAX_AGE_HOURS", 0))*time.Hour, processor, metrics)
 		if err != nil {
 			slog.Error("JetStream 初始化失败", "err", err)
 			os.Exit(1)
@@ -371,6 +399,17 @@ func main() {
 		slog.Warn("主机在线接入未启用", "reason", reason)
 	}
 	routes := http.NewServeMux()
+	routes.Handle("/api/temporal-gaps", api.TemporalGaps(db))
+	verifications := api.CommandVerifications(db)
+	routes.Handle("/api/commands/{id}/verifications", verifications)
+	routes.Handle("/api/commands/{id}/verifications/{verificationId}", verifications)
+	routes.Handle("/api/identity-observations", api.IdentityObservations(db))
+	routes.Handle("/api/local-account-snapshots", api.LocalAccountSnapshots(db))
+	routes.Handle("/api/local-account-snapshots/", api.LocalAccountSnapshots(db))
+	routes.Handle("/api/identity-observations/", api.IdentityCandidates(db))
+	directoryAPI := api.IdentityDirectories(db)
+	routes.Handle("/api/identity-directories", directoryAPI)
+	routes.Handle("/api/identity-directories/", directoryAPI)
 	routes.Handle("/api/host-import/", api.HostImports(&hostimport.Service{DB: client, Vault: credentialVault}, enrollSvc, os.Getenv("ENROLL_PUBLIC_URL"), getenv("ENROLL_SSH_ENABLED", "false") == "true"))
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook, aiConf, db))
 	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))

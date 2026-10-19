@@ -30,8 +30,7 @@ const ACTIVITY_UNLOAD: u8 = 4;
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
 
 /// 启动监控线程。签名与其他采集器一致，由 collector::spawn 接线调用。
-/// 不返回 Result：/proc/modules 读不到时快照为空集，diff 照常工作，
-/// 没有需要降级的失败面。
+/// 读取失败保留上次有效基线，不把错误解释成模块全量卸载。
 pub fn spawn(agent_id: String, sink: EventSink) {
     std::thread::spawn(move || run(&agent_id, &sink));
 }
@@ -39,13 +38,20 @@ pub fn spawn(agent_id: String, sink: EventSink) {
 fn run(agent_id: &str, sink: &EventSink) {
     // 模块名 -> 磁盘路径的解析根：/lib/modules/$(uname -r)/
     let modules_dir = format!("/lib/modules/{}", kernel_release());
-    // 首次快照做基线，不报历史存量
-    let mut prev = snapshot();
-    loop {
-        std::thread::sleep(POLL_INTERVAL);
-        let cur = snapshot();
-        let (loaded, unloaded) = diff_modules(&prev, &cur);
-        prev = cur;
+    let mut prev = None;
+    while !sink.is_closed() {
+        let changes = update_snapshot(&mut prev, snapshot());
+        let (loaded, unloaded) = match changes {
+            Ok(changes) => {
+                sink.capability("kmod", "proc-modules", "active");
+                changes
+            }
+            Err(_) => {
+                sink.capability("kmod", "proc-modules", "unavailable");
+                std::thread::sleep(POLL_INTERVAL);
+                continue;
+            }
+        };
         for name in &loaded {
             let path = resolve_module_path(Path::new(&modules_dir), name);
             if !sink.send(module_event(agent_id, ACTIVITY_LOAD, name, path)) {
@@ -59,15 +65,25 @@ fn run(agent_id: &str, sink: &EventSink) {
                 return;
             }
         }
+        std::thread::sleep(POLL_INTERVAL);
     }
 }
 
-/// 当前已加载模块名集合；/proc/modules 读不到时为空集（下一轮 diff 会
-/// 把全量模块当新增——但 /proc 读失败意味着系统已病入膏肓，接受这点噪音）。
-fn snapshot() -> BTreeSet<String> {
-    std::fs::read_to_string("/proc/modules")
-        .map(|t| parse_modules(&t))
-        .unwrap_or_default()
+fn snapshot() -> std::io::Result<BTreeSet<String>> {
+    std::fs::read_to_string("/proc/modules").map(|text| parse_modules(&text))
+}
+
+fn update_snapshot(
+    previous: &mut Option<BTreeSet<String>>,
+    current: std::io::Result<BTreeSet<String>>,
+) -> std::io::Result<(Vec<String>, Vec<String>)> {
+    let current = current?;
+    let changes = previous
+        .as_ref()
+        .map(|old| diff_modules(old, &current))
+        .unwrap_or_default();
+    *previous = Some(current);
+    Ok(changes)
 }
 
 /// 内核版本（uname -r 等价物），读不到给空串——模块路径解析会因此落空，
@@ -264,5 +280,33 @@ nf_tables 262144 0 - Live 0xffffffffc0800000
             v["module"]["file"].get("path").is_none(),
             "路径未知时不应编造 path 字段"
         );
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+    #[test]
+    fn read_failure_does_not_fabricate_module_changes() {
+        let baseline = BTreeSet::from(["ext4".into(), "nf_tables".into()]);
+        let mut previous = None;
+        assert_eq!(
+            update_snapshot(&mut previous, Ok(baseline.clone())).unwrap(),
+            (vec![], vec![])
+        );
+        assert!(
+            update_snapshot(
+                &mut previous,
+                Err(std::io::ErrorKind::PermissionDenied.into())
+            )
+            .is_err()
+        );
+        assert_eq!(previous, Some(baseline.clone()));
+        assert_eq!(
+            update_snapshot(&mut previous, Ok(baseline)).unwrap(),
+            (vec![], vec![])
+        );
+        let changes = update_snapshot(&mut previous, Ok(BTreeSet::from(["ext4".into()]))).unwrap();
+        assert_eq!(changes, (vec![], vec!["nf_tables".into()]));
     }
 }

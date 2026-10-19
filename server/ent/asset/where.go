@@ -421,6 +421,16 @@ func LastSeenLTE(v time.Time) predicate.Asset {
 	return predicate.Asset(sql.FieldLTE(FieldLastSeen, v))
 }
 
+// CollectorHealthIsNil applies the IsNil predicate on the "collector_health" field.
+func CollectorHealthIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldCollectorHealth))
+}
+
+// CollectorHealthNotNil applies the NotNil predicate on the "collector_health" field.
+func CollectorHealthNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldCollectorHealth))
+}
+
 // ConfigIsNil applies the IsNil predicate on the "config" field.
 func ConfigIsNil() predicate.Asset {
 	return predicate.Asset(sql.FieldIsNull(FieldConfig))

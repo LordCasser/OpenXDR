@@ -149,8 +149,9 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 同样真执行；它仍是阻塞 HTTP 请求，另开审批界面批准后才返回。
 结束进程与隔离/解除隔离继续走 `RESPONSE_ENABLED` 与 `ISOLATION_ALLOW` 闸门。
 等待回执超时意味着执行结果未知，不代表命令没有执行，不自动再次下发。
-EXEC 在重连时不自动补发，避免原命令已执行但回执丢失造成重复执行；原有响应动作维持补发。
-跨节点 EXEC 投递确认失败记录为 `unknown`，不能据此断言执行失败。
+所有动作在重连时都不自动补发，避免原动作已执行但回执丢失造成重复执行或覆盖较新的处置意图。
+跨节点投递确认失败记录为 `unknown`，不能据此断言执行失败；无法识别或未指定状态的回执也保持 unknown，
+不写完成时间或把缺省退出码当作执行结果。
 合法迟到回执仍可将 unknown 更新为终态；回执绑定已验证的 agent 流及其资产，
 终态不能被重复回执或较晚的 sent 更新覆盖。此实现不宣称 exactly-once 保证。
 
@@ -263,3 +264,11 @@ PDF 的 Chromium 同时设置阻断代理（包括 loopback）与 DNS 规则，�
 只启动部分组后发生重启，尚未启动的组会补跑一次，不重放已启动组的命令。
 Windows 隔离的 WFP 权重设计依据 [Microsoft Filter Arbitration](https://learn.microsoft.com/en-us/windows/win32/fwp/filter-arbitration)：
 许可和默认阻断置于同一独立子层；不覆盖其他产品或系统策略的阻断。
+
+### 专用只读身份集成验证
+
+`TestQueryDedicatedGroupView` 在配置 INTEGRATION_DATABASE_URL 后默认创建随机隔离登录角色，
+仅授予测试视图权限，结束清理角色与授权；测试连接用户须有创建/回收角色权限，仅对隔离测试库运行。
+仍可同时提供 PI_TEST_QUERY_DSN 和 PI_TEST_QUERY_ROLE 使用预配置测试身份，缺少其中一个会失败。
+覆盖组视图可见性、基表/列级授权拒绝、写语句和包装逃逸拒绝、行数/字节截断及重复列名保留。
+这不替代生产角色配置、真实组视图与权限回收验收。

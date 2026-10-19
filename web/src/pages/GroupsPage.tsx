@@ -7,6 +7,7 @@ import {
   type GroupRow, type MemberRow,
 } from '../api'
 import { LoadError } from '../components/LoadError'
+import { DirectoryStatus } from '../components/DirectoryStatus'
 import { Page } from '../components/Page'
 import { ROLE_KEY, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
@@ -19,6 +20,7 @@ function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void 
   const [busy, setBusy] = useState(false)
   const [newUser, setNewUser] = useState<string>()
   const [newRole, setNewRole] = useState('analyst')
+  const [activeTab, setActiveTab] = useState('members')
   const members = useQuery({ queryKey: ['members', group.id], queryFn: () => fetchMembers(group.id) })
   const usersQuery = useQuery({ queryKey: ['users'], queryFn: fetchUsers })
   const assetsQuery = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
@@ -65,7 +67,10 @@ function GroupDrawer({ group, onClose }: { group: GroupRow; onClose: () => void 
   return (
     <Drawer open size={720} title={t('manageGroup', { name: group.name })} onClose={() => { if (!busy) onClose() }} closable={!busy} maskClosable={!busy} keyboard={!busy}>
       <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={[
+          { key: 'directories', label: t('directoryTitle'), children: activeTab === 'directories' && <DirectoryStatus groupId={group.id} /> },
           {
             key: 'members',
             label: t('groupMembers'),

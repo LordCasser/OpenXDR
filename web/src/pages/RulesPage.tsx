@@ -53,12 +53,12 @@ export function RulesPage() {
         columns={[
           {
             title: t('thRule'), dataIndex: 'title',
-            render: (v, r) => <><Tooltip title={r.id}>{v || r.id}</Tooltip>{r.author && <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{t('ruleBy', { author: r.author })}</Typography.Text>}</>,
+            render: (v, r) => <><Tooltip title={r.id}>{v || r.id}</Tooltip>{r.kind && <Space size={4} wrap style={{ display: 'flex', marginTop: 4 }}><Tag>{t(r.kind === 'event_count' ? 'temporalCount' : 'temporalSequence')}</Tag><Typography.Text type="secondary">{t('temporalRuleWindow', { seconds: r.windowSeconds ?? 0 })}{r.threshold ? ` · ${t('temporalRuleThreshold', { count: r.threshold })}` : ''}</Typography.Text></Space>}{r.author && <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{t('ruleBy', { author: r.author })}</Typography.Text>}</>,
           },
           { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} />, sorter: (a, b) => a.severity - b.severity },
           { title: t('thClass'), dataIndex: 'classUid', width: 110, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v || t('allClasses')) },
           { title: t('thPlatform'), dataIndex: 'product', width: 110, render: v => v || '-' },
-          { title: t('thDataSource'), width: 140, render: (_, r) => (r.ingested ? <Tag>{r.source}</Tag> : <Tag color="warning">{t('noDataSource')}</Tag>) },
+          { title: t('thDataSource'), width: 140, render: (_, r) => (r.ingested ? <Tag>{r.kind ? t('temporalRuleSource') : r.source}</Tag> : <Tag color="warning">{t('noDataSource')}</Tag>) },
         ]}
       />}
     </FilterCard>

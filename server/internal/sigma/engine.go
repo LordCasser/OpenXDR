@@ -138,9 +138,23 @@ var levelMap = map[string]int16{
 // Sigma 的 near/count 聚合语法要求跨事件统计，超出单事件匹配引擎的能力
 var aggregateCond = regexp.MustCompile(`\|\s*(count|min|max|avg|sum|near)\b`)
 
+// Catalog 是检测与展示共用的当前规则视图。
+type Catalog interface {
+	Evaluate(int, string, map[string]any) []*Rule
+	Rules() []*Rule
+	TitleOf(string) string
+	AuthorOf(string) string
+}
+
 type Rule struct {
-	ID    string
-	Title string
+	Kind          string
+	WindowSeconds int
+	Threshold     int
+	References    []string
+	source        string
+	digest        string // 编译时读取的原文哈希，避免版本指纹与加载内容发生竞态
+	ID            string
+	Title         string
 	// Author 规则作者。社区规则（DRL 1.1）要求基于命中产生的消息保留作者，告警、规则页与通知都带上
 	Author   string
 	Severity int16
@@ -402,6 +416,7 @@ func loadState(dir string) (*engineState, Report) {
 	})
 	if err != nil {
 		slog.Warn("Sigma 规则目录不可读", "dir", dir, "err", err)
+		report.Skipped["规则目录读取失败"] = append(report.Skipped["规则目录读取失败"], err.Error())
 	}
 	s.index()
 	return s, report
@@ -596,7 +611,7 @@ func Compile(data []byte) (*Rule, error) {
 		return nil, err
 	}
 
-	rule := &Rule{Severity: 3, sels: sels, cond: cond}
+	rule := &Rule{source: string(data), Severity: 3, sels: sels, cond: cond, digest: fmt.Sprintf("%x", sha256.Sum256(data))}
 	if id, ok := doc["id"].(string); ok {
 		rule.ID = id
 	}

@@ -231,7 +231,7 @@ type Command struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // UUID，结果按此关联
 	Kind  CommandKind            `protobuf:"varint,2,opt,name=kind,proto3,enum=openxdr.agent.v1.CommandKind" json:"kind,omitempty"`
-	// 只做不改：dry_run 时执行器只报告"将会做什么"，不产生任何实际影响
+	// 已废弃：平台不再下发演练，恒为 false；agent 忽略此字段。保留字段号兼容已部署的 agent
 	DryRun bool `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
 	// KILL_PROCESS 用：优先按 GUID 校验，pid 会被系统复用
 	ProcessGuid string `protobuf:"bytes,4,opt,name=process_guid,json=processGuid,proto3" json:"process_guid,omitempty"`
@@ -432,6 +432,50 @@ func (x *CommandResult) GetTruncated() bool {
 	return false
 }
 
+type CommandResultAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CommandId     string                 `protobuf:"bytes,1,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommandResultAck) Reset() {
+	*x = CommandResultAck{}
+	mi := &file_agent_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommandResultAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommandResultAck) ProtoMessage() {}
+
+func (x *CommandResultAck) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommandResultAck.ProtoReflect.Descriptor instead.
+func (*CommandResultAck) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CommandResultAck) GetCommandId() string {
+	if x != nil {
+		return x.CommandId
+	}
+	return ""
+}
+
 type RegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
@@ -446,7 +490,7 @@ type RegisterRequest struct {
 
 func (x *RegisterRequest) Reset() {
 	*x = RegisterRequest{}
-	mi := &file_agent_proto_msgTypes[4]
+	mi := &file_agent_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -458,7 +502,7 @@ func (x *RegisterRequest) String() string {
 func (*RegisterRequest) ProtoMessage() {}
 
 func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[4]
+	mi := &file_agent_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -471,7 +515,7 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{4}
+	return file_agent_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RegisterRequest) GetHostname() string {
@@ -532,7 +576,7 @@ type RegisterResponse struct {
 
 func (x *RegisterResponse) Reset() {
 	*x = RegisterResponse{}
-	mi := &file_agent_proto_msgTypes[5]
+	mi := &file_agent_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -544,7 +588,7 @@ func (x *RegisterResponse) String() string {
 func (*RegisterResponse) ProtoMessage() {}
 
 func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[5]
+	mi := &file_agent_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -557,7 +601,7 @@ func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
 func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{5}
+	return file_agent_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RegisterResponse) GetAgentId() string {
@@ -607,7 +651,7 @@ type AgentEvent struct {
 
 func (x *AgentEvent) Reset() {
 	*x = AgentEvent{}
-	mi := &file_agent_proto_msgTypes[6]
+	mi := &file_agent_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -619,7 +663,7 @@ func (x *AgentEvent) String() string {
 func (*AgentEvent) ProtoMessage() {}
 
 func (x *AgentEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[6]
+	mi := &file_agent_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -632,7 +676,7 @@ func (x *AgentEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentEvent.ProtoReflect.Descriptor instead.
 func (*AgentEvent) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{6}
+	return file_agent_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AgentEvent) GetAgentId() string {
@@ -707,7 +751,7 @@ type ReportAck struct {
 
 func (x *ReportAck) Reset() {
 	*x = ReportAck{}
-	mi := &file_agent_proto_msgTypes[7]
+	mi := &file_agent_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -719,7 +763,7 @@ func (x *ReportAck) String() string {
 func (*ReportAck) ProtoMessage() {}
 
 func (x *ReportAck) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[7]
+	mi := &file_agent_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -732,7 +776,7 @@ func (x *ReportAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportAck.ProtoReflect.Descriptor instead.
 func (*ReportAck) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{7}
+	return file_agent_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ReportAck) GetReceived() uint64 {
@@ -740,6 +784,94 @@ func (x *ReportAck) GetReceived() uint64 {
 		return x.Received
 	}
 	return 0
+}
+
+type HealthRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	HealthJson    string                 `protobuf:"bytes,2,opt,name=health_json,json=healthJson,proto3" json:"health_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HealthRequest) Reset() {
+	*x = HealthRequest{}
+	mi := &file_agent_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HealthRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HealthRequest) ProtoMessage() {}
+
+func (x *HealthRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
+func (*HealthRequest) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *HealthRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *HealthRequest) GetHealthJson() string {
+	if x != nil {
+		return x.HealthJson
+	}
+	return ""
+}
+
+type HealthAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HealthAck) Reset() {
+	*x = HealthAck{}
+	mi := &file_agent_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HealthAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HealthAck) ProtoMessage() {}
+
+func (x *HealthAck) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HealthAck.ProtoReflect.Descriptor instead.
+func (*HealthAck) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{10}
 }
 
 var File_agent_proto protoreflect.FileDescriptor
@@ -778,7 +910,10 @@ const file_agent_proto_rawDesc = "" +
 	"\tSUCCEEDED\x10\x01\x12\n" +
 	"\n" +
 	"\x06FAILED\x10\x02\x12\x0f\n" +
-	"\vUNSUPPORTED\x10\x03\"\xb6\x01\n" +
+	"\vUNSUPPORTED\x10\x03\"1\n" +
+	"\x10CommandResultAck\x12\x1d\n" +
+	"\n" +
+	"command_id\x18\x01 \x01(\tR\tcommandId\"\xb6\x01\n" +
 	"\x0fRegisterRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x19\n" +
@@ -806,17 +941,24 @@ const file_agent_proto_rawDesc = "" +
 	"\x13parent_process_guid\x18\b \x01(\tR\x11parentProcessGuid\x12%\n" +
 	"\x0edropped_events\x18\t \x01(\x04R\rdroppedEvents\"'\n" +
 	"\tReportAck\x12\x1a\n" +
-	"\breceived\x18\x01 \x01(\x04R\breceived*m\n" +
+	"\breceived\x18\x01 \x01(\x04R\breceived\"K\n" +
+	"\rHealthRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
+	"\vhealth_json\x18\x02 \x01(\tR\n" +
+	"healthJson\"\v\n" +
+	"\tHealthAck*m\n" +
 	"\vCommandKind\x12\x1c\n" +
 	"\x18COMMAND_KIND_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fKILL_PROCESS\x10\x01\x12\x10\n" +
 	"\fISOLATE_HOST\x10\x02\x12\x12\n" +
 	"\x0eUNISOLATE_HOST\x10\x03\x12\b\n" +
-	"\x04EXEC\x10\x042\xce\x02\n" +
+	"\x04EXEC\x10\x042\xf8\x03\n" +
 	"\fAgentService\x12Q\n" +
-	"\bRegister\x12!.openxdr.agent.v1.RegisterRequest\x1a\".openxdr.agent.v1.RegisterResponse\x12K\n" +
+	"\bRegister\x12!.openxdr.agent.v1.RegisterRequest\x1a\".openxdr.agent.v1.RegisterResponse\x12L\n" +
+	"\fReportHealth\x12\x1f.openxdr.agent.v1.HealthRequest\x1a\x1b.openxdr.agent.v1.HealthAck\x12K\n" +
 	"\fReportEvents\x12\x1c.openxdr.agent.v1.AgentEvent\x1a\x1b.openxdr.agent.v1.ReportAck(\x01\x12J\n" +
-	"\bCommands\x12\x1f.openxdr.agent.v1.CommandResult\x1a\x19.openxdr.agent.v1.Command(\x010\x01\x12R\n" +
+	"\bCommands\x12\x1f.openxdr.agent.v1.CommandResult\x1a\x19.openxdr.agent.v1.Command(\x010\x01\x12Z\n" +
+	"\x13ReportCommandResult\x12\x1f.openxdr.agent.v1.CommandResult\x1a\".openxdr.agent.v1.CommandResultAck\x12R\n" +
 	"\rDownloadAgent\x12!.openxdr.agent.v1.DownloadRequest\x1a\x1c.openxdr.agent.v1.AgentChunk0\x01B\x13Z\x11openxdr/server/pbb\x06proto3"
 
 var (
@@ -832,7 +974,7 @@ func file_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_agent_proto_goTypes = []any{
 	(CommandKind)(0),          // 0: openxdr.agent.v1.CommandKind
 	(CommandResult_Status)(0), // 1: openxdr.agent.v1.CommandResult.Status
@@ -840,27 +982,34 @@ var file_agent_proto_goTypes = []any{
 	(*AgentChunk)(nil),        // 3: openxdr.agent.v1.AgentChunk
 	(*Command)(nil),           // 4: openxdr.agent.v1.Command
 	(*CommandResult)(nil),     // 5: openxdr.agent.v1.CommandResult
-	(*RegisterRequest)(nil),   // 6: openxdr.agent.v1.RegisterRequest
-	(*RegisterResponse)(nil),  // 7: openxdr.agent.v1.RegisterResponse
-	(*AgentEvent)(nil),        // 8: openxdr.agent.v1.AgentEvent
-	(*ReportAck)(nil),         // 9: openxdr.agent.v1.ReportAck
+	(*CommandResultAck)(nil),  // 6: openxdr.agent.v1.CommandResultAck
+	(*RegisterRequest)(nil),   // 7: openxdr.agent.v1.RegisterRequest
+	(*RegisterResponse)(nil),  // 8: openxdr.agent.v1.RegisterResponse
+	(*AgentEvent)(nil),        // 9: openxdr.agent.v1.AgentEvent
+	(*ReportAck)(nil),         // 10: openxdr.agent.v1.ReportAck
+	(*HealthRequest)(nil),     // 11: openxdr.agent.v1.HealthRequest
+	(*HealthAck)(nil),         // 12: openxdr.agent.v1.HealthAck
 }
 var file_agent_proto_depIdxs = []int32{
-	0, // 0: openxdr.agent.v1.Command.kind:type_name -> openxdr.agent.v1.CommandKind
-	1, // 1: openxdr.agent.v1.CommandResult.status:type_name -> openxdr.agent.v1.CommandResult.Status
-	6, // 2: openxdr.agent.v1.AgentService.Register:input_type -> openxdr.agent.v1.RegisterRequest
-	8, // 3: openxdr.agent.v1.AgentService.ReportEvents:input_type -> openxdr.agent.v1.AgentEvent
-	5, // 4: openxdr.agent.v1.AgentService.Commands:input_type -> openxdr.agent.v1.CommandResult
-	2, // 5: openxdr.agent.v1.AgentService.DownloadAgent:input_type -> openxdr.agent.v1.DownloadRequest
-	7, // 6: openxdr.agent.v1.AgentService.Register:output_type -> openxdr.agent.v1.RegisterResponse
-	9, // 7: openxdr.agent.v1.AgentService.ReportEvents:output_type -> openxdr.agent.v1.ReportAck
-	4, // 8: openxdr.agent.v1.AgentService.Commands:output_type -> openxdr.agent.v1.Command
-	3, // 9: openxdr.agent.v1.AgentService.DownloadAgent:output_type -> openxdr.agent.v1.AgentChunk
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0,  // 0: openxdr.agent.v1.Command.kind:type_name -> openxdr.agent.v1.CommandKind
+	1,  // 1: openxdr.agent.v1.CommandResult.status:type_name -> openxdr.agent.v1.CommandResult.Status
+	7,  // 2: openxdr.agent.v1.AgentService.Register:input_type -> openxdr.agent.v1.RegisterRequest
+	11, // 3: openxdr.agent.v1.AgentService.ReportHealth:input_type -> openxdr.agent.v1.HealthRequest
+	9,  // 4: openxdr.agent.v1.AgentService.ReportEvents:input_type -> openxdr.agent.v1.AgentEvent
+	5,  // 5: openxdr.agent.v1.AgentService.Commands:input_type -> openxdr.agent.v1.CommandResult
+	5,  // 6: openxdr.agent.v1.AgentService.ReportCommandResult:input_type -> openxdr.agent.v1.CommandResult
+	2,  // 7: openxdr.agent.v1.AgentService.DownloadAgent:input_type -> openxdr.agent.v1.DownloadRequest
+	8,  // 8: openxdr.agent.v1.AgentService.Register:output_type -> openxdr.agent.v1.RegisterResponse
+	12, // 9: openxdr.agent.v1.AgentService.ReportHealth:output_type -> openxdr.agent.v1.HealthAck
+	10, // 10: openxdr.agent.v1.AgentService.ReportEvents:output_type -> openxdr.agent.v1.ReportAck
+	4,  // 11: openxdr.agent.v1.AgentService.Commands:output_type -> openxdr.agent.v1.Command
+	6,  // 12: openxdr.agent.v1.AgentService.ReportCommandResult:output_type -> openxdr.agent.v1.CommandResultAck
+	3,  // 13: openxdr.agent.v1.AgentService.DownloadAgent:output_type -> openxdr.agent.v1.AgentChunk
+	8,  // [8:14] is the sub-list for method output_type
+	2,  // [2:8] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_agent_proto_init() }
@@ -874,7 +1023,7 @@ func file_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   8,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

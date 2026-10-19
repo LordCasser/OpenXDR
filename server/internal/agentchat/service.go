@@ -293,7 +293,7 @@ func (s *Service) closeDangling(ctx context.Context, id uuid.UUID, seq *int) err
 	for _, p := range pending {
 		content, err := json.Marshal(map[string]any{
 			"role": "toolResult", "toolCallId": p.ID, "toolName": p.Name, "isError": true, "timestamp": time.Now().UnixMilli(),
-			"content": []map[string]string{{"type": "text", "text": "用户停止了本轮，这个工具调用没有完成"}},
+			"content": []map[string]string{{"type": "text", "text": "本轮已停止，未取得这个工具调用的完整结果；不代表动作没有执行。先核对已有指令记录和副作用，禁止自动重试"}},
 		})
 		if err != nil {
 			return err
@@ -531,6 +531,7 @@ var reportTool = piruntime.Tool{Name: "report", Description: "保存当前会话
 
 func (s *Service) tools(ctx context.Context, group uuid.UUID) []piruntime.Tool {
 	tools := []piruntime.Tool{
+		commandStatusTool,
 		{Name: "exec", Description: "对组内资产执行命令，高风险命令会暂停等组管理员批准。host 为资产 UUID。", Parameters: json.RawMessage(`{"type":"object","properties":{"host":{"type":"string"},"cmd":{"type":"string","minLength":1,"maxLength":32768},"timeout":{"type":"integer","minimum":1,"maximum":300}},"required":["host","cmd"],"additionalProperties":false}`)},
 		{Name: "track", Description: trackDescription, Parameters: trackParameters},
 		{Name: "identify", Description: identifyDescription, Parameters: identifyParameters},
@@ -551,6 +552,8 @@ func (s *Service) tools(ctx context.Context, group uuid.UUID) []piruntime.Tool {
 // tool 执行一次工具调用。who 只携带发起身份（用户或系统）与审批超时，其余字段由会话决定。
 func (s *Service) tool(ctx context.Context, session *ent.AgentSession, who commandgate.Request, name string, args json.RawMessage) (string, error) {
 	switch name {
+	case "command_status":
+		return s.commandStatus(ctx, session, args)
 	case "exec":
 		var body struct {
 			Host    uuid.UUID `json:"host"`
@@ -625,22 +628,26 @@ func (s *Service) waitCommand(ctx context.Context, cmd *ent.Command, timeout uin
 	defer ticker.Stop()
 	for {
 		if cmd.Status == "unknown" {
-			return "", fmt.Errorf("命令 %s 投递结果未知，请查询命令记录，禁止自动重试", cmd.ID)
+			return "", fmt.Errorf("命令 %s 投递或执行结果未知，请用 command_status 查询已有指令，禁止自动重试", cmd.ID)
 		}
 		if cmd.Status != "pending" && cmd.Status != "sent" {
 			// 只裁剪模型上下文中的副本，Command 表仍保留完整回执。
 			result := *cmd
 			result.Stdout = modelOutput(cmd.Stdout, &result.Truncated)
 			result.Stderr = modelOutput(cmd.Stderr, &result.Truncated)
-			return marshal(&result)
+			return marshal(struct {
+				*ent.Command
+				Effect string `json:"effect"`
+				Retry  string `json:"retry"`
+			}{&result, "not_assessed_by_this_tool", "not_authorized_by_this_tool"})
 		}
 		select {
 		case <-wait.Done():
-			return "", fmt.Errorf("等待命令 %s 回执结束，执行状态未知，请查询记录，禁止自动重试: %w", cmd.ID, wait.Err())
+			return "", fmt.Errorf("等待命令 %s 回执结束，执行状态未知，请用 command_status 查询已有指令，禁止自动重试: %w", cmd.ID, wait.Err())
 		case <-ticker.C:
 			current, err := s.DB.Command.Get(wait, cmd.ID)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("命令 %s 回执读取失败，执行状态未知，请用 command_status 查询已有指令，禁止自动重试", cmd.ID)
 			}
 			cmd = current
 		}

@@ -72,6 +72,12 @@ func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, ma
 	if replicas < 1 || replicas > 5 {
 		return nil, fmt.Errorf("QUEUE_REPLICAS 必须在 1..5")
 	}
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("QUEUE_MAX_BYTES_GB 必须大于 0")
+	}
+	if maxAge != 0 {
+		return nil, fmt.Errorf("QUEUE_MAX_AGE_HOURS 必须为 0：已确认但未处理的事件不能按时间过期")
+	}
 	nc, err := nats.Connect(url,
 		nats.Name("openxdr-"+instance),
 		nats.MaxReconnects(-1),
@@ -96,7 +102,7 @@ func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, ma
 		Replicas:    replicas,
 		MaxBytes:    maxBytes,
 		MaxAge:      maxAge,
-		Discard:     nats.DiscardOld,
+		Discard:     nats.DiscardNew,
 	}
 	if info, infoErr := js.StreamInfo(streamName); infoErr != nil {
 		if _, err = js.AddStream(config); err != nil {
@@ -106,6 +112,9 @@ func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, ma
 	} else if info.Config.Description != "" && info.Config.Description != config.Description {
 		nc.Close()
 		return nil, fmt.Errorf("QUEUE_SHARDS 与现有 stream 不一致: %q", info.Config.Description)
+	} else if (info.Config.MaxBytes <= 0 || maxBytes < info.Config.MaxBytes) || info.State.Bytes > uint64(maxBytes) {
+		nc.Close()
+		return nil, fmt.Errorf("拒绝在线缩小队列容量；请在停写维护窗口核对积压后调整")
 	} else if _, err = js.UpdateStream(config); err != nil {
 		nc.Close()
 		return nil, err

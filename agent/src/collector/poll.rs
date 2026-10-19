@@ -12,6 +12,7 @@ use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 const INTERVAL: Duration = Duration::from_secs(1);
 
 pub async fn run(agent_id: String, tx: EventSink) {
+    tx.capability("process", "poll", "degraded");
     // 默认刷新不含命令行/可执行路径/用户，检测规则全靠这几项，必须显式要
     let kind = ProcessRefreshKind::nothing()
         .with_cmd(UpdateKind::Always)
@@ -29,7 +30,7 @@ pub async fn run(agent_id: String, tx: EventSink) {
         registry.seed(pid.as_u32(), &proc.name().to_string_lossy(), exe.as_deref());
     }
 
-    loop {
+    while !tx.is_closed() {
         tokio::time::sleep(INTERVAL).await;
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
 

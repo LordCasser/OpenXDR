@@ -121,7 +121,8 @@ func TestResultStatus(t *testing.T) {
 		{pb.CommandResult_SUCCEEDED, "succeeded"},
 		{pb.CommandResult_FAILED, "failed"},
 		{pb.CommandResult_UNSUPPORTED, "unsupported"},
-		{pb.CommandResult_Status(999), "failed"}, // 未知状态兜底
+		{pb.CommandResult_STATUS_UNSPECIFIED, "unknown"},
+		{pb.CommandResult_Status(999), "unknown"}, // 未知状态兜底
 	}
 	for _, tc := range cases {
 		if got := resultStatus(tc.st); got != tc.want {

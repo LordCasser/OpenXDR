@@ -11,26 +11,30 @@ import (
 )
 
 type Metrics struct {
-	published  *prometheus.CounterVec
-	processed  *prometheus.CounterVec
-	failed     *prometheus.CounterVec
-	alerts     *prometheus.CounterVec
-	duration   *prometheus.HistogramVec
-	queueDepth *prometheus.GaugeVec
+	temporalSkipped *prometheus.CounterVec
+	published       *prometheus.CounterVec
+	processed       *prometheus.CounterVec
+	failed          *prometheus.CounterVec
+	alerts          *prometheus.CounterVec
+	duration        *prometheus.HistogramVec
+	queueDepth      *prometheus.GaugeVec
 }
 
 func New(reg prometheus.Registerer) *Metrics {
 	m := &Metrics{
-		published:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_events_published_total", Help: "发布到处理管线的事件数"}, []string{"source"}),
-		processed:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_events_processed_total", Help: "处理完成的事件数"}, []string{"source", "duplicate"}),
-		failed:     prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_pipeline_failures_total", Help: "处理管线失败数"}, []string{"stage"}),
-		alerts:     prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_alerts_created_total", Help: "新建告警数"}, []string{"source"}),
-		duration:   prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "openxdr_event_processing_seconds", Help: "单事件处理耗时", Buckets: prometheus.DefBuckets}, []string{"source"}),
-		queueDepth: prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "openxdr_queue_pending_messages", Help: "JetStream 分片待处理消息"}, []string{"shard"}),
+		temporalSkipped: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_temporal_skipped_total", Help: "时序检测未覆盖的事件数"}, []string{"reason"}),
+		published:       prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_events_published_total", Help: "发布到处理管线的事件数"}, []string{"source"}),
+		processed:       prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_events_processed_total", Help: "处理完成的事件数"}, []string{"source", "duplicate"}),
+		failed:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_pipeline_failures_total", Help: "处理管线失败数"}, []string{"stage"}),
+		alerts:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_alerts_created_total", Help: "新建告警数"}, []string{"source"}),
+		duration:        prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "openxdr_event_processing_seconds", Help: "单事件处理耗时", Buckets: prometheus.DefBuckets}, []string{"source"}),
+		queueDepth:      prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "openxdr_queue_pending_messages", Help: "JetStream 分片待处理消息"}, []string{"shard"}),
 	}
-	reg.MustRegister(m.published, m.processed, m.failed, m.alerts, m.duration, m.queueDepth)
+	reg.MustRegister(m.temporalSkipped, m.published, m.processed, m.failed, m.alerts, m.duration, m.queueDepth)
 	return m
 }
+
+func (m *Metrics) TemporalSkipped(reason string) { m.temporalSkipped.WithLabelValues(reason).Inc() }
 
 func (m *Metrics) Published(source string) { m.published.WithLabelValues(source).Inc() }
 func (m *Metrics) PublishFailed()          { m.failed.WithLabelValues("publish").Inc() }

@@ -45,12 +45,7 @@ func (s *Server) Commands(stream pb.AgentService_CommandsServer) error {
 	heartbeat := time.NewTicker(heartbeatInterval)
 	defer heartbeat.Stop()
 
-	// 只补发可重放的响应动作；直接写流，避免重连关闭 outbound 时仍向其发送。
-	for _, cmd := range s.Hub.PendingFor(ctx, agentID) {
-		if err := stream.Send(s.Hub.ToProto(cmd)); err != nil {
-			return err
-		}
-	}
+	// 不重放旧指令：隔离意图可能过期，PID 可能复用；迟到回执仍可正常入库。
 
 	// 收执行结果：Recv 阻塞，单独跑一个 goroutine
 	recvErr := make(chan error, 1)
@@ -61,7 +56,11 @@ func (s *Server) Commands(stream pb.AgentService_CommandsServer) error {
 				recvErr <- err
 				return
 			}
-			s.Hub.Complete(ctx, agentID, res)
+			if err := s.Hub.Complete(ctx, agentID, res); err != nil {
+				slog.Warn("指令回执未持久化", "agent", agentID, "err", err)
+				recvErr <- errors.New("指令回执未持久化，执行结果仍需核实")
+				return
+			}
 		}
 	}()
 

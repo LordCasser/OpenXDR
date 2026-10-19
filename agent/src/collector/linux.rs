@@ -66,6 +66,7 @@ pub async fn run(agent_id: String, tx: EventSink, collect_network: bool) {
     if let Err(e) = run_ebpf(agent_id.clone(), tx.clone(), collect_network).await {
         eprintln!("eBPF 采集不可用（{e}），尝试 netlink proc connector");
         if collect_network {
+            tx.capability("network", "ebpf", "unavailable");
             dnswatch::spawn(agent_id.clone(), tx.clone(), None);
         }
         // 与默认构建同一降级链：netlink 拿不到再退轮询，不直接从最强掉到最弱
@@ -88,6 +89,7 @@ async fn run_ebpf(
     use aya::programs::TracePoint;
     use aya::util::online_cpus;
 
+    let mut readers = tokio::task::JoinSet::new();
     let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!(concat!(
         env!("OUT_DIR"),
         "/openxdr-ebpf"
@@ -106,6 +108,7 @@ async fn run_ebpf(
         .try_into()?;
     exit_program.load()?;
     exit_program.attach("sched", "sched_process_exit")?;
+    tx.capability("process", "ebpf", "active");
 
     let mut events: AsyncPerfEventArray<_> = bpf
         .take_map("EVENTS")
@@ -129,7 +132,7 @@ async fn run_ebpf(
         let tx = tx.clone();
         let agent_id = agent_id.clone();
         let registry = registry.clone();
-        tokio::spawn(async move {
+        readers.spawn(async move {
             let mut bufs = (0..8)
                 .map(|_| bytes::BytesMut::with_capacity(2048))
                 .collect::<Vec<_>>();
@@ -161,7 +164,7 @@ async fn run_ebpf(
         let tx = tx.clone();
         let agent_id = agent_id.clone();
         let registry = registry.clone();
-        tokio::spawn(async move {
+        readers.spawn(async move {
             let mut bufs = (0..8)
                 .map(|_| bytes::BytesMut::with_capacity(256))
                 .collect::<Vec<_>>();
@@ -191,8 +194,9 @@ async fn run_ebpf(
     // 网络采集独立降级：老内核没有 inet_sock_set_state 时进程采集照常
     if collect_network {
         let owners: Shared<HashMap<u16, (u32, Instant)>> = Default::default();
-        match spawn_conn_readers(&mut bpf, &agent_id, &tx, &registry, &owners).await {
+        match spawn_conn_readers(&mut bpf, &agent_id, &tx, &registry, &owners, &mut readers).await {
             Ok(udp) => {
+                tx.capability("network", "ebpf", if udp { "active" } else { "degraded" });
                 let udp = if udp { "、UDP 出站" } else { "" };
                 eprintln!("网络采集: eBPF（TCP 出站与入站{udp}，60s 采样）");
                 dnswatch::spawn(
@@ -202,6 +206,7 @@ async fn run_ebpf(
                 );
             }
             Err(e) => {
+                tx.capability("network", "ebpf", "unavailable");
                 eprintln!("网络采集不可用（{e}）");
                 dnswatch::spawn(agent_id.clone(), tx.clone(), None);
             }
@@ -209,7 +214,7 @@ async fn run_ebpf(
     }
 
     // 常驻：bpf 句柄在本栈上保活，程序保持挂载
-    std::future::pending::<()>().await;
+    tx.closed().await;
     Ok(())
 }
 
@@ -249,6 +254,7 @@ async fn spawn_conn_readers(
     tx: &EventSink,
     registry: &Shared<ProcessRegistry>,
     dns_owners: &Shared<HashMap<u16, (u32, Instant)>>,
+    readers: &mut tokio::task::JoinSet<()>,
 ) -> Result<bool, BoxError> {
     use aya::maps::perf::AsyncPerfEventArray;
     use aya::util::online_cpus;
@@ -277,7 +283,7 @@ async fn spawn_conn_readers(
         let tx = tx.clone();
         let agent_id = agent_id.to_string();
         let state = state.clone();
-        tokio::spawn(async move {
+        readers.spawn(async move {
             let mut bufs = (0..8)
                 .map(|_| bytes::BytesMut::with_capacity(1024))
                 .collect::<Vec<_>>();

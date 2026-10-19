@@ -4,7 +4,9 @@ package janitor
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -131,4 +133,54 @@ func TestJanitorCleansExpiredSessions(t *testing.T) {
 		t.Errorf("未过期会话应保留: %v", err)
 	}
 	cancel()
+}
+
+func TestSweepPreservesTemporalEvidenceIncludingMergedAnchor(t *testing.T) {
+	ctx, client := testdb.New(t)
+	db, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	old := time.Now().Add(-48 * time.Hour)
+	var ids []uuid.UUID
+	for range 4 {
+		e, err := client.Event.Create().SetTs(old).SetClassUID(1007).SetSource("agent").SetRaw(json.RawMessage(`{"evidence":"original"}`)).Save(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, e.ID)
+	}
+	alert, err := client.Alert.Create().SetTs(old).SetRuleID("sequence").SetSeverity(4).SetEventID(ids[0]).Save(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO temporal_rule_snapshots(revision,document) VALUES('v','{}') ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	evidence, _ := json.Marshal([]uuid.UUID{ids[2], ids[1]})
+	if _, err := db.Exec(`INSERT INTO temporal_detections(revision,rule_id,anchor_id,group_id,entity,evidence,alert_id) VALUES('v','sequence',$1,$2,'asset',$3::jsonb,$4)`, ids[1], uuid.New(), string(evidence), alert.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO temporal_evidence(revision,rule_id,anchor_id,event_id) VALUES('v','sequence',$1,$2)`, ids[1], ids[2]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DELETE FROM events WHERE id=$1`, ids[2]); err == nil {
+		t.Fatal("外键必须阻止删除仍被使用的原始证据")
+	}
+	j := &Janitor{DB: client, Retention: 24 * time.Hour}
+	if n, err := j.sweep(ctx); err != nil || n != 1 {
+		t.Fatalf("只应清理无关事件: %d %v", n, err)
+	}
+	for _, id := range ids[:3] {
+		if _, err := client.Event.Get(ctx, id); err != nil {
+			t.Fatalf("原始事件被清理: %s %v", id, err)
+		}
+	}
+	if err := client.Alert.DeleteOneID(alert.ID).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := j.sweep(ctx); err != nil || n != 3 {
+		t.Fatalf("告警删除后应释放证据: %d %v", n, err)
+	}
 }

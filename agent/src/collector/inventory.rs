@@ -74,32 +74,100 @@ type Fingerprint = Vec<(Proto, IpAddr, u16, Option<String>)>;
 /// scan 由平台模块提供，返回当前监听表（无需排序去重）。
 pub fn spawn<F>(agent_id: String, sink: EventSink, scan: F)
 where
-    F: FnMut() -> Vec<Listener> + Send + 'static,
+    F: FnMut() -> std::io::Result<Vec<Listener>> + Send + 'static,
 {
     std::thread::spawn(move || run(&agent_id, &sink, scan));
 }
 
-fn run(agent_id: &str, sink: &EventSink, mut scan: impl FnMut() -> Vec<Listener>) {
+fn run(agent_id: &str, sink: &EventSink, mut scan: impl FnMut() -> std::io::Result<Vec<Listener>>) {
     // 断线重连会重新拉起采集，云环境探测按进程只做一次
     static CLOUD: OnceLock<Option<Cloud>> = OnceLock::new();
     let cloud = CLOUD.get_or_init(cloud::detect).as_ref();
 
     let mut last: Option<(Fingerprint, Instant)> = None;
+    #[cfg(target_os = "linux")]
+    let mut last_accounts = None;
     while !sink.is_closed() {
-        let listeners = normalize(scan());
+        let listeners = match scan() {
+            Ok(listeners) => {
+                sink.capability(
+                    "inventory",
+                    if cfg!(windows) {
+                        "ip-helper"
+                    } else {
+                        "proc-net"
+                    },
+                    "active",
+                );
+                normalize(listeners)
+            }
+            Err(_) => {
+                sink.capability(
+                    "inventory",
+                    if cfg!(windows) {
+                        "ip-helper"
+                    } else {
+                        "proc-net"
+                    },
+                    "unavailable",
+                );
+                std::thread::sleep(POLL_INTERVAL);
+                continue;
+            }
+        };
         let fp = fingerprint(&listeners);
         let due = match &last {
             Some((prev, at)) => *prev != fp || at.elapsed() >= HEARTBEAT,
             None => true,
         };
+        #[cfg(target_os = "linux")]
+        let (accounts, due) = {
+            let value = super::local_accounts::snapshot().ok();
+            sink.capability(
+                "local-accounts",
+                "etc-passwd",
+                if value.is_some() {
+                    "active"
+                } else {
+                    "unavailable"
+                },
+            );
+            let changed = due || value != last_accounts;
+            (value, changed)
+        };
         if due {
-            if !sink.send(inventory_event(agent_id, &listeners, cloud)) {
+            let event = inventory_event(agent_id, &listeners, cloud);
+            #[cfg(target_os = "linux")]
+            let event = with_local_accounts(event, accounts.as_deref());
+            if !sink.send(event) {
                 return;
+            }
+            #[cfg(target_os = "linux")]
+            {
+                last_accounts = accounts;
             }
             last = Some((fp, Instant::now()));
         }
         std::thread::sleep(POLL_INTERVAL);
     }
+}
+
+#[cfg(target_os = "linux")]
+fn with_local_accounts(
+    mut event: AgentEvent,
+    accounts: Option<&[super::local_accounts::Account]>,
+) -> AgentEvent {
+    // 输入是本模块刚生成的 JSON，不包含外部文本；失败时保留原始清单事件。
+    if let Ok(mut raw) = serde_json::from_str::<Value>(&event.raw_json) {
+        raw["device"]["local_accounts"] = match accounts {
+            Some(items) => {
+                json!({"version": 1, "source": "etc-passwd", "state": "observed", "items": items})
+            }
+            None => json!({"version": 1, "source": "etc-passwd", "state": "unavailable"}),
+        };
+        event.raw_json = raw.to_string();
+    }
+    event
 }
 
 /// 去重（按协议+地址+端口，优先保留认出属主的那条）、排序（协议、端口、地址）、截断。
@@ -183,6 +251,20 @@ fn inventory_event(agent_id: &str, listeners: &[Listener], cloud: Option<&Cloud>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn account_inventory_distinguishes_empty_from_unavailable() {
+        let empty = with_local_accounts(inventory_event("a", &[], None), Some(&[]));
+        let value: Value = serde_json::from_str(&empty.raw_json).unwrap();
+        assert_eq!(value["device"]["local_accounts"]["items"], json!([]));
+        assert_eq!(value["device"]["local_accounts"]["state"], "observed");
+        assert_eq!(value["device"]["listening"], json!([]));
+        let missing = with_local_accounts(inventory_event("a", &[], None), None);
+        let value: Value = serde_json::from_str(&missing.raw_json).unwrap();
+        assert_eq!(value["device"]["local_accounts"]["state"], "unavailable");
+        assert!(value["device"]["local_accounts"].get("items").is_none());
+    }
 
     fn l(proto: Proto, addr: &str, port: u16, owner: Option<&str>) -> Listener {
         Listener {

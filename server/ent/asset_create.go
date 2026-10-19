@@ -93,6 +93,12 @@ func (_c *AssetCreate) SetNillableLastSeen(v *time.Time) *AssetCreate {
 	return _c
 }
 
+// SetCollectorHealth sets the "collector_health" field.
+func (_c *AssetCreate) SetCollectorHealth(v json.RawMessage) *AssetCreate {
+	_c.mutation.SetCollectorHealth(v)
+	return _c
+}
+
 // SetConfig sets the "config" field.
 func (_c *AssetCreate) SetConfig(v json.RawMessage) *AssetCreate {
 	_c.mutation.SetConfig(v)
@@ -480,6 +486,10 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LastSeen(); ok {
 		_spec.SetField(asset.FieldLastSeen, field.TypeTime, value)
 		_node.LastSeen = value
+	}
+	if value, ok := _c.mutation.CollectorHealth(); ok {
+		_spec.SetField(asset.FieldCollectorHealth, field.TypeJSON, value)
+		_node.CollectorHealth = value
 	}
 	if value, ok := _c.mutation.Config(); ok {
 		_spec.SetField(asset.FieldConfig, field.TypeJSON, value)

@@ -13,13 +13,13 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use windows_sys::Win32::Foundation::{ERROR_NO_MORE_ITEMS, GetLastError};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, ERROR_NO_MORE_ITEMS, GetLastError, HANDLE, WAIT_FAILED, WAIT_TIMEOUT,
+};
 use windows_sys::Win32::System::EventLog::{
     EvtClose, EvtNext, EvtRender, EvtRenderEventXml, EvtSubscribe, EvtSubscribeToFutureEvents,
 };
-use windows_sys::Win32::System::Threading::{
-    CreateEventW, INFINITE, ResetEvent, WaitForSingleObject,
-};
+use windows_sys::Win32::System::Threading::{CreateEventW, ResetEvent, WaitForSingleObject};
 
 use super::EventSink;
 use crate::pb::AgentEvent;
@@ -65,6 +65,7 @@ pub fn spawn(agent_id: String, sink: EventSink) {
             "登录/安全日志监控: Security 日志 4624/4625/4648/4719/4720/4726/4732/1102",
             parse_security_event,
         ) {
+            sec_sink.capability("auth", "event-log-security", "unavailable");
             eprintln!("登录/安全日志监控不可用（EvtSubscribe 错误码 {e}），需要管理员权限");
         }
     });
@@ -79,6 +80,7 @@ pub fn spawn(agent_id: String, sink: EventSink) {
             "PowerShell 脚本块监控: 4104 Script Block Logging",
             parse_script_block,
         ) {
+            sink.capability("powershell", "event-log-4104", "unavailable");
             eprintln!(
                 "PowerShell 脚本块监控不可用（EvtSubscribe 错误码 {e}），\
                  可能未启用 Script Block Logging，不影响登录监控"
@@ -106,6 +108,7 @@ fn subscribe(
     if signal.is_null() {
         return Err(unsafe { GetLastError() });
     }
+    let mut handles = Subscription { signal, sub: 0 };
     let channel_w = wide(channel);
     let query_w = wide(query);
     let sub = unsafe {
@@ -123,31 +126,71 @@ fn subscribe(
     if sub == 0 {
         return Err(unsafe { GetLastError() });
     }
+    handles.sub = sub;
+    sink.capability(
+        if channel == "Security" {
+            "auth"
+        } else {
+            "powershell"
+        },
+        if channel == "Security" {
+            "event-log-security"
+        } else {
+            "event-log-4104"
+        },
+        "active",
+    );
     eprintln!("{desc}");
-
-    loop {
-        unsafe { WaitForSingleObject(signal, INFINITE) };
+    while !sink.is_closed() {
+        match unsafe { WaitForSingleObject(signal, 1000) } {
+            WAIT_TIMEOUT => continue,
+            WAIT_FAILED => return Err(unsafe { GetLastError() }),
+            _ => {}
+        }
         loop {
-            let mut handles = [0isize; 16];
+            let mut events = [0isize; 16];
             let mut got = 0u32;
-            if unsafe { EvtNext(sub, 16, handles.as_mut_ptr(), INFINITE, 0, &mut got) } == 0 {
-                if unsafe { GetLastError() } == ERROR_NO_MORE_ITEMS {
+            if unsafe { EvtNext(sub, 16, events.as_mut_ptr(), 0, 0, &mut got) } == 0 {
+                let error = unsafe { GetLastError() };
+                if error == ERROR_NO_MORE_ITEMS {
                     unsafe { ResetEvent(signal) };
+                    break;
                 }
-                break;
+                return Err(error);
             }
-            for &h in &handles[..got as usize] {
-                let ev = render_xml(h)
-                    .as_deref()
-                    .and_then(|xml| parse(xml, agent_id));
-                unsafe { EvtClose(h) };
-                if let Some(ev) = ev
-                    && !sink.send(ev)
-                {
-                    unsafe { EvtClose(sub) };
-                    return Ok(());
+            let mut open = true;
+            for &event in &events[..got as usize] {
+                let value = if open {
+                    render_xml(event)
+                        .as_deref()
+                        .and_then(|xml| parse(xml, agent_id))
+                } else {
+                    None
+                };
+                unsafe { EvtClose(event) };
+                if let Some(value) = value {
+                    open = sink.send(value);
                 }
             }
+            if !open {
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
+}
+
+struct Subscription {
+    signal: HANDLE,
+    sub: isize,
+}
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        unsafe {
+            if self.sub != 0 {
+                EvtClose(self.sub);
+            }
+            CloseHandle(self.signal);
         }
     }
 }
@@ -192,6 +235,9 @@ fn render_xml(event: isize) -> Option<String> {
 
 struct LoginRecord {
     user: String,
+    sid: String,
+    domain: String,
+    logon_id: String,
     ip: String,
     logon_type: String,
     failure: bool,
@@ -203,7 +249,13 @@ struct LoginRecord {
 
 /// 取 <Data Name='X'>value</Data> 的值。wevtapi 渲染用单引号属性。
 fn xml_data<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
-    let tag = format!("Name='{name}'>");
+    let single = format!("Name='{name}'>");
+    let double = format!("Name=\"{name}\">");
+    let tag = if xml.contains(&single) {
+        single
+    } else {
+        double
+    };
     let rest = &xml[xml.find(&tag)? + tag.len()..];
     Some(&rest[..rest.find("</Data>")?])
 }
@@ -244,12 +296,10 @@ fn parse_security_event(xml: &str, agent_id: &str) -> Option<AgentEvent> {
 
 /// 解析 4624/4625，滤掉机器账号与服务会话——人的登录才是信号。
 fn parse_security_xml(xml: &str) -> Option<LoginRecord> {
-    let failure = if xml.contains("<EventID>4625</EventID>") {
-        true
-    } else if xml.contains("<EventID>4624</EventID>") {
-        false
-    } else {
-        return None;
+    let failure = match event_id(xml)? {
+        4625 => true,
+        4624 => false,
+        _ => return None,
     };
     let user = xml_data(xml, "TargetUserName").unwrap_or_default();
     if is_machine_or_service(user) {
@@ -262,6 +312,15 @@ fn parse_security_xml(xml: &str) -> Option<LoginRecord> {
     }
     Some(LoginRecord {
         user: user.to_string(),
+        sid: xml_data(xml, "TargetUserSid")
+            .unwrap_or_default()
+            .to_string(),
+        domain: xml_data(xml, "TargetDomainName")
+            .unwrap_or_default()
+            .to_string(),
+        logon_id: xml_data(xml, "TargetLogonId")
+            .unwrap_or_default()
+            .to_string(),
         ip: xml_data(xml, "IpAddress").unwrap_or_default().to_string(),
         logon_type: logon_type.to_string(),
         failure,
@@ -296,11 +355,27 @@ fn auth_event(agent_id: &str, user: &str, raw: serde_json::Value) -> AgentEvent 
 fn login_event(agent_id: &str, rec: &LoginRecord) -> AgentEvent {
     let mut raw = serde_json::json!({
         "activity_id": ACTIVITY_LOGON,
+        "event_id": if rec.failure { 4625 } else { 4624 },
+        "log_name": "Security",
         "status_id": if rec.failure { 2 } else { 1 },
         "user": { "name": rec.user },
         "src_endpoint": { "ip": rec.ip },
         "service": { "name": format!("logon-type-{}", rec.logon_type) },
     });
+    if !matches!(rec.sid.as_str(), "" | "-" | "S-1-0-0") {
+        raw["user"]["uid"] = rec.sid.clone().into();
+    }
+    if !matches!(rec.domain.as_str(), "" | "-") {
+        raw["user"]["domain"] = rec.domain.clone().into();
+    }
+    // 失败登录没有创建目标会话，SubjectLogonId 也不能当作目标会话。
+    if !rec.failure
+        && let Some(value) = rec.logon_id.strip_prefix("0x")
+        && let Ok(value) = u64::from_str_radix(value, 16)
+        && value != 0
+    {
+        raw["session"] = serde_json::json!({"uid": format!("0x{value:x}")});
+    }
     // 失败原因码有值才写：4624 的 Status 恒为成功码，没有研判价值
     if !rec.status.is_empty() {
         raw["status_code"] = rec.status.clone().into();
@@ -473,6 +548,31 @@ mod tests {
              <Data Name='SubStatus'>{sub}</Data>\
              </EventData></Event>"
         )
+    }
+
+    #[test]
+    fn login_preserves_target_identity_without_inventing_session() {
+        let input = xml(4624, "alice", "3", "10.0.0.7").replace("</EventData>",
+            "<Data Name=\"TargetUserSid\">S-1-5-21-1-2-3-1001</Data><Data Name=\"TargetDomainName\">CONTOSO</Data><Data Name=\"TargetLogonId\">0x00ABC</Data></EventData>");
+        let input = input.replace(
+            "<EventID>4624</EventID>",
+            "<EventID Qualifiers='0'>4624</EventID>",
+        );
+        let record = parse_security_xml(&input).unwrap();
+        let event = login_event("agent", &record);
+        let raw: serde_json::Value = serde_json::from_str(&event.raw_json).unwrap();
+        assert_eq!(raw["user"]["uid"], "S-1-5-21-1-2-3-1001");
+        assert_eq!(raw["user"]["domain"], "CONTOSO");
+        assert_eq!(raw["session"]["uid"], "0xabc");
+        assert_eq!(raw["event_id"], 4624);
+        let failed = input
+            .replace("4624", "4625")
+            .replace("S-1-5-21-1-2-3-1001", "S-1-0-0");
+        let event = login_event("agent", &parse_security_xml(&failed).unwrap());
+        let raw: serde_json::Value = serde_json::from_str(&event.raw_json).unwrap();
+        assert!(raw["user"].get("uid").is_none());
+        assert!(raw.get("session").is_none());
+        assert_eq!(raw["event_id"], 4625);
     }
 
     #[test]

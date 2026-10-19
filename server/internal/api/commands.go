@@ -45,7 +45,7 @@ type commandDetection struct {
 }
 
 // withDetections 给指令行补上它触发的检测
-func withDetections(ctx context.Context, db *ent.Client, rules *sigma.Engine, rows []commandRow) error {
+func withDetections(ctx context.Context, db *ent.Client, rules sigma.Catalog, rows []commandRow) error {
 	ids := make([]uuid.UUID, len(rows))
 	for i, r := range rows {
 		ids[i] = r.ID
@@ -93,7 +93,7 @@ type issueBody struct {
 	TimeoutMS   uint32     `json:"timeoutMs"`
 }
 
-func mapCommands(api *http.ServeMux, db *ent.Client, rules *sigma.Engine, hub *response.Hub, selfEndpoints []string, gate *commandgate.Gate) {
+func mapCommands(api *http.ServeMux, db *ent.Client, rules sigma.Catalog, hub *response.Hub, selfEndpoints []string, gate *commandgate.Gate) {
 	api.HandleFunc("POST /api/commands", func(w http.ResponseWriter, r *http.Request) {
 		var body issueBody
 		if json.NewDecoder(r.Body).Decode(&body) != nil {

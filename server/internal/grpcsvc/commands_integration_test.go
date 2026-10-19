@@ -4,7 +4,9 @@ package grpcsvc
 
 import (
 	"context"
+	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +14,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
+	"openxdr/server/ent"
+	"openxdr/server/ent/hook"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/testdb"
 	"openxdr/server/pb"
@@ -56,8 +60,8 @@ func (f *fakeCommandsStream) RecvMsg(any) error            { return nil }
 
 var _ grpc.BidiStreamingServer[pb.CommandResult, pb.Command] = (*fakeCommandsStream)(nil)
 
-// 断线重连后补发未回执指令 + agent 执行后 Complete 回写审计。
-func TestAgentCommandsReplayAndComplete(t *testing.T) {
+// 断线重连不重放任何旧动作，但仍接收迟到回执。
+func TestAgentCommandsNoReplayAndComplete(t *testing.T) {
 	ctx, client := testdb.New(t)
 	agentID := uuid.New()
 
@@ -67,7 +71,7 @@ func TestAgentCommandsReplayAndComplete(t *testing.T) {
 	}
 	hub := response.NewHub(client, true)
 
-	// 已下发未回执的指令（status=sent）应补发给重连的 agent。
+	// 已下发未回执的指令（status=sent）不能自动重放。
 	// 直接落一条 sent 指令，模拟“早已推给 agent 但连接断了”的状态。
 	cmd, err := client.Command.Create().
 		SetKind("isolate_host").
@@ -79,6 +83,11 @@ func TestAgentCommandsReplayAndComplete(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for kind := range response.Kinds {
+		for _, status := range []string{"pending", "sent", "unknown"} {
+			client.Command.Create().SetKind(kind).SetAssetID(asset.ID).SetStatus(status).SaveX(ctx)
+		}
+	}
 	s := &Server{DB: client, Hub: hub}
 	// agent 认领后返回执行结果
 	agentClaim := &pb.CommandResult{AgentId: agentID.String()}
@@ -97,13 +106,8 @@ func TestAgentCommandsReplayAndComplete(t *testing.T) {
 		t.Errorf("连上指令通道应刷新 last_seen，实际 %v", got.LastSeen)
 	}
 
-	// 补发的指令应推给 agent 且内容正确
-	if len(stream.sent) != 1 {
-		t.Fatalf("应补发 1 条指令，实际 %d", len(stream.sent))
-	}
-	pushed := stream.sent[0]
-	if pushed.Kind != pb.CommandKind_ISOLATE_HOST || pushed.Id != cmd.ID.String() {
-		t.Errorf("补发指令内容错误: %+v", pushed)
+	if len(stream.sent) != 0 {
+		t.Fatalf("重连不得重放任何动作，实际 %d", len(stream.sent))
 	}
 
 	// 库中状态应更新为 succeeded，且 detail 落库
@@ -116,5 +120,29 @@ func TestAgentCommandsReplayAndComplete(t *testing.T) {
 	}
 	if got.Detail == nil || *got.Detail != "ok" {
 		t.Errorf("detail 应回写为 ok，实际 %v", got.Detail)
+	}
+}
+
+func TestCommandStreamReportsReceiptStorageFailure(t *testing.T) {
+	ctx, client := testdb.New(t)
+	agentID := uuid.New()
+	host := client.Asset.Create().SetHostname("receipt-failure").SetAgentID(agentID).SaveX(ctx)
+	cmd := client.Command.Create().SetAssetID(host.ID).SetKind("exec").SetStatus("sent").SaveX(ctx)
+	client.Command.Use(func(next ent.Mutator) ent.Mutator {
+		return hook.CommandFunc(func(ctx context.Context, m *ent.CommandMutation) (ent.Value, error) {
+			if state, ok := m.Status(); ok && state == "succeeded" {
+				return nil, errors.New("模拟存储失败")
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
+	hub := response.NewHub(client, true)
+	server := &Server{DB: client, Hub: hub}
+	stream := newFakeCommandsStream(ctx, []*pb.CommandResult{{AgentId: agentID.String()}, {CommandId: cmd.ID.String(), Status: pb.CommandResult_SUCCEEDED}})
+	if err := server.Commands(stream); err == nil || !strings.Contains(err.Error(), "未持久化") {
+		t.Fatalf("流未报告失败: %v", err)
+	}
+	if client.Command.GetX(ctx, cmd.ID).Status != "sent" || len(stream.sent) != 0 || hub.Online(agentID) {
+		t.Fatal("失败后伪造完成、重发或残留指令通道")
 	}
 }

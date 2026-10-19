@@ -35,6 +35,7 @@ pub fn spawn(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegis
 }
 
 fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>) {
+    let health_sink = sink.clone();
     // ETW 回调要求 'static，采样表/注册表/出口全部按所有权移进闭包；
     // 注册表由 mod.rs 传入，与进程采集共享
     let sampler = Mutex::new(ConnSampler::default());
@@ -100,11 +101,17 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
 
     match UserTrace::new().enable(provider).start_and_process() {
         Ok(_trace) => {
+            health_sink.capability("network", "etw-tcp-out", "degraded");
             eprintln!("网络采集: ETW Kernel-Network TcpConnect（TCP 出站，60s 采样）");
             // trace 句柄保活；agent 退出即进程结束，无需额外清理
-            std::thread::park();
+            while !health_sink.is_closed() {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
         }
-        Err(e) => eprintln!("网络采集不可用（{e:?}），进程采集不受影响"),
+        Err(e) => {
+            health_sink.capability("network", "etw-tcp-out", "unavailable");
+            eprintln!("网络采集不可用（{e:?}），进程采集不受影响");
+        }
     }
 }
 

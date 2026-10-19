@@ -84,8 +84,9 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
 
     match UserTrace::new().enable(provider).start_and_process() {
         Ok(_trace) => {
+            tx.capability("process", "etw", "active");
             // trace 句柄保活；channel 关闭即 agent 退出，无需额外清理
-            std::future::pending::<()>().await
+            tx.closed().await
         }
         Err(e) => {
             eprintln!("ETW 采集不可用（{e:?}），回落到轮询采集");

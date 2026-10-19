@@ -32,13 +32,13 @@ pub fn spawn(agent_id: String, sink: EventSink) {
 /// 一行原始记录：(协议, 地址, 端口, pid)
 type Row = (Proto, IpAddr, u16, u32);
 
-fn scan(sys: &mut System) -> Vec<Listener> {
+fn scan(sys: &mut System) -> std::io::Result<Vec<Listener>> {
     let mut rows: Vec<Row> = Vec::new();
 
     let buf = fetch(|p, n| unsafe {
         // SAFETY: p 指向 n 字节可写缓冲（或首轮为空指针取长度），由 fetch 保证
         GetExtendedTcpTable(p, n, 0, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0)
-    });
+    })?;
     rows.extend(
         read_rows::<MIB_TCPROW_OWNER_PID>(
             &buf,
@@ -56,7 +56,7 @@ fn scan(sys: &mut System) -> Vec<Listener> {
     let buf = fetch(|p, n| unsafe {
         // SAFETY: 同上
         GetExtendedTcpTable(p, n, 0, AF_INET6, TCP_TABLE_OWNER_PID_LISTENER, 0)
-    });
+    })?;
     rows.extend(
         read_rows::<MIB_TCP6ROW_OWNER_PID>(
             &buf,
@@ -74,7 +74,7 @@ fn scan(sys: &mut System) -> Vec<Listener> {
     let buf = fetch(|p, n| unsafe {
         // SAFETY: 同上
         GetExtendedUdpTable(p, n, 0, AF_INET, UDP_TABLE_OWNER_PID, 0)
-    });
+    })?;
     rows.extend(
         read_rows::<MIB_UDPROW_OWNER_PID>(
             &buf,
@@ -92,7 +92,7 @@ fn scan(sys: &mut System) -> Vec<Listener> {
     let buf = fetch(|p, n| unsafe {
         // SAFETY: 同上
         GetExtendedUdpTable(p, n, 0, AF_INET6, UDP_TABLE_OWNER_PID, 0)
-    });
+    })?;
     rows.extend(
         read_rows::<MIB_UDP6ROW_OWNER_PID>(
             &buf,
@@ -120,14 +120,15 @@ fn scan(sys: &mut System) -> Vec<Listener> {
         true,
         ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
     );
-    rows.into_iter()
+    Ok(rows
+        .into_iter()
         .map(|(proto, addr, port, pid)| Listener {
             proto,
             addr,
             port,
             owner: owner_of(sys, pid),
         })
-        .collect()
+        .collect())
 }
 
 fn owner_of(sys: &System, pid: u32) -> Option<Owner> {
@@ -157,8 +158,8 @@ fn port(raw: u32) -> u16 {
 }
 
 /// IP Helper 两段式取表：先问长度再取；表在两次调用间变大则重试几次。
-/// 失败返回空缓冲（本轮视为无条目，不报错数据）。缓冲用 u32 数组保证 4 字节对齐。
-fn fetch(call: impl Fn(*mut core::ffi::c_void, *mut u32) -> u32) -> Vec<u32> {
+/// 失败返回错误，调用方保留上次清单。缓冲用 u32 数组保证 4 字节对齐。
+fn fetch(call: impl Fn(*mut core::ffi::c_void, *mut u32) -> u32) -> std::io::Result<Vec<u32>> {
     let mut size = 0u32;
     for _ in 0..4 {
         let mut buf = vec![0u32; (size as usize).div_ceil(4)];
@@ -168,12 +169,12 @@ fn fetch(call: impl Fn(*mut core::ffi::c_void, *mut u32) -> u32) -> Vec<u32> {
             buf.as_mut_ptr().cast()
         };
         match call(ptr, &mut size) {
-            NO_ERROR if !buf.is_empty() => return buf,
+            NO_ERROR if !buf.is_empty() => return Ok(buf),
             NO_ERROR | ERROR_INSUFFICIENT_BUFFER => continue,
-            _ => break,
+            code => return Err(std::io::Error::from_raw_os_error(code as i32)),
         }
     }
-    Vec::new()
+    Err(std::io::Error::other("监听表读取连续变化，保留上次清单"))
 }
 
 /// 按表头条目数取行（行数组位于 offset 处，即表结构的 table 字段）；条目数超出缓冲的部分丢弃（不读越界）

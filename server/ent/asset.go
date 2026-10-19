@@ -31,6 +31,8 @@ type Asset struct {
 	FirstSeen time.Time `json:"first_seen,omitempty"`
 	// LastSeen holds the value of the "last_seen" field.
 	LastSeen time.Time `json:"last_seen,omitempty"`
+	// CollectorHealth holds the value of the "collector_health" field.
+	CollectorHealth json.RawMessage `json:"collector_health,omitempty"`
 	// Config holds the value of the "config" field.
 	Config json.RawMessage `json:"config,omitempty"`
 	// GroupID holds the value of the "group_id" field.
@@ -122,7 +124,7 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case asset.FieldAgentID, asset.FieldGroupID, asset.FieldZoneID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case asset.FieldIPAddrs, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldServiceNotes, asset.FieldEgressNotes, asset.FieldRelationNotes, asset.FieldLockedFields:
+		case asset.FieldIPAddrs, asset.FieldCollectorHealth, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldServiceNotes, asset.FieldEgressNotes, asset.FieldRelationNotes, asset.FieldLockedFields:
 			values[i] = new([]byte)
 		case asset.FieldCriticality:
 			values[i] = new(sql.NullInt64)
@@ -192,6 +194,14 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field last_seen", values[i])
 			} else if value.Valid {
 				_m.LastSeen = value.Time
+			}
+		case asset.FieldCollectorHealth:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field collector_health", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.CollectorHealth); err != nil {
+					return fmt.Errorf("unmarshal field collector_health: %w", err)
+				}
 			}
 		case asset.FieldConfig:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -405,6 +415,9 @@ func (_m *Asset) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("last_seen=")
 	builder.WriteString(_m.LastSeen.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("collector_health=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CollectorHealth))
 	builder.WriteString(", ")
 	builder.WriteString("config=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Config))

@@ -30,7 +30,7 @@ type attackCoverage struct {
 
 // mapAttack ATT&CK 覆盖矩阵。回答的是"我们防住了哪几环"，
 // 以及更重要的"哪些格子看着有规则其实没数据供数"。
-func mapAttack(api *http.ServeMux, rules *sigma.Engine) {
+func mapAttack(api *http.ServeMux, rules sigma.Catalog) {
 	api.HandleFunc("GET /api/attack", func(w http.ResponseWriter, r *http.Request) {
 		type agg struct {
 			rules   int

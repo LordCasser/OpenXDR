@@ -61,6 +61,7 @@ pub fn spawn(agent_id: String, tx: EventSink) -> io::Result<()> {
     }
     let sock = Socket::open()?;
     sock.subscribe()?;
+    tx.capability("process", "netlink", "active");
     std::thread::spawn(move || pump(sock, agent_id, tx));
     Ok(())
 }
@@ -70,8 +71,15 @@ fn pump(sock: Socket, agent_id: String, tx: EventSink) {
     let mut registry = super::seeded_registry();
     let mut buf = vec![0u8; 8192];
 
-    loop {
-        let Ok(n) = sock.recv(&mut buf) else { return };
+    while !tx.is_closed() {
+        let n = match sock.recv(&mut buf) {
+            Ok(n) => n,
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock => continue,
+            Err(_) => {
+                tx.capability("process", "netlink", "unavailable");
+                return;
+            }
+        };
         for event in parse_events(&buf[..n]) {
             let Some(d) = describe(&event) else { continue };
             let event = process_event(
@@ -275,6 +283,22 @@ impl Socket {
 
     fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
+            let mut fd = libc::pollfd {
+                fd: self.0,
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            let ready = unsafe { libc::poll(&mut fd, 1, 1000) };
+            if ready == 0 {
+                return Err(io::ErrorKind::WouldBlock.into());
+            }
+            if ready < 0 {
+                let err = io::Error::last_os_error();
+                if err.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(err);
+            }
             let n =
                 unsafe { libc::recv(self.0, buf.as_mut_ptr() as *mut libc::c_void, buf.len(), 0) };
             if n < 0 {

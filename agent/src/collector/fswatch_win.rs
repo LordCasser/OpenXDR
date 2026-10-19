@@ -2,7 +2,7 @@
 //!
 //! 默认盯 System32\drivers\etc（hosts 劫持）与 System32\config
 //! （SAM/SECURITY hive 所在——hive 被占用读不到内容，但文件变更可见）。
-//! 每个监控目录一个线程，阻塞等事件；不递归子目录（与 Linux 侧
+//! 每个监控目录一个线程，以可取消的重叠 I/O 等事件；不递归子目录（与 Linux 侧
 //! 限深语义对齐，System32 下递归的 watch 开销也扛不住）。
 //! ReadDirectoryChangesW 不提供肇事者进程，事件只有路径与动作——
 //! 这些路径上的任何写入本身就值得一条告警。
@@ -12,15 +12,19 @@ use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, ERROR_NOTIFY_ENUM_DIR, GetLastError, HANDLE, INVALID_HANDLE_VALUE,
+    CloseHandle, ERROR_IO_PENDING, ERROR_NOTIFY_ENUM_DIR, GetLastError, HANDLE,
+    INVALID_HANDLE_VALUE, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_ACTION_ADDED, FILE_ACTION_MODIFIED, FILE_ACTION_REMOVED,
     FILE_ACTION_RENAMED_NEW_NAME, FILE_ACTION_RENAMED_OLD_NAME, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_LIST_DIRECTORY, FILE_NOTIFY_CHANGE_ATTRIBUTES, FILE_NOTIFY_CHANGE_FILE_NAME,
-    FILE_NOTIFY_CHANGE_LAST_WRITE, FILE_NOTIFY_CHANGE_SECURITY, FILE_SHARE_DELETE, FILE_SHARE_READ,
-    FILE_SHARE_WRITE, OPEN_EXISTING, ReadDirectoryChangesW,
+    FILE_FLAG_OVERLAPPED, FILE_LIST_DIRECTORY, FILE_NOTIFY_CHANGE_ATTRIBUTES,
+    FILE_NOTIFY_CHANGE_FILE_NAME, FILE_NOTIFY_CHANGE_LAST_WRITE, FILE_NOTIFY_CHANGE_SECURITY,
+    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING, ReadDirectoryChangesW,
 };
+
+use windows_sys::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
+use windows_sys::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 
 use super::EventSink;
 use crate::pb::AgentEvent;
@@ -77,7 +81,7 @@ fn open_dir(dir: &str) -> Option<HANDLE> {
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             std::ptr::null(),
             OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
             std::ptr::null_mut(),
         )
     };
@@ -87,42 +91,112 @@ fn open_dir(dir: &str) -> Option<HANDLE> {
     Some(handle)
 }
 
+struct OwnedHandle(HANDLE);
+impl Drop for OwnedHandle {
+    fn drop(&mut self) {
+        unsafe { CloseHandle(self.0) };
+    }
+}
+
 fn watch_loop(handle: HANDLE, dir: &str, agent_id: &str, sink: &EventSink) {
-    let mut buf = vec![0u8; 65536];
-    loop {
-        let mut returned = 0u32;
-        let ok = unsafe {
-            ReadDirectoryChangesW(
-                handle,
-                buf.as_mut_ptr().cast(),
-                buf.len() as u32,
-                0, // 不递归子目录
-                NOTIFY_FILTER,
-                &mut returned,
-                std::ptr::null_mut(),
-                None,
-            )
-        };
-        if ok == 0 {
-            // 缓冲区被事件洪流塞爆：这批丢了，继续盯下一批
-            if unsafe { GetLastError() } == ERROR_NOTIFY_ENUM_DIR {
+    let handle = OwnedHandle(handle);
+    let event = unsafe { CreateEventW(std::ptr::null(), 1, 0, std::ptr::null()) };
+    if event.is_null() {
+        eprintln!(
+            "文件监控: {dir} 无法创建完成事件：{}",
+            io::Error::last_os_error()
+        );
+        return;
+    }
+    let event = OwnedHandle(event);
+    // Windows 要求通知缓冲区 DWORD 对齐。
+    let mut storage = vec![0u32; 16384];
+    while !sink.is_closed() {
+        let returned = match read_changes(handle.0, event.0, &mut storage, sink) {
+            Ok(Some(n)) => n,
+            Ok(None) => return,
+            Err(err) if err.raw_os_error() == Some(ERROR_NOTIFY_ENUM_DIR as i32) => {
                 eprintln!("文件监控: {dir} 事件溢出，部分变更丢失");
                 continue;
             }
-            break; // 目录句柄失效（目录已删等），线程退出
+            Err(err) => {
+                eprintln!("文件监控: {dir} 读取失败：{err}");
+                return;
+            }
+        };
+        if returned == 0 {
+            eprintln!("文件监控: {dir} 通知缓冲区溢出，部分变更丢失");
+            continue;
         }
-        for (action, name) in parse_records(&buf[..returned as usize]) {
+        let bytes = unsafe { std::slice::from_raw_parts(storage.as_ptr().cast::<u8>(), returned) };
+        for (action, name) in parse_records(bytes) {
             let Some(activity) = rdcw_activity(action) else {
                 continue;
             };
             let path = format!("{}\\{}", dir.trim_end_matches('\\'), name);
             if !sink.send(file_event(agent_id, &path, activity)) {
-                unsafe { CloseHandle(handle) };
                 return;
             }
         }
     }
-    unsafe { CloseHandle(handle) };
+}
+
+fn read_changes(
+    handle: HANDLE,
+    event: HANDLE,
+    storage: &mut [u32],
+    sink: &EventSink,
+) -> io::Result<Option<usize>> {
+    let mut overlapped = OVERLAPPED {
+        hEvent: event,
+        ..unsafe { std::mem::zeroed() }
+    };
+    let size = std::mem::size_of_val(storage);
+    let ok = unsafe {
+        ReadDirectoryChangesW(
+            handle,
+            storage.as_mut_ptr().cast(),
+            size as u32,
+            0,
+            NOTIFY_FILTER,
+            std::ptr::null_mut(),
+            &mut overlapped,
+            None,
+        )
+    };
+    if ok == 0 && unsafe { GetLastError() } != ERROR_IO_PENDING {
+        return Err(io::Error::last_os_error());
+    }
+    let mut returned = 0;
+    loop {
+        if sink.is_closed() {
+            // 取消仅发出请求，必须等待 I/O 完成后才能释放缓冲区及 OVERLAPPED。
+            unsafe {
+                CancelIoEx(handle, &overlapped);
+                GetOverlappedResult(handle, &overlapped, &mut returned, 1);
+            }
+            return Ok(None);
+        }
+        match unsafe { WaitForSingleObject(event, 250) } {
+            WAIT_TIMEOUT => continue,
+            WAIT_OBJECT_0 => break,
+            _ => {
+                let err = io::Error::last_os_error();
+                unsafe {
+                    CancelIoEx(handle, &overlapped);
+                    GetOverlappedResult(handle, &overlapped, &mut returned, 1);
+                }
+                return Err(err);
+            }
+        }
+    }
+    if unsafe { GetOverlappedResult(handle, &overlapped, &mut returned, 0) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if returned as usize > size {
+        return Err(io::Error::other("通知数据超过缓冲区"));
+    }
+    Ok(Some(returned as usize))
 }
 
 /// 解析一段 FILE_NOTIFY_INFORMATION 记录链，产出 (Action, 相对文件名)。
@@ -203,6 +277,8 @@ mod tests {
             EventSink {
                 tx,
                 dropped: Arc::new(AtomicU64::new(0)),
+                health: crate::health::Health::new(),
+                generation: 0,
             },
             rx,
         )
@@ -286,19 +362,61 @@ mod tests {
         let d = dir_s.clone();
         // HANDLE 不实现 Send，按 usize 搬过线程边界（与 spawn 内一致）
         let raw = handle as usize;
-        std::thread::spawn(move || watch_loop(raw as HANDLE, &d, "agent-t", &sink));
-
-        std::fs::write(dir.join("evil.txt"), b"x").unwrap();
-
-        let ev = rx.blocking_recv().expect("应收到文件事件");
+        let (done, finished) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            watch_loop(raw as HANDLE, &d, "agent-t", &sink);
+            let _ = done.send(());
+        });
+        // 首次读取异步启动，用不同文件名重试，既不无限等也不依赖线程调度顺序。
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        let mut index = 0;
+        let ev = loop {
+            std::fs::write(dir.join(format!("evil-{index}.txt")), b"x").unwrap();
+            if let Ok(event) = rx.try_recv() {
+                break event;
+            }
+            assert!(std::time::Instant::now() < deadline, "未收到文件事件");
+            index += 1;
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
         assert_eq!(ev.class_uid, CLASS_FILE_ACTIVITY);
         assert!(ev.username.is_empty(), "RDCW 路径没有进程上下文");
         let v: serde_json::Value = serde_json::from_str(&ev.raw_json).unwrap();
-        assert_eq!(v["file"]["path"], dir.join("evil.txt").to_str().unwrap());
-        assert_eq!(v["activity_id"], 1);
+        let path = v["file"]["path"].as_str().unwrap();
+        assert!(std::path::Path::new(path).starts_with(&dir));
+        assert!(matches!(v["activity_id"].as_u64(), Some(1 | 3)));
         assert!(v.get("process").is_none());
 
-        let _ = std::fs::remove_dir_all(&dir);
+        rx.close();
+        finished
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .expect("关闭后采集线程应退出");
+        worker.join().unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn idle_watch_stops_without_file_changes() {
+        let dir = temp_root("idle");
+        std::fs::create_dir_all(&dir).unwrap();
+        let (sink, mut rx) = test_sink();
+        let path = dir.to_str().unwrap().to_owned();
+        let raw = open_dir(&path).unwrap() as usize;
+        let (done, finished) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            watch_loop(raw as HANDLE, &path, "agent-t", &sink);
+            let _ = done.send(());
+        });
+        assert!(matches!(
+            finished.recv_timeout(std::time::Duration::from_millis(100)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ));
+        rx.close();
+        finished
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .expect("空闲监控必须可以取消");
+        worker.join().unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
