@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -106,13 +107,23 @@ func Vulns(db *ent.Client, sqlDB *sql.DB) http.Handler {
 				continue
 			}
 			x := row{AssetID: a.ID, Fixable: len(rep.Fixable), Unfixed: len(rep.Unfixed)}
+			// 同一个源码包可能既有可修复也有暂无修复的漏洞，暴露面按源码包合并成一条
+			bySource := map[string]int{}
 			for _, p := range append(append([]vuln.Package{}, rep.Fixable...), rep.Unfixed...) {
 				x.MaxScore = max(x.MaxScore, p.MaxScore)
-				if p.Exposed {
-					x.Exposed++
-					x.ExposedPackages = append(x.ExposedPackages, exposedPackage{p.Source, p.Binaries, p.MaxScore, len(p.Vulns), p.FixedIn})
+				if !p.Exposed {
+					continue
 				}
+				if i, ok := bySource[p.Source]; ok {
+					e := &x.ExposedPackages[i]
+					e.MaxScore, e.Vulns = max(e.MaxScore, p.MaxScore), e.Vulns+len(p.Vulns)
+					e.FixedIn = cmp.Or(e.FixedIn, p.FixedIn)
+					continue
+				}
+				bySource[p.Source] = len(x.ExposedPackages)
+				x.ExposedPackages = append(x.ExposedPackages, exposedPackage{p.Source, p.Binaries, p.MaxScore, len(p.Vulns), p.FixedIn})
 			}
+			x.Exposed = len(x.ExposedPackages)
 			for _, p := range rep.Fixable {
 				if p.MaxScore >= 7 {
 					x.High++
