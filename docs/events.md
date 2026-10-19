@@ -208,6 +208,7 @@ Linux 另有 TCP 入站与 UDP 出站：
 
 - `activity_id`：6 一问一答，1 只有查询（5 秒没等到应答），此时没有 `rcode_id` 与 `answers`
 - 只收本机与本机容器发起的查询；同一 (客户端, 域名, 类型) 60 秒内只报一次
+- `requester.ip`：容器里的解析器（AdGuard、dnsmasq）转发上游时，5 秒内送进同一容器的同名同类型查询的客户端地址，即真正问的一方；没有就省略
 - `process` 只在 eBPF 构建里有（按源端口取 UDP 发送事件的进程）；`conn_tuple` 为 `udp:客户端>服务器:53`
 
 **sensor 会话**中 `dns_query` 非空时判定为 4003（`sensor.go:24-28,79-82`），

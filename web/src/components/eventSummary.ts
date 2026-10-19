@@ -85,7 +85,9 @@ export function eventSummary(classUid: number, raw: unknown, t: T, withAction = 
       const rcode = r.query?.rcode_id
       const result = rcode == null ? `(${t('evNoAnswer')})` : rcode ? RCODE[rcode] ?? `RCODE ${rcode}` : answers ? `→ ${answers}` : undefined
       const type = r.query?.type && r.query.type !== 'A' ? r.query.type : undefined
-      return join(inContainer(r), r.process?.name, r.query?.hostname, type, result)
+      // 解析器转发的查询：标出真正问的客户端
+      const forClient = r.requester?.ip ? t('evForClient', { ip: r.requester.ip }) : undefined
+      return join(inContainer(r), r.process?.name, forClient, r.query?.hostname, type, result)
     }
     case 1005:
       return join(act, r.module?.file?.name || r.module?.file?.path)

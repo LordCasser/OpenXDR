@@ -55,6 +55,7 @@ export function EventFacts({ classUid, raw, username }: { classUid: number; raw:
     </>)
     const answers = Array.isArray(r.answers) ? r.answers.map((a: Raw) => a.ip || a.rdata).filter(Boolean) : []
     add('answers', t('factAnswers'), answers.length > 0 && <span className="mono">{answers.join(', ')}</span>)
+    add('requester', t('factRequester'), r.requester?.ip && <>{mono(r.requester.ip)}<Typography.Text type="secondary"> · {t('factRequesterHint')}</Typography.Text></>)
   }
 
   if (!items.length) return null

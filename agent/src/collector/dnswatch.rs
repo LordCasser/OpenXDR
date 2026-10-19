@@ -3,6 +3,8 @@
 //! 没有 sensor 的部署也拿得到域名：情报的域名部分有东西可撞，出站连接能带上域名。
 //! 只收本机自己（客户端地址是本机地址）与本机容器（报文经 veth 接口）的查询；
 //! 宿主机网桥上转发的虚拟机流量、别的主机来问本机 DNS 服务的查询都不收——那不是这台主机做的事。
+//! 但容器是解析器（AdGuard、dnsmasq）时，它发出的上游查询其实是替局域网客户端问的：别的主机送进容器的查询
+//! 只记不报，容器随后转发同一域名时在事件上标出真正的查询方（requester），告警才不会全算在解析器头上。
 //!
 //! 内核侧用经典 BPF 过滤器只放行 UDP 53，用户态不碰别的包。发起进程由 eBPF 的 UDP 发送事件按源端口归属，
 //! 默认构建没有 eBPF 时只有地址、没有进程。同一客户端对同一域名、同一类型的查询 60 秒内只报一次。
@@ -33,6 +35,8 @@ const DUP_WINDOW: Duration = Duration::from_secs(10);
 const MAX_TRACKED: usize = 8192;
 /// 应答地址最多记几个：够做情报碰撞与域名回填
 const MAX_ANSWERS: usize = 8;
+/// 客户端查询送进容器后，容器多久内转发同一域名算作替它问的
+const REQUESTER_WINDOW: Duration = Duration::from_secs(5);
 /// sockaddr_ll.sll_pkttype：本机发出的包
 const PACKET_OUTGOING: u8 = 4;
 
@@ -194,8 +198,13 @@ struct Pending {
     message: Message,
     answer: Option<(Message, Instant)>,
     container: Option<Arc<Container>>,
+    /// 容器发出的查询经过的 veth，用来找送进同一容器的客户端查询
+    iface: Option<String>,
     seen: Instant,
 }
+
+/// 送进容器的一次客户端查询：(veth, 小写域名, 类型)
+type Inbound = (String, String, u16);
 
 struct State {
     agent_id: String,
@@ -204,6 +213,7 @@ struct State {
     pending: HashMap<Key, Pending>,
     done: HashMap<Key, Instant>,
     reported: HashMap<(IpAddr, String, u16), Instant>,
+    inbound: HashMap<Inbound, (IpAddr, Instant)>,
     local: Vec<IpAddr>,
     local_at: Option<Instant>,
     ifnames: HashMap<i32, String>,
@@ -217,6 +227,7 @@ fn run(fd: i32, agent_id: String, sink: EventSink, resolver: Option<Resolver>) {
         pending: HashMap::new(),
         done: HashMap::new(),
         reported: HashMap::new(),
+        inbound: HashMap::new(),
         local: Vec::new(),
         local_at: None,
         ifnames: HashMap::new(),
@@ -267,6 +278,15 @@ impl State {
         // 也经过 veth，但那是别人的查询，不收
         let from_container =
             iface.starts_with("veth") && (pkttype == PACKET_OUTGOING) == message.response;
+        if iface.starts_with("veth")
+            && !message.response
+            && pkttype == PACKET_OUTGOING
+            && !self.is_local(client)
+        {
+            let key = (iface, message.qname.to_ascii_lowercase(), message.qtype);
+            self.inbound.insert(key, (client, Instant::now()));
+            return;
+        }
         if !from_container && !self.is_local(client) {
             return;
         }
@@ -291,9 +311,13 @@ impl State {
             message: message.clone(),
             answer: None,
             container: None,
+            iface: None,
             seen: now,
         });
         entry.container = entry.container.take().or(container);
+        if from_container && entry.iface.is_none() {
+            entry.iface = Some(iface);
+        }
         // 应答先存着，由 expire 稍后上报：应答往往几毫秒就到，eBPF 那边的 UDP 事件可能还没处理完
         if message.response && entry.answer.is_none() {
             entry.answer = Some((message, now));
@@ -316,7 +340,8 @@ impl State {
             if let Some(p) = self.pending.remove(&key) {
                 self.done.insert(key.clone(), now);
                 let answer = p.answer.as_ref().map(|(m, _)| m);
-                self.report(&key, p.server, &p.message, answer, p.container);
+                let requester = self.requester(&p);
+                self.report(&key, p.server, &p.message, answer, p.container, requester);
             }
         }
         if self.done.len() >= MAX_TRACKED {
@@ -329,6 +354,20 @@ impl State {
         if self.pending.len() >= MAX_TRACKED {
             self.pending.clear();
         }
+        if self.inbound.len() >= MAX_TRACKED {
+            self.inbound
+                .retain(|_, (_, t)| now.duration_since(*t) < REQUESTER_WINDOW);
+        }
+    }
+
+    /// 容器转发的这条查询是替谁问的：同一容器前后几秒内收到的同名同类型客户端查询
+    fn requester(&self, p: &Pending) -> Option<IpAddr> {
+        let iface = p.iface.clone()?;
+        let key = (iface, p.message.qname.to_ascii_lowercase(), p.message.qtype);
+        let (client, at) = self.inbound.get(&key)?;
+        let near = p.seen.saturating_duration_since(*at) <= REQUESTER_WINDOW
+            && at.saturating_duration_since(p.seen) <= REQUESTER_WINDOW;
+        near.then_some(*client)
     }
 
     fn report(
@@ -338,6 +377,7 @@ impl State {
         query: &Message,
         answer: Option<&Message>,
         container: Option<Arc<Container>>,
+        requester: Option<IpAddr>,
     ) {
         let now = Instant::now();
         let dedup = (key.client, query.qname.clone(), query.qtype);
@@ -359,8 +399,11 @@ impl State {
             server,
             query,
             answer,
-            origin.as_ref(),
-            container.as_deref(),
+            Who {
+                origin: origin.as_ref(),
+                container: container.as_deref(),
+                requester,
+            },
         ));
     }
 
@@ -572,15 +615,27 @@ fn qtype_name(t: u16) -> String {
 }
 
 /// 字段与 sensor 的 DNS 事件同一约定（query.hostname、answers[].ip），规则与情报对两路一视同仁
+/// 这条查询是谁发的：本机进程、所在容器、替哪个客户端转发
+#[derive(Default)]
+struct Who<'a> {
+    origin: Option<&'a Origin>,
+    container: Option<&'a Container>,
+    requester: Option<IpAddr>,
+}
+
 fn dns_event(
     agent_id: &str,
     key: &Key,
     server: IpAddr,
     query: &Message,
     answer: Option<&Message>,
-    origin: Option<&Origin>,
-    container: Option<&Container>,
+    who: Who,
 ) -> AgentEvent {
+    let Who {
+        origin,
+        container,
+        requester,
+    } = who;
     let mut raw = serde_json::json!({
         // OCSF：1 Query（没等到应答）/ 6 Traffic（一问一答）
         "activity_id": if answer.is_some() { 6 } else { 1 },
@@ -617,6 +672,9 @@ fn dns_event(
     }
     if let Some(c) = container {
         raw["container"] = c.to_json();
+    }
+    if let Some(ip) = requester {
+        raw["requester"] = serde_json::json!({ "ip": ip.to_string() });
     }
     AgentEvent {
         agent_id: agent_id.to_string(),
@@ -761,8 +819,11 @@ mod tests {
             "10.0.0.1".parse().unwrap(),
             &q,
             Some(&r),
-            Some(&origin),
-            Some(&c),
+            Who {
+                origin: Some(&origin),
+                container: Some(&c),
+                requester: Some("192.168.1.20".parse().unwrap()),
+            },
         );
         assert_eq!(evt.class_uid, CLASS_DNS);
         assert_eq!(evt.conn_tuple, "udp:10.0.0.5:54321>10.0.0.1:53");
@@ -775,11 +836,59 @@ mod tests {
         assert_eq!(v["answers"][0]["rdata"], "www.example.com");
         assert_eq!(v["process"]["name"], "curl");
         assert_eq!(v["container"]["uid"], "203");
+        assert_eq!(v["requester"]["ip"], "192.168.1.20");
 
-        let unanswered = dns_event("a", &key, "10.0.0.1".parse().unwrap(), &q, None, None, None);
+        let unanswered = dns_event(
+            "a",
+            &key,
+            "10.0.0.1".parse().unwrap(),
+            &q,
+            None,
+            Who::default(),
+        );
         let v: Value = serde_json::from_str(&unanswered.raw_json).unwrap();
         assert_eq!(v["activity_id"], 1);
         assert!(v.get("answers").is_none() && v["query"].get("rcode_id").is_none());
+        assert!(v.get("requester").is_none());
+    }
+
+    #[test]
+    fn requester_is_the_client_that_asked_the_container() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let now = Instant::now();
+        let client: IpAddr = "192.168.1.20".parse().unwrap();
+        let st = State {
+            agent_id: "a".into(),
+            sink: EventSink {
+                tx,
+                dropped: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            },
+            resolver: None,
+            pending: HashMap::new(),
+            done: HashMap::new(),
+            reported: HashMap::new(),
+            inbound: HashMap::from([(
+                ("veth201i0".into(), "example.com".into(), 1),
+                (client, now),
+            )]),
+            local: Vec::new(),
+            local_at: None,
+            ifnames: HashMap::new(),
+        };
+        let pending = |iface: Option<&str>, seen: Instant| Pending {
+            server: "1.1.1.1".parse().unwrap(),
+            message: parse(&query()).unwrap(),
+            answer: None,
+            container: None,
+            iface: iface.map(str::to_string),
+            seen,
+        };
+        assert_eq!(st.requester(&pending(Some("veth201i0"), now)), Some(client));
+        // 别的容器、本机自己的查询、隔太久的都不算
+        assert_eq!(st.requester(&pending(Some("veth202i0"), now)), None);
+        assert_eq!(st.requester(&pending(None, now)), None);
+        let late = now + REQUESTER_WINDOW + Duration::from_secs(1);
+        assert_eq!(st.requester(&pending(Some("veth201i0"), late)), None);
     }
 
     #[test]
