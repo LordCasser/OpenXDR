@@ -31,6 +31,13 @@ const panel = {
   exit: { opacity: 0, y: -16, filter: 'blur(6px)', transition: { duration: 0.35, ease: EASE } },
 }
 
+// 欢迎页整体用暗色，不继承控制台的亮色 token；主色取主页的黑白，不用默认蓝
+const DARK = {
+  inherit: false,
+  algorithm: theme.darkAlgorithm,
+  token: { colorPrimary: '#f5f5f5', colorTextLightSolid: '#0a0a0a', colorBgContainer: 'rgba(255,255,255,0.04)', colorBgElevated: '#171717', borderRadius: 10 },
+}
+
 // 首次安装的全屏欢迎：出品 → 欢迎 → 用户协议 → 四步引导。升级上来的实例只补同意协议
 export function WelcomeFlow({ setup }: { setup: SetupState }) {
   const { locale } = useI18n()
@@ -40,6 +47,7 @@ export function WelcomeFlow({ setup }: { setup: SetupState }) {
   const toHero = useCallback(() => setPhase(p => (p === 'present' ? 'hero' : p)), [])
 
   return (
+    <ConfigProvider theme={DARK}>
     <div className="wl-root">
       <Backdrop dim={phase === 'present' ? 1 : phase === 'hero' ? 0 : 0.55} speed={reduce ? 0 : 0.72} />
       <AnimatePresence mode="wait">
@@ -50,6 +58,7 @@ export function WelcomeFlow({ setup }: { setup: SetupState }) {
       </AnimatePresence>
       {phase !== 'present' && <Rights c={c} />}
     </div>
+    </ConfigProvider>
   )
 }
 
@@ -183,14 +192,12 @@ function Wizard({ c }: { c: Copy }) {
           <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0, transition: { duration: 0.45, ease: EASE } }} exit={{ opacity: 0, x: -24, transition: { duration: 0.2 } }}>
             <h2>{c.steps[step]}</h2>
             <p className="wl-lead">{c.stepHints[step]}</p>
-            <ConfigProvider theme={{ algorithm: theme.darkAlgorithm, token: { colorBgContainer: 'rgba(255,255,255,0.03)' } }}>
-              <div className="wl-step-body">
-                {step === 0 && <AIModelSettings />}
-                {step === 1 && <ProjectStep c={c} />}
-                {step === 2 && <AssetStep c={c} />}
-                {step === 3 && <NotifySettingsCard />}
-              </div>
-            </ConfigProvider>
+            <div className="wl-step-body">
+              {step === 0 && <AIModelSettings />}
+              {step === 1 && <ProjectStep c={c} />}
+              {step === 2 && <AssetStep c={c} />}
+              {step === 3 && <NotifySettingsCard />}
+            </div>
           </motion.div>
         </AnimatePresence>
         <footer>
@@ -268,6 +275,7 @@ export function SetupWaiting() {
   const { signOut } = useSession()
   const c = COPY[locale]
   return (
+    <ConfigProvider theme={DARK}>
     <div className="wl-root">
       <Backdrop dim={0.55} speed={0.4} />
       <motion.section className="wl-panel wl-waiting" {...panel}>
@@ -277,5 +285,6 @@ export function SetupWaiting() {
       </motion.section>
       <Rights c={c} />
     </div>
+    </ConfigProvider>
   )
 }

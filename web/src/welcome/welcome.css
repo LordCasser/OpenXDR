@@ -11,9 +11,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 48px 24px 72px;
+  padding: 48px clamp(24px, 4vw, 64px) 20px;
 }
+/* 内容比视口高时 justify-content: center 会把顶部裁掉，用 margin 居中 */
+.wl-root > section { margin-block: auto; }
 .wl-backdrop { position: fixed; inset: 0; pointer-events: none; }
 .wl-hole { position: relative; overflow: hidden; }
 .wl-fallback {
@@ -182,6 +183,7 @@
 .wl-rail-step:hover, .wl-rail-step.is-past { color: #d4d4d4; }
 .wl-rail-step.is-current { color: #fff; }
 .wl-rail-step > span { position: relative; z-index: 1; }
+.wl-rail-step > .wl-rail-glow { position: absolute; z-index: 0; }
 .wl-rail-mark {
   display: inline-flex;
   width: 26px;
@@ -201,7 +203,7 @@
   background: rgba(255, 255, 255, 0.06);
 }
 .wl-skip-all { align-self: flex-start; margin-top: 12px; color: #737373 !important; }
-.wl-step { min-height: 520px; }
+.wl-step { min-height: 420px; }
 .wl-step-body { margin-top: 24px; }
 .wl-step-body .ant-card { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.08); }
 .wl-later { color: #737373 !important; font-size: 13px; }
@@ -211,10 +213,8 @@
 .wl-waiting .ant-btn { margin-top: 24px; }
 
 .wl-rights {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 18px;
+  position: relative;
+  margin-top: 32px;
   padding: 0 24px;
   text-align: center;
   font-size: 12px;
@@ -228,7 +228,6 @@
   .wl-wizard { grid-template-columns: 1fr; }
   .wl-rail { position: static; flex-direction: row; flex-wrap: wrap; }
   .wl-panel { padding: 28px 22px; border-radius: 20px; }
-  .wl-rights { position: static; margin-top: 32px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wl-ping i { animation: none; }
