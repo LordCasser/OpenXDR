@@ -177,37 +177,83 @@ func TestDeliveryCannotOverwriteEarlyResult(t *testing.T) {
 		})
 	}
 }
-func TestExecUnknownDeliveryAndNoReplay(t *testing.T) {
+func TestAllActionsUnknownDelivery(t *testing.T) {
+	for kind := range Kinds {
+		t.Run(kind, func(t *testing.T) {
+			ctx, db := testdb.New(t)
+			id := uuid.New()
+			a := db.Asset.Create().SetHostname("remote").SetAgentID(id).SaveX(ctx)
+			h := NewHub(db, true)
+			h.Router = completingRouter{hub: h, fail: true}
+			line := "whoami"
+			cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: kind, Cmd: &line})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cmd.Status != "unknown" || cmd.CompletedAt != nil {
+				t.Fatalf("未知投递被当成终态: %+v", cmd)
+			}
+			h.Complete(ctx, id, &pb.CommandResult{CommandId: cmd.ID.String(), Status: pb.CommandResult_SUCCEEDED})
+			if got := db.Command.GetX(ctx, cmd.ID); got.Status != "succeeded" || got.CompletedAt == nil {
+				t.Fatal("未知投递应接受迟到的合法回执")
+			}
+		})
+	}
+}
+
+func TestUnknownReceiptAllowsLaterResult(t *testing.T) {
 	ctx, db := testdb.New(t)
 	id := uuid.New()
-	a := db.Asset.Create().SetHostname("remote").SetAgentID(id).SaveX(ctx)
+	a := db.Asset.Create().SetHostname("unknown-result").SetAgentID(id).SaveX(ctx)
 	h := NewHub(db, true)
-	h.Router = completingRouter{hub: h, fail: true}
+	ch := h.Attach(id)
 	line := "whoami"
 	cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cmd.Status != "unknown" || cmd.CompletedAt != nil {
-		t.Fatalf("不能把未知投递当作失败: %+v", cmd)
+	<-ch
+	h.Complete(ctx, id, &pb.CommandResult{CommandId: cmd.ID.String(), Status: pb.CommandResult_Status(999), Stdout: "不能认定为执行完成"})
+	got := db.Command.GetX(ctx, cmd.ID)
+	if got.Status != "unknown" || got.CompletedAt != nil || got.ExitCode != nil || got.Stdout != nil {
+		t.Fatalf("未知回执制造终态: %+v", got)
 	}
-	ch := h.Attach(id)
-	exec, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
+	h.Complete(ctx, id, &pb.CommandResult{CommandId: cmd.ID.String(), Status: pb.CommandResult_SUCCEEDED, Stdout: "真实回执"})
+	got = db.Command.GetX(ctx, cmd.ID)
+	if got.Status != "succeeded" || got.Stdout == nil || *got.Stdout != "真实回执" {
+		t.Fatal("迟到回执未覆盖未知状态")
+	}
+}
+
+// 连接断开时还缓冲在通道里的指令确定没送到：记失败而不是永远停在 sent；写流出错的记 unknown
+func TestUndeliveredCommandsSettle(t *testing.T) {
+	ctx, db := testdb.New(t)
+	agentID := uuid.New()
+	a := db.Asset.Create().SetHostname("undelivered").SetAgentID(agentID).SaveX(ctx)
+	h := NewHub(db, true)
+	ch := h.Attach(agentID)
+	queued, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "isolate_host", IssuedBy: "admin"})
+	if err != nil || queued.Status != "sent" {
+		t.Fatalf("下发失败: %v %v", err, queued)
+	}
+	h.Detach(agentID, ch)
+	h.Abandon(ch)
+	if got := db.Command.GetX(ctx, queued.ID); got.Status != "failed" || got.CompletedAt == nil {
+		t.Fatalf("未写入的指令应记失败，实际 %s", got.Status)
+	}
+
+	ch = h.Attach(agentID)
+	sent, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "kill_process", PID: 1, IssuedBy: "admin"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-ch
-	kill, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "kill_process"})
-	if err != nil {
-		t.Fatal(err)
+	h.SendFailed(<-ch, errors.New("broken pipe"))
+	if got := db.Command.GetX(ctx, sent.ID).Status; got != "unknown" {
+		t.Fatalf("写流失败应记 unknown，实际 %s", got)
 	}
-	<-ch
-	pending := h.PendingFor(ctx, id)
-	if len(pending) != 1 || pending[0].ID != kill.ID {
-		t.Fatalf("重连不得重放 EXEC %s: %+v", exec.ID, pending)
-	}
-	h.Complete(ctx, id, &pb.CommandResult{CommandId: cmd.ID.String(), Status: pb.CommandResult_SUCCEEDED})
-	if got := db.Command.GetX(ctx, cmd.ID); got.Status != "succeeded" {
-		t.Fatal("未知投递应接受迟到的合法回执")
+	// 已有回执的终态不被覆盖
+	h.settle(ctx, queued.ID.String(), "unknown", "x")
+	if got := db.Command.GetX(ctx, queued.ID).Status; got != "failed" {
+		t.Fatalf("终态被覆盖为 %s", got)
 	}
 }

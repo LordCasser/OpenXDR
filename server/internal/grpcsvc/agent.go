@@ -34,7 +34,7 @@ type Server struct {
 	DB *ent.Client
 	// SQL 核对平台指令标记用；不配置时不认指令标记，照常告警
 	SQL         cmdorigin.Querier
-	Rules       *sigma.Engine
+	Rules       sigma.Catalog
 	DedupWindow time.Duration
 	Hub         *response.Hub
 	Suppress    *suppress.Store

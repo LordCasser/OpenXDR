@@ -245,7 +245,8 @@ Windows 放行地址必须为数字 IP 或 IP:端口（IPv6 为 `[地址]:端口
 
 结束进程必须携带采集事件中的 `processGuid` 和 `pid`，Agent 同时校验 GUID 与创建时间，
 通过 Linux pidfd（需内核支持）或 Windows 进程句柄执行，身份不明时拒绝，绝不退回裸 PID。
-指令通道独立断开时会每 5 秒重连；补发保留 PID 和隔离放行地址，EXEC 仍不自动重放。
+指令通道独立断开时会每 5 秒重连；所有动作均不自动重放，避免过期的隔离/解除意图再次生效。
+跨节点确认丢失记录为 unknown；重新操作前需检查原指令记录与主机实际状态。
 
 ## ATT&CK 覆盖
 
@@ -322,10 +323,13 @@ server 全部通过环境变量配置，均有默认值：
 | `QUEUE_SHARDS` | `32` | 事件一致性分片数；同一资产保持有序 |
 | `QUEUE_REPLICAS` | `1` | JetStream stream 副本数；三节点生产集群设为 3 |
 | `QUEUE_MAX_BYTES_GB` | `20` | 事件 stream 最大磁盘占用 |
-| `QUEUE_MAX_AGE_HOURS` | `168` | 未处理消息最长保留时间 |
+| `QUEUE_MAX_AGE_HOURS` | `0` | 必须为 0；未处理消息不自动过期，容量满则拒收新消息 |
 | `LOG_FORMAT` | 空（text） | 设为 `json` 输出结构化日志 |
 | `LOG_LEVEL` | `info` | debug / info / warn / error |
 | `RULES_PATH` | `../rules` | Sigma 规则目录 |
+| `IDENTITY_RUN_RETENTION_DAYS` | `30` | 目录终态运行记录保留天数，0 关闭历史删除，范围 0–3650；每来源最新记录保留，过期运行回收不受此开关影响 |
+| `IDENTITY_SOURCES_JSON` | 空（关闭） | 多目录只读账号同步，严格 JSON 数组；凭据通过环境变量名引用，组须已存在，配置后重启生效。见 [身份来源配置](identity-correlation.md#启动配置与定时同步) |
+| `TEMPORAL_RULES_PATH` | 空（关闭） | 时序规则独立目录；配置后与基础规则整批严格加载，共用 RULES_RELOAD_SECONDS 重载周期。容器使用容器内路径，需额外挂载；见 [时序检测](temporal-detection.md) |
 | `RULES_RELOAD_SECONDS` | `30` | 规则目录变更检测周期，变更自动热重载；0 关闭 |
 | `TASKS_PATH` | `../tasks` | 预设任务 YAML 目录；配置了 Pi 模型（`PI_MODEL` 或控制台）才运行，见 [Pi 后端](pi-backend.md#预设任务) |
 | `SCHEDULE_INTERVAL_SECONDS` | `30` | 任务到期检查与 YAML 重载周期 |

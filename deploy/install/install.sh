@@ -62,6 +62,8 @@ mkdir -p "$DIR/certs"
 cd "$DIR"
 say "下载编排文件（$VERSION）"
 curl -fsSL "$BASE/docker-compose.yml" -o docker-compose.yml.new || die "下载失败：$BASE/docker-compose.yml"
+curl -fsSL "$BASE/nats.conf" -o nats.conf.new || die "下载失败：$BASE/nats.conf"
+mv nats.conf.new nats.conf
 mv docker-compose.yml.new docker-compose.yml
 
 rand() { head -c "$1" /dev/urandom | base64 | tr -d '\n/+='; }

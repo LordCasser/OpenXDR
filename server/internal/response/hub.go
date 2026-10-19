@@ -28,6 +28,9 @@ const pendingPerAgent = 32
 // ErrDeliveryUnknown 表示已尝试投递，调用方不能将其当作未执行并重试。
 var ErrDeliveryUnknown = errors.New("指令投递结果未知")
 
+// ErrReceiptRejected 回执对不上本 agent 名下的指令：重传不会改变结果，agent 应当丢弃
+var ErrReceiptRejected = errors.New("指令不存在或不属于当前 agent")
+
 type Hub struct {
 	DB      *ent.Client
 	Enabled bool
@@ -107,6 +110,13 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 		return nil, fmt.Errorf("该资产没有 agent，无法下发指令")
 	}
 
+	var automaticID uuid.UUID
+	if req.automatic {
+		if req.Kind != "isolate_host" || req.IncidentID == nil || *req.IncidentID == uuid.Nil {
+			return nil, fmt.Errorf("自动响应必须绑定事件与隔离动作")
+		}
+		automaticID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("openxdr:auto-isolate|"+req.IncidentID.String()+"|"+a.ID.String()))
+	}
 	create := h.DB.Command.Create().
 		SetKind(req.Kind).
 		SetAssetID(a.ID).
@@ -115,8 +125,17 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 		SetNillableProcessGUID(req.ProcessGUID).
 		SetNillableCmd(req.Cmd).
 		SetTimeoutMs(req.TimeoutMS).SetPid(req.PID).SetAllowEndpoints(req.AllowEndpoints)
+	if automaticID != uuid.Nil {
+		create.SetID(automaticID)
+	}
 	cmd, err := create.Save(ctx)
 	if err != nil {
+		if automaticID != uuid.Nil && ent.IsConstraintError(err) {
+			prior, lookupErr := h.DB.Command.Get(ctx, automaticID)
+			if lookupErr == nil && prior.Kind == req.Kind && prior.AssetID == a.ID && prior.IncidentID != nil && *prior.IncidentID == *req.IncidentID && prior.IssuedBy == req.IssuedBy {
+				return prior, nil
+			}
+		}
 		return nil, err
 	}
 
@@ -131,13 +150,10 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 		return h.finish(ctx, cmd.ID, "failed", "agent 未连接指令通道")
 	}
 	if err := h.Router.Deliver(ctx, *a.AgentID, req.toProto(cmd.ID)); err != nil {
-		// 投递响应丢失不能证明远端没有执行，EXEC 不允许自动重放。
-		status := "failed"
-		if req.Kind == "exec" {
-			status = "unknown"
-		}
+		// 投递响应丢失不能证明远端没有执行；所有动作都不能据此自动重试。
+		status := "unknown"
 		out, finishErr := h.finish(ctx, cmd.ID, status, err.Error())
-		if finishErr != nil && status == "unknown" {
+		if finishErr != nil {
 			return cmd, fmt.Errorf("%w：命令 %s 可能已投递，状态回写失败，禁止自动重试: %v", ErrDeliveryUnknown, cmd.ID, finishErr)
 		}
 		return out, finishErr
@@ -162,6 +178,8 @@ func (h *Hub) enqueue(agentID uuid.UUID, expected chan *pb.Command, cmd *pb.Comm
 }
 
 type Request struct {
+	// 仅 Auto 可设置；不接受 HTTP/模型提供的幂等身份。
+	automatic   bool
 	AssetID     uuid.UUID
 	Kind        string
 	IncidentID  *uuid.UUID
@@ -204,7 +222,7 @@ func kindToProto(kind string) pb.CommandKind {
 	return Kinds[kind]
 }
 
-// resultStatus 把上报的 proto 状态归一成库里的取值；未知状态一律按 failed 处理。
+// resultStatus 不把无法识别的回执解释成已知失败。
 func resultStatus(st pb.CommandResult_Status) string {
 	if s, ok := map[pb.CommandResult_Status]string{
 		pb.CommandResult_SUCCEEDED:   "succeeded",
@@ -213,7 +231,7 @@ func resultStatus(st pb.CommandResult_Status) string {
 	}[st]; ok {
 		return s
 	}
-	return "failed"
+	return "unknown"
 }
 
 func (h *Hub) mark(ctx context.Context, id uuid.UUID, status string) (*ent.Command, error) {
@@ -239,14 +257,47 @@ func (h *Hub) finish(ctx context.Context, id uuid.UUID, status, detail string) (
 	return h.DB.Command.Get(ctx, id)
 }
 
-func (h *Hub) finishUpdate(id uuid.UUID, status, detail string) *ent.CommandUpdateOne {
-	return h.DB.Command.UpdateOneID(id).
-		SetStatus(status).
-		SetDetail(detail).
-		SetCompletedAt(time.Now())
+// Abandon 连接结束时还缓冲在通道里、没写进指令流的指令：确定没送到 agent，记失败。
+// 必须在 Detach 之后调用，此后不会再有指令进这个通道
+func (h *Hub) Abandon(ch chan *pb.Command) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for {
+		select {
+		case cmd, ok := <-ch:
+			if !ok {
+				return
+			}
+			h.settle(ctx, cmd.Id, "failed", "指令通道断开，指令未写入、未下发")
+		default:
+			return
+		}
+	}
 }
 
-// ToProto 把库里的指令还原成下发消息，用于断线重连后补发。
+// SendFailed 写指令流出错：可能已经到了 agent，记 unknown 交人核实，不重放
+func (h *Hub) SendFailed(cmd *pb.Command, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	h.settle(ctx, cmd.Id, "unknown", "写入指令通道失败，执行情况未知："+err.Error())
+}
+
+// settle 只改尚未有回执的指令：已经回执的终态不覆盖
+func (h *Hub) settle(ctx context.Context, id, status, detail string) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return
+	}
+	upd := h.DB.Command.Update().Where(entcommand.IDEQ(uid), entcommand.StatusIn("pending", "sent")).SetStatus(status).SetDetail(detail)
+	if status != "unknown" {
+		upd.SetCompletedAt(time.Now())
+	}
+	if err := upd.Exec(ctx); err != nil {
+		slog.Warn("回写未送达指令失败", "command", uid, "err", err)
+	}
+}
+
+// ToProto 还原指令参数；不代表允许自动重放。
 func (h *Hub) ToProto(cmd *ent.Command) *pb.Command {
 	out := &pb.Command{
 		Id:             cmd.ID.String(),
@@ -265,48 +316,56 @@ func (h *Hub) ToProto(cmd *ent.Command) *pb.Command {
 }
 
 // Complete 回写执行结果。agent 上报的 command_id 必须能对上库里的记录，
-// 对不上就丢弃——不接受来路不明的执行结果污染审计。
-func (h *Hub) Complete(ctx context.Context, agentID uuid.UUID, res *pb.CommandResult) {
+// 来源不匹配或持久化失败明确返回错误；不接受来路不明的结果污染审计。
+func (h *Hub) Complete(ctx context.Context, agentID uuid.UUID, res *pb.CommandResult) error {
+	if res == nil {
+		return errors.New("指令回执不能为空")
+	}
 	if res.CommandId == "" {
-		return // 认领连接的首条消息
+		return nil // 兼容连接认领消息。
 	}
 	id, err := uuid.Parse(res.CommandId)
-	if err != nil {
-		return
+	if err != nil || id == uuid.Nil {
+		return errors.New("指令回执 ID 无效")
 	}
-	// agentID 来自已认证的流，不信任回执里自报的 AgentId。
 	scope := entcommand.HasAssetWith(asset.AgentIDEQ(agentID))
 	cmd, err := h.DB.Command.Query().Where(entcommand.IDEQ(id), scope).Only(ctx)
 	if err != nil {
-		slog.Warn("拒绝非所属资产的指令回执", "agent", agentID, "command", id)
-		return
+		if ent.IsNotFound(err) {
+			return ErrReceiptRejected
+		}
+		return fmt.Errorf("读取指令回执目标失败: %w", err)
 	}
 	status := resultStatus(res.Status)
-	upd := h.finishUpdate(id, status, storable(res.Detail)).Where(scope, entcommand.StatusIn("pending", "sent", "unknown"))
-	if cmd.Kind == "exec" {
+	// 并发/重复回执只能完成非终态；终态保持首次记录。
+	upd := h.DB.Command.Update().Where(entcommand.IDEQ(id), scope, entcommand.StatusIn("pending", "sent", "unknown")).SetStatus(status).SetDetail(storable(res.Detail))
+	if status != "unknown" {
+		upd.SetCompletedAt(time.Now())
+	}
+	if cmd.Kind == "exec" && status != "unknown" {
 		upd.SetExitCode(res.ExitCode).SetStdout(storable(res.Stdout)).SetStderr(storable(res.Stderr)).SetTruncated(res.Truncated)
 	}
-	if _, err := upd.Save(ctx); err != nil {
-		slog.Warn("回写指令结果失败", "command", id, "err", err)
-	} else {
-		slog.Info("指令执行完毕", "command", id, "status", status, "detail", res.Detail)
-	}
-}
-
-// PendingFor 仅补发原有响应动作；EXEC 可能已经执行，重连时不得重复下发。
-func (h *Hub) PendingFor(ctx context.Context, agentID uuid.UUID) []*ent.Command {
-	a, err := h.DB.Asset.Query().Where(asset.AgentIDEQ(agentID)).First(ctx)
+	changed, err := upd.Save(ctx)
 	if err != nil {
+		return fmt.Errorf("持久化指令回执失败: %w", err)
+	}
+	if changed == 0 {
+		// 资产换绑/记录删除不能伪装为成功；合法终态重投则幂等接受。
+		current, err := h.DB.Command.Query().Where(entcommand.IDEQ(id), scope).Only(ctx)
+		if ent.IsNotFound(err) {
+			return ErrReceiptRejected
+		}
+		if err != nil {
+			return fmt.Errorf("读取指令回执目标失败: %w", err)
+		}
+		// 结果未知的回执（执行被 agent 停机打断）遇上已有终态：以已有终态为准，同样确认
+		if status != "unknown" && current.Status != "succeeded" && current.Status != "failed" && current.Status != "unsupported" {
+			return errors.New("回执未写入，指令状态仍未确定")
+		}
 		return nil
 	}
-	cmds, err := h.DB.Command.Query().
-		Where(entcommand.AssetIDEQ(a.ID), entcommand.StatusEQ("sent"), entcommand.KindNEQ("exec")).
-		Order(ent.Asc(entcommand.FieldCreatedAt)).
-		All(ctx)
-	if err != nil {
-		return nil
-	}
-	return cmds
+	slog.Info("指令回执已记录", "command", id, "status", status)
+	return nil
 }
 
 // storable 命令输出入库前的整理：Postgres 文本列不收 NUL 字节和非法 UTF-8，读 /proc/*/cmdline 之类的输出常带这些，

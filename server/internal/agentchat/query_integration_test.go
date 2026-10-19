@@ -9,20 +9,48 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"openxdr/server/internal/testdb"
 )
 
 func TestQueryDedicatedGroupView(t *testing.T) {
 	ctx, _ := testdb.New(t)
 	dsn, role := os.Getenv("PI_TEST_QUERY_DSN"), os.Getenv("PI_TEST_QUERY_ROLE")
-	if dsn == "" || role == "" {
-		t.Skip("未配置隔离只读测试角色")
+	if (dsn == "") != (role == "") {
+		t.Fatal("PI_TEST_QUERY_DSN 与 PI_TEST_QUERY_ROLE 必须同时配置")
 	}
 	db, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	if dsn == "" {
+		config, err := pgx.ParseConfig(os.Getenv("INTEGRATION_DATABASE_URL"))
+		if err != nil {
+			t.Fatal("测试数据库连接配置无效")
+		}
+		role = "pi_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+		password := strings.ReplaceAll(uuid.NewString(), "-", "")
+		// 名称与密码只由随机十六进制构造，且不输出到测试日志。
+		if _, err := db.ExecContext(ctx, `CREATE ROLE `+role+` LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '`+password+`'`); err != nil {
+			t.Fatal("创建隔离测试角色失败")
+		}
+		defer func() {
+			if _, err := db.ExecContext(ctx, `DROP OWNED BY `+role+`; DROP ROLE `+role); err != nil {
+				t.Error("清理隔离测试角色失败")
+			}
+		}()
+		if _, err := db.ExecContext(ctx, `GRANT USAGE ON SCHEMA public TO `+role); err != nil {
+			t.Fatal(err)
+		}
+		config.User = role
+		config.Password = password
+		dsn = stdlib.RegisterConnConfig(config)
+		defer stdlib.UnregisterConnConfig(dsn)
+	}
+
 	_, err = db.ExecContext(ctx, `CREATE TABLE pi_query_fixture(group_id text,value text);
  INSERT INTO pi_query_fixture VALUES ('allowed','可见'),('other','不可见');
  CREATE VIEW pi_group_view WITH (security_barrier=true) AS SELECT value FROM pi_query_fixture WHERE group_id='allowed';`)

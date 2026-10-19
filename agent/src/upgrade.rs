@@ -40,15 +40,15 @@ fn sha256_hex(mut r: impl Read) -> std::io::Result<String> {
     Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// 下载并换上新版。成功返回 Ok(())，调用方随即退出进程。
+/// 下载并换上新版。成功返回后由调用方排空采集缓存再退出。
 pub async fn apply(
     client: &mut AgentServiceClient<tonic::transport::Channel>,
     platform: &str,
     sha256: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let data = download(client, platform, sha256).await?;
-    let version = install(&std::env::current_exe()?, &data)?;
-    eprintln!("已升级到 {version}，退出等待重新拉起");
+    let version = install(&std::env::current_exe()?, &data).await?;
+    eprintln!("已安装 {version}，等待事件落盘后退出重新拉起");
     Ok(())
 }
 
@@ -76,10 +76,23 @@ async fn download(
 }
 
 /// 新版先落到 .new 并自检，通过后旧版改名 .prev、新版就位。返回新版自报的版本号。
-fn install(exe: &Path, data: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
+async fn install(exe: &Path, data: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
     let new = with_suffix(exe, ".new");
     write_executable(&new, data)?;
-    let check = std::process::Command::new(&new).arg("version").output();
+    let check = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        tokio::process::Command::new(&new)
+            .arg("version")
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .unwrap_or_else(|_| {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "新版自检超过 10 秒",
+        ))
+    });
     let check = match check {
         Ok(c) if c.status.success() => c,
         Ok(c) => {
@@ -138,27 +151,47 @@ mod tests {
 
     /// 自检失败的新版不能换上去，旧版原地不动；自检通过才换，旧版留作 .prev。
     #[cfg(unix)]
-    #[test]
-    fn install_swaps_only_after_self_check() {
+    #[tokio::test]
+    async fn install_swaps_only_after_self_check() {
         let dir = std::env::temp_dir().join(format!("openxdr-upgrade-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let exe = dir.join("openxdr-agent");
         std::fs::write(&exe, "old").unwrap();
 
-        assert!(install(&exe, b"#!/bin/sh\nexit 1\n").is_err());
+        assert!(install(&exe, b"#!/bin/sh\nexit 1\n").await.is_err());
         assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old");
         assert!(!with_suffix(&exe, ".new").exists(), "自检失败应清掉 .new");
-        assert!(install(&exe, b"not an executable").is_err());
+        assert!(install(&exe, b"not an executable").await.is_err());
         assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old");
 
         let good = b"#!/bin/sh\necho 9.9.9\n";
-        assert_eq!(install(&exe, good).unwrap(), "9.9.9");
+        assert_eq!(install(&exe, good).await.unwrap(), "9.9.9");
         assert_eq!(std::fs::read(&exe).unwrap(), good);
         assert_eq!(
             std::fs::read_to_string(with_suffix(&exe, ".prev")).unwrap(),
             "old"
         );
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn stalled_self_check_keeps_old_executable() {
+        let dir =
+            std::env::temp_dir().join(format!("openxdr-upgrade-timeout-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).unwrap();
+        let exe = dir.join("agent");
+        std::fs::write(&exe, "old").unwrap();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            install(&exe, b"#!/bin/sh\nexec sleep 60\n"),
+        )
+        .await
+        .unwrap();
+        assert!(result.unwrap_err().to_string().contains("10 秒"));
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old");
+        assert!(!with_suffix(&exe, ".new").exists());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

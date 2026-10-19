@@ -134,6 +134,24 @@ func (_u *AssetUpdate) SetNillableLastSeen(v *time.Time) *AssetUpdate {
 	return _u
 }
 
+// SetCollectorHealth sets the "collector_health" field.
+func (_u *AssetUpdate) SetCollectorHealth(v json.RawMessage) *AssetUpdate {
+	_u.mutation.SetCollectorHealth(v)
+	return _u
+}
+
+// AppendCollectorHealth appends value to the "collector_health" field.
+func (_u *AssetUpdate) AppendCollectorHealth(v json.RawMessage) *AssetUpdate {
+	_u.mutation.AppendCollectorHealth(v)
+	return _u
+}
+
+// ClearCollectorHealth clears the value of the "collector_health" field.
+func (_u *AssetUpdate) ClearCollectorHealth() *AssetUpdate {
+	_u.mutation.ClearCollectorHealth()
+	return _u
+}
+
 // SetConfig sets the "config" field.
 func (_u *AssetUpdate) SetConfig(v json.RawMessage) *AssetUpdate {
 	_u.mutation.SetConfig(v)
@@ -682,6 +700,17 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.LastSeen(); ok {
 		_spec.SetField(asset.FieldLastSeen, field.TypeTime, value)
 	}
+	if value, ok := _u.mutation.CollectorHealth(); ok {
+		_spec.SetField(asset.FieldCollectorHealth, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCollectorHealth(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldCollectorHealth, value)
+		})
+	}
+	if _u.mutation.CollectorHealthCleared() {
+		_spec.ClearField(asset.FieldCollectorHealth, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.Config(); ok {
 		_spec.SetField(asset.FieldConfig, field.TypeJSON, value)
 	}
@@ -1081,6 +1110,24 @@ func (_u *AssetUpdateOne) SetNillableLastSeen(v *time.Time) *AssetUpdateOne {
 	if v != nil {
 		_u.SetLastSeen(*v)
 	}
+	return _u
+}
+
+// SetCollectorHealth sets the "collector_health" field.
+func (_u *AssetUpdateOne) SetCollectorHealth(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.SetCollectorHealth(v)
+	return _u
+}
+
+// AppendCollectorHealth appends value to the "collector_health" field.
+func (_u *AssetUpdateOne) AppendCollectorHealth(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.AppendCollectorHealth(v)
+	return _u
+}
+
+// ClearCollectorHealth clears the value of the "collector_health" field.
+func (_u *AssetUpdateOne) ClearCollectorHealth() *AssetUpdateOne {
+	_u.mutation.ClearCollectorHealth()
 	return _u
 }
 
@@ -1661,6 +1708,17 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if value, ok := _u.mutation.LastSeen(); ok {
 		_spec.SetField(asset.FieldLastSeen, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.CollectorHealth(); ok {
+		_spec.SetField(asset.FieldCollectorHealth, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCollectorHealth(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldCollectorHealth, value)
+		})
+	}
+	if _u.mutation.CollectorHealthCleared() {
+		_spec.ClearField(asset.FieldCollectorHealth, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Config(); ok {
 		_spec.SetField(asset.FieldConfig, field.TypeJSON, value)

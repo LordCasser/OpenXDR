@@ -32,7 +32,7 @@ struct Socket {
 
 pub fn spawn(agent_id: String, sink: EventSink) {
     let mut scanner = Scanner::default();
-    inventory::spawn(agent_id, sink, move || scanner.scan());
+    inventory::spawn(agent_id, sink, move || scanner.scan_checked());
 }
 
 /// 监听表扫描：资产清单定时用，入站连接按本机端口找服务进程也用（linux.rs）
@@ -43,7 +43,19 @@ pub(super) struct Scanner {
 }
 
 impl Scanner {
+    #[cfg(feature = "ebpf")]
     pub(super) fn scan(&mut self) -> Vec<Listener> {
+        self.scan_checked().unwrap_or_default()
+    }
+
+    fn scan_checked(&mut self) -> std::io::Result<Vec<Listener>> {
+        self.scan_with(|path| std::fs::read_to_string(path))
+    }
+
+    fn scan_with(
+        &mut self,
+        mut read: impl FnMut(&str) -> std::io::Result<String>,
+    ) -> std::io::Result<Vec<Listener>> {
         let low = ephemeral_low();
         let mut cur = BTreeSet::new();
         for (file, proto) in [
@@ -52,16 +64,16 @@ impl Scanner {
             ("/proc/net/udp", Proto::Udp),
             ("/proc/net/udp6", Proto::Udp),
         ] {
-            if let Ok(text) = std::fs::read_to_string(file) {
-                cur.extend(parse_proc_net(&text, proto, low));
-            }
+            let text = read(file)?;
+            cur.extend(parse_proc_net(&text, proto, low));
         }
         if cur != self.prev {
             let inodes = cur.iter().map(|s| s.inode).filter(|&i| i != 0).collect();
             self.owners = attribute(&inodes);
             self.prev = cur;
         }
-        self.prev
+        Ok(self
+            .prev
             .iter()
             .map(|s| Listener {
                 proto: s.proto,
@@ -69,7 +81,7 @@ impl Scanner {
                 port: s.port,
                 owner: self.owners.get(&s.inode).cloned(),
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -229,6 +241,30 @@ mod tests {
         assert!(parse_endpoint("0100007F").is_none());
         assert!(parse_endpoint("0100:0035").is_none());
         assert!(parse_endpoint("ZZZZZZZZ:0035").is_none());
+    }
+
+    #[test]
+    fn failed_table_read_preserves_previous_inventory() {
+        let mut scanner = Scanner::default();
+        let first = scanner.scan_with(|_| Ok(TCP.into())).unwrap();
+        assert!(!first.is_empty());
+        let previous = scanner.prev.clone();
+        assert!(
+            scanner
+                .scan_with(|path| if path.ends_with("udp") {
+                    Err(std::io::ErrorKind::PermissionDenied.into())
+                } else {
+                    Ok("header\n".into())
+                })
+                .is_err()
+        );
+        assert_eq!(scanner.prev, previous);
+        assert!(
+            scanner
+                .scan_with(|_| Ok("header\n".into()))
+                .unwrap()
+                .is_empty()
+        );
     }
 
     const TCP: &str = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode

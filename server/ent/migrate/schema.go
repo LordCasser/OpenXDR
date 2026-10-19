@@ -199,6 +199,7 @@ var (
 		{Name: "agent_id", Type: field.TypeUUID, Unique: true, Nullable: true},
 		{Name: "first_seen", Type: field.TypeTime},
 		{Name: "last_seen", Type: field.TypeTime},
+		{Name: "collector_health", Type: field.TypeJSON, Nullable: true},
 		{Name: "config", Type: field.TypeJSON, Nullable: true},
 		{Name: "group_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "agent_version", Type: field.TypeString, Nullable: true},

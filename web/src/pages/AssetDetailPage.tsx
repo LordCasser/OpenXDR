@@ -14,6 +14,11 @@ import { useRemember } from '../app/recent'
 import { saveQueue } from '../components/incidentQueue'
 import { useRowLink } from '../components/rowLink'
 import { useCanActIn, useSession } from '../app/session'
+import { CommandVerificationDrawer } from '../components/CommandVerificationDrawer'
+import { LocalAccounts } from '../components/LocalAccounts'
+import { IdentityObservations } from '../components/IdentityObservations'
+import { TemporalGaps } from '../components/TemporalGaps'
+import { CollectorHealth } from '../components/CollectorHealth'
 import { AssetProfileView } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
 import { Page, WIDE_ONLY, useWideTable } from '../components/Page'
@@ -107,8 +112,9 @@ export function AssetDetailPage() {
   const { groups, isAdmin } = useSession()
   const [starting, setStarting] = useState(false)
   const [tab, setTab] = useState('incidents')
+  const [verifying, setVerifying] = useState<CommandRow | null>(null)
   const [incPage, setIncPage] = useState(1)
-  const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets })
+  const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 15000 })
   const asset = assets.data?.find(a => a.id === id)
   const canAct = useCanActIn(asset?.groupId)
   const incidents = useQuery({
@@ -159,6 +165,7 @@ export function AssetDetailPage() {
       subtitle={[asset.os, asset.ipAddrs?.join(', '), group?.name ?? t('ungrouped')].filter(Boolean).join(' · ')}
       extra={canChat && asset.groupId && <Button type="primary" icon={<RobotOutlined />} loading={starting} onClick={investigate}>{t('investigateHost')}</Button>}
     >
+      {verifying?.assetId === asset.id && <CommandVerificationDrawer key={`${verifying.id}:${asset.groupId}`} command={verifying} canEdit={canAct} onClose={() => setVerifying(null)} />}
       <Row gutter={[16, 16]}>
         <Col xs={12} xl={6}>
           <Stat label={t('unresolvedIncidents')} value={unresolved.data?.total ?? '-'} tone={unresolved.data?.total ? token.colorError : undefined} onClick={() => setTab('incidents')} />
@@ -173,6 +180,7 @@ export function AssetDetailPage() {
           <Stat label={t('thLastSeen')} value={<span style={{ fontSize: 17 }}>{asset.agentId ? fmtTime(asset.lastSeen).slice(5) : '—'}</span>} />
         </Col>
 
+        <Col span={24}><CollectorHealth asset={asset} /></Col>
         <Col xs={24} xl={17}>
           <Card styles={{ body: { paddingTop: 4 } }}>
             <Tabs
@@ -229,7 +237,7 @@ export function AssetDetailPage() {
                 {
                   key: 'commands',
                   label: t('tabCommands'),
-                  children: (
+                  children: commands.isError ? <LoadError error={commands.error} onRetry={() => commands.refetch()} /> : (
                     <Table size="small" rowKey="id" loading={commands.isPending} dataSource={commands.data ?? []} pagination={{ pageSize: 10, hideOnSinglePage: true }}
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noCommands')} /> }}
                       columns={[
@@ -237,6 +245,7 @@ export function AssetDetailPage() {
                         { title: t('thAction'), dataIndex: 'kind', width: 120, render: v => commandKind(v, t) },
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <CommandStatusTag value={v} /> },
                         { title: t('thCreatedBy'), dataIndex: 'issuedBy', width: 110 },
+                        { title: t('verificationTitle'), width: 100, render: (_, row: CommandRow) => <Button size="small" onClick={() => setVerifying(row)}>{t('verificationTitle')}</Button> },
                         { title: t('thResult'), dataIndex: 'detail', ellipsis: true },
                         {
                           title: t('thDetections'), dataIndex: 'detections', width: 220,
@@ -247,6 +256,9 @@ export function AssetDetailPage() {
                       ]} />
                   ),
                 },
+                { key: 'detectionGaps', label: t('temporalGapsTitle'), children: tab === 'detectionGaps' ? <TemporalGaps key={asset.id} asset={asset} /> : null },
+                { key: 'localAccounts', label: t('collectorLocalAccounts'), children: tab === 'localAccounts' ? <LocalAccounts key={asset.id} asset={asset} /> : null },
+                { key: 'identity', label: t('identityTitle'), children: tab === 'identity' ? <IdentityObservations key={asset.id} asset={asset} /> : null },
                 { key: 'config', label: t('tabConfig'), children: <ConfigTab assetId={asset.id} canEdit={canAct} /> },
               ]}
             />

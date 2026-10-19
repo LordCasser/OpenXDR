@@ -165,3 +165,174 @@ level: high
 		t.Fatalf("应有一条挂在指令上的告警、一条照常告警（4 次）: %+v", alerts)
 	}
 }
+
+// 到达顺序不能替代事件时间；同一时间戳无法证明失败发生在成功之前。
+func TestBruteforceEventTimeWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		offset     time.Duration
+		otherUser  bool
+		otherAsset bool
+		want       int
+	}{
+		{name: "窗口内", offset: -time.Minute, want: 1},
+		{name: "窗口下界", offset: -10 * time.Minute, want: 1},
+		{name: "窗口外", offset: -10*time.Minute - time.Microsecond},
+		{name: "相同时间", offset: 0},
+		{name: "未来失败先到达", offset: time.Minute},
+		{name: "不同用户", offset: -time.Minute, otherUser: true},
+		{name: "不同资产", offset: -time.Minute, otherAsset: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, client, db := testProcessor(t)
+			defer client.Close()
+			defer db.Close()
+			ctx := context.Background()
+			asset, err := client.Asset.Create().SetHostname("auth-target").SetOs("linux").Save(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			failureAsset := asset.ID
+			if tc.otherAsset {
+				other, err := client.Asset.Create().SetHostname("other").SetOs("linux").Save(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				failureAsset = other.ID
+			}
+			now := time.Now().UTC().Truncate(time.Microsecond)
+			success := Envelope{Version: EnvelopeVersion, ID: uuid.New(), PartitionKey: asset.ID.String(), Timestamp: now,
+				ClassUID: 3002, Source: "agent", AssetID: &asset.ID, Username: "root", Raw: json.RawMessage(`{"status_id":1}`)}
+			for i := 0; i < 5; i++ {
+				failure := success
+				failure.ID = uuid.New()
+				failure.AssetID = &failureAsset
+				failure.PartitionKey = failureAsset.String()
+				failure.Timestamp = now.Add(tc.offset)
+				failure.Raw = json.RawMessage(`{"status_id":2}`)
+				if tc.otherUser {
+					failure.Username = "alice"
+				}
+				if err := p.Process(ctx, failure); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// 新处理器读取持久状态；再次投递同一成功事件不能增加告警数。
+			restarted := *p
+			for i := 0; i < 2; i++ {
+				if err := restarted.Process(ctx, success); err != nil {
+					t.Fatal(err)
+				}
+			}
+			alerts, err := client.Alert.Query().All(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(alerts) != tc.want {
+				t.Fatalf("告警数 %d，期望 %d", len(alerts), tc.want)
+			}
+			if len(alerts) > 0 && (alerts[0].Count != 1 || alerts[0].RuleID != sigma.RuleBruteforceSuccess) {
+				t.Fatalf("重投改变告警: %+v", alerts[0])
+			}
+		})
+	}
+}
+
+func TestLateAuthFailuresMatchOnceAcrossProcessors(t *testing.T) {
+	p, client, db := testProcessor(t)
+	defer client.Close()
+	defer db.Close()
+	ctx := context.Background()
+	asset, err := client.Asset.Create().SetHostname("late-auth").SetOs("linux").Save(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	success := Envelope{Version: EnvelopeVersion, ID: uuid.New(), PartitionKey: asset.ID.String(), Timestamp: now, ClassUID: 3002, Source: "agent", AssetID: &asset.ID, Username: "root", Raw: json.RawMessage(`{"status_id":1}`)}
+	if err := p.Process(ctx, success); err != nil {
+		t.Fatal(err)
+	}
+	// 多个处理器并发接收先前发生的失败，最后一条应补出成功事件的告警。
+	errors := make(chan error, 10)
+	for i := 0; i < 10; i++ {
+		failure := success
+		failure.ID = uuid.New()
+		failure.Timestamp = now.Add(-time.Duration(i+1) * time.Second)
+		failure.Raw = json.RawMessage(`{"status_id":2}`)
+		restarted := *p
+		go func() {
+			if err := restarted.Process(ctx, failure); err != nil {
+				errors <- err
+				return
+			}
+			errors <- restarted.Process(ctx, failure)
+		}()
+	}
+	for i := 0; i < 10; i++ {
+		if err := <-errors; err != nil {
+			t.Fatal(err)
+		}
+	}
+	alerts, err := client.Alert.Query().All(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(alerts) != 1 || alerts[0].Count != 1 || alerts[0].EventID == nil || *alerts[0].EventID != success.ID {
+		t.Fatalf("迟到命中应唯一且绑定成功事件: %+v", alerts)
+	}
+	var matches int
+	if err := db.QueryRow(`SELECT count(*) FROM temporal_matches`).Scan(&matches); err != nil || matches != 1 {
+		t.Fatalf("持久命中 %d: %v", matches, err)
+	}
+}
+
+func TestTemporalMatchRollsBackWithAlert(t *testing.T) {
+	p, client, db := testProcessor(t)
+	defer client.Close()
+	defer db.Close()
+	ctx := context.Background()
+	asset, err := client.Asset.Create().SetHostname("rollback-auth").SetOs("linux").Save(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	success := Envelope{Version: EnvelopeVersion, ID: uuid.New(), PartitionKey: asset.ID.String(), Timestamp: now, ClassUID: 3002, Source: "agent", AssetID: &asset.ID, Username: "root", Raw: json.RawMessage(`{"status_id":1}`)}
+	if err := p.Process(ctx, success); err != nil {
+		t.Fatal(err)
+	}
+	failure := success
+	failure.Raw = json.RawMessage(`{"status_id":2}`)
+	for i := 0; i < 4; i++ {
+		failure.ID = uuid.New()
+		failure.Timestamp = now.Add(-time.Duration(i+1) * time.Second)
+		if err := p.Process(ctx, failure); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`ALTER TABLE alerts ADD CONSTRAINT test_reject_temporal CHECK (rule_id <> 'xdr:bruteforce-success') NOT VALID`); err != nil {
+		t.Fatal(err)
+	}
+	defer db.Exec(`ALTER TABLE alerts DROP CONSTRAINT IF EXISTS test_reject_temporal`)
+	failure.ID = uuid.New()
+	failure.Timestamp = now.Add(-5 * time.Second)
+	if err := p.Process(ctx, failure); err == nil {
+		t.Fatal("告警失败必须回滚事务")
+	}
+	var matches int
+	if err := db.QueryRow(`SELECT count(*) FROM temporal_matches`).Scan(&matches); err != nil || matches != 0 {
+		t.Fatalf("命中占位未回滚: %d %v", matches, err)
+	}
+	var exists bool
+	if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM events WHERE id=$1)`, failure.ID).Scan(&exists); err != nil || exists {
+		t.Fatalf("失败事件未回滚: %v %v", exists, err)
+	}
+	if _, err := db.Exec(`ALTER TABLE alerts DROP CONSTRAINT test_reject_temporal`); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Process(ctx, failure); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := client.Alert.Query().Count(ctx); err != nil || n != 1 {
+		t.Fatalf("恢复后应能重试生成告警: %d %v", n, err)
+	}
+}

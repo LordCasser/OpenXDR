@@ -68,3 +68,46 @@ func TestReplayPreservesFields(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletionReportsPersistenceFailureAndAllowsReceiptRetry(t *testing.T) {
+	ctx, db := testdb.New(t)
+	agentID := uuid.New()
+	a := db.Asset.Create().SetHostname("receipt-retry").SetAgentID(agentID).SaveX(ctx)
+	cmd := db.Command.Create().SetAssetID(a.ID).SetKind("exec").SetStatus("sent").SaveX(ctx)
+	fail := true
+	db.Command.Use(func(next ent.Mutator) ent.Mutator {
+		return hook.CommandFunc(func(ctx context.Context, m *ent.CommandMutation) (ent.Value, error) {
+			if state, ok := m.Status(); ok && state == "succeeded" && fail {
+				return nil, errors.New("模拟回执存储失败")
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
+	h := NewHub(db, true)
+	result := &pb.CommandResult{CommandId: cmd.ID.String(), Status: pb.CommandResult_SUCCEEDED, Stdout: "完成"}
+	if err := h.Complete(ctx, agentID, result); err == nil {
+		t.Fatal("持久化失败被吞掉")
+	}
+	if db.Command.GetX(ctx, cmd.ID).Status != "sent" {
+		t.Fatal("失败后伪造终态")
+	}
+	fail = false
+	if err := h.Complete(ctx, agentID, result); err != nil {
+		t.Fatal(err)
+	}
+	result.Status = pb.CommandResult_FAILED
+	result.Stdout = "重复冲突"
+	if err := h.Complete(ctx, agentID, result); err != nil {
+		t.Fatal(err)
+	}
+	got := db.Command.GetX(ctx, cmd.ID)
+	if got.Status != "succeeded" || got.Stdout == nil || *got.Stdout != "完成" {
+		t.Fatal("重复回执覆盖终态")
+	}
+	if err := h.Complete(ctx, uuid.New(), result); err == nil {
+		t.Fatal("接受非所属 agent 回执")
+	}
+	if err := h.Complete(ctx, agentID, nil); err == nil {
+		t.Fatal("接受空回执")
+	}
+}

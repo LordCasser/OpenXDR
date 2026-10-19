@@ -4672,55 +4672,57 @@ func (m *ApprovalMutation) ResetEdge(name string) error {
 // AssetMutation represents an operation that mutates the Asset nodes in the graph.
 type AssetMutation struct {
 	config
-	op                    Op
-	typ                   string
-	id                    *uuid.UUID
-	hostname              *string
-	os                    *string
-	ip_addrs              *[]string
-	appendip_addrs        []string
-	agent_id              *uuid.UUID
-	first_seen            *time.Time
-	last_seen             *time.Time
-	_config               *json.RawMessage
-	append_config         json.RawMessage
-	group_id              *uuid.UUID
-	agent_version         *string
-	silent_since          *time.Time
-	listening             *json.RawMessage
-	appendlistening       json.RawMessage
-	cloud                 *json.RawMessage
-	appendcloud           json.RawMessage
-	inventory_at          *time.Time
-	service_notes         *json.RawMessage
-	appendservice_notes   json.RawMessage
-	egress_notes          *json.RawMessage
-	appendegress_notes    json.RawMessage
-	zone_id               *uuid.UUID
-	role                  *string
-	summary               *string
-	criticality           *int
-	addcriticality        *int
-	annotation_reason     *string
-	relation_notes        *map[string]string
-	locked_fields         *[]string
-	appendlocked_fields   []string
-	annotated_at          *time.Time
-	annotated_facts       *string
-	annotate_requested_at *time.Time
-	clearedFields         map[string]struct{}
-	events                map[uuid.UUID]struct{}
-	removedevents         map[uuid.UUID]struct{}
-	clearedevents         bool
-	alerts                map[uuid.UUID]struct{}
-	removedalerts         map[uuid.UUID]struct{}
-	clearedalerts         bool
-	commands              map[uuid.UUID]struct{}
-	removedcommands       map[uuid.UUID]struct{}
-	clearedcommands       bool
-	done                  bool
-	oldValue              func(context.Context) (*Asset, error)
-	predicates            []predicate.Asset
+	op                     Op
+	typ                    string
+	id                     *uuid.UUID
+	hostname               *string
+	os                     *string
+	ip_addrs               *[]string
+	appendip_addrs         []string
+	agent_id               *uuid.UUID
+	first_seen             *time.Time
+	last_seen              *time.Time
+	collector_health       *json.RawMessage
+	appendcollector_health json.RawMessage
+	_config                *json.RawMessage
+	append_config          json.RawMessage
+	group_id               *uuid.UUID
+	agent_version          *string
+	silent_since           *time.Time
+	listening              *json.RawMessage
+	appendlistening        json.RawMessage
+	cloud                  *json.RawMessage
+	appendcloud            json.RawMessage
+	inventory_at           *time.Time
+	service_notes          *json.RawMessage
+	appendservice_notes    json.RawMessage
+	egress_notes           *json.RawMessage
+	appendegress_notes     json.RawMessage
+	zone_id                *uuid.UUID
+	role                   *string
+	summary                *string
+	criticality            *int
+	addcriticality         *int
+	annotation_reason      *string
+	relation_notes         *map[string]string
+	locked_fields          *[]string
+	appendlocked_fields    []string
+	annotated_at           *time.Time
+	annotated_facts        *string
+	annotate_requested_at  *time.Time
+	clearedFields          map[string]struct{}
+	events                 map[uuid.UUID]struct{}
+	removedevents          map[uuid.UUID]struct{}
+	clearedevents          bool
+	alerts                 map[uuid.UUID]struct{}
+	removedalerts          map[uuid.UUID]struct{}
+	clearedalerts          bool
+	commands               map[uuid.UUID]struct{}
+	removedcommands        map[uuid.UUID]struct{}
+	clearedcommands        bool
+	done                   bool
+	oldValue               func(context.Context) (*Asset, error)
+	predicates             []predicate.Asset
 }
 
 var _ ent.Mutation = (*AssetMutation)(nil)
@@ -5096,6 +5098,71 @@ func (m *AssetMutation) OldLastSeen(ctx context.Context) (v time.Time, err error
 // ResetLastSeen resets all changes to the "last_seen" field.
 func (m *AssetMutation) ResetLastSeen() {
 	m.last_seen = nil
+}
+
+// SetCollectorHealth sets the "collector_health" field.
+func (m *AssetMutation) SetCollectorHealth(jm json.RawMessage) {
+	m.collector_health = &jm
+	m.appendcollector_health = nil
+}
+
+// CollectorHealth returns the value of the "collector_health" field in the mutation.
+func (m *AssetMutation) CollectorHealth() (r json.RawMessage, exists bool) {
+	v := m.collector_health
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCollectorHealth returns the old "collector_health" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldCollectorHealth(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCollectorHealth is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCollectorHealth requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCollectorHealth: %w", err)
+	}
+	return oldValue.CollectorHealth, nil
+}
+
+// AppendCollectorHealth adds jm to the "collector_health" field.
+func (m *AssetMutation) AppendCollectorHealth(jm json.RawMessage) {
+	m.appendcollector_health = append(m.appendcollector_health, jm...)
+}
+
+// AppendedCollectorHealth returns the list of values that were appended to the "collector_health" field in this mutation.
+func (m *AssetMutation) AppendedCollectorHealth() (json.RawMessage, bool) {
+	if len(m.appendcollector_health) == 0 {
+		return nil, false
+	}
+	return m.appendcollector_health, true
+}
+
+// ClearCollectorHealth clears the value of the "collector_health" field.
+func (m *AssetMutation) ClearCollectorHealth() {
+	m.collector_health = nil
+	m.appendcollector_health = nil
+	m.clearedFields[asset.FieldCollectorHealth] = struct{}{}
+}
+
+// CollectorHealthCleared returns if the "collector_health" field was cleared in this mutation.
+func (m *AssetMutation) CollectorHealthCleared() bool {
+	_, ok := m.clearedFields[asset.FieldCollectorHealth]
+	return ok
+}
+
+// ResetCollectorHealth resets all changes to the "collector_health" field.
+func (m *AssetMutation) ResetCollectorHealth() {
+	m.collector_health = nil
+	m.appendcollector_health = nil
+	delete(m.clearedFields, asset.FieldCollectorHealth)
 }
 
 // SetConfig sets the "config" field.
@@ -6342,7 +6409,7 @@ func (m *AssetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.hostname != nil {
 		fields = append(fields, asset.FieldHostname)
 	}
@@ -6360,6 +6427,9 @@ func (m *AssetMutation) Fields() []string {
 	}
 	if m.last_seen != nil {
 		fields = append(fields, asset.FieldLastSeen)
+	}
+	if m.collector_health != nil {
+		fields = append(fields, asset.FieldCollectorHealth)
 	}
 	if m._config != nil {
 		fields = append(fields, asset.FieldConfig)
@@ -6438,6 +6508,8 @@ func (m *AssetMutation) Field(name string) (ent.Value, bool) {
 		return m.FirstSeen()
 	case asset.FieldLastSeen:
 		return m.LastSeen()
+	case asset.FieldCollectorHealth:
+		return m.CollectorHealth()
 	case asset.FieldConfig:
 		return m.Config()
 	case asset.FieldGroupID:
@@ -6497,6 +6569,8 @@ func (m *AssetMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldFirstSeen(ctx)
 	case asset.FieldLastSeen:
 		return m.OldLastSeen(ctx)
+	case asset.FieldCollectorHealth:
+		return m.OldCollectorHealth(ctx)
 	case asset.FieldConfig:
 		return m.OldConfig(ctx)
 	case asset.FieldGroupID:
@@ -6585,6 +6659,13 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLastSeen(v)
+		return nil
+	case asset.FieldCollectorHealth:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCollectorHealth(v)
 		return nil
 	case asset.FieldConfig:
 		v, ok := value.(json.RawMessage)
@@ -6773,6 +6854,9 @@ func (m *AssetMutation) ClearedFields() []string {
 	if m.FieldCleared(asset.FieldAgentID) {
 		fields = append(fields, asset.FieldAgentID)
 	}
+	if m.FieldCleared(asset.FieldCollectorHealth) {
+		fields = append(fields, asset.FieldCollectorHealth)
+	}
 	if m.FieldCleared(asset.FieldConfig) {
 		fields = append(fields, asset.FieldConfig)
 	}
@@ -6852,6 +6936,9 @@ func (m *AssetMutation) ClearField(name string) error {
 		return nil
 	case asset.FieldAgentID:
 		m.ClearAgentID()
+		return nil
+	case asset.FieldCollectorHealth:
+		m.ClearCollectorHealth()
 		return nil
 	case asset.FieldConfig:
 		m.ClearConfig()
@@ -6935,6 +7022,9 @@ func (m *AssetMutation) ResetField(name string) error {
 		return nil
 	case asset.FieldLastSeen:
 		m.ResetLastSeen()
+		return nil
+	case asset.FieldCollectorHealth:
+		m.ResetCollectorHealth()
 		return nil
 	case asset.FieldConfig:
 		m.ResetConfig()

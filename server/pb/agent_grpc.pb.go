@@ -22,10 +22,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_Register_FullMethodName      = "/openxdr.agent.v1.AgentService/Register"
-	AgentService_ReportEvents_FullMethodName  = "/openxdr.agent.v1.AgentService/ReportEvents"
-	AgentService_Commands_FullMethodName      = "/openxdr.agent.v1.AgentService/Commands"
-	AgentService_DownloadAgent_FullMethodName = "/openxdr.agent.v1.AgentService/DownloadAgent"
+	AgentService_Register_FullMethodName            = "/openxdr.agent.v1.AgentService/Register"
+	AgentService_ReportHealth_FullMethodName        = "/openxdr.agent.v1.AgentService/ReportHealth"
+	AgentService_ReportEvents_FullMethodName        = "/openxdr.agent.v1.AgentService/ReportEvents"
+	AgentService_Commands_FullMethodName            = "/openxdr.agent.v1.AgentService/Commands"
+	AgentService_ReportCommandResult_FullMethodName = "/openxdr.agent.v1.AgentService/ReportCommandResult"
+	AgentService_DownloadAgent_FullMethodName       = "/openxdr.agent.v1.AgentService/DownloadAgent"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -34,11 +36,15 @@ const (
 type AgentServiceClient interface {
 	// agent 启动时注册，server 颁发/找回 agent_id
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
+	// 独立状态通道，不进入事件积压队列。
+	ReportHealth(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthAck, error)
 	// 客户端流式上报事件，一条长连接批量推
 	ReportEvents(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[AgentEvent, ReportAck], error)
 	// 双向流：agent 保持连接等待指令，执行完把结果回传。
 	// agent 主动连出，不需要在被监控主机上开监听端口。
 	Commands(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[CommandResult, Command], error)
+	// 独立回执确认：确认只代表结果已持久化，不授权重新执行动作。
+	ReportCommandResult(ctx context.Context, in *CommandResult, opts ...grpc.CallOption) (*CommandResultAck, error)
 	// 下载 server 分发的 agent 安装包，分块流式返回。走已认证的同一条通道，不另开下载地址
 	DownloadAgent(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AgentChunk], error)
 }
@@ -55,6 +61,16 @@ func (c *agentServiceClient) Register(ctx context.Context, in *RegisterRequest, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RegisterResponse)
 	err := c.cc.Invoke(ctx, AgentService_Register_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ReportHealth(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthAck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HealthAck)
+	err := c.cc.Invoke(ctx, AgentService_ReportHealth_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,6 +103,16 @@ func (c *agentServiceClient) Commands(ctx context.Context, opts ...grpc.CallOpti
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_CommandsClient = grpc.BidiStreamingClient[CommandResult, Command]
 
+func (c *agentServiceClient) ReportCommandResult(ctx context.Context, in *CommandResult, opts ...grpc.CallOption) (*CommandResultAck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommandResultAck)
+	err := c.cc.Invoke(ctx, AgentService_ReportCommandResult_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) DownloadAgent(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AgentChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_DownloadAgent_FullMethodName, cOpts...)
@@ -112,11 +138,15 @@ type AgentService_DownloadAgentClient = grpc.ServerStreamingClient[AgentChunk]
 type AgentServiceServer interface {
 	// agent 启动时注册，server 颁发/找回 agent_id
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
+	// 独立状态通道，不进入事件积压队列。
+	ReportHealth(context.Context, *HealthRequest) (*HealthAck, error)
 	// 客户端流式上报事件，一条长连接批量推
 	ReportEvents(grpc.ClientStreamingServer[AgentEvent, ReportAck]) error
 	// 双向流：agent 保持连接等待指令，执行完把结果回传。
 	// agent 主动连出，不需要在被监控主机上开监听端口。
 	Commands(grpc.BidiStreamingServer[CommandResult, Command]) error
+	// 独立回执确认：确认只代表结果已持久化，不授权重新执行动作。
+	ReportCommandResult(context.Context, *CommandResult) (*CommandResultAck, error)
 	// 下载 server 分发的 agent 安装包，分块流式返回。走已认证的同一条通道，不另开下载地址
 	DownloadAgent(*DownloadRequest, grpc.ServerStreamingServer[AgentChunk]) error
 	mustEmbedUnimplementedAgentServiceServer()
@@ -132,11 +162,17 @@ type UnimplementedAgentServiceServer struct{}
 func (UnimplementedAgentServiceServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
 }
+func (UnimplementedAgentServiceServer) ReportHealth(context.Context, *HealthRequest) (*HealthAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportHealth not implemented")
+}
 func (UnimplementedAgentServiceServer) ReportEvents(grpc.ClientStreamingServer[AgentEvent, ReportAck]) error {
 	return status.Error(codes.Unimplemented, "method ReportEvents not implemented")
 }
 func (UnimplementedAgentServiceServer) Commands(grpc.BidiStreamingServer[CommandResult, Command]) error {
 	return status.Error(codes.Unimplemented, "method Commands not implemented")
+}
+func (UnimplementedAgentServiceServer) ReportCommandResult(context.Context, *CommandResult) (*CommandResultAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportCommandResult not implemented")
 }
 func (UnimplementedAgentServiceServer) DownloadAgent(*DownloadRequest, grpc.ServerStreamingServer[AgentChunk]) error {
 	return status.Error(codes.Unimplemented, "method DownloadAgent not implemented")
@@ -180,6 +216,24 @@ func _AgentService_Register_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_ReportHealth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ReportHealth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ReportHealth_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ReportHealth(ctx, req.(*HealthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_ReportEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(AgentServiceServer).ReportEvents(&grpc.GenericServerStream[AgentEvent, ReportAck]{ServerStream: stream})
 }
@@ -193,6 +247,24 @@ func _AgentService_Commands_Handler(srv interface{}, stream grpc.ServerStream) e
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_CommandsServer = grpc.BidiStreamingServer[CommandResult, Command]
+
+func _AgentService_ReportCommandResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommandResult)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ReportCommandResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ReportCommandResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ReportCommandResult(ctx, req.(*CommandResult))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 func _AgentService_DownloadAgent_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(DownloadRequest)
@@ -215,6 +287,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Register",
 			Handler:    _AgentService_Register_Handler,
+		},
+		{
+			MethodName: "ReportHealth",
+			Handler:    _AgentService_ReportHealth_Handler,
+		},
+		{
+			MethodName: "ReportCommandResult",
+			Handler:    _AgentService_ReportCommandResult_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -71,3 +71,17 @@ Prometheus 预置节点离线、队列积压、处理失败和 P95 延迟规则�
 6. agent 连到 server A，从 server B 的 API 下发 dry-run：指令必须经 NATS 路由成功。
 
 任何一项失败都不能把集群标记为可用。
+
+## 未处理事件的保留与升级
+
+事件 stream 使用 `DiscardNew`：达到容量上限后拒绝发布，由新版 Agent 保留本地批次并重试；已确认的旧消息不为新消息腾空间。
+`QUEUE_MAX_AGE_HOURS` 默认且必须为 0，未处理事件不自动过期。旧配置显式设为 168 等非零值时，新 server 拒绝启动并报告该变量。
+队列容量必须为正；在线缩容会被拒绝，防止读取状态与更新配置之间有新发布而误删积压。缩容须在停止发布、核对并排空积压后由管理员维护。
+
+升级时先更新全部 gateway/worker 的环境配置，再完成 server 版本切换；不能把新旧版本长期混跑，否则旧版可能在重启时写回原来的淘汰策略。stream 配置迁移不清空积压。
+已被旧策略淘汰或过期的消息无法追回。本保证不覆盖操作员手工删除、磁盘损坏、旧采集端没有补传缓存等情况。
+
+单机、三节点 Compose 和 HA 的 NATS 模板均设置 `sync_interval: always`，让发布确认前先同步磁盘；使用外部 NATS 时必须自行设置。
+同时设置 `max_payload: 4MB`，覆盖新版 Agent 有界事件大小；外部 NATS 若仍采用默认 1 MiB 上限，大事件可能反复拒收。
+此配置会增加磁盘同步开销，应以实际硬件测量吞吐，不能沿用默认异步同步策略下的容量数字。
+[NATS 官方持久性说明](https://github.com/nats-io/nats.docs/blob/master/nats-concepts/jetstream/README.md)。

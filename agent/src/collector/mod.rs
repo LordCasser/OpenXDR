@@ -19,6 +19,8 @@ mod registry;
 
 #[cfg(target_os = "linux")]
 mod authwatch;
+#[cfg(target_os = "linux")]
+mod local_accounts;
 
 #[cfg(target_os = "linux")]
 mod container;
@@ -79,13 +81,58 @@ pub const COMMAND_ENV: &str = "OPENXDR_COMMAND_ID";
 /// 宿主机两秒内能冒出两千多条进程事件，缓冲得兜住这种尖峰慢慢排空，而不是丢
 const SINK_CAPACITY: usize = 16 * 1024;
 
-pub fn spawn(agent_id: String, cfg: Config) -> mpsc::Receiver<AgentEvent> {
+pub fn spawn(
+    agent_id: String,
+    cfg: Config,
+    health: Arc<crate::health::Health>,
+) -> mpsc::Receiver<AgentEvent> {
     let (tx, rx) = mpsc::channel(SINK_CAPACITY);
+    let generation = health.begin(&[
+        ("process", true),
+        ("files", cfg.collect_files),
+        ("network", cfg.collect_network),
+        ("dns", cfg.collect_network),
+        ("auth", cfg.collect_auth),
+        ("inventory", cfg.collect_inventory),
+        (
+            "local-accounts",
+            cfg.collect_inventory && cfg!(target_os = "linux"),
+        ),
+    ]);
     periodic::set_enabled(cfg.collapse_periodic);
     let sink = EventSink {
         tx,
-        dropped: Arc::new(AtomicU64::new(0)),
+        dropped: health.dropped.clone(),
+        health,
+        generation,
     };
+
+    #[cfg(all(target_os = "linux", not(feature = "ebpf")))]
+    if cfg.collect_network {
+        sink.capability("network", "ebpf-not-built", "unavailable");
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        sink.capability(
+            "powershell",
+            "event-log-4104",
+            if cfg.collect_auth {
+                "unknown"
+            } else {
+                "disabled"
+            },
+        );
+        sink.capability(
+            "persist",
+            "registry-services-tasks-wmi",
+            if cfg.collect_persist {
+                "unknown"
+            } else {
+                "disabled"
+            },
+        );
+    }
 
     // 进程采集的各分支会拿走 agent_id/sink 所有权，文件监控的副本先留出来
     #[cfg(target_os = "linux")]
@@ -130,8 +177,14 @@ pub fn spawn(agent_id: String, cfg: Config) -> mpsc::Receiver<AgentEvent> {
     #[cfg(target_os = "windows")]
     if cfg.collect_files {
         match fswatch_win::spawn(agent_id.clone(), sink.clone(), &cfg.file_watch_dirs) {
-            Ok(n) => eprintln!("文件监控: ReadDirectoryChangesW 盯 {n} 个敏感目录"),
-            Err(e) => eprintln!("文件监控不可用（{e}）"),
+            Ok(n) => {
+                sink.capability("files", "rdcw", if n > 0 { "active" } else { "degraded" });
+                eprintln!("文件监控: ReadDirectoryChangesW 盯 {n} 个敏感目录");
+            }
+            Err(e) => {
+                sink.capability("files", "rdcw", "unavailable");
+                eprintln!("文件监控不可用（{e}）");
+            }
         }
     }
 
@@ -191,9 +244,19 @@ pub fn spawn(agent_id: String, cfg: Config) -> mpsc::Receiver<AgentEvent> {
 pub struct EventSink {
     tx: mpsc::Sender<AgentEvent>,
     dropped: Arc<AtomicU64>,
+    health: Arc<crate::health::Health>,
+    generation: u64,
 }
 
 impl EventSink {
+    #[cfg(any(target_os = "windows", feature = "ebpf"))]
+    pub async fn closed(&self) {
+        self.tx.closed().await;
+    }
+    pub fn capability(&self, name: &str, path: &str, state: &str) {
+        self.health.capability(self.generation, name, path, state);
+    }
+
     /// 返回 false 表示上报侧已关闭，采集任务应当退出。
     pub fn send(&self, mut event: AgentEvent) -> bool {
         event.dropped_events = self.dropped.load(Ordering::Relaxed);
@@ -371,12 +434,29 @@ fn username_of(pid: u32) -> String {
 
 /// 进程事件的出口，各采集路径都走这里：组装事件、过一遍周期折叠（见 periodic），
 /// 连同待补发的被折叠祖先与到期的汇总一起返回，调用方按顺序发出即可
+/// 事件里的命令行上限。规则只看前段，超出部分截掉，事件仍然上报
+const EVENT_CMD_LINE_MAX: usize = 32 * 1024;
+
+/// 按字节截断，退到字符边界
+fn truncate(s: &str, max: usize) -> &str {
+    let mut end = s.len().min(max);
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 fn emit_process(
     agent_id: &str,
     registry: &mut ProcessRegistry,
     activity: u32,
     info: ProcessInfo<'_>,
 ) -> Vec<AgentEvent> {
+    // argv 最长能到几 MB（ulimit -s unlimited），原样上报会撑爆持久批次
+    let info = ProcessInfo {
+        cmd_line: info.cmd_line.map(|c| truncate(c, EVENT_CMD_LINE_MAX)),
+        ..info
+    };
     let (pid, ppid) = (info.pid, info.ppid);
     let now = std::time::Instant::now();
     let mut own = None;

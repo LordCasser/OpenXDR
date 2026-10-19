@@ -9,11 +9,15 @@ option go_package = "openxdr/server/pb";
 service AgentService {
   // agent 启动时注册，server 颁发/找回 agent_id
   rpc Register(RegisterRequest) returns (RegisterResponse);
+  // 独立状态通道，不进入事件积压队列。
+  rpc ReportHealth(HealthRequest) returns (HealthAck);
   // 客户端流式上报事件，一条长连接批量推
   rpc ReportEvents(stream AgentEvent) returns (ReportAck);
   // 双向流：agent 保持连接等待指令，执行完把结果回传。
   // agent 主动连出，不需要在被监控主机上开监听端口。
   rpc Commands(stream CommandResult) returns (stream Command);
+  // 独立回执确认：确认只代表结果已持久化，不授权重新执行动作。
+  rpc ReportCommandResult(CommandResult) returns (CommandResultAck);
   // 下载 server 分发的 agent 安装包，分块流式返回。走已认证的同一条通道，不另开下载地址
   rpc DownloadAgent(DownloadRequest) returns (stream AgentChunk);
 }
@@ -69,6 +73,10 @@ message CommandResult {
   }
 }
 
+message CommandResultAck {
+  string command_id = 1;
+}
+
 message RegisterRequest {
   string hostname = 1;
   string os = 2;
@@ -106,3 +114,9 @@ message AgentEvent {
 message ReportAck {
   uint64 received = 1;
 }
+
+message HealthRequest {
+  string agent_id = 1;
+  string health_json = 2;
+}
+message HealthAck {}
