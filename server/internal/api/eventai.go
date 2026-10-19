@@ -71,6 +71,8 @@ func EventAI(db *ent.Client, llm *triage.LLM) http.Handler {
 
 	// 解读在后台跑：POST 发起（已有在跑的或已有结果就直接返回它，refresh=1 才重来），GET 读当前这次。
 	// 结果按发起人存：候选是按调用者能看的范围捞的，别人的解读可能提到他看不到的主机
+	// 每个节点同时最多几次后台解读：调用不再挂在请求上，没有名额就能被连点拉起任意多次
+	slots := make(chan struct{}, 4)
 	key := func(r *http.Request) aijob.Key {
 		return aijob.Key{Kind: "explain", Subject: r.PathValue("id"), Variant: r.URL.Query().Get("lang"), Owner: auth.From(r.Context()).ID.String()}
 	}
@@ -110,14 +112,21 @@ func EventAI(db *ent.Client, llm *triage.LLM) http.Handler {
 				host = map[string]any{"hostname": a.Hostname, "os": a.Os, "ips": a.IPAddrs, "role": a.Role, "summary": a.Summary}
 			}
 		}
+		select {
+		case slots <- struct{}{}:
+		default:
+			http.Error(w, "解读繁忙，请稍后重试", http.StatusTooManyRequests)
+			return
+		}
 		system, user := eventai.Messages(e, host, groups, k.Variant)
-		j, err := aijob.Start(r.Context(), db, k, func(ctx context.Context) (any, error) {
+		// 已有一次在跑（别的标签页或节点刚发起）时 Start 返回那一次，照样轮询它
+		j, _, err := aijob.Start(r.Context(), db, k, func(ctx context.Context) (any, error) {
 			reply, err := llm.Chat(ctx, []triage.Message{{Role: "system", Content: system}, {Role: "user", Content: user}}, nil)
 			if err != nil {
 				return nil, fmt.Errorf("模型调用失败：%w", err)
 			}
 			return eventai.Parse(reply.Content, groups)
-		}, nil)
+		}, func() { <-slots })
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
