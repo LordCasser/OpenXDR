@@ -44,7 +44,7 @@ pub async fn run(cmd: &Command) -> Outcome {
 
     let Ok(((stdout, out_cut), (stderr, err_cut), waited)) = collected else {
         kill_tree(&mut child).await;
-        return Outcome::failed(format!("超过 {}s 未结束，已终止", timeout.as_secs()));
+        return Outcome::failed(format!("超过 {:?} 未结束，已终止", timeout));
     };
     let code = match waited {
         Ok(status) => status.code().unwrap_or(-1), // 被信号终止没有退出码
