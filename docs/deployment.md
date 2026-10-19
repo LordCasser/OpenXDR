@@ -361,6 +361,7 @@ server 全部通过环境变量配置，均有默认值：
 | `AUTO_RESPONSE_EXEMPT` | 空 | 逗号分隔的主机名，绝不自动隔离 |
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测的按资产学习期 |
 | `BEACON_ENABLED` | `1` | 外联心跳检测（新出现的规律公网外联），0 关闭 |
+| `PI_HISTORY_FOLD_KB` | `64` | Pi 会话历史超过这么多 KB 时折叠较早的工具结果再发给模型，0 不折叠 |
 | `VULN_SYNC_HOURS` | `24` | 漏洞库（OSV）同步周期，0 关闭 |
 | `VULN_OSV_URL` | `https://osv-vulnerabilities.storage.googleapis.com` | OSV 下载地址，可指向内网镜像 |
 | `VULN_DIR` | 空 | 离线漏洞库目录（放 `Debian.zip`、`Ubuntu.zip`），设置后不联网 |

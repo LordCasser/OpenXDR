@@ -48,6 +48,8 @@ type Service struct {
 	Rules interface{ TitleOf(id string) string }
 	// GroupDailyTokens 每组近 24 小时 Pi 会话的输入加输出 token 上限，0 表示不限
 	GroupDailyTokens int
+	// FoldAbove 历史超过这么多字节时折叠较早的工具结果与思考过程再发给模型，0 不折叠
+	FoldAbove int
 	// running 后台运行中的对话：停机时等它们把终态写完再退出
 	running sync.WaitGroup
 }
@@ -318,6 +320,7 @@ func (s *Service) closeDangling(ctx context.Context, id uuid.UUID, seq *int) err
 }
 
 // history 按 seq 取出会话已入库的全部消息，返回最后一条的 seq 供续写编号。
+// 发给模型的是折叠后的历史（见 compact.go），大小上限也按折叠后算，长会话不必早早新建
 func (s *Service) history(ctx context.Context, id uuid.UUID) ([]json.RawMessage, int, error) {
 	history, err := s.DB.SessionMessage.Query().Where(sessionmessage.SessionIDEQ(id)).Order(ent.Asc(sessionmessage.FieldSeq)).Limit(1001).All(ctx)
 	if err != nil {
@@ -328,11 +331,14 @@ func (s *Service) history(ctx context.Context, id uuid.UUID) ([]json.RawMessage,
 	}
 	messages := make([]json.RawMessage, len(history))
 	seq := 0
-	size := 0
 	for i, m := range history {
 		messages[i] = m.Content
 		seq = m.Seq
-		size += len(m.Content)
+	}
+	messages = fold(messages, s.FoldAbove)
+	size := 0
+	for _, m := range messages {
+		size += len(m)
 	}
 	if size > 2*1024*1024 {
 		return nil, 0, errors.New("会话历史超过 2 MiB，请新建会话")
