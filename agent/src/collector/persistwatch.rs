@@ -231,6 +231,7 @@ fn service_states() -> Option<HashMap<String, &'static str>> {
         SERVICE_WIN32,
     };
 
+    // SAFETY: 两个字符串参数传空指针表示本机、默认数据库，是 API 约定的用法；空句柄表示失败，下面已检查。
     let scm = unsafe {
         OpenSCManagerW(
             std::ptr::null(),
@@ -245,6 +246,8 @@ fn service_states() -> Option<HashMap<String, &'static str>> {
     let mut bytes_needed = 0u32;
     let mut count = 0u32;
     let mut resume = 0u32;
+    // SAFETY: 第一段只问大小：缓冲区传空指针、长度 0 是 API 约定的用法（必然报 ERROR_MORE_DATA），
+    // 系统只写三个栈上出参；scm 是上面成功打开的句柄；组名传空表示不按组过滤。
     unsafe {
         EnumServicesStatusExW(
             scm,
@@ -262,6 +265,8 @@ fn service_states() -> Option<HashMap<String, &'static str>> {
     // 用 u64 缓冲保证对齐：ENUM_SERVICE_STATUS_PROCESSW 含指针字段，
     // Vec<u8> 不保证 8 字节对齐
     let mut buf = vec![0u64; (bytes_needed as usize).div_ceil(8)];
+    // SAFETY: buf 至少 bytes_needed 字节，以 Vec<u64> 分配保证结构体内指针字段的 8 字节对齐，
+    // 传入的长度就是 bytes_needed，系统不会写出界；出参都指向栈上变量。
     let ok = unsafe {
         EnumServicesStatusExW(
             scm,
@@ -276,10 +281,13 @@ fn service_states() -> Option<HashMap<String, &'static str>> {
             std::ptr::null(),
         )
     };
+    // SAFETY: scm 是上面 OpenSCManagerW 成功返回、只由本函数持有的句柄，枚举完关一次，之后不再使用。
     unsafe { CloseServiceHandle(scm) };
     if ok == 0 {
         return None;
     }
+    // SAFETY: EnumServicesStatusExW 成功后 buf 开头是 count 个连续的 ENUM_SERVICE_STATUS_PROCESSW，
+    // 全部落在 bytes_needed 之内；buf 8 字节对齐，在 entries 使用期间存活且不再改动。
     let entries = unsafe {
         std::slice::from_raw_parts(
             buf.as_ptr() as *const ENUM_SERVICE_STATUS_PROCESSW,
@@ -288,6 +296,7 @@ fn service_states() -> Option<HashMap<String, &'static str>> {
     };
     let mut out = HashMap::new();
     for e in entries {
+        // SAFETY: lpServiceName 由系统指向同一块 buf 内以 0 结尾的 UTF-16 串（或为空），buf 仍存活。
         let name = unsafe { wide_str(e.lpServiceName) };
         out.insert(
             name.to_lowercase(),
@@ -316,14 +325,20 @@ fn service_state_name(state: u32) -> &'static str {
 }
 
 /// 从 Win32 API 返回的宽字符指针构造 String，空指针给空串。
+///
+/// # Safety
+/// `p` 为空，或指向一段以 0 结尾、u16 对齐、调用期间不被改写的 UTF-16 串。
 unsafe fn wide_str(p: *mut u16) -> String {
     if p.is_null() {
         return String::new();
     }
     let mut len = 0;
+    // SAFETY: 调用方保证 p 指向以 0 结尾的 u16 串：遇到第一个 0 之前的每个下标都在串内。
     while unsafe { *p.add(len) } != 0 {
         len += 1;
     }
+    // SAFETY: 上面数出的 len 个 u16 都在串内且已初始化，p 非空、u16 对齐由系统保证；
+    // 返回的 String 是拷贝，不延长借用。
     String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(p, len) })
 }
 
@@ -530,6 +545,8 @@ mod winreg {
     fn open(hive: Hive, key: &str) -> Option<HKEY> {
         let key_w: Vec<u16> = key.encode_utf16().chain(std::iter::once(0)).collect();
         let mut handle: HKEY = std::ptr::null_mut();
+        // SAFETY: key_w 是以 0 结尾的 UTF-16 键名，调用期间存活；handle 是栈上出参，成功时系统写入新句柄；
+        // hive.raw() 是预定义根键，无需关闭。
         if unsafe { RegOpenKeyExW(hive.raw(), key_w.as_ptr(), 0, KEY_READ, &mut handle) } != 0 {
             return None;
         }
@@ -544,6 +561,8 @@ mod winreg {
         loop {
             let mut name = [0u16; 256];
             let mut name_len = name.len() as u32;
+            // SAFETY: handle 是 open 成功返回的有效键句柄；name 是栈上 256 个 u16，name_len 如实给出容量
+            // （字符数），系统最多写这么多并回填实际长度；其余可选出参传空指针表示不需要。
             let rc = unsafe {
                 RegEnumKeyExW(
                     handle,
@@ -562,6 +581,7 @@ mod winreg {
             out.push(String::from_utf16_lossy(&name[..name_len as usize]));
             index += 1;
         }
+        // SAFETY: handle 是 open 成功返回、只由本函数持有的键句柄，枚举完关一次。
         unsafe { RegCloseKey(handle) };
         Some(out)
     }
@@ -573,6 +593,8 @@ mod winreg {
         let mut kind = 0u32;
         let mut data = 0u32;
         let mut data_len = std::mem::size_of::<u32>() as u32;
+        // SAFETY: handle 是有效键句柄；name_w 以 0 结尾且调用期间存活；data 是栈上 u32，data_len 如实
+        // 给出它的 4 字节大小，系统不会写出界（值更大时返回 ERROR_MORE_DATA 而不写入）。
         let rc = unsafe {
             RegQueryValueExW(
                 handle,
@@ -583,6 +605,7 @@ mod winreg {
                 &mut data_len,
             )
         };
+        // SAFETY: handle 是 open 成功返回、只由本函数持有的键句柄，查完关一次。
         unsafe { RegCloseKey(handle) };
         (rc == 0 && kind == REG_DWORD).then_some(data)
     }
@@ -601,6 +624,9 @@ mod winreg {
             let mut kind = 0u32;
             let mut data = [0u8; 4096];
             let mut data_len = data.len() as u32;
+            // SAFETY: handle 是有效键句柄；name 与 data 都是栈上数组，name_len / data_len 如实给出各自容量，
+            // 系统最多写这么多并回填实际长度（放不下时返回 ERROR_MORE_DATA，下面按失败结束）；
+            // 保留参数传空指针。
             let rc = unsafe {
                 RegEnumValueW(
                     handle,
@@ -632,6 +658,7 @@ mod winreg {
             out.push((value_name, content));
             index += 1;
         }
+        // SAFETY: handle 是 open 成功返回、只由本函数持有的键句柄，枚举完关一次。
         unsafe { RegCloseKey(handle) };
         out
     }

@@ -100,7 +100,12 @@ struct Ring {
 }
 
 impl Ring {
+    /// # Safety
+    /// `base` 指向 XDP 环的 mmap 区域，`off` 是内核经 XDP_MMAP_OFFSETS 给出的偏移，区域至少
+    /// 覆盖 `off.desc` 起 `size` 个描述符；`size` 是 2 的幂且等于建环时的大小。
+    /// 返回的视图只能在映射存活期间使用。
     unsafe fn new(base: *mut u8, off: &RingOffset, size: u32) -> Self {
+        // SAFETY: 按本函数 # Safety，各偏移都由内核给出、落在同一映射内，这里只做指针运算。
         unsafe {
             Self {
                 producer: base.add(off.producer as usize) as *mut u32,
@@ -114,10 +119,14 @@ impl Ring {
     }
 
     fn producer_value(&self) -> u32 {
+        // SAFETY: producer 指向映射内内核给的 4 字节对齐计数器，映射在 Ring 使用期间存活；内核并发写它，
+        // 所以 volatile 读。注意 volatile 不是 acquire：libbpf 在这里用 smp_load_acquire，本实现在
+        // x86（TSO）上成立，弱内存序架构上应补 fence(Acquire)（已知隐患，本次不改逻辑）。
         unsafe { std::ptr::read_volatile(self.producer) }
     }
 
     fn needs_wakeup(&self) -> bool {
+        // SAFETY: flags 同 producer：映射内对齐的 u32，内核并发写，volatile 读。
         unsafe { std::ptr::read_volatile(self.flags) & XDP_RING_NEED_WAKEUP != 0 }
     }
 
@@ -127,8 +136,12 @@ impl Ring {
         let producer = self.producer_value();
         for (i, addr) in addrs.iter().enumerate() {
             let slot = (producer.wrapping_add(i as u32) & self.mask) as usize;
+            // SAFETY: slot 经掩码后 < size，desc 起至少有 size 个 u64 槽（FILL 环；RX 环的描述符更大，同样不越界），
+            // 都在映射内且 8 字节对齐；[producer, producer + addrs.len()) 这些槽内核在 producer 推进前不会读。
             unsafe { std::ptr::write((self.desc as *mut u64).add(slot), *addr) };
         }
+        // SAFETY: producer 指针同上有效。发布前的槽写入需要 release 语义：libbpf 用 smp_store_release，
+        // 本实现依赖 x86 TSO，弱内存序架构上应先 fence(Release)（已知隐患，本次不改逻辑）。
         unsafe {
             std::ptr::write_volatile(self.producer, producer.wrapping_add(addrs.len() as u32))
         };
@@ -150,7 +163,11 @@ impl Ring {
         let mut used = Vec::with_capacity((producer.wrapping_sub(consumer)) as usize);
         while consumer != producer {
             let slot = (consumer & self.mask) as usize;
+            // SAFETY: slot 经掩码后 < size，RX 环 desc 起有 size 个 XdpDesc，映射内 8 字节对齐；
+            // [cached_consumer, producer) 范围的描述符内核已写好，consumer 推进前不会再改。
             let desc = unsafe { &*(self.desc as *const XdpDesc).add(slot) };
+            // SAFETY: 按本函数 # Safety，addr + len 落在 UMEM 内；对应帧在归还 FILL 环之前内核不会再写，
+            // 切片只借给本次回调。
             let frame = unsafe {
                 std::slice::from_raw_parts(umem.add(desc.addr as usize), desc.len as usize)
             };
@@ -159,6 +176,7 @@ impl Ring {
             consumer = consumer.wrapping_add(1);
         }
 
+        // SAFETY: consumer 指向映射内对齐的 u32；此时所有帧都已交付回调，发布后内核才可复用这些描述符槽。
         unsafe { std::ptr::write_volatile(self.consumer, consumer) };
         self.cached_consumer = consumer;
         used
@@ -182,6 +200,8 @@ pub struct AfXdp {
     dropped: u64,
 }
 
+// SAFETY: AfXdp 独占 fd、UMEM 与三段环映射（不可 Clone，没有别的别名），裸指针不绑定创建线程，
+// 移到 worker 线程使用、在别的线程 Drop 都没问题；只实现 Send 不实现 Sync。
 unsafe impl Send for AfXdp {}
 
 impl AfXdp {
@@ -191,6 +211,7 @@ impl AfXdp {
             "frame_count 必须是 2 的幂"
         );
 
+        // SAFETY: 纯 FFI 调用，参数都是整数常量，不涉及指针；返回值在下面检查 < 0。
         let fd = unsafe { libc::socket(AF_XDP, libc::SOCK_RAW | libc::SOCK_CLOEXEC, 0) };
         if fd < 0 {
             return Err(io::Error::last_os_error());
@@ -198,6 +219,9 @@ impl AfXdp {
 
         // UMEM：页对齐的连续内存，网卡直接往里 DMA
         let umem_len = (cfg.frame_count * cfg.frame_size) as usize;
+        // SAFETY: 匿名私有映射，不指定地址，长度为 frame_count × frame_size；MAP_FAILED 在下面检查。
+        // 注意之后 setsockopt / mmap_offsets / map_ring / bind 失败时用 ? 直接返回，UMEM 与 fd 都会
+        // 泄漏到进程退出（不是 UB）。
         let umem = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
@@ -209,6 +233,7 @@ impl AfXdp {
             )
         };
         if umem == libc::MAP_FAILED {
+            // SAFETY: fd 是上面刚创建的、尚未交给任何人的套接字，关闭后立即返回。
             unsafe { libc::close(fd) };
             return Err(io::Error::last_os_error());
         }
@@ -244,7 +269,10 @@ impl AfXdp {
             offsets.completion.desc as usize + cfg.frame_count as usize * size_of::<u64>(),
         )?;
 
+        // SAFETY: rx_map 是按 offsets.rx.desc + frame_count 个 XdpDesc 映射的 RX 环，偏移来自内核，
+        // frame_count 已断言为 2 的幂且等于 XDP_RX_RING 申请的大小；映射由 AfXdp 持有到 Drop。
         let rx = unsafe { Ring::new(rx_map, &offsets.rx, cfg.frame_count) };
+        // SAFETY: fill_map 同理：按 offsets.fill.desc + frame_count 个 u64 映射的 FILL 环，大小与申请一致。
         let fill = unsafe { Ring::new(fill_map, &offsets.fill, cfg.frame_count) };
 
         let index = if_index(iface)?;
@@ -255,6 +283,8 @@ impl AfXdp {
             sxdp_queue_id: cfg.queue_id,
             sxdp_shared_umem_fd: 0,
         };
+        // SAFETY: fd 是有效 AF_XDP 套接字；addr 是栈上与内核 struct sockaddr_xdp 布局一致的 #[repr(C)]
+        // 结构，传入的长度正是它的大小，内核只读它。
         let rc = unsafe {
             libc::bind(
                 fd,
@@ -291,11 +321,14 @@ impl AfXdp {
         let producer = self.fill.producer_value();
         for i in 0..self.frame_count {
             let slot = (producer.wrapping_add(i) & self.fill.mask) as usize;
+            // SAFETY: slot 经掩码后 < frame_count，即 FILL 环的槽数，desc 起有这么多 u64 槽，都在映射内且对齐；
+            // 刚建好的环内核尚未消费任何槽。
             unsafe {
                 let addr = self.fill.desc as *mut u64;
                 std::ptr::write(addr.add(slot), (i * self.frame_size) as u64);
             }
         }
+        // SAFETY: 同 Ring::publish：producer 指向映射内对齐的 u32，release 语义的说明同上。
         unsafe {
             std::ptr::write_volatile(self.fill.producer, producer.wrapping_add(self.frame_count))
         };
@@ -316,6 +349,7 @@ impl AfXdp {
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: &mut pfd 指向栈上单个 pollfd，nfds 传 1 与之相符；self.fd 有效。
         let n = unsafe { libc::poll(&mut pfd, 1, 1000) };
         if n < 0 {
             let err = io::Error::last_os_error();
@@ -355,6 +389,9 @@ impl Capture for AfXdp {
             .unwrap_or_default()
             .as_nanos() as u64;
 
+        // SAFETY: self.rx 是 open 时按内核偏移建好的 RX 环，self.umem 是本 socket 注册的 UMEM；
+        // 对齐模式下内核只会把从 FILL 环拿到的帧地址（都 < umem_len）连同不超过帧大小的长度
+        // 写回 RX 描述符，满足 consume 的前提。
         let used = unsafe {
             self.rx
                 .consume(self.umem, producer, &mut |frame| f(frame, now_ns))
@@ -378,6 +415,8 @@ impl std::os::fd::AsRawFd for AfXdp {
 
 impl Drop for AfXdp {
     fn drop(&mut self) {
+        // SAFETY: 各地址与长度正是 open 里 mmap 返回的值，fd 由 AfXdp 独占；Drop 只执行一次，
+        // 帧切片只在 poll_batch 回调期间借用，此时不可能还有存活的借用。
         unsafe {
             libc::munmap(self.rx_map as *mut libc::c_void, self.rx_map_len);
             libc::munmap(self.fill_map as *mut libc::c_void, self.fill_map_len);
@@ -391,6 +430,9 @@ impl Drop for AfXdp {
 fn mmap_offsets(fd: RawFd) -> io::Result<MmapOffsets> {
     let mut offsets = MmapOffsets::default();
     let mut len = size_of::<MmapOffsets>() as libc::socklen_t;
+    // SAFETY: offsets 是栈上已初始化的 #[repr(C)] 结构，len 如实给出它的大小，内核最多写这么多。
+    // 老内核（< 5.4）返回不带 flags 的短结构时 flags 偏移保持 0，只会让 needs_wakeup 读错，
+    // 仍在映射内，不越界。
     let rc = unsafe {
         libc::getsockopt(
             fd,
@@ -407,6 +449,8 @@ fn mmap_offsets(fd: RawFd) -> io::Result<MmapOffsets> {
 }
 
 fn map_ring(fd: RawFd, offset: libc::off_t, len: usize) -> io::Result<(*mut u8, usize)> {
+    // SAFETY: fd 是有效 AF_XDP 套接字，offset 是该环约定的页偏移，len 由调用方按内核偏移算出；
+    // MAP_FAILED 在下面检查。
     let ptr = unsafe {
         libc::mmap(
             std::ptr::null_mut(),
@@ -424,6 +468,8 @@ fn map_ring(fd: RawFd, offset: libc::off_t, len: usize) -> io::Result<(*mut u8, 
 }
 
 fn setsockopt<T>(fd: RawFd, opt: libc::c_int, value: &T) -> io::Result<()> {
+    // SAFETY: value 是调用方给的 &T，在调用期间有效、可读 size_of::<T>() 字节，长度如实传入；
+    // 各调用点的 T（XdpUmemReg、u32）与该选项的内核结构一致，内核只读它。
     let rc = unsafe {
         libc::setsockopt(
             fd,
@@ -442,6 +488,7 @@ fn setsockopt<T>(fd: RawFd, opt: libc::c_int, value: &T) -> io::Result<()> {
 fn if_index(iface: &str) -> io::Result<u32> {
     let name = std::ffi::CString::new(iface)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "网卡名含 NUL"))?;
+    // SAFETY: name 是以 NUL 结尾的 CString，调用期间存活，函数只读它。
     let index = unsafe { libc::if_nametoindex(name.as_ptr()) };
     if index == 0 {
         return Err(io::Error::last_os_error());

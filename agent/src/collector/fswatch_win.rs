@@ -74,6 +74,8 @@ pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<u
 /// 以目录方式打开监控根（FILE_FLAG_BACKUP_SEMANTICS 是开目录句柄的钥匙）。
 fn open_dir(dir: &str) -> Option<HANDLE> {
     let path_w: Vec<u16> = dir.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: path_w 是以 0 结尾的 UTF-16 路径，调用期间存活；安全属性与模板句柄传空是 API 允许的用法；
+    // 返回值在下面检查空与 INVALID_HANDLE_VALUE。
     let handle = unsafe {
         CreateFileW(
             path_w.as_ptr(),
@@ -94,12 +96,15 @@ fn open_dir(dir: &str) -> Option<HANDLE> {
 struct OwnedHandle(HANDLE);
 impl Drop for OwnedHandle {
     fn drop(&mut self) {
+        // SAFETY: OwnedHandle 只包裹 CreateFileW / CreateEventW 成功返回的句柄（构造前已检查），
+        // 不可 Clone，Drop 只执行一次。
         unsafe { CloseHandle(self.0) };
     }
 }
 
 fn watch_loop(handle: HANDLE, dir: &str, agent_id: &str, sink: &EventSink) {
     let handle = OwnedHandle(handle);
+    // SAFETY: 安全属性与名称传空指针（匿名、默认安全描述符）是 API 允许的用法；空句柄下面已检查。
     let event = unsafe { CreateEventW(std::ptr::null(), 1, 0, std::ptr::null()) };
     if event.is_null() {
         eprintln!(
@@ -128,6 +133,8 @@ fn watch_loop(handle: HANDLE, dir: &str, agent_id: &str, sink: &EventSink) {
             eprintln!("文件监控: {dir} 通知缓冲区溢出，部分变更丢失");
             continue;
         }
+        // SAFETY: read_changes 返回 Some(n) 时 I/O 已完成，内核不再写 storage，且已校验 n ≤ storage 的
+        // 字节数；storage 是 Vec<u32>，按 u8 重新解释不受对齐限制，借用期间不被改动。
         let bytes = unsafe { std::slice::from_raw_parts(storage.as_ptr().cast::<u8>(), returned) };
         for (action, name) in parse_records(bytes) {
             let Some(activity) = rdcw_activity(action) else {
@@ -149,9 +156,13 @@ fn read_changes(
 ) -> io::Result<Option<usize>> {
     let mut overlapped = OVERLAPPED {
         hEvent: event,
+        // SAFETY: OVERLAPPED 只含整数、指针与联合体，全零是 API 要求的初值（hEvent 已在上一行显式给出）。
         ..unsafe { std::mem::zeroed() }
     };
     let size = std::mem::size_of_val(storage);
+    // SAFETY: handle 是以 FILE_FLAG_OVERLAPPED 打开的目录句柄；storage 是 DWORD 对齐的独占缓冲，
+    // 长度如实传入。异步 I/O 会在调用返回后继续写 storage 与 overlapped，所以下面每条
+    // 返回路径都先等到 I/O 完成（或取消后完成）才离开本函数，借用不会悬空。
     let ok = unsafe {
         ReadDirectoryChangesW(
             handle,
@@ -164,6 +175,7 @@ fn read_changes(
             None,
         )
     };
+    // SAFETY: GetLastError 无参数，只读本线程的错误码。
     if ok == 0 && unsafe { GetLastError() } != ERROR_IO_PENDING {
         return Err(io::Error::last_os_error());
     }
@@ -171,17 +183,21 @@ fn read_changes(
     loop {
         if sink.is_closed() {
             // 取消仅发出请求，必须等待 I/O 完成后才能释放缓冲区及 OVERLAPPED。
+            // SAFETY: handle 与 overlapped 正是上面发起的那次 I/O；CancelIoEx 只发取消请求，随后以 bWait = 1
+            // 调 GetOverlappedResult 阻塞到 I/O 真正结束，之后 storage 与 overlapped 才可以释放。
             unsafe {
                 CancelIoEx(handle, &overlapped);
                 GetOverlappedResult(handle, &overlapped, &mut returned, 1);
             }
             return Ok(None);
         }
+        // SAFETY: event 是 watch_loop 持有的有效事件句柄，等待不涉及内存。
         match unsafe { WaitForSingleObject(event, 250) } {
             WAIT_TIMEOUT => continue,
             WAIT_OBJECT_0 => break,
             _ => {
                 let err = io::Error::last_os_error();
+                // SAFETY: 同上：先取消，再阻塞等 I/O 结束，保证返回后内核不再写 storage 与 overlapped。
                 unsafe {
                     CancelIoEx(handle, &overlapped);
                     GetOverlappedResult(handle, &overlapped, &mut returned, 1);
@@ -190,6 +206,7 @@ fn read_changes(
             }
         }
     }
+    // SAFETY: event 已触发表示 I/O 完成；overlapped 与 returned 都是本函数的栈变量，bWait = 0 只取结果。
     if unsafe { GetOverlappedResult(handle, &overlapped, &mut returned, 0) } == 0 {
         return Err(io::Error::last_os_error());
     }

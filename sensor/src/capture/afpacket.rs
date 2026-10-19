@@ -97,13 +97,16 @@ pub struct AfPacket {
     next_block: usize,
 }
 
-// ring 指针指向本 fd 私有的 mmap 区域，随结构体一起移动到 worker 线程
+// SAFETY: ring 指针指向本 fd 私有的 mmap 区域，随结构体一起移动到 worker 线程。
+// 映射与 fd 都由 AfPacket 独占（不可 Clone，没有别的别名），不依赖创建线程的任何状态，
+// 换线程使用、在别的线程 Drop 都没问题；只实现 Send 不实现 Sync，同一时刻只有一个线程碰它。
 unsafe impl Send for AfPacket {}
 
 impl AfPacket {
     /// 在 `iface` 上开一个抓包环。`fanout_group` 非 0 时加入 FANOUT 组，
     /// 同组的多个 socket 按流哈希分担流量。
     pub fn open(iface: &str, cfg: &RingConfig, fanout_group: u16) -> io::Result<Self> {
+        // SAFETY: 纯 FFI 调用，参数都是整数常量，不涉及指针；返回值在下面检查 < 0。
         let fd = unsafe {
             libc::socket(
                 libc::AF_PACKET,
@@ -131,6 +134,9 @@ impl AfPacket {
         setsockopt(fd, PACKET_RX_RING, &req)?;
 
         let ring_len = cfg.block_size as usize * cfg.block_count as usize;
+        // SAFETY: 不指定地址、长度 ring_len 恰为 PACKET_RX_RING 申请的 block_size × block_count（内核要求
+        // 整块映射），fd 是上面打开并已设好环的 AF_PACKET 套接字；MAP_FAILED 在下面检查。
+        // 注意之后 bind / fanout 失败返回时 FdGuard 只关 fd，这段映射会泄漏到进程退出（不是 UB）。
         let ring = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
@@ -169,6 +175,8 @@ impl AfPacket {
     }
 
     fn block_ptr(&self, index: usize) -> *mut BlockDescV1 {
+        // SAFETY: 唯一调用方只传 self.next_block，它恒 < block_count（取模推进），偏移
+        // index × block_size < ring_len，结果仍在 open 映射的同一块区域内。
         unsafe { self.ring.add(index * self.block_size) as *mut BlockDescV1 }
     }
 
@@ -180,6 +188,7 @@ impl AfPacket {
             revents: 0,
         };
         loop {
+            // SAFETY: &mut pfd 指向栈上单个 pollfd，nfds 传 1 与之相符，poll 只在调用期间读写它；self.fd 有效。
             let n = unsafe { libc::poll(&mut pfd, 1, 1000) };
             if n < 0 {
                 let err = io::Error::last_os_error();
@@ -206,6 +215,9 @@ impl Capture for AfPacket {
         // 内核写完整块才置 TP_STATUS_USER；未就绪就 poll 等。
         // poll 可能报可读但当前块尚未retire，限次让出，避免空转饿死上层的老化与统计。
         let mut attempts = 0;
+        // SAFETY: desc 由 block_ptr 给出，指向映射内某块的块头；mmap 页对齐且 block_size 是页大小的
+        // 倍数，块头满足对齐。块状态由内核并发改写，所以用 volatile 读。注意这里经 &(*desc)
+        // 先造了一个共享引用，严格按 Rust 内存模型应改为 &raw const 再读（已知瑕疵，本次不改逻辑）。
         while unsafe { std::ptr::read_volatile(&(*desc).block_status) } & TP_STATUS_USER == 0 {
             if !self.wait_block()? {
                 return Ok(0);
@@ -216,9 +228,13 @@ impl Capture for AfPacket {
             }
         }
 
+        // SAFETY: block_status 已带 TP_STATUS_USER：内核写完整块后交给用户态，在下面清零归还之前不再
+        // 写入这块，块内帧偏移、mac 偏移与 snaplen 均由内核保证落在块内，满足 walk_block 的前提。
         let num_pkts = unsafe { walk_block(desc, f) };
 
         // 归还块给内核
+        // SAFETY: 块仍属于用户态，没有并发写入；walk_block 交出的帧切片只在回调期间借用（回调签名是
+        // 高阶生命周期，无法留存），此刻已全部失效，清零后内核即可复用这块。
         unsafe { std::ptr::write_volatile(&mut (*desc).block_status, 0) };
         self.next_block = (self.next_block + 1) % self.block_count;
         Ok(num_pkts as usize)
@@ -231,6 +247,8 @@ impl Capture for AfPacket {
             tp_freeze_q_cnt: 0,
         };
         let mut len = size_of::<TpacketStatsV3>() as libc::socklen_t;
+        // SAFETY: stats 是栈上与内核 struct tpacket_stats_v3 布局一致的 #[repr(C)] 结构，len 如实给出
+        // 它的大小，内核最多写这么多；self.fd 有效。
         let rc = unsafe {
             libc::getsockopt(
                 self.fd,
@@ -251,12 +269,16 @@ impl Capture for AfPacket {
 /// 偏移、mac 偏移与 snaplen 都落在块内；遍历期间块内容不被并发改写（内核置了
 /// TP_STATUS_USER 之后、用户态归还之前即是如此）。块头与帧头须按 4 字节对齐。
 unsafe fn walk_block(desc: *const BlockDescV1, f: &mut dyn FnMut(&[u8], u64)) -> u32 {
+    // SAFETY: 前提见本函数 # Safety：desc 指向可读、对齐的完整块头。
     let (num_pkts, first_offset) = unsafe { ((*desc).num_pkts, (*desc).offset_to_first_pkt) };
     let block_base = desc as *const u8;
     let mut offset = first_offset as usize;
 
     for _ in 0..num_pkts {
+        // SAFETY: offset 是块头给的首帧偏移或链上累加的 tp_next_offset，前提保证它落在块内；
+        // 这里只做指针运算。
         let hdr = unsafe { block_base.add(offset) as *const Tpacket3Hdr };
+        // SAFETY: hdr 指向块内一个完整帧头，内核按 TPACKET_ALIGNMENT（16）对齐帧，满足 u32 / u16 读。
         let (next, mac, snaplen, sec, nsec) = unsafe {
             (
                 (*hdr).tp_next_offset as usize,
@@ -267,6 +289,8 @@ unsafe fn walk_block(desc: *const BlockDescV1, f: &mut dyn FnMut(&[u8], u64)) ->
             )
         };
         // 零拷贝：帧数据直接借用 mmap 区域
+        // SAFETY: 前提保证 [offset + mac, offset + mac + snaplen) 落在块内且块在回调期间不被内核改写；
+        // 切片只借给本次回调。
         let frame = unsafe { std::slice::from_raw_parts(block_base.add(offset + mac), snaplen) };
         f(frame, sec * 1_000_000_000 + nsec);
 
@@ -286,6 +310,8 @@ impl AsRawFd for AfPacket {
 
 impl Drop for AfPacket {
     fn drop(&mut self) {
+        // SAFETY: ring / ring_len 正是 open 里 mmap 返回的地址与长度，fd 由 AfPacket 独占；Drop 只执行一次，
+        // 帧切片只在 poll_batch 回调期间借用，此时不可能还有存活的借用。
         unsafe {
             libc::munmap(self.ring as *mut libc::c_void, self.ring_len);
             libc::close(self.fd);
@@ -297,11 +323,14 @@ struct FdGuard(RawFd);
 
 impl Drop for FdGuard {
     fn drop(&mut self) {
+        // SAFETY: FdGuard 只包裹 socket 刚返回的有效 fd；open 成功时 mem::forget 掉它，不会与 AfPacket 重复关闭。
         unsafe { libc::close(self.0) };
     }
 }
 
 fn setsockopt<T>(fd: RawFd, opt: libc::c_int, value: &T) -> io::Result<()> {
+    // SAFETY: value 是调用方给的 &T，在调用期间有效、可读 size_of::<T>() 字节，长度如实传入；
+    // 各调用点的 T（c_int、c_uint、TpacketReq3）与该选项的内核结构一致，内核只读它。
     let rc = unsafe {
         libc::setsockopt(
             fd,
@@ -320,16 +349,19 @@ fn setsockopt<T>(fd: RawFd, opt: libc::c_int, value: &T) -> io::Result<()> {
 fn bind_iface(fd: RawFd, iface: &str) -> io::Result<()> {
     let name = std::ffi::CString::new(iface)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "网卡名含 NUL"))?;
+    // SAFETY: name 是以 NUL 结尾的 CString，调用期间存活，函数只读它。
     let index = unsafe { libc::if_nametoindex(name.as_ptr()) };
     if index == 0 {
         return Err(io::Error::last_os_error());
     }
 
+    // SAFETY: sockaddr_ll 只含整数字段，全零是合法值，随后填入族、协议与网卡序号。
     let mut addr: libc::sockaddr_ll = unsafe { std::mem::zeroed() };
     addr.sll_family = libc::AF_PACKET as u16;
     addr.sll_protocol = (libc::ETH_P_ALL as u16).to_be();
     addr.sll_ifindex = index as i32;
 
+    // SAFETY: fd 是调用方持有的有效套接字；addr 是栈上已初始化的 sockaddr_ll，传入的长度正是它的大小。
     let rc = unsafe {
         libc::bind(
             fd,

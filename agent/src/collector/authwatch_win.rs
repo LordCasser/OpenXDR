@@ -104,13 +104,17 @@ fn subscribe(
     parse: fn(&str, &str) -> Option<AgentEvent>,
 ) -> Result<(), u32> {
     // 手动复位的信号：EvtNext 读空后复位，日志服务有新事件时置位
+    // SAFETY: 安全属性与名称传空指针（匿名、默认安全描述符）是 API 允许的用法；空句柄下面已检查。
     let signal = unsafe { CreateEventW(std::ptr::null(), 1, 1, std::ptr::null()) };
     if signal.is_null() {
+        // SAFETY: GetLastError 无参数，只读本线程的错误码。
         return Err(unsafe { GetLastError() });
     }
     let mut handles = Subscription { signal, sub: 0 };
     let channel_w = wide(channel);
     let query_w = wide(query);
+    // SAFETY: signal 是上面创建、由 handles 持有的有效事件句柄；channel_w / query_w 是以 0 结尾的
+    // UTF-16 串，在调用期间存活；书签传空、回调传 None 表示用信号拉取模式，返回 0 表示失败。
     let sub = unsafe {
         EvtSubscribe(
             0,
@@ -124,6 +128,7 @@ fn subscribe(
         )
     };
     if sub == 0 {
+        // SAFETY: GetLastError 无参数，只读本线程的错误码。
         return Err(unsafe { GetLastError() });
     }
     handles.sub = sub;
@@ -142,17 +147,23 @@ fn subscribe(
     );
     eprintln!("{desc}");
     while !sink.is_closed() {
+        // SAFETY: signal 由 handles 持有，在循环期间一直有效，等待不涉及内存。
         match unsafe { WaitForSingleObject(signal, 1000) } {
             WAIT_TIMEOUT => continue,
+            // SAFETY: GetLastError 无参数，只读本线程的错误码。
             WAIT_FAILED => return Err(unsafe { GetLastError() }),
             _ => {}
         }
         loop {
             let mut events = [0isize; 16];
             let mut got = 0u32;
+            // SAFETY: sub 是成功订阅的句柄，由 handles 持有；events 是栈上 16 个句柄的数组，请求数也是 16，
+            // 系统最多写 16 个并把实际数写进 got。
             if unsafe { EvtNext(sub, 16, events.as_mut_ptr(), 0, 0, &mut got) } == 0 {
+                // SAFETY: GetLastError 无参数，只读本线程的错误码。
                 let error = unsafe { GetLastError() };
                 if error == ERROR_NO_MORE_ITEMS {
+                    // SAFETY: signal 由 handles 持有，在本函数内一直有效。
                     unsafe { ResetEvent(signal) };
                     break;
                 }
@@ -167,6 +178,7 @@ fn subscribe(
                 } else {
                     None
                 };
+                // SAFETY: event 是 EvtNext 本轮返回的事件句柄（只取前 got 个），每个只在这里关闭一次。
                 unsafe { EvtClose(event) };
                 if let Some(value) = value {
                     open = sink.send(value);
@@ -186,6 +198,8 @@ struct Subscription {
 }
 impl Drop for Subscription {
     fn drop(&mut self) {
+        // SAFETY: Subscription 独占这两个句柄：signal 构造前已检查非空，sub 为 0 表示尚未订阅不关；
+        // 不可 Clone，Drop 只执行一次。
         unsafe {
             if self.sub != 0 {
                 EvtClose(self.sub);
@@ -199,6 +213,8 @@ impl Drop for Subscription {
 fn render_xml(event: isize) -> Option<String> {
     let mut used = 0u32;
     let mut props = 0u32;
+    // SAFETY: 第一段只探大小：缓冲区传空指针、长度 0 是 API 约定的用法，系统只写 used / props；
+    // event 是调用方持有、尚未关闭的事件句柄。
     unsafe {
         EvtRender(
             0,
@@ -215,6 +231,8 @@ fn render_xml(event: isize) -> Option<String> {
     }
     // used 是字节数，缓冲区按 u16 分配
     let mut buf = vec![0u16; used.div_ceil(2) as usize];
+    // SAFETY: buf 是 ceil(used / 2) 个 u16，至少 used 字节，传入的容量就是 used，系统不会写出界；
+    // 出参都指向栈上变量。
     if unsafe {
         EvtRender(
             0,

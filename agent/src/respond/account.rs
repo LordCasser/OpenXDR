@@ -80,6 +80,7 @@ mod platform {
 
     /// uid 0 的账号与 agent 自己的账号都不能锁
     pub fn is_self(name: &str) -> bool {
+        // SAFETY: geteuid 无参数、总是成功，不读写任何内存。
         let uid = unsafe { libc::geteuid() };
         std::fs::read_to_string("/etc/passwd")
             .unwrap_or_default()

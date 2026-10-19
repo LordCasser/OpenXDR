@@ -253,6 +253,8 @@ fn run(fd: i32, agent_id: String, sink: EventSink, resolver: Option<Resolver>) {
         // SAFETY: sockaddr_ll 全零是合法初值；buf 与 addr 的长度如实传入
         let mut addr: libc::sockaddr_ll = unsafe { std::mem::zeroed() };
         let mut len = size_of::<libc::sockaddr_ll>() as u32;
+        // SAFETY: fd 是本线程持有的 AF_PACKET 套接字；buf 为独占的可写 Vec，长度如实传 buf.len()；
+        // addr / len 指向栈上的 sockaddr_ll 与其大小，内核最多写 len 字节并回填实际长度。
         let n = unsafe {
             libc::recvfrom(
                 fd,

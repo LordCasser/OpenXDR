@@ -338,6 +338,7 @@ pub(crate) fn replace_file(from: &Path, to: &Path) -> io::Result<()> {
         };
         let from: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
         let to: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
+        // SAFETY: from / to 是以 0 结尾的 UTF-16 缓冲，在调用期间一直存活，MoveFileExW 只读它们；标志为常量。
         if unsafe {
             MoveFileExW(
                 from.as_ptr(),

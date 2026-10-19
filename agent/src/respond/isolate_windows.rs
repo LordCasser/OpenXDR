@@ -71,6 +71,8 @@ pub fn unisolate(_cmd: &Command) -> Outcome {
 struct Engine(HANDLE);
 impl Drop for Engine {
     fn drop(&mut self) {
+        // SAFETY: Engine 只包裹 FwpmEngineOpen0 成功返回的会话句柄（失败时 ? 提前返回、不构造），
+        // 不可 Clone，Drop 只执行一次。
         unsafe {
             FwpmEngineClose0(self.0);
         }
@@ -86,6 +88,8 @@ fn check(code: u32) -> Result<(), String> {
 fn replace(allowed: Option<&[Endpoint]>) -> Result<(), String> {
     let mut handle = null_mut();
     // 所有指针仅在同步调用期间借用，WFP 复制规则数据。
+    // SAFETY: 服务器名、认证标识与会话参数传空指针表示本机、当前身份、默认会话，是 API 允许的用法；
+    // handle 是栈上出参，成功时写入引擎句柄。
     unsafe {
         check(FwpmEngineOpen0(
             null(),
@@ -96,12 +100,15 @@ fn replace(allowed: Option<&[Endpoint]>) -> Result<(), String> {
         ))?;
     }
     let engine = Engine(handle);
+    // SAFETY: engine.0 是上面成功打开、由 engine 持有的会话句柄，在本函数内一直有效。
     unsafe {
         check(FwpmTransactionBegin0(engine.0, 0))?;
     }
+    // SAFETY: engine.0 有效；提交只作用于本会话已开启的事务。
     let result =
         update(&engine, allowed).and_then(|()| unsafe { check(FwpmTransactionCommit0(engine.0)) });
     if result.is_err() {
+        // SAFETY: 同上：engine.0 有效，回滚本会话已开启但未提交的事务。
         unsafe {
             FwpmTransactionAbort0(engine.0);
         }
@@ -111,6 +118,7 @@ fn replace(allowed: Option<&[Endpoint]>) -> Result<(), String> {
 fn update(engine: &Engine, allowed: Option<&[Endpoint]>) -> Result<(), String> {
     remove_owned(engine)?;
     let Some(allowed) = allowed else {
+        // SAFETY: engine.0 是调用方持有的有效会话句柄；&SUBLAYER 指向静态 GUID，调用期间有效。
         let code = unsafe { FwpmSubLayerDeleteByKey0(engine.0, &SUBLAYER) };
         return if code == FWP_E_SUBLAYER_NOT_FOUND as u32 {
             Ok(())
@@ -129,6 +137,8 @@ fn update(engine: &Engine, allowed: Option<&[Endpoint]>) -> Result<(), String> {
         weight: 0x8000,
         ..Default::default()
     };
+    // SAFETY: sublayer 及其引用的 name 缓冲都是本函数的局部变量，同步调用期间存活，WFP 内部复制数据；
+    // 安全描述符传空表示默认。
     let code = unsafe { FwpmSubLayerAdd0(engine.0, &sublayer, null_mut()) };
     if code != FWP_E_ALREADY_EXISTS as u32 {
         check(code)?;
@@ -230,6 +240,8 @@ fn add_filter(
         filterCondition: conditions.as_mut_ptr(),
         ..Default::default()
     };
+    // SAFETY: filter 引用的 name、weight 与 conditions 都比这次同步调用活得久，numFilterConditions
+    // 与 conditions.len() 一致；WFP 复制规则后不再持有这些指针，出参 ID 与安全描述符传空表示不需要。
     unsafe { check(FwpmFilterAdd0(engine.0, &filter, null_mut(), null_mut())) }
 }
 fn remove_owned(engine: &Engine) -> Result<(), String> {
@@ -241,6 +253,7 @@ fn remove_owned(engine: &Engine) -> Result<(), String> {
             ..Default::default()
         };
         let mut enumeration = null_mut();
+        // SAFETY: engine.0 有效；template 是栈上已初始化的枚举模板，enumeration 是栈上出参。
         unsafe {
             check(FwpmFilterCreateEnumHandle0(
                 engine.0,
@@ -249,6 +262,7 @@ fn remove_owned(engine: &Engine) -> Result<(), String> {
             ))?;
         }
         let result = remove_enumerated(engine, enumeration);
+        // SAFETY: enumeration 是上面成功创建的枚举句柄（失败时 ? 已提前返回），只在这里销毁一次。
         unsafe {
             FwpmFilterDestroyEnumHandle0(engine.0, enumeration);
         }
@@ -260,6 +274,8 @@ fn remove_enumerated(engine: &Engine, enumeration: HANDLE) -> Result<(), String>
     loop {
         let mut entries = null_mut();
         let mut count = 0;
+        // SAFETY: engine.0 与 enumeration 都有效；entries / count 是栈上出参，系统分配的数组需由
+        // FwpmFreeMemory0 释放。
         unsafe {
             check(FwpmFilterEnum0(
                 engine.0,
@@ -271,23 +287,29 @@ fn remove_enumerated(engine: &Engine, enumeration: HANDLE) -> Result<(), String>
         }
         if count == 0 {
             if !entries.is_null() {
+                // SAFETY: entries 非空，是 FwpmFilterEnum0 分配的数组，只在这里释放一次，之后不再使用。
                 unsafe {
                     FwpmFreeMemory0(&mut entries as *mut _ as *mut _);
                 }
             }
             return Ok(());
         }
+        // SAFETY: FwpmFilterEnum0 成功时 entries 指向 count 个 FWPM_FILTER0 指针组成的数组，由系统分配，
+        // 在下面 FwpmFreeMemory0 之前一直有效；ids 收集完才释放。
         let ids: Vec<u64> = unsafe { std::slice::from_raw_parts(entries, count as usize) }
             .iter()
             .filter_map(|entry| {
+                // SAFETY: 数组里每个元素都指向系统分配、与数组同生命周期的有效 FWPM_FILTER0，只读字段。
                 let filter = unsafe { &**entry };
                 (same_guid(filter.subLayerKey, SUBLAYER)).then_some(filter.filterId)
             })
             .collect();
+        // SAFETY: entries 由 FwpmFilterEnum0 分配，借用它的切片已在上面 collect 完毕，只在这里释放一次。
         unsafe {
             FwpmFreeMemory0(&mut entries as *mut _ as *mut _);
         }
         for id in ids {
+            // SAFETY: engine.0 有效；按值传入的过滤器 ID 不涉及内存。
             unsafe {
                 check(FwpmFilterDeleteById0(engine.0, id))?;
             }

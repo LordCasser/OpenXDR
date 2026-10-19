@@ -17,6 +17,8 @@ static XSKS: XskMap = XskMap::with_max_entries(64, 0);
 
 #[xdp]
 pub fn openxdr_redirect(ctx: XdpContext) -> u32 {
+    // SAFETY: ctx.ctx 是内核传给 XDP 程序的 struct xdp_md 指针，程序运行期间有效；
+    // 读 rx_queue_index 这类上下文字段由验证器按偏移检查，越界的访问在加载时就会被拒绝。
     let queue = unsafe { (*ctx.ctx).rx_queue_index };
     // 该队列没有挂 socket 时 redirect 失败，此时放行给内核协议栈
     XSKS.redirect(queue, xdp_action::XDP_PASS as u64)
