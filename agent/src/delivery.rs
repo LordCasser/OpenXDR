@@ -28,8 +28,9 @@ impl Queue {
     }
 }
 
-pub fn open(server: &str, health: Arc<crate::health::Health>) -> io::Result<Queue> {
-    let root = std::env::var_os("OPENXDR_STATE_DIR")
+/// agent 的状态目录：事件缓存、回执、隔离的文件都放在下面
+pub fn state_root() -> PathBuf {
+    std::env::var_os("OPENXDR_STATE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             #[cfg(windows)]
@@ -44,7 +45,11 @@ pub fn open(server: &str, health: Arc<crate::health::Health>) -> io::Result<Queu
             {
                 PathBuf::from("/var/lib/openxdr/agent")
             }
-        });
+        })
+}
+
+pub fn open(server: &str, health: Arc<crate::health::Health>) -> io::Result<Queue> {
+    let root = state_root();
     let scope = format!("{}\n{}", server, crate::enroll::hostname());
     let key = format!("{:x}", Sha256::digest(scope.as_bytes()));
     let limit = match std::env::var("OPENXDR_SPOOL_MAX_BYTES") {

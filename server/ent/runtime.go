@@ -173,7 +173,7 @@ func init() {
 	// command.DefaultTimeoutMs holds the default value on creation for the timeout_ms field.
 	command.DefaultTimeoutMs = commandDescTimeoutMs.Default.(uint32)
 	// commandDescTruncated is the schema descriptor for truncated field.
-	commandDescTruncated := commandFields[16].Descriptor()
+	commandDescTruncated := commandFields[17].Descriptor()
 	// command.DefaultTruncated holds the default value on creation for the truncated field.
 	command.DefaultTruncated = commandDescTruncated.Default.(bool)
 	// commandDescID is the schema descriptor for id field.

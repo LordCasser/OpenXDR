@@ -63,7 +63,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/commands?incidentId=&assetId=` | 指令历史，可按事件或主机筛选 |
-| POST | `/api/commands` | `{"kind":"kill_process\|isolate_host\|unisolate_host\|exec","assetId","incidentId","pid"}`（一律真执行，没有演练模式）；`exec` 另带 `"cmd"`（必填）与 `"timeoutMs"`（0 = agent 默认 60s），结果回写 `exitCode` / `stdout` / `stderr` / `truncated`（各截断到 64KB） |
+| POST | `/api/commands` | `{"kind":"kill_process\|isolate_host\|unisolate_host\|exec\|block_network\|unblock_network\|quarantine_file\|restore_file\|disable_account\|enable_account","assetId","incidentId","pid","target"}`（一律真执行，没有演练模式）；封锁、隔离文件、锁定账号必须带 `target`（IP / 网段 / 域名、文件绝对路径、账号名），不合法或会封到 server 自己时 400；`exec` 另带 `"cmd"`（必填）与 `"timeoutMs"`（0 = agent 默认 60s），结果回写 `exitCode` / `stdout` / `stderr` / `truncated`（各截断到 64KB） |
 
 需 server 配置 `RESPONSE_ENABLED=true`；隔离要求 `ISOLATION_ALLOW` 包含 server
 的 gRPC 端点，否则 agent 拒绝执行。

@@ -32,16 +32,31 @@ const (
 	CommandKind_ISOLATE_HOST             CommandKind = 2
 	CommandKind_UNISOLATE_HOST           CommandKind = 3
 	CommandKind_EXEC                     CommandKind = 4
+	// 封锁与指定地址的进出通信；域名在执行时解析成地址。解除按原始目标整组删除
+	CommandKind_BLOCK_NETWORK   CommandKind = 5
+	CommandKind_UNBLOCK_NETWORK CommandKind = 6
+	// 把文件移进 agent 的隔离区，记下原路径、权限与哈希；恢复时原路径已有文件则拒绝覆盖
+	CommandKind_QUARANTINE_FILE CommandKind = 7
+	CommandKind_RESTORE_FILE    CommandKind = 8
+	// 锁定本机账号（Linux 锁密码并置过期，公钥登录同样被挡住；Windows 停用账号）
+	CommandKind_DISABLE_ACCOUNT CommandKind = 9
+	CommandKind_ENABLE_ACCOUNT  CommandKind = 10
 )
 
 // Enum value maps for CommandKind.
 var (
 	CommandKind_name = map[int32]string{
-		0: "COMMAND_KIND_UNSPECIFIED",
-		1: "KILL_PROCESS",
-		2: "ISOLATE_HOST",
-		3: "UNISOLATE_HOST",
-		4: "EXEC",
+		0:  "COMMAND_KIND_UNSPECIFIED",
+		1:  "KILL_PROCESS",
+		2:  "ISOLATE_HOST",
+		3:  "UNISOLATE_HOST",
+		4:  "EXEC",
+		5:  "BLOCK_NETWORK",
+		6:  "UNBLOCK_NETWORK",
+		7:  "QUARANTINE_FILE",
+		8:  "RESTORE_FILE",
+		9:  "DISABLE_ACCOUNT",
+		10: "ENABLE_ACCOUNT",
 	}
 	CommandKind_value = map[string]int32{
 		"COMMAND_KIND_UNSPECIFIED": 0,
@@ -49,6 +64,12 @@ var (
 		"ISOLATE_HOST":             2,
 		"UNISOLATE_HOST":           3,
 		"EXEC":                     4,
+		"BLOCK_NETWORK":            5,
+		"UNBLOCK_NETWORK":          6,
+		"QUARANTINE_FILE":          7,
+		"RESTORE_FILE":             8,
+		"DISABLE_ACCOUNT":          9,
+		"ENABLE_ACCOUNT":           10,
 	}
 )
 
@@ -239,8 +260,11 @@ type Command struct {
 	// ISOLATE_HOST 用：隔离期间必须放行的地址，否则 agent 失联后无法解除隔离
 	AllowEndpoints []string `protobuf:"bytes,6,rep,name=allow_endpoints,json=allowEndpoints,proto3" json:"allow_endpoints,omitempty"`
 	// EXEC 用：Linux 交给 sh -c，Windows 交给 PowerShell；timeout_ms 为 0 时用 agent 默认值
-	Cmd           string `protobuf:"bytes,7,opt,name=cmd,proto3" json:"cmd,omitempty"`
-	TimeoutMs     uint32 `protobuf:"varint,8,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	Cmd       string `protobuf:"bytes,7,opt,name=cmd,proto3" json:"cmd,omitempty"`
+	TimeoutMs uint32 `protobuf:"varint,8,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	// BLOCK_NETWORK / UNBLOCK_NETWORK：IP、网段（CIDR）或域名；QUARANTINE_FILE / RESTORE_FILE：文件绝对路径；
+	// DISABLE_ACCOUNT / ENABLE_ACCOUNT：本机账号名
+	Target        string `protobuf:"bytes,9,opt,name=target,proto3" json:"target,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -329,6 +353,13 @@ func (x *Command) GetTimeoutMs() uint32 {
 		return x.TimeoutMs
 	}
 	return 0
+}
+
+func (x *Command) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
 }
 
 type CommandResult struct {
@@ -884,7 +915,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x06sha256\x18\x02 \x01(\tR\x06sha256\" \n" +
 	"\n" +
 	"AgentChunk\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"\xf4\x01\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"\x8c\x02\n" +
 	"\aCommand\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.openxdr.agent.v1.CommandKindR\x04kind\x12\x17\n" +
@@ -894,7 +925,8 @@ const file_agent_proto_rawDesc = "" +
 	"\x0fallow_endpoints\x18\x06 \x03(\tR\x0eallowEndpoints\x12\x10\n" +
 	"\x03cmd\x18\a \x01(\tR\x03cmd\x12\x1d\n" +
 	"\n" +
-	"timeout_ms\x18\b \x01(\rR\ttimeoutMs\"\xda\x02\n" +
+	"timeout_ms\x18\b \x01(\rR\ttimeoutMs\x12\x16\n" +
+	"\x06target\x18\t \x01(\tR\x06target\"\xda\x02\n" +
 	"\rCommandResult\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1d\n" +
 	"\n" +
@@ -946,13 +978,20 @@ const file_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vhealth_json\x18\x02 \x01(\tR\n" +
 	"healthJson\"\v\n" +
-	"\tHealthAck*m\n" +
+	"\tHealthAck*\xe5\x01\n" +
 	"\vCommandKind\x12\x1c\n" +
 	"\x18COMMAND_KIND_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fKILL_PROCESS\x10\x01\x12\x10\n" +
 	"\fISOLATE_HOST\x10\x02\x12\x12\n" +
 	"\x0eUNISOLATE_HOST\x10\x03\x12\b\n" +
-	"\x04EXEC\x10\x042\xf8\x03\n" +
+	"\x04EXEC\x10\x04\x12\x11\n" +
+	"\rBLOCK_NETWORK\x10\x05\x12\x13\n" +
+	"\x0fUNBLOCK_NETWORK\x10\x06\x12\x13\n" +
+	"\x0fQUARANTINE_FILE\x10\a\x12\x10\n" +
+	"\fRESTORE_FILE\x10\b\x12\x13\n" +
+	"\x0fDISABLE_ACCOUNT\x10\t\x12\x12\n" +
+	"\x0eENABLE_ACCOUNT\x10\n" +
+	"2\xf8\x03\n" +
 	"\fAgentService\x12Q\n" +
 	"\bRegister\x12!.openxdr.agent.v1.RegisterRequest\x1a\".openxdr.agent.v1.RegisterResponse\x12L\n" +
 	"\fReportHealth\x12\x1f.openxdr.agent.v1.HealthRequest\x1a\x1b.openxdr.agent.v1.HealthAck\x12K\n" +

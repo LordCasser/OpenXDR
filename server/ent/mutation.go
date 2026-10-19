@@ -9256,6 +9256,7 @@ type CommandMutation struct {
 	cmd                   *string
 	timeout_ms            *uint32
 	addtimeout_ms         *int32
+	target                *string
 	exit_code             *int32
 	addexit_code          *int32
 	stdout                *string
@@ -9927,6 +9928,55 @@ func (m *CommandMutation) ResetTimeoutMs() {
 	m.addtimeout_ms = nil
 }
 
+// SetTarget sets the "target" field.
+func (m *CommandMutation) SetTarget(s string) {
+	m.target = &s
+}
+
+// Target returns the value of the "target" field in the mutation.
+func (m *CommandMutation) Target() (r string, exists bool) {
+	v := m.target
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTarget returns the old "target" field's value of the Command entity.
+// If the Command object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandMutation) OldTarget(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTarget is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTarget requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTarget: %w", err)
+	}
+	return oldValue.Target, nil
+}
+
+// ClearTarget clears the value of the "target" field.
+func (m *CommandMutation) ClearTarget() {
+	m.target = nil
+	m.clearedFields[command.FieldTarget] = struct{}{}
+}
+
+// TargetCleared returns if the "target" field was cleared in this mutation.
+func (m *CommandMutation) TargetCleared() bool {
+	_, ok := m.clearedFields[command.FieldTarget]
+	return ok
+}
+
+// ResetTarget resets all changes to the "target" field.
+func (m *CommandMutation) ResetTarget() {
+	m.target = nil
+	delete(m.clearedFields, command.FieldTarget)
+}
+
 // SetExitCode sets the "exit_code" field.
 func (m *CommandMutation) SetExitCode(i int32) {
 	m.exit_code = &i
@@ -10241,7 +10291,7 @@ func (m *CommandMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CommandMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.created_at != nil {
 		fields = append(fields, command.FieldCreatedAt)
 	}
@@ -10277,6 +10327,9 @@ func (m *CommandMutation) Fields() []string {
 	}
 	if m.timeout_ms != nil {
 		fields = append(fields, command.FieldTimeoutMs)
+	}
+	if m.target != nil {
+		fields = append(fields, command.FieldTarget)
 	}
 	if m.exit_code != nil {
 		fields = append(fields, command.FieldExitCode)
@@ -10325,6 +10378,8 @@ func (m *CommandMutation) Field(name string) (ent.Value, bool) {
 		return m.Cmd()
 	case command.FieldTimeoutMs:
 		return m.TimeoutMs()
+	case command.FieldTarget:
+		return m.Target()
 	case command.FieldExitCode:
 		return m.ExitCode()
 	case command.FieldStdout:
@@ -10368,6 +10423,8 @@ func (m *CommandMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldCmd(ctx)
 	case command.FieldTimeoutMs:
 		return m.OldTimeoutMs(ctx)
+	case command.FieldTarget:
+		return m.OldTarget(ctx)
 	case command.FieldExitCode:
 		return m.OldExitCode(ctx)
 	case command.FieldStdout:
@@ -10470,6 +10527,13 @@ func (m *CommandMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTimeoutMs(v)
+		return nil
+	case command.FieldTarget:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTarget(v)
 		return nil
 	case command.FieldExitCode:
 		v, ok := value.(int32)
@@ -10590,6 +10654,9 @@ func (m *CommandMutation) ClearedFields() []string {
 	if m.FieldCleared(command.FieldCmd) {
 		fields = append(fields, command.FieldCmd)
 	}
+	if m.FieldCleared(command.FieldTarget) {
+		fields = append(fields, command.FieldTarget)
+	}
 	if m.FieldCleared(command.FieldExitCode) {
 		fields = append(fields, command.FieldExitCode)
 	}
@@ -10630,6 +10697,9 @@ func (m *CommandMutation) ClearField(name string) error {
 		return nil
 	case command.FieldCmd:
 		m.ClearCmd()
+		return nil
+	case command.FieldTarget:
+		m.ClearTarget()
 		return nil
 	case command.FieldExitCode:
 		m.ClearExitCode()
@@ -10686,6 +10756,9 @@ func (m *CommandMutation) ResetField(name string) error {
 		return nil
 	case command.FieldTimeoutMs:
 		m.ResetTimeoutMs()
+		return nil
+	case command.FieldTarget:
+		m.ResetTarget()
 		return nil
 	case command.FieldExitCode:
 		m.ResetExitCode()

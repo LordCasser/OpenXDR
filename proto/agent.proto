@@ -44,6 +44,9 @@ message Command {
   // EXEC 用：Linux 交给 sh -c，Windows 交给 PowerShell；timeout_ms 为 0 时用 agent 默认值
   string cmd = 7;
   uint32 timeout_ms = 8;
+  // BLOCK_NETWORK / UNBLOCK_NETWORK：IP、网段（CIDR）或域名；QUARANTINE_FILE / RESTORE_FILE：文件绝对路径；
+  // DISABLE_ACCOUNT / ENABLE_ACCOUNT：本机账号名
+  string target = 9;
 }
 
 enum CommandKind {
@@ -52,6 +55,15 @@ enum CommandKind {
   ISOLATE_HOST = 2;
   UNISOLATE_HOST = 3;
   EXEC = 4;
+  // 封锁与指定地址的进出通信；域名在执行时解析成地址。解除按原始目标整组删除
+  BLOCK_NETWORK = 5;
+  UNBLOCK_NETWORK = 6;
+  // 把文件移进 agent 的隔离区，记下原路径、权限与哈希；恢复时原路径已有文件则拒绝覆盖
+  QUARANTINE_FILE = 7;
+  RESTORE_FILE = 8;
+  // 锁定本机账号（Linux 锁密码并置过期，公钥登录同样被挡住；Windows 停用账号）
+  DISABLE_ACCOUNT = 9;
+  ENABLE_ACCOUNT = 10;
 }
 
 message CommandResult {

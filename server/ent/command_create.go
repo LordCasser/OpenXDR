@@ -166,6 +166,20 @@ func (_c *CommandCreate) SetNillableTimeoutMs(v *uint32) *CommandCreate {
 	return _c
 }
 
+// SetTarget sets the "target" field.
+func (_c *CommandCreate) SetTarget(v string) *CommandCreate {
+	_c.mutation.SetTarget(v)
+	return _c
+}
+
+// SetNillableTarget sets the "target" field if the given value is not nil.
+func (_c *CommandCreate) SetNillableTarget(v *string) *CommandCreate {
+	if v != nil {
+		_c.SetTarget(*v)
+	}
+	return _c
+}
+
 // SetExitCode sets the "exit_code" field.
 func (_c *CommandCreate) SetExitCode(v int32) *CommandCreate {
 	_c.mutation.SetExitCode(v)
@@ -427,6 +441,10 @@ func (_c *CommandCreate) createSpec() (*Command, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TimeoutMs(); ok {
 		_spec.SetField(command.FieldTimeoutMs, field.TypeUint32, value)
 		_node.TimeoutMs = value
+	}
+	if value, ok := _c.mutation.Target(); ok {
+		_spec.SetField(command.FieldTarget, field.TypeString, value)
+		_node.Target = &value
 	}
 	if value, ok := _c.mutation.ExitCode(); ok {
 		_spec.SetField(command.FieldExitCode, field.TypeInt32, value)

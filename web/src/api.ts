@@ -214,6 +214,7 @@ export interface CommandRow {
   issuedBy: string
   detail: string | null
   completedAt: string | null
+  target?: string
   // 这条指令拉起的进程触发的检测（来源已知，不进事件）
   detections?: { ruleId: string; title?: string; author?: string; count: number }[]
 }
@@ -226,6 +227,8 @@ export async function issueCommand(body: {
   assetId: string
   incidentId?: string
   pid?: number
+  // 封锁（IP、网段或域名）、隔离文件（绝对路径）、锁定账号（账号名）的目标
+  target?: string
 }): Promise<CommandRow> {
   const r = await post('/api/commands', body)
   if (!r.ok) await fail(r)

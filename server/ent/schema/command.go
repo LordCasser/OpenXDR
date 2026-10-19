@@ -33,6 +33,8 @@ func (Command) Fields() []ent.Field {
 		// 以下仅 exec 使用：下发的命令行与 agent 回传的执行输出
 		field.Text("cmd").Optional().Nillable(),
 		field.Uint32("timeout_ms").Default(0),
+		// 封锁 / 隔离文件 / 锁定账号的目标：IP、网段或域名，文件绝对路径，本机账号名
+		field.String("target").Optional().Nillable(),
 		field.Int32("exit_code").Optional().Nillable(),
 		field.Text("stdout").Optional().Nillable(),
 		field.Text("stderr").Optional().Nillable(),

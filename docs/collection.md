@@ -364,7 +364,8 @@ DNS/JA3S/证书字段经 proto `FlowRecord` 的 `dns_rcode=19` / `dns_answers=20
 ## 响应面（与采集同进程）
 
 agent 的 `respond/` 模块执行 server 下发的指令：结束进程、主机隔离
-（Linux nftables 独立表 / Windows netsh 防火墙规则）。指令一律真执行，闸门：
+（Linux nftables 独立表 / Windows WFP 独立子层）、封锁网络（nftables `openxdr_block` / Windows 防火墙规则组）、
+隔离与恢复文件、锁定与解锁本机账号，以及平台 exec。指令一律真执行，闸门：
 `RESPONSE_ENABLED` 全局开关、未配置 `ISOLATION_ALLOW` 拒绝隔离。
 详见 [detection.md](detection.md) 响应处置一节。
 

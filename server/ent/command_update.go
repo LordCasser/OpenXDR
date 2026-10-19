@@ -241,6 +241,26 @@ func (_u *CommandUpdate) AddTimeoutMs(v int32) *CommandUpdate {
 	return _u
 }
 
+// SetTarget sets the "target" field.
+func (_u *CommandUpdate) SetTarget(v string) *CommandUpdate {
+	_u.mutation.SetTarget(v)
+	return _u
+}
+
+// SetNillableTarget sets the "target" field if the given value is not nil.
+func (_u *CommandUpdate) SetNillableTarget(v *string) *CommandUpdate {
+	if v != nil {
+		_u.SetTarget(*v)
+	}
+	return _u
+}
+
+// ClearTarget clears the value of the "target" field.
+func (_u *CommandUpdate) ClearTarget() *CommandUpdate {
+	_u.mutation.ClearTarget()
+	return _u
+}
+
 // SetExitCode sets the "exit_code" field.
 func (_u *CommandUpdate) SetExitCode(v int32) *CommandUpdate {
 	_u.mutation.ResetExitCode()
@@ -463,6 +483,12 @@ func (_u *CommandUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedTimeoutMs(); ok {
 		_spec.AddField(command.FieldTimeoutMs, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.Target(); ok {
+		_spec.SetField(command.FieldTarget, field.TypeString, value)
+	}
+	if _u.mutation.TargetCleared() {
+		_spec.ClearField(command.FieldTarget, field.TypeString)
 	}
 	if value, ok := _u.mutation.ExitCode(); ok {
 		_spec.SetField(command.FieldExitCode, field.TypeInt32, value)
@@ -753,6 +779,26 @@ func (_u *CommandUpdateOne) AddTimeoutMs(v int32) *CommandUpdateOne {
 	return _u
 }
 
+// SetTarget sets the "target" field.
+func (_u *CommandUpdateOne) SetTarget(v string) *CommandUpdateOne {
+	_u.mutation.SetTarget(v)
+	return _u
+}
+
+// SetNillableTarget sets the "target" field if the given value is not nil.
+func (_u *CommandUpdateOne) SetNillableTarget(v *string) *CommandUpdateOne {
+	if v != nil {
+		_u.SetTarget(*v)
+	}
+	return _u
+}
+
+// ClearTarget clears the value of the "target" field.
+func (_u *CommandUpdateOne) ClearTarget() *CommandUpdateOne {
+	_u.mutation.ClearTarget()
+	return _u
+}
+
 // SetExitCode sets the "exit_code" field.
 func (_u *CommandUpdateOne) SetExitCode(v int32) *CommandUpdateOne {
 	_u.mutation.ResetExitCode()
@@ -1005,6 +1051,12 @@ func (_u *CommandUpdateOne) sqlSave(ctx context.Context) (_node *Command, err er
 	}
 	if value, ok := _u.mutation.AddedTimeoutMs(); ok {
 		_spec.AddField(command.FieldTimeoutMs, field.TypeUint32, value)
+	}
+	if value, ok := _u.mutation.Target(); ok {
+		_spec.SetField(command.FieldTarget, field.TypeString, value)
+	}
+	if _u.mutation.TargetCleared() {
+		_spec.ClearField(command.FieldTarget, field.TypeString)
 	}
 	if value, ok := _u.mutation.ExitCode(); ok {
 		_spec.SetField(command.FieldExitCode, field.TypeInt32, value)

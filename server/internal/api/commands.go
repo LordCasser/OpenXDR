@@ -29,6 +29,7 @@ type commandRow struct {
 	Detail      *string    `json:"detail"`
 	CompletedAt *time.Time `json:"completedAt"`
 	Cmd         *string    `json:"cmd,omitempty"`
+	Target      *string    `json:"target,omitempty"`
 	ExitCode    *int32     `json:"exitCode,omitempty"`
 	Stdout      *string    `json:"stdout,omitempty"`
 	Stderr      *string    `json:"stderr,omitempty"`
@@ -79,7 +80,7 @@ func toRow(c *ent.Command) commandRow {
 		ID: c.ID, CreatedAt: c.CreatedAt, Kind: c.Kind, Status: c.Status,
 		AssetID: c.AssetID, IncidentID: c.IncidentID,
 		IssuedBy: c.IssuedBy, Detail: c.Detail, CompletedAt: c.CompletedAt,
-		Cmd: c.Cmd, ExitCode: c.ExitCode, Stdout: c.Stdout, Stderr: c.Stderr, Truncated: c.Truncated,
+		Cmd: c.Cmd, Target: c.Target, ExitCode: c.ExitCode, Stdout: c.Stdout, Stderr: c.Stderr, Truncated: c.Truncated,
 	}
 }
 
@@ -91,6 +92,8 @@ type issueBody struct {
 	PID         uint32     `json:"pid"`
 	Cmd         string     `json:"cmd"`
 	TimeoutMS   uint32     `json:"timeoutMs"`
+	// 封锁、隔离文件、锁定账号的目标
+	Target string `json:"target"`
 }
 
 func mapCommands(api *http.ServeMux, db *ent.Client, rules sigma.Catalog, hub *response.Hub, selfEndpoints []string, gate *commandgate.Gate) {
@@ -101,8 +104,17 @@ func mapCommands(api *http.ServeMux, db *ent.Client, rules sigma.Catalog, hub *r
 			return
 		}
 		if _, ok := response.Kinds[body.Kind]; !ok {
-			http.Error(w, "kind 必须是 kill_process / isolate_host / unisolate_host / exec", http.StatusBadRequest)
+			http.Error(w, "kind 必须是 kill_process / isolate_host / unisolate_host / exec / block_network / unblock_network / quarantine_file / restore_file / disable_account / enable_account", http.StatusBadRequest)
 			return
+		}
+		target := ""
+		if response.TargetKinds[body.Kind] {
+			t, err := response.NormalizeTarget(body.Kind, body.Target, response.ProtectedAddrs(selfEndpoints))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			target = t
 		}
 		if body.Kind == "exec" && body.Cmd == "" {
 			http.Error(w, "exec 必须带 cmd", http.StatusBadRequest)
@@ -120,6 +132,7 @@ func mapCommands(api *http.ServeMux, db *ent.Client, rules sigma.Catalog, hub *r
 			PID:         body.PID,
 			IssuedBy:    audit.Actor(r.Context()),
 			TimeoutMS:   body.TimeoutMS,
+			Target:      target,
 		}
 		if body.Kind == "exec" {
 			req.Cmd = &body.Cmd
@@ -153,6 +166,8 @@ func mapCommands(api *http.ServeMux, db *ent.Client, rules sigma.Catalog, hub *r
 		detail := body.Kind
 		if body.Kind == "exec" {
 			detail += ": " + body.Cmd
+		} else if target != "" {
+			detail += ": " + target
 		}
 		audit.Log(r.Context(), db, r, "command_issued", cmd.ID.String(), detail)
 		w.WriteHeader(http.StatusAccepted)

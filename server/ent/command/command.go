@@ -39,6 +39,8 @@ const (
 	FieldCmd = "cmd"
 	// FieldTimeoutMs holds the string denoting the timeout_ms field in the database.
 	FieldTimeoutMs = "timeout_ms"
+	// FieldTarget holds the string denoting the target field in the database.
+	FieldTarget = "target"
 	// FieldExitCode holds the string denoting the exit_code field in the database.
 	FieldExitCode = "exit_code"
 	// FieldStdout holds the string denoting the stdout field in the database.
@@ -77,6 +79,7 @@ var Columns = []string{
 	FieldDetail,
 	FieldCmd,
 	FieldTimeoutMs,
+	FieldTarget,
 	FieldExitCode,
 	FieldStdout,
 	FieldStderr,
@@ -172,6 +175,11 @@ func ByCmd(opts ...sql.OrderTermOption) OrderOption {
 // ByTimeoutMs orders the results by the timeout_ms field.
 func ByTimeoutMs(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTimeoutMs, opts...).ToFunc()
+}
+
+// ByTarget orders the results by the target field.
+func ByTarget(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTarget, opts...).ToFunc()
 }
 
 // ByExitCode orders the results by the exit_code field.

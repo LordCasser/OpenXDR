@@ -117,6 +117,12 @@ const COMMAND_KIND: Record<string, MsgKey> = {
   isolate_host: 'isolateHost',
   unisolate_host: 'unisolateHost',
   exec: 'execCommand',
+  block_network: 'blockNetwork',
+  unblock_network: 'unblockNetwork',
+  quarantine_file: 'quarantineFile',
+  restore_file: 'restoreFile',
+  disable_account: 'disableAccount',
+  enable_account: 'enableAccount',
 }
 
 export const commandKind = (kind: string, t: (k: MsgKey) => string) => (COMMAND_KIND[kind] ? t(COMMAND_KIND[kind]) : kind)

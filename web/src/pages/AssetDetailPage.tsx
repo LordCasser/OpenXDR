@@ -242,7 +242,7 @@ export function AssetDetailPage() {
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noCommands')} /> }}
                       columns={[
                         { title: t('thTime'), dataIndex: 'createdAt', render: fmtTime, width: 170 },
-                        { title: t('thAction'), dataIndex: 'kind', width: 120, render: v => commandKind(v, t) },
+                        { title: t('thAction'), dataIndex: 'kind', width: 200, render: (v, c) => <>{commandKind(v, t)}{c.target && <Typography.Text className="mono" type="secondary" style={{ display: 'block', fontSize: 12 }}>{c.target}</Typography.Text>}</> },
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <CommandStatusTag value={v} /> },
                         { title: t('thCreatedBy'), dataIndex: 'issuedBy', width: 110 },
                         { title: t('verificationTitle'), width: 100, render: (_, row: CommandRow) => <Button size="small" onClick={() => setVerifying(row)}>{t('verificationTitle')}</Button> },

@@ -7,8 +7,11 @@
 
 use crate::pb::{Command, CommandKind, CommandResult, command_result::Status};
 
+mod account;
 mod exec;
+mod netblock;
 mod process;
+mod quarantine;
 
 #[cfg(target_os = "linux")]
 #[path = "isolate_linux.rs"]
@@ -63,12 +66,37 @@ impl Outcome {
     }
 }
 
+/// Windows 上的处置动作（防火墙规则、本地账号）走 PowerShell cmdlet：输出不随系统语言变，比解析 netsh 可靠。
+/// 调用方负责先校验拼进脚本的参数字符集
+#[cfg(target_os = "windows")]
+pub(crate) fn powershell(script: &str) -> Result<String, String> {
+    let out = std::process::Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &format!("$ErrorActionPreference='Stop'; {script}"),
+        ])
+        .output()
+        .map_err(|e| format!("无法执行 PowerShell: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 pub async fn execute(agent_id: &str, cmd: &Command) -> CommandResult {
     let outcome = match cmd.kind() {
         CommandKind::KillProcess => process::kill(cmd),
         CommandKind::IsolateHost => isolate::isolate(cmd),
         CommandKind::UnisolateHost => isolate::unisolate(cmd),
         CommandKind::Exec => exec::run(cmd).await,
+        CommandKind::BlockNetwork => netblock::block(cmd),
+        CommandKind::UnblockNetwork => netblock::unblock(cmd),
+        CommandKind::QuarantineFile => quarantine::quarantine(cmd),
+        CommandKind::RestoreFile => quarantine::restore(cmd),
+        CommandKind::DisableAccount => account::disable(cmd),
+        CommandKind::EnableAccount => account::enable(cmd),
         CommandKind::Unspecified => Outcome::failed("未指定动作"),
     };
 

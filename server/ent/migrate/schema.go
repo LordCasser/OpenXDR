@@ -325,6 +325,7 @@ var (
 		{Name: "detail", Type: field.TypeString, Nullable: true},
 		{Name: "cmd", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "timeout_ms", Type: field.TypeUint32, Default: 0},
+		{Name: "target", Type: field.TypeString, Nullable: true},
 		{Name: "exit_code", Type: field.TypeInt32, Nullable: true},
 		{Name: "stdout", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "stderr", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -340,7 +341,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "commands_assets_commands",
-				Columns:    []*schema.Column{CommandsColumns[17]},
+				Columns:    []*schema.Column{CommandsColumns[18]},
 				RefColumns: []*schema.Column{AssetsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -349,7 +350,7 @@ var (
 			{
 				Name:    "command_asset_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{CommandsColumns[17], CommandsColumns[3]},
+				Columns: []*schema.Column{CommandsColumns[18], CommandsColumns[3]},
 			},
 			{
 				Name:    "command_created_at",

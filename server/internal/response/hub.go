@@ -125,6 +125,9 @@ func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
 		SetNillableProcessGUID(req.ProcessGUID).
 		SetNillableCmd(req.Cmd).
 		SetTimeoutMs(req.TimeoutMS).SetPid(req.PID).SetAllowEndpoints(req.AllowEndpoints)
+	if req.Target != "" {
+		create.SetTarget(req.Target)
+	}
 	if automaticID != uuid.Nil {
 		create.SetID(automaticID)
 	}
@@ -191,6 +194,8 @@ type Request struct {
 	// exec 用：命令行与超时（0 交给 agent 默认值）
 	Cmd       *string
 	TimeoutMS uint32
+	// 封锁、隔离文件、锁定账号的目标，下发前须经 NormalizeTarget
+	Target string
 }
 
 func (r Request) toProto(id uuid.UUID) *pb.Command {
@@ -200,6 +205,7 @@ func (r Request) toProto(id uuid.UUID) *pb.Command {
 		Pid:            r.PID,
 		AllowEndpoints: r.AllowEndpoints,
 		TimeoutMs:      r.TimeoutMS,
+		Target:         r.Target,
 	}
 	if r.Cmd != nil {
 		cmd.Cmd = *r.Cmd
@@ -212,10 +218,16 @@ func (r Request) toProto(id uuid.UUID) *pb.Command {
 
 // Kinds 支持的动作，同时用于 API 参数校验。
 var Kinds = map[string]pb.CommandKind{
-	"kill_process":   pb.CommandKind_KILL_PROCESS,
-	"isolate_host":   pb.CommandKind_ISOLATE_HOST,
-	"unisolate_host": pb.CommandKind_UNISOLATE_HOST,
-	"exec":           pb.CommandKind_EXEC,
+	"kill_process":    pb.CommandKind_KILL_PROCESS,
+	"isolate_host":    pb.CommandKind_ISOLATE_HOST,
+	"unisolate_host":  pb.CommandKind_UNISOLATE_HOST,
+	"exec":            pb.CommandKind_EXEC,
+	"block_network":   pb.CommandKind_BLOCK_NETWORK,
+	"unblock_network": pb.CommandKind_UNBLOCK_NETWORK,
+	"quarantine_file": pb.CommandKind_QUARANTINE_FILE,
+	"restore_file":    pb.CommandKind_RESTORE_FILE,
+	"disable_account": pb.CommandKind_DISABLE_ACCOUNT,
+	"enable_account":  pb.CommandKind_ENABLE_ACCOUNT,
 }
 
 func kindToProto(kind string) pb.CommandKind {
@@ -308,6 +320,9 @@ func (h *Hub) ToProto(cmd *ent.Command) *pb.Command {
 	}
 	if cmd.Cmd != nil {
 		out.Cmd = *cmd.Cmd
+	}
+	if cmd.Target != nil {
+		out.Target = *cmd.Target
 	}
 	if cmd.ProcessGUID != nil {
 		out.ProcessGuid = cmd.ProcessGUID.String()

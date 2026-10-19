@@ -44,6 +44,8 @@ type Command struct {
 	Cmd *string `json:"cmd,omitempty"`
 	// TimeoutMs holds the value of the "timeout_ms" field.
 	TimeoutMs uint32 `json:"timeout_ms,omitempty"`
+	// Target holds the value of the "target" field.
+	Target *string `json:"target,omitempty"`
 	// ExitCode holds the value of the "exit_code" field.
 	ExitCode *int32 `json:"exit_code,omitempty"`
 	// Stdout holds the value of the "stdout" field.
@@ -93,7 +95,7 @@ func (*Command) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case command.FieldPid, command.FieldTimeoutMs, command.FieldExitCode:
 			values[i] = new(sql.NullInt64)
-		case command.FieldKind, command.FieldStatus, command.FieldIssuedBy, command.FieldDetail, command.FieldCmd, command.FieldStdout, command.FieldStderr:
+		case command.FieldKind, command.FieldStatus, command.FieldIssuedBy, command.FieldDetail, command.FieldCmd, command.FieldTarget, command.FieldStdout, command.FieldStderr:
 			values[i] = new(sql.NullString)
 		case command.FieldCreatedAt, command.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -197,6 +199,13 @@ func (_m *Command) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field timeout_ms", values[i])
 			} else if value.Valid {
 				_m.TimeoutMs = uint32(value.Int64)
+			}
+		case command.FieldTarget:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field target", values[i])
+			} else if value.Valid {
+				_m.Target = new(string)
+				*_m.Target = value.String
 			}
 		case command.FieldExitCode:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -316,6 +325,11 @@ func (_m *Command) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("timeout_ms=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TimeoutMs))
+	builder.WriteString(", ")
+	if v := _m.Target; v != nil {
+		builder.WriteString("target=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	if v := _m.ExitCode; v != nil {
 		builder.WriteString("exit_code=")

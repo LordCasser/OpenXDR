@@ -257,3 +257,25 @@ func TestUndeliveredCommandsSettle(t *testing.T) {
 		t.Fatalf("终态被覆盖为 %s", got)
 	}
 }
+
+// 新动作把目标落库、原样送到 agent；能力未启用时同样被拦
+func TestTargetedActionsCarryTarget(t *testing.T) {
+	ctx, db := testdb.New(t)
+	agentID := uuid.New()
+	a := db.Asset.Create().SetHostname("targeted").SetAgentID(agentID).SaveX(ctx)
+	if _, err := NewHub(db, false).Issue(ctx, Request{AssetID: a.ID, Kind: "block_network", Target: "45.9.148.10", IssuedBy: "admin"}); err == nil {
+		t.Fatal("RESPONSE_ENABLED 关闭时不得下发")
+	}
+	h := NewHub(db, true)
+	ch := h.Attach(agentID)
+	for kind, target := range map[string]string{"block_network": "45.9.148.0/24", "quarantine_file": "/tmp/x.sh", "disable_account": "deploy"} {
+		cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: kind, Target: target, IssuedBy: "admin"})
+		if err != nil || cmd.Target == nil || *cmd.Target != target {
+			t.Fatalf("%s 下发或落库不对: %v %+v", kind, err, cmd)
+		}
+		sent := <-ch
+		if sent.Kind != Kinds[kind] || sent.Target != target || h.ToProto(cmd).Target != target {
+			t.Fatalf("%s 送到 agent 的指令不对: %+v", kind, sent)
+		}
+	}
+}

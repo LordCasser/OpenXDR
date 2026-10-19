@@ -330,8 +330,20 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
   → CommandResult 回传 → Hub.Complete 回写 succeeded/failed/unsupported
 ```
 
-指令种类仅 `kill_process / isolate_host / unisolate_host`
-（`hub.go:140-144`、`api/commands.go:48-90`、`grpcsvc/commands.go:15-76`）。
+指令种类：`kill_process`、`isolate_host / unisolate_host`、`exec`，以及带目标（`target`）的三对：
+
+| 动作 | 目标 | Linux | Windows |
+|---|---|---|---|
+| `block_network / unblock_network` | IP、网段或域名（域名在 agent 上解析） | nftables 独立表 `openxdr_block`，集合元素带原始目标注释，进出都丢 | 防火墙规则组「OpenXDR Block」，进出各一条；防火墙未启用时报失败 |
+| `quarantine_file / restore_file` | 文件绝对路径 | 移进状态目录 `isolated-files/`（0700，文件去掉全部权限），记原路径、大小、SHA-256、权限与属主 | 同左，`ProgramData\OpenXDR\state\isolated-files` |
+| `disable_account / enable_account` | 本机账号名 | `usermod -L -e 1`：锁密码并置过期，公钥登录经 PAM 账户检查同样被挡 | `Disable-LocalUser`（只管本地账号，域账号在域控处理） |
+
+目标先经 server 的 `response.NormalizeTarget` 校验，agent 收到后再按同样的规则查一遍（`respond/netblock.rs`、
+`quarantine.rs`、`account.rs`）：封锁拒绝覆盖 server 自己的地址（server 侧取 `ISOLATION_ALLOW`，agent 侧取
+`OPENXDR_SERVER` 解析结果）、回环、未指定地址和过宽的网段（IPv4 宽于 /16、IPv6 宽于 /48）；隔离文件只处理普通文件，
+拒绝伪文件系统、agent 自身与它的状态目录，恢复时原位置已有文件拒绝覆盖；锁定账号拒绝 root、Administrator、SYSTEM
+这类内置账号、uid 0 与 agent 自身运行的账号。已有会话不随账号锁定断开，要断开用结束进程或隔离主机。
+旧版 agent 不认识新动作，回执「未指定动作」失败，不会误执行（`hub.go`、`api/commands.go`、`grpcsvc/commands.go`）。
 
 ### 闸门与防护（改这块代码时全部不得绕过）
 
