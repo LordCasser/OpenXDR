@@ -99,3 +99,27 @@ func TestOfCapsAtMax(t *testing.T) {
 		}
 	}
 }
+
+// 多组一起读、总数超过 Max 时，截掉的是 AI 记忆：别组较新的 AI 记忆不能把人工记忆挤出去
+func TestOfCapKeepsHumanAcrossGroups(t *testing.T) {
+	ctx, db := testdb.New(t)
+	a := db.Group.Create().SetName("a").SaveX(ctx)
+	b := db.Group.Create().SetName("b").SaveX(ctx)
+	base := time.Now().Add(-time.Hour)
+	builders := make([]*ent.MemoryCreate, 0, Max)
+	for i := range Max {
+		builders = append(builders, db.Memory.Create().SetGroupID(a.ID).SetContent("m").SetSource("ai").SetAuthor("s").
+			SetUpdatedAt(base.Add(time.Duration(i+1)*time.Second)))
+	}
+	db.Memory.CreateBulk(builders...).ExecX(ctx)
+	human := db.Memory.Create().SetGroupID(b.ID).SetContent("人工").SetSource("human").SetAuthor("x").
+		SetUpdatedAt(base).SaveX(ctx)
+
+	items, err := Of(ctx, db, []uuid.UUID{a.ID, b.ID}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != Max || items[0]["id"] != human.ID {
+		t.Fatalf("人工记忆应保留且排第一: %d 条，首条 %v", len(items), items[0]["content"])
+	}
+}

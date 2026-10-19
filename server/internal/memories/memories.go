@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
@@ -30,23 +31,20 @@ func Clean(content string) (string, error) {
 
 // Of 组内记忆，人工写的在前，各自按最近更新排；hostnames 用来把资产 ID 换成主机名
 func Of(ctx context.Context, db *ent.Client, groups []uuid.UUID, hostnames map[uuid.UUID]string) ([]map[string]any, error) {
+	// 人工优先要排在 Limit 之前：多组一起读时，别的组较新的 AI 记忆不能把人工记忆挤出去
+	humanFirst := func(s *sql.Selector) { s.OrderExpr(sql.Expr(s.C(memory.FieldSource) + " = 'human' DESC")) }
 	rows, err := db.Memory.Query().Where(memory.GroupIDIn(groups...)).
-		Order(ent.Desc(memory.FieldUpdatedAt)).Limit(Max).All(ctx)
+		Order(humanFirst, ent.Desc(memory.FieldUpdatedAt)).Limit(Max).All(ctx)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]map[string]any, 0, len(rows))
-	for _, human := range []bool{true, false} {
-		for _, m := range rows {
-			if (m.Source == "human") != human {
-				continue
-			}
-			item := map[string]any{"id": m.ID, "content": m.Content, "source": m.Source, "updated": m.UpdatedAt.Format("2006-01-02")}
-			if m.AssetID != nil {
-				item["host"] = hostnames[*m.AssetID]
-			}
-			out = append(out, item)
+	for _, m := range rows {
+		item := map[string]any{"id": m.ID, "content": m.Content, "source": m.Source, "updated": m.UpdatedAt.Format("2006-01-02")}
+		if m.AssetID != nil {
+			item["host"] = hostnames[*m.AssetID]
 		}
+		out = append(out, item)
 	}
 	return out, nil
 }
