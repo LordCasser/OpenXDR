@@ -30,6 +30,8 @@ COPY --from=build /openxdr-server /usr/local/bin/openxdr-server
 COPY --from=build /openxdr-gencerts /usr/local/bin/openxdr-gencerts
 COPY rules/ /opt/openxdr/rules/
 COPY tasks/ /opt/openxdr/tasks/
+# 时序规则随镜像带上，但默认不启用（开发中）：设 TEMPORAL_RULES_PATH=/opt/openxdr/temporal-rules 开启
+COPY temporal-rules/ /opt/openxdr/temporal-rules/
 COPY --from=agents /dist/ /opt/openxdr/dist/
 ENV RULES_PATH=/opt/openxdr/rules TASKS_PATH=/opt/openxdr/tasks AGENT_DIST_DIR=/opt/openxdr/dist
 COPY --from=pi-runtime /usr/local/bin/node /usr/local/bin/node
