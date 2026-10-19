@@ -85,4 +85,4 @@ curl -fsS https://<地址>/ -o /dev/null -w '%{http_code}\n'   # 自建 CA 时�
 
 ### 队列持久确认
 
-安装脚本同时下载该 Release 的 `nats.conf`，编排将其只读挂载给 NATS。配置包含 4 MiB 消息上限与 `sync_interval: always`，保证发布确认前同步持久数据；手动安装也需下载同版本配置，不能退回只带 `--jetstream` 的默认启动方式。
+安装脚本同时下载该 Release 的 `nats.conf`，编排将其只读挂载给 NATS。配置包含 4 MiB 消息上限与 `sync_interval: 1s`（每秒落盘，断电最多丢 1 秒已确认事件，理由与实测见 cluster.md）；手动安装也需下载同版本配置，不能退回只带 `--jetstream` 的默认启动方式。
