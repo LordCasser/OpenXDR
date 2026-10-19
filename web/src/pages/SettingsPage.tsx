@@ -30,7 +30,7 @@ export function SettingsPage() {
 }
 
 // 通知：出口只有一个——IM 群，填地址、点测试、保存
-function NotifySettingsCard() {
+export function NotifySettingsCard() {
   const { t } = useI18n()
   const { message } = App.useApp()
   const [form] = Form.useForm<NotifySettings>()

@@ -11,20 +11,24 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",
+    "@react-three/fiber": "^9.8.2",
     "@tanstack/react-query": "^5.104.3",
     "antd": "^6.6.6",
     "d3-force": "^3.0.0",
+    "motion": "^12.43.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
     "react-router": "^8.4.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/d3-force": "^3.0.10",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^6.0.4",
     "oxlint": "^1.75.0",
     "typescript": "~6.0.2",

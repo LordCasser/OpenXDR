@@ -37,6 +37,10 @@ func TestMinRoleRouteTable(t *testing.T) {
 		{"PATCH", "/api/tasks/daily", "admin"},
 		{"PUT", "/api/tasks/daily/groups/0190d7b0-0000-7000-8000-000000000000", "viewer"},
 		{"POST", "/api/tasks/daily/run", "admin"},
+		// 初始化状态：人人可读，同意协议与结束引导只有 admin
+		{"GET", "/api/setup", "viewer"},
+		{"POST", "/api/setup/agreement", "admin"},
+		{"POST", "/api/setup/onboarded", "admin"},
 	}
 	for _, c := range cases {
 		if got := minRole(c.method, c.path); got != c.want {

@@ -651,6 +651,18 @@ export const createMemory = (body: { groupId: string; assetId?: string; content:
 export const updateMemory = (id: string, content: string) => send('PATCH', `/api/memories/${id}`, { content })
 export const deleteMemory = (id: string) => send('DELETE', `/api/memories/${id}`)
 
+// 安装初始化：管理员同意用户协议、走完（或跳过）首次引导
+export interface SetupState {
+  agreementVersion: string
+  accepted: boolean
+  acceptedBy: string
+  acceptedAt: string | null
+  onboarded: boolean
+}
+export const fetchSetup = () => get<SetupState>('/api/setup')
+export const acceptAgreement = (version: string) => send('POST', '/api/setup/agreement', { version })
+export const finishOnboarding = (skipped: string[]) => send('POST', '/api/setup/onboarded', { skipped })
+
 export const fetchGroups = () => get<GroupRow[]>('/api/groups')
 export const createGroup = async (name: string): Promise<GroupRow> =>
   (await send('POST', '/api/groups', { name })).json()
