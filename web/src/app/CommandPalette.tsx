@@ -70,7 +70,7 @@ export function CommandPalette({ open, onClose, onHelp }: { open: boolean; onClo
       ].filter(a => match(a.label, 'words' in a ? a.words : '')).map(a => ({ ...a, section: 'paletteSectionActions' as MsgKey })),
     ]
     return out
-  }, [q, assets.data, incidents.data, sessions.data, isAdmin, groups, group, setGroupId, dark, toggle, locale, setLocale, tour.start, onHelp, t])
+  }, [q, assets.data, incidents.data, sessions.data, isAdmin, groups, group, setGroupId, dark, toggle, locale, setLocale, tour.start, onHelp, navigate, t])
 
   useEffect(() => setActive(0), [q])
   useEffect(() => {

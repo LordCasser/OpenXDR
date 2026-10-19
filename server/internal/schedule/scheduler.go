@@ -146,9 +146,7 @@ func (s *Scheduler) due(ctx context.Context, t *ent.Task, groupID uuid.UUID, now
 	return next, nil
 }
 
-// fire 每个目标组一个会话。空组不跑；上一轮还在跑的组跳过本轮，不叠加。
-func (s *Scheduler) fire(ctx context.Context, t *ent.Task) { s.fireDue(ctx, t, time.Now()) }
-
+// fireDue 每个目标组一个会话。空组不跑；上一轮还在跑的组跳过本轮，不叠加。
 func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 	if s.slots == nil {
 		s.slots = make(chan struct{}, 4)

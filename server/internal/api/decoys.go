@@ -14,6 +14,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/decoy"
 	"openxdr/server/internal/sshdecoy"
@@ -228,7 +229,7 @@ func decoyAudit(r *http.Request, tx *ent.Tx, action string, id uuid.UUID) error 
 	if u == nil {
 		return errors.New("未登录")
 	}
-	return tx.AuditLog.Create().SetUsername(u.Username).SetAction(action).SetTarget(id.String()).SetDetail("仅变更登记；不启动或停止远程 SSH 服务").SetRemoteAddr(r.RemoteAddr).Exec(r.Context())
+	return audit.Checked(r.Context(), tx.AuditLog.Create(), u.Username, audit.RemoteAddr(r), action, id.String(), "仅变更登记；不启动或停止远程 SSH 服务")
 }
 
 func validDecoyResource(kind, resource string, port int) bool {

@@ -12,6 +12,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/decoydeployment"
 	"openxdr/server/ent/hostcredential"
+	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/decoy"
 	"openxdr/server/internal/hostimport"
@@ -118,7 +119,7 @@ func DecoyInstalls(s *hostimport.Service, cfg DecoyInstallConfig) http.Handler {
 		token := randomDecoyToken()
 		err = tx.DecoyDeployment.UpdateOneID(row.ID).SetInstallState(decoydeployment.InstallStateInstalling).SetInstallStartedAt(now).SetTokenHash(decoyTokenHash(token)).SetTokenGroupID(*host.GroupID).SetTokenExpiresAt(now.Add(decoyTokenTTL)).SetMarker(randomDecoyToken()).Exec(r.Context())
 		if err == nil {
-			err = tx.AuditLog.Create().SetUsername(auth.From(r.Context()).Username).SetAction("decoy_install_started").SetTarget(row.ID.String()).SetRemoteAddr(r.RemoteAddr).SetDetail("使用已保存凭据安装专用诱饵；安装结果须结合运行租约核查").Exec(r.Context())
+			err = audit.Checked(r.Context(), tx.AuditLog.Create(), auth.From(r.Context()).Username, audit.RemoteAddr(r), "decoy_install_started", row.ID.String(), "使用已保存凭据安装专用诱饵；安装结果须结合运行租约核查")
 		}
 		if err == nil {
 			err = tx.Commit()
@@ -169,7 +170,7 @@ func finishDecoyInstall(ctx context.Context, db *ent.Client, r *http.Request, id
 	}
 	err = update.Exec(ctx)
 	if err == nil {
-		err = tx.AuditLog.Create().SetUsername(auth.From(r.Context()).Username).SetAction(action).SetTarget(id.String()).SetRemoteAddr(r.RemoteAddr).SetDetail("安装脚本结果；不代表诱饵已在线，需核对租约与目标服务").Exec(ctx)
+		err = audit.Checked(ctx, tx.AuditLog.Create(), auth.From(r.Context()).Username, audit.RemoteAddr(r), action, id.String(), "安装脚本结果；不代表诱饵已在线，需核对租约与目标服务")
 	}
 	if err == nil {
 		_, err = tx.HostCredential.Update().Where(hostcredential.IDEQ(credentialID), hostcredential.LeaseUntilEQ(lease)).SetLeaseUntil(time.Unix(0, 0)).Save(ctx)

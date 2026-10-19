@@ -234,7 +234,7 @@ func TestSchedulerBoundsActiveGroups(t *testing.T) {
 	runner := &blockedRunner{make(chan struct{}, 6), make(chan struct{})}
 	s := &Scheduler{DB: db, Runner: runner, DefaultModel: func() string { return "m" }, Timeout: time.Minute}
 	done := make(chan struct{})
-	go func() { defer close(done); s.fire(ctx, task) }()
+	go func() { defer close(done); s.fireDue(ctx, task, time.Now()) }()
 	for range 4 {
 		select {
 		case <-runner.started:
@@ -271,12 +271,12 @@ func TestSchedulerWaitsForPiModel(t *testing.T) {
 	runner := &blockedRunner{make(chan struct{}, 1), make(chan struct{})}
 	model := ""
 	s := &Scheduler{DB: db, Runner: runner, DefaultModel: func() string { return model }, Timeout: time.Minute}
-	s.fire(ctx, task)
+	s.fireDue(ctx, task, time.Now())
 	if n := db.TaskRun.Query().CountX(ctx); n != 0 {
 		t.Fatalf("没配 Pi 模型不应运行，得到 %d 次", n)
 	}
 	model = "m"
-	s.fire(ctx, task)
+	s.fireDue(ctx, task, time.Now())
 	<-runner.started
 	close(runner.release)
 	s.wg.Wait()

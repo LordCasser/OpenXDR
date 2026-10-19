@@ -1,6 +1,7 @@
 package correlate
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -47,7 +48,7 @@ func TestAttachProcessEvent(t *testing.T) {
 	pg := guidPtr()
 	evt := mkEvent(1007, "", "", pg, `{"process":{"name":"cmd.exe","pid":123}}`)
 
-	attachEngine().attach(nil, g, attachAlert(&asset, evt))
+	attachEngine().attach(context.Background(), g, attachAlert(&asset, evt))
 
 	if countNodes(g, "asset") != 1 || countNodes(g, "alert") != 1 || countNodes(g, "process") != 1 {
 		t.Fatalf("期望 asset/alert/process 各 1 节点，实际 %+v", g.Nodes)
@@ -66,7 +67,7 @@ func TestAttachNoAsset(t *testing.T) {
 	g := &Graph{}
 	pg := guidPtr()
 	evt := mkEvent(1007, "", "", pg, `{}`)
-	attachEngine().attach(nil, g, attachAlert(nil, evt))
+	attachEngine().attach(context.Background(), g, attachAlert(nil, evt))
 
 	if countNodes(g, "asset") != 0 {
 		t.Error("无资产时不应有 asset 节点")
@@ -85,7 +86,7 @@ func TestAttachNoAsset(t *testing.T) {
 func TestAttachNoEvent(t *testing.T) {
 	g := &Graph{}
 	asset := uuid.New()
-	attachEngine().attach(nil, g, attachAlert(&asset, nil))
+	attachEngine().attach(context.Background(), g, attachAlert(&asset, nil))
 
 	if countNodes(g, "alert") != 1 {
 		t.Fatalf("应有 alert 节点，实际 %+v", g.Nodes)
@@ -101,7 +102,7 @@ func TestAttachNetworkEvent(t *testing.T) {
 	asset := uuid.New()
 	evt := mkEvent(4001, "", "1.1.1.1:9000->2.2.2.2:443", nil,
 		`{"dst_endpoint":{"ip":"2.2.2.2","port":443}}`)
-	attachEngine().attach(nil, g, attachAlert(&asset, evt))
+	attachEngine().attach(context.Background(), g, attachAlert(&asset, evt))
 
 	if countNodes(g, "connection") != 1 || countNodes(g, "process") != 0 {
 		t.Fatalf("网络事件应得到 connection 节点，实际 %+v", g.Nodes)
@@ -118,14 +119,14 @@ func TestAttachOverflow(t *testing.T) {
 	before := len(g.Nodes)
 	asset := uuid.New()
 
-	eng.attach(nil, g, attachAlert(&asset, mkEvent(1007, "", "", nil, `{}`)))
+	eng.attach(context.Background(), g, attachAlert(&asset, mkEvent(1007, "", "", nil, `{}`)))
 	if len(g.Nodes) != before {
 		t.Errorf("触顶后不应加节点，before=%d after=%d", before, len(g.Nodes))
 	}
 	if g.Overflow != 1 {
 		t.Errorf("触顶应累加 overflow=1，得到 %d", g.Overflow)
 	}
-	eng.attach(nil, g, attachAlert(&asset, mkEvent(1007, "", "", nil, `{}`)))
+	eng.attach(context.Background(), g, attachAlert(&asset, mkEvent(1007, "", "", nil, `{}`)))
 	if g.Overflow != 2 {
 		t.Errorf("连续触顶 overflow 应=2，得到 %d", g.Overflow)
 	}
@@ -144,7 +145,7 @@ func TestAttachLabels(t *testing.T) {
 			Event: mkEvent(1007, "", "", nil, `{"process":{"name":"bash","pid":9}}`),
 		},
 	}
-	attachEngine().attach(nil, g, al)
+	attachEngine().attach(context.Background(), g, al)
 
 	labels := map[string]string{}
 	for _, n := range g.Nodes {
@@ -162,7 +163,7 @@ func TestAttachLabels(t *testing.T) {
 func TestAttachEventWithoutGUID(t *testing.T) {
 	g := &Graph{}
 	assetID := uuid.New()
-	attachEngine().attach(nil, g, attachAlert(&assetID, mkEvent(1007, "", "", nil, `{}`)))
+	attachEngine().attach(context.Background(), g, attachAlert(&assetID, mkEvent(1007, "", "", nil, `{}`)))
 
 	var eventID string
 	for _, n := range g.Nodes {
@@ -186,8 +187,8 @@ func TestAttachSharedEventNode(t *testing.T) {
 	evt := mkEvent(1007, "", "", pg, `{}`)
 
 	eng := attachEngine()
-	eng.attach(nil, g, attachAlert(&asset, evt))
-	eng.attach(nil, g, attachAlert(&asset, evt))
+	eng.attach(context.Background(), g, attachAlert(&asset, evt))
+	eng.attach(context.Background(), g, attachAlert(&asset, evt))
 
 	if countNodes(g, "process") != 1 {
 		t.Fatalf("同事件两次 attach 进程节点应去重，实际 %d", countNodes(g, "process"))

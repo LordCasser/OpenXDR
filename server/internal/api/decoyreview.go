@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"openxdr/server/ent"
 	"openxdr/server/ent/decoyobservation"
+	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/decoy"
 )
@@ -61,7 +62,7 @@ func mapDecoyReview(mux *http.ServeMux, db *ent.Client) {
 		}
 		incidentID, err := openDecoyIncident(r.Context(), tx, deployment, host, observation, severity, "human")
 		if err == nil {
-			err = tx.AuditLog.Create().SetUsername(auth.From(r.Context()).Username).SetAction("decoy_observation_review_requested").SetTarget(incidentID.String()).SetDetail("人工提交观察 " + observation.ID.String() + "；仅站内复核，不代表攻击归因").SetRemoteAddr(r.RemoteAddr).Exec(r.Context())
+			err = audit.Checked(r.Context(), tx.AuditLog.Create(), auth.From(r.Context()).Username, audit.RemoteAddr(r), "decoy_observation_review_requested", incidentID.String(), "人工提交观察 "+observation.ID.String()+"；仅站内复核，不代表攻击归因")
 		}
 		if err == nil {
 			err = tx.Commit()

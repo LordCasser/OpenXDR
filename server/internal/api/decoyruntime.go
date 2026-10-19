@@ -18,6 +18,7 @@ import (
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/decoydeployment"
 	"openxdr/server/ent/decoyobservation"
+	"openxdr/server/internal/audit"
 	"openxdr/server/internal/decoy"
 )
 
@@ -214,7 +215,7 @@ func DecoyRuntime(db *ent.Client) http.Handler {
 			severity, _ := decoy.ReviewSeverity(event.Kind)
 			var incidentID uuid.UUID
 			if incidentID, err = openDecoyIncident(ctx, tx, row, a, observation, severity, "marker"); err == nil {
-				err = tx.AuditLog.Create().SetUsername("system").SetAction("decoy_marker_review_opened").SetTarget(incidentID.String()).SetDetail("标记命中自动开单，观察 " + observation.ID.String() + "；不代表攻击归因").SetRemoteAddr(r.RemoteAddr).Exec(ctx)
+				err = audit.Checked(ctx, tx.AuditLog.Create(), "system", audit.RemoteAddr(r), "decoy_marker_review_opened", incidentID.String(), "标记命中自动开单，观察 "+observation.ID.String()+"；不代表攻击归因")
 			}
 		}
 		if err == nil {
