@@ -51,9 +51,11 @@ import (
 	"openxdr/server/internal/report"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/schedule"
+	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
 	"openxdr/server/internal/syslog"
 	"openxdr/server/internal/telemetry"
+	"openxdr/server/internal/temporal"
 	"openxdr/server/internal/triage"
 	"openxdr/server/internal/ueba"
 	"openxdr/server/internal/vuln"
@@ -66,37 +68,114 @@ func main() {
 	defer stop()
 
 	dsn := getenv("DATABASE_URL", "postgres://openxdr:openxdr@localhost:5432/openxdr?sslmode=disable")
+	db, client := openStore(ctx, dsn)
+	defer client.Close()
+	startDirectorySync(ctx, db)
+
+	suppressions := suppress.New(client, time.Duration(getenvInt("SUPPRESSION_RELOAD_SECONDS", 30))*time.Second)
+	go suppressions.Run(ctx)
+	intelStore, intelFeeds := startIntel(ctx, db, client)
+
+	rulesPath := getenv("RULES_PATH", "../rules")
+	rules, temporalRules, err := loadDetectionRules(ctx, rulesPath, os.Getenv("TEMPORAL_RULES_PATH"), time.Duration(getenvInt("RULES_RELOAD_SECONDS", 30))*time.Second)
+	if err != nil {
+		slog.Error("检测规则快照加载失败", "err", err)
+		os.Exit(1)
+	}
+	startAnalytics(ctx, db, client, rules, suppressions)
+
+	credentialVault := loadCredentialVault()
+	aiConf := newAIConf(client, credentialVault)
+	conf := func() aiconf.Config { return aiConf.Get(ctx) }
+	// 研判与资产标注共用一个端点与模型，每次调用按当时的配置，用量按用途分开记
+	llmFor := func(feature string) *triage.LLM { return newLLM(client, conf, feature) }
+	assetEngine := startAssetMap(ctx, db, client, llmFor, conf)
+
+	hub := response.NewHub(client, os.Getenv("RESPONSE_ENABLED") == "true")
+	allowlist := isolationAllowlist()
+	triageEngine := startTriage(ctx, db, client, rules, llmFor, hub, allowlist)
+	notifySettings, webhook := startNotify(ctx, db, client, rules, triageEngine.LLM.Enabled)
+	silentAfter := time.Duration(getenvInt("AGENT_SILENT_MINUTES", 10)) * time.Minute
+	startLiveness(ctx, db, client, webhook, silentAfter)
+
+	dedupWindow := time.Duration(getenvInt("ALERT_DEDUP_WINDOW_MINUTES", 5)) * time.Minute
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	events, router := startEventBus(db, rules, temporalRules, suppressions, intelStore, dedupWindow, hub, registry)
+	if router != nil {
+		defer router.Close()
+	}
+	defer events.Close()
+	startSyslog(ctx, client, rules, dedupWindow, suppressions, intelStore, events)
+	grpcServer, dist := startGRPC(db, client, rules, dedupWindow, hub, suppressions, intelStore, events)
+
+	if err := cluster.WithLock(ctx, db, "bootstrap", func() error { return auth.Bootstrap(ctx, client) }); err != nil {
+		slog.Error("初始化 admin 账号失败", "err", err)
+		os.Exit(1)
+	}
+
+	httpAddr := getenv("HTTP_ADDR", ":8080")
+	slog.Info("HTTP 启动", "addr", httpAddr)
+	queryRoles := startQueryRoles(ctx, db, client, dsn)
+	chat := startChat(ctx, client, rules, hub, webhook, conf, queryRoles)
+	startScheduler(ctx, db, client, chat, conf, webhook)
+	enrollSvc := loadEnroll(client, silentAfter)
+	routes := http.NewServeMux()
+	registerSQLRoutes(routes, db)
+	registerHostRoutes(ctx, routes, db, client, rules, credentialVault, enrollSvc, conf)
+	registerSettingsRoutes(routes, db, client, credentialVault, notifySettings, webhook, aiConf, intelFeeds, enrollSvc, dist)
+	registerAIRoutes(routes, client, llmFor, assetEngine)
+	routes.Handle("/", api.Handler(client, rules, hub, suppressions, intelStore, allowlist, chat))
+	mux := publicMux(auth.Middleware(client, routes), db, client, registry, enrollSvc, dist, events)
+	// 经反向代理时还原客户端地址，登录退避与审计才按真人计
+	trustedProxies, err := realip.Parse(os.Getenv("TRUSTED_PROXIES"))
+	if err != nil {
+		slog.Error("TRUSTED_PROXIES 配置无效", "err", err)
+		os.Exit(1)
+	}
+	httpServer := &http.Server{Addr: httpAddr, Handler: realip.Middleware(trustedProxies, mux), ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	serveUntilDone(ctx, httpServer, chat, grpcServer)
+}
+
+// openStore 连接数据库，在 schema 锁里建表并完成各模块的库结构迁移。
+func openStore(ctx context.Context, dsn string) (*sql.DB, *ent.Client) {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		slog.Error("数据库连接失败", "err", err)
 		os.Exit(1)
 	}
 	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, db)))
-	defer client.Close()
-	if err := cluster.WithLock(ctx, db, "schema", func() error {
-		if err := client.Schema.Create(ctx); err != nil {
-			return err
-		}
-		ensureSearchIndex(ctx, db)
-		// 旧版 AI 免审批名单换成高风险名单；放在 schema 锁里，多节点同时启动只迁一次
-		if err := commandgate.MigrateAllowToDeny(ctx, client); err != nil {
-			return err
-		}
-		if err := commandgate.UpgradeDefaults(ctx, client); err != nil {
-			return err
-		}
-		if err := aijob.EnsureSchema(ctx, db); err != nil {
-			return err
-		}
-		if err := response.EnsureVerificationSchema(ctx, db); err != nil {
-			return err
-		}
-		return ingest.EnsureSchema(ctx, db)
-	}); err != nil {
+	if err := cluster.WithLock(ctx, db, "schema", func() error { return migrateSchema(ctx, db, client) }); err != nil {
 		slog.Error("集群处理状态初始化失败", "err", err)
 		os.Exit(1)
 	}
+	return db, client
+}
 
+// migrateSchema 建表与各模块的库结构迁移，调用方须持有 schema 锁。
+func migrateSchema(ctx context.Context, db *sql.DB, client *ent.Client) error {
+	if err := client.Schema.Create(ctx); err != nil {
+		return err
+	}
+	ensureSearchIndex(ctx, db)
+	// 旧版 AI 免审批名单换成高风险名单；放在 schema 锁里，多节点同时启动只迁一次
+	if err := commandgate.MigrateAllowToDeny(ctx, client); err != nil {
+		return err
+	}
+	if err := commandgate.UpgradeDefaults(ctx, client); err != nil {
+		return err
+	}
+	if err := aijob.EnsureSchema(ctx, db); err != nil {
+		return err
+	}
+	if err := response.EnsureVerificationSchema(ctx, db); err != nil {
+		return err
+	}
+	return ingest.EnsureSchema(ctx, db)
+}
+
+// startDirectorySync 目录来源登记、单活同步与运行记录清理。
+func startDirectorySync(ctx context.Context, db *sql.DB) {
 	directoryJobs, err := directory.LoadConfig(os.Getenv("IDENTITY_SOURCES_JSON"), os.Getenv)
 	if err != nil {
 		slog.Error("目录同步配置无效", "err", err)
@@ -119,24 +198,21 @@ func main() {
 	go cluster.RunLeader(ctx, db, "identity-maintenance", func(ctx context.Context) {
 		directory.RunMaintenance(ctx, db, time.Duration(directoryRetention)*24*time.Hour)
 	})
+}
 
-	suppressions := suppress.New(client, time.Duration(getenvInt("SUPPRESSION_RELOAD_SECONDS", 30))*time.Second)
-	go suppressions.Run(ctx)
-
+// startIntel 情报库定时重载与情报订阅。
+func startIntel(ctx context.Context, db *sql.DB, client *ent.Client) (*intel.Store, *intel.Feeds) {
 	intelStore := intel.New(client, time.Duration(getenvInt("INTEL_RELOAD_SECONDS", 30))*time.Second)
 	go intelStore.Run(ctx)
 	// 情报订阅：内置公开源，控制台开关，单活定时拉取；落库后由 intelStore 下个重载周期生效
 	intelFeeds := &intel.Feeds{DB: db, Client: client, HTTP: &http.Client{},
 		Interval: time.Duration(getenvInt("INTEL_FEED_INTERVAL_HOURS", 6)) * time.Hour}
 	go cluster.RunLeader(ctx, db, "intel-feeds", intelFeeds.Run)
+	return intelStore, intelFeeds
+}
 
-	rulesPath := getenv("RULES_PATH", "../rules")
-	rules, temporalRules, err := loadDetectionRules(ctx, rulesPath, os.Getenv("TEMPORAL_RULES_PATH"), time.Duration(getenvInt("RULES_RELOAD_SECONDS", 30))*time.Second)
-	if err != nil {
-		slog.Error("检测规则快照加载失败", "err", err)
-		os.Exit(1)
-	}
-
+// startAnalytics 关联、UEBA、外联心跳、保留期清理与自动结案等单活后台任务。
+func startAnalytics(ctx context.Context, db *sql.DB, client *ent.Client, rules sigma.Catalog, suppressions *suppress.Store) {
 	correlator := &correlate.Engine{
 		DB:            client,
 		Rules:         rules,
@@ -178,31 +254,41 @@ func main() {
 		autoClose := &janitor.AutoClose{DB: client, Days: days, Interval: time.Hour}
 		go cluster.RunLeader(ctx, db, "auto-close-benign", autoClose.Run)
 	}
+}
 
-	var credentialVault *hostimport.Vault
-	if key := os.Getenv("HOST_CREDENTIAL_KEY"); key != "" {
-		credentialVault, err = hostimport.NewVault(key)
-		if err != nil {
-			slog.Error("凭据加密配置无效")
-			os.Exit(1)
-		}
+// loadCredentialVault 主机凭据加密钥匙，未配置 HOST_CREDENTIAL_KEY 时为 nil。
+func loadCredentialVault() *hostimport.Vault {
+	key := os.Getenv("HOST_CREDENTIAL_KEY")
+	if key == "" {
+		return nil
 	}
+	credentialVault, err := hostimport.NewVault(key)
+	if err != nil {
+		slog.Error("凭据加密配置无效")
+		os.Exit(1)
+	}
+	return credentialVault
+}
 
-	// AI 与外部情报查询配置：控制台保存的为准，环境变量是首次部署的默认值；密钥用上面同一把钥匙加密落库
-	aiConf := &aiconf.Store{DB: client, Vault: credentialVault, Default: aiconf.Config{
+// newAIConf AI 与外部情报查询配置：控制台保存的为准，环境变量是首次部署的默认值；密钥用主机凭据同一把钥匙加密落库
+func newAIConf(client *ent.Client, credentialVault *hostimport.Vault) *aiconf.Store {
+	return &aiconf.Store{DB: client, Vault: credentialVault, Default: aiconf.Config{
 		BaseURL: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"),
 		Model: os.Getenv("AI_MODEL"), PiModel: os.Getenv("PI_MODEL"),
 		PTR: getenv("IPINFO_PTR", "true") == "true", VTKey: os.Getenv("VT_API_KEY"), VTAlertMin: getenvInt("VT_ALERT_MIN_ENGINES", 3),
 	}}
-	conf := func() aiconf.Config { return aiConf.Get(ctx) }
-	// 研判与资产标注共用一个端点与模型，每次调用按当时的配置，用量按用途分开记
-	llmFor := func(feature string) *triage.LLM {
-		l := triage.NewLLM("", "", "", time.Duration(getenvInt("AI_TIMEOUT_SECONDS", 120))*time.Second)
-		l.Endpoint = func() (string, string, string) { c := conf(); return c.BaseURL, c.Model, c.APIKey }
-		l.OnUsage = aiconf.Recorder(client, feature)
-		return l
-	}
+}
 
+// newLLM 端点与模型按调用当时的控制台配置取，用量记在 feature 名下。
+func newLLM(client *ent.Client, conf func() aiconf.Config, feature string) *triage.LLM {
+	l := triage.NewLLM("", "", "", time.Duration(getenvInt("AI_TIMEOUT_SECONDS", 120))*time.Second)
+	l.Endpoint = func() (string, string, string) { c := conf(); return c.BaseURL, c.Model, c.APIKey }
+	l.OnUsage = aiconf.Recorder(client, feature)
+	return l
+}
+
+// startAssetMap 资产图谱与攻击面，以及公网目的地址的背景信息补全。
+func startAssetMap(ctx context.Context, db *sql.DB, client *ent.Client, llmFor func(string) *triage.LLM, conf func() aiconf.Config) *assetmap.Engine {
 	// 资产图谱与攻击面：物化清单与依赖边始终运行；配置了研判与标注模型才做 AI 标注
 	assetEngine := &assetmap.Engine{
 		DB: client, SQL: db,
@@ -221,11 +307,11 @@ func main() {
 		HTTP: &http.Client{Timeout: 15 * time.Second},
 	}
 	go cluster.RunLeader(ctx, db, "ipinfo", ipEnricher.Run)
+	return assetEngine
+}
 
-	hub := response.NewHub(client, os.Getenv("RESPONSE_ENABLED") == "true")
-	allowlist := isolationAllowlist()
-
-	// 研判引擎：AI 带只读调查工具逐个研判 incident
+// startTriage 研判引擎：AI 带只读调查工具逐个研判 incident
+func startTriage(ctx context.Context, db *sql.DB, client *ent.Client, rules sigma.Catalog, llmFor func(string) *triage.LLM, hub *response.Hub, allowlist []string) *triage.Engine {
 	triageEngine := &triage.Engine{
 		DB:       client,
 		Rules:    rules,
@@ -243,8 +329,11 @@ func main() {
 	}
 	// 常驻：模型在控制台配上就开始研判，撤掉就停
 	go cluster.RunLeader(ctx, db, "triage", triageEngine.Run)
+	return triageEngine
+}
 
-	// 推送目标以控制台保存的为准，环境变量只是首次部署的默认值
+// startNotify 推送目标以控制台保存的为准，环境变量只是首次部署的默认值
+func startNotify(ctx context.Context, db *sql.DB, client *ent.Client, rules sigma.Catalog, waitTriage func() bool) (*notify.Settings, *notify.Webhook) {
 	notifySettings := &notify.Settings{DB: client, Default: notify.Target{
 		URL:         os.Getenv("WEBHOOK_URL"),
 		Format:      getenv("WEBHOOK_FORMAT", "generic"),
@@ -256,11 +345,15 @@ func main() {
 		DB:         client,
 		Settings:   notifySettings,
 		Interval:   time.Duration(getenvInt("WEBHOOK_INTERVAL_SECONDS", 30)) * time.Second,
-		WaitTriage: triageEngine.LLM.Enabled,
+		WaitTriage: waitTriage,
 		Rules:      rules,
 	}
 	go cluster.RunLeader(ctx, db, "notify", notifier.Run)
-	silentAfter := time.Duration(getenvInt("AGENT_SILENT_MINUTES", 10)) * time.Minute
+	return notifySettings, webhook
+}
+
+// startLiveness 采集端静默与丢事件告警。
+func startLiveness(ctx context.Context, db *sql.DB, client *ent.Client, webhook *notify.Webhook, silentAfter time.Duration) {
 	watcher := &liveness.Watcher{
 		DB: client, Notify: webhook.Send,
 		SilentAfter: silentAfter,
@@ -268,10 +361,11 @@ func main() {
 		DropAlert:   getenvInt("COLLECTOR_DROP_ALERT", 1000),
 	}
 	go cluster.RunLeader(ctx, db, "liveness", watcher.Run)
+}
 
-	dedupWindow := time.Duration(getenvInt("ALERT_DEDUP_WINDOW_MINUTES", 5)) * time.Minute
-	registry := prometheus.NewRegistry()
-	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+// startEventBus 事件处理管道：配了 NATS_URL 走 JetStream 持久队列并挂上跨节点指令路由，
+// 否则单机直连，返回的 router 为 nil。
+func startEventBus(db *sql.DB, rules sigma.Catalog, temporalRules *temporal.Store, suppressions *suppress.Store, intelStore *intel.Store, dedupWindow time.Duration, hub *response.Hub, registry *prometheus.Registry) (eventbus.Bus, *response.NATSRouter) {
 	metrics := telemetry.New(registry)
 	processor := &ingest.Processor{
 		DB: db, Rules: rules, Temporal: temporalRules, Suppress: suppressions, Intel: intelStore,
@@ -280,29 +374,31 @@ func main() {
 	var events eventbus.Bus = eventbus.NewDirect(processor, metrics)
 	hostname, _ := os.Hostname()
 	instance := eventbus.InstanceName(hostname, os.Getpid())
-	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
-		queued, err := eventbus.NewJetStream(natsURL,
-			instance, getenvInt("QUEUE_SHARDS", 32), getenvInt("QUEUE_REPLICAS", 1),
-			int64(getenvInt("QUEUE_MAX_BYTES_GB", 20))*1024*1024*1024,
-			time.Duration(getenvInt("QUEUE_MAX_AGE_HOURS", 0))*time.Hour, processor, metrics)
-		if err != nil {
-			slog.Error("JetStream 初始化失败", "err", err)
-			os.Exit(1)
-		}
-		events = queued
-		router, routeErr := response.NewNATSRouter(natsURL, instance)
-		if routeErr != nil {
-			slog.Error("跨节点指令路由初始化失败", "err", routeErr)
-			os.Exit(1)
-		}
-		hub.Router = router
-		defer router.Close()
-		slog.Info("事件队列已启用", "url", natsURL, "shards", getenvInt("QUEUE_SHARDS", 32))
-	} else {
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
 		slog.Warn("NATS_URL 未配置，事件使用单机直连模式")
+		return events, nil
 	}
-	defer events.Close()
+	queued, err := eventbus.NewJetStream(natsURL,
+		instance, getenvInt("QUEUE_SHARDS", 32), getenvInt("QUEUE_REPLICAS", 1),
+		int64(getenvInt("QUEUE_MAX_BYTES_GB", 20))*1024*1024*1024,
+		time.Duration(getenvInt("QUEUE_MAX_AGE_HOURS", 0))*time.Hour, processor, metrics)
+	if err != nil {
+		slog.Error("JetStream 初始化失败", "err", err)
+		os.Exit(1)
+	}
+	router, routeErr := response.NewNATSRouter(natsURL, instance)
+	if routeErr != nil {
+		slog.Error("跨节点指令路由初始化失败", "err", routeErr)
+		os.Exit(1)
+	}
+	hub.Router = router
+	slog.Info("事件队列已启用", "url", natsURL, "shards", getenvInt("QUEUE_SHARDS", 32))
+	return queued, router
+}
 
+// startSyslog syslog 接入，与采集端共用同一事件管道。
+func startSyslog(ctx context.Context, client *ent.Client, rules sigma.Catalog, dedupWindow time.Duration, suppressions *suppress.Store, intelStore *intel.Store, events eventbus.Bus) {
 	go (&syslog.Server{
 		DB:          client,
 		Rules:       rules,
@@ -312,7 +408,10 @@ func main() {
 		Intel:       intelStore,
 		Events:      events,
 	}).Run(ctx)
+}
 
+// startGRPC 监听 agent 与 sensor 接入，返回 gRPC 服务与 agent 安装包目录。
+func startGRPC(db *sql.DB, client *ent.Client, rules sigma.Catalog, dedupWindow time.Duration, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, events eventbus.Bus) (*grpc.Server, *enroll.Dist) {
 	grpcAddr := getenv("GRPC_ADDR", ":8081")
 	lis, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
@@ -357,14 +456,11 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+	return grpcServer, dist
+}
 
-	if err := cluster.WithLock(ctx, db, "bootstrap", func() error { return auth.Bootstrap(ctx, client) }); err != nil {
-		slog.Error("初始化 admin 账号失败", "err", err)
-		os.Exit(1)
-	}
-
-	httpAddr := getenv("HTTP_ADDR", ":8080")
-	slog.Info("HTTP 启动", "addr", httpAddr)
+// startQueryRoles 组查询身份：手工配置的优先，其余由平台账号自动开通（需 CREATEROLE）
+func startQueryRoles(ctx context.Context, db *sql.DB, client *ent.Client, dsn string) *queryrole.Provisioner {
 	queryURLs := map[uuid.UUID]string{}
 	if raw := os.Getenv("PI_QUERY_DATABASE_URLS"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &queryURLs); err != nil {
@@ -372,7 +468,6 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	// 组查询身份：手工配置的优先，其余由平台账号自动开通（需 CREATEROLE）
 	queryRoles := &queryrole.Provisioner{DB: db, Client: client, BaseDSN: dsn, Static: queryURLs}
 	go func() {
 		queryRoles.Reconcile(ctx)
@@ -380,20 +475,32 @@ func main() {
 			slog.Error("删除遗留 dry_run 列失败，多半是仍有视图引用 commands.dry_run：手工开通的组视图需按新版 deploy/pi-query/group-views.sql 重建，其他手工视图需去掉该列，然后重启 server；在此之前该列只是不再被读取", "err", err)
 		}
 	}()
+	return queryRoles
+}
+
+// newPiRuntime 配了沙箱就让 Pi 在远端隔离容器里用默认工具干活；没配退回本机 runner 与平台自定义工具
+func newPiRuntime() piruntime.Runtime {
 	piRuntime := piruntime.Runtime{Runner: getenv("PI_RUNNER_PATH", "/app/pi-runtime/runner.mjs"), Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second}
-	// 配了沙箱就让 Pi 在远端隔离容器里用默认工具干活；没配退回本机 runner 与平台自定义工具
-	if url := os.Getenv("SANDBOX_URL"); url != "" {
-		remote, err := piruntime.NewRemote(url, os.Getenv("SANDBOX_KEY"), os.Getenv("SANDBOX_CA_FILE"))
-		if err != nil {
-			slog.Error("沙箱配置无效", "err", err)
-			os.Exit(1)
-		}
-		if strings.HasPrefix(url, "http://") {
-			slog.Warn("平台与沙箱之间为明文，仅适合受信网络调试")
-		}
-		piRuntime.Remote = remote
-		slog.Info("Pi 在沙箱中运行", "url", url)
+	url := os.Getenv("SANDBOX_URL")
+	if url == "" {
+		return piRuntime
 	}
+	remote, err := piruntime.NewRemote(url, os.Getenv("SANDBOX_KEY"), os.Getenv("SANDBOX_CA_FILE"))
+	if err != nil {
+		slog.Error("沙箱配置无效", "err", err)
+		os.Exit(1)
+	}
+	if strings.HasPrefix(url, "http://") {
+		slog.Warn("平台与沙箱之间为明文，仅适合受信网络调试")
+	}
+	piRuntime.Remote = remote
+	slog.Info("Pi 在沙箱中运行", "url", url)
+	return piRuntime
+}
+
+// startChat Pi 会话服务，并恢复上次退出时未完成的会话。
+func startChat(ctx context.Context, client *ent.Client, rules sigma.Catalog, hub *response.Hub, webhook *notify.Webhook, conf func() aiconf.Config, queryRoles *queryrole.Provisioner) *agentchat.Service {
+	piRuntime := newPiRuntime()
 	chat := &agentchat.Service{Base: ctx, Rules: rules, Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second, Notify: webhook.Send},
 		Runtime: piRuntime, Sandboxed: piRuntime.Sandboxed(),
 		AI: func() (string, string, string) { c := conf(); return c.BaseURL, c.APIKey, c.PiModel }, Query: queryRoles,
@@ -401,7 +508,11 @@ func main() {
 		// 长会话折叠较早的工具结果与思考过程再发给模型，库里与界面仍是原文
 		FoldAbove: getenvInt("PI_HISTORY_FOLD_KB", 64) * 1024}
 	go chat.Recover(ctx)
-	// 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
+	return chat
+}
+
+// startScheduler 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
+func startScheduler(ctx context.Context, db *sql.DB, client *ent.Client, chat *agentchat.Service, conf func() aiconf.Config, webhook *notify.Webhook) {
 	report.Chromium = getenv("CHROMIUM_PATH", "chromium")
 	scheduler := &schedule.Scheduler{
 		DB: client, Runner: chat,
@@ -413,6 +524,10 @@ func main() {
 	}
 	// 常驻：任务定义照常同步到库里，Pi 模型配上才运行
 	go cluster.RunLeader(ctx, db, "schedule", scheduler.Run)
+}
+
+// loadEnroll 主机在线接入配置。
+func loadEnroll(client *ent.Client, silentAfter time.Duration) *enroll.Service {
 	enrollSvc, err := enroll.FromEnv(client, silentAfter)
 	if err != nil {
 		slog.Error("主机接入配置无效", "err", err)
@@ -421,18 +536,23 @@ func main() {
 	if reason := enrollSvc.Disabled(); reason != "" {
 		slog.Warn("主机在线接入未启用", "reason", reason)
 	}
-	// 运维文档导入：AI 解析主机清单，截图与扫描件走视觉模型（AI_VISION_MODEL，不配就用研判模型）。
-	// 端点与密钥按控制台当时的配置取；文档大，超时放宽到 180 秒、关掉隐式思考
-	importLLM := func(model string) *triage.LLM {
-		l := triage.NewLLM("", "", "", 180*time.Second)
-		l.NoThinking, l.MaxTokens = true, 16384
-		l.Endpoint = func() (string, string, string) {
-			c := conf()
-			return c.BaseURL, cmp.Or(model, c.Model, c.PiModel), c.APIKey
-		}
-		return l
+	return enrollSvc
+}
+
+// newImportLLM 运维文档导入：AI 解析主机清单，截图与扫描件走视觉模型（AI_VISION_MODEL，不配就用研判模型）。
+// 端点与密钥按控制台当时的配置取；文档大，超时放宽到 180 秒、关掉隐式思考
+func newImportLLM(conf func() aiconf.Config, model string) *triage.LLM {
+	l := triage.NewLLM("", "", "", 180*time.Second)
+	l.NoThinking, l.MaxTokens = true, 16384
+	l.Endpoint = func() (string, string, string) {
+		c := conf()
+		return c.BaseURL, cmp.Or(model, c.Model, c.PiModel), c.APIKey
 	}
-	routes := http.NewServeMux()
+	return l
+}
+
+// registerSQLRoutes 直接查库的接口：时序缺口、指令核验与身份观测。
+func registerSQLRoutes(routes *http.ServeMux, db *sql.DB) {
 	routes.Handle("/api/temporal-gaps", api.TemporalGaps(db))
 	verifications := api.CommandVerifications(db)
 	routes.Handle("/api/commands/{id}/verifications", verifications)
@@ -444,7 +564,11 @@ func main() {
 	directoryAPI := api.IdentityDirectories(db)
 	routes.Handle("/api/identity-directories", directoryAPI)
 	routes.Handle("/api/identity-directories/", directoryAPI)
-	routes.Handle("/api/host-import/", api.HostImports(&hostimport.Service{DB: client, Vault: credentialVault, LLM: importLLM(""), VisionLLM: importLLM(os.Getenv("AI_VISION_MODEL"))}, enrollSvc, os.Getenv("ENROLL_PUBLIC_URL"), getenv("ENROLL_SSH_ENABLED", "false") == "true"))
+}
+
+// registerHostRoutes 主机导入、初始化向导、研判准确率与软件漏洞接口，并启动漏洞库同步。
+func registerHostRoutes(ctx context.Context, routes *http.ServeMux, db *sql.DB, client *ent.Client, rules sigma.Catalog, credentialVault *hostimport.Vault, enrollSvc *enroll.Service, conf func() aiconf.Config) {
+	routes.Handle("/api/host-import/", api.HostImports(&hostimport.Service{DB: client, Vault: credentialVault, LLM: newImportLLM(conf, ""), VisionLLM: newImportLLM(conf, os.Getenv("AI_VISION_MODEL"))}, enrollSvc, os.Getenv("ENROLL_PUBLIC_URL"), getenv("ENROLL_SSH_ENABLED", "false") == "true"))
 	setup := api.Setup(client)
 	routes.Handle("/api/setup", setup)
 	routes.Handle("/api/setup/", setup)
@@ -459,6 +583,10 @@ func main() {
 			Interval: time.Duration(getenvInt("VULN_SYNC_HOURS", 24)) * time.Hour}
 		go cluster.RunLeader(ctx, db, "vuln-sync", syncer.Run)
 	}
+}
+
+// registerSettingsRoutes 诱饵部署、系统设置、情报订阅与接入令牌接口。
+func registerSettingsRoutes(routes *http.ServeMux, db *sql.DB, client *ent.Client, credentialVault *hostimport.Vault, notifySettings *notify.Settings, webhook *notify.Webhook, aiConf *aiconf.Store, intelFeeds *intel.Feeds, enrollSvc *enroll.Service, dist *enroll.Dist) {
 	routes.Handle("/api/decoy-install/", api.DecoyInstalls(&hostimport.Service{DB: client, Vault: credentialVault}, api.DecoyInstallConfig{Enabled: getenv("DECOY_SSH_ENABLED", "false") == "true", PublicURL: os.Getenv("ENROLL_PUBLIC_URL"), DistDir: os.Getenv("DECOY_DIST_DIR")}))
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook, aiConf, db))
 	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))
@@ -466,6 +594,10 @@ func main() {
 	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
 	routes.Handle("/api/enroll-tokens", enrollTokens)
 	routes.Handle("/api/enroll-tokens/", enrollTokens)
+}
+
+// registerAIRoutes 日志检索「问 AI」与资产图谱接口。
+func registerAIRoutes(routes *http.ServeMux, client *ent.Client, llmFor func(string) *triage.LLM, assetEngine *assetmap.Engine) {
 	// 日志检索里的「问 AI」：交互式调用，同样关掉隐式思考、限住输出，等得起
 	explainLLM := llmFor("explain")
 	explainLLM.NoThinking, explainLLM.MaxTokens = true, 1500
@@ -477,8 +609,10 @@ func main() {
 	for _, path := range api.AssetMapPaths {
 		routes.Handle(path, assetMap)
 	}
-	routes.Handle("/", api.Handler(client, rules, hub, suppressions, intelStore, allowlist, chat))
-	app := auth.Middleware(client, routes)
+}
+
+// publicMux 外层路由：指标、健康检查与免登录的接入端点，其余交给需登录的 app。
+func publicMux(app http.Handler, db *sql.DB, client *ent.Client, registry *prometheus.Registry, enrollSvc *enroll.Service, dist *enroll.Dist, events eventbus.Bus) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", telemetry.Handler(registry))
 	// 接入端点免登录：安装脚本与二进制公开，注册靠令牌
@@ -493,13 +627,11 @@ func main() {
 		_, _ = w.Write([]byte("ready\n"))
 	})
 	mux.Handle("/", app)
-	// 经反向代理时还原客户端地址，登录退避与审计才按真人计
-	trustedProxies, err := realip.Parse(os.Getenv("TRUSTED_PROXIES"))
-	if err != nil {
-		slog.Error("TRUSTED_PROXIES 配置无效", "err", err)
-		os.Exit(1)
-	}
-	httpServer := &http.Server{Addr: httpAddr, Handler: realip.Middleware(trustedProxies, mux), ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	return mux
+}
+
+// serveUntilDone 服务 HTTP 直到出错或收到退出信号，然后依次排空 HTTP、Pi 会话与 gRPC。
+func serveUntilDone(ctx context.Context, httpServer *http.Server, chat *agentchat.Service, grpcServer *grpc.Server) {
 	httpErr := make(chan error, 1)
 	go func() { httpErr <- httpServer.ListenAndServe() }()
 	select {
