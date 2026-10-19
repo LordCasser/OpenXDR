@@ -52,8 +52,14 @@ export function describeCron(expr: string, t: T, locale: string): string | null 
   const text = p.mode === 'daily' ? t('schedDescDaily', { time })
     : p.mode === 'weekly' ? t('schedDescWeekly', { days: p.days.map(d => weekday(d, locale)).join(t('listSep')), time })
       : p.mode === 'hourly' ? t('schedDescHourly', { m: p.minute })
-        : null
+        : monthly(expr, t)
   return text && p.tz ? `${text}（${p.tz}）` : text
+}
+
+// 每月某日某时（编辑器不提供这种形状，只在展示时翻成人话）
+function monthly(expr: string, t: T): string | null {
+  const m = /^(?:CRON_TZ=\S+\s+)?(\d{1,2}) (\d{1,2}) (\d{1,2}) \* \*$/.exec(expr.trim())
+  return m ? t('schedDescMonthly', { day: m[3], time: `${pad(+m[2])}:${pad(+m[1])}` }) : null
 }
 
 const MODES: { value: Mode; key: MsgKey }[] = [

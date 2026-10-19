@@ -329,3 +329,88 @@ func TestSchedulerRerunsInterrupted(t *testing.T) {
 		t.Fatalf("应换新会话重跑同一轮一次：%d 次 %+v", len(runner.jobs), runs)
 	}
 }
+
+// levelRunner 按组交指定级别的报告
+type levelRunner struct {
+	mu     sync.Mutex
+	db     *ent.Client
+	levels map[string]string
+	ran    []string
+}
+
+func (f *levelRunner) RunTask(_ context.Context, job Job) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	g := job.Session.GroupID.String()
+	f.ran = append(f.ran, g)
+	return f.db.Report.Create().SetSessionID(job.Session.ID).SetGroupID(job.Session.GroupID).
+		SetTitle("证书检查").SetMarkdown("# 结果").SetLevel(f.levels[g]).Exec(context.Background())
+}
+
+// 默认关闭的任务只在单独开启的组上跑；ok 级报告只存档不推送，urgent 标题加前缀；
+// YAML 里的 enabled 只决定首次入库，之后界面改过的开关不被覆盖
+func TestGroupEnabledAndQuietReports(t *testing.T) {
+	ctx, client := testdb.New(t)
+	gA := client.Group.Create().SetName("A").SaveX(ctx)
+	gB := client.Group.Create().SetName("B").SaveX(ctx)
+	gC := client.Group.Create().SetName("C").SaveX(ctx)
+	for _, g := range []*ent.Group{gA, gB, gC} {
+		client.Asset.Create().SetHostname("h-" + g.Name).SetGroupID(g.ID).SaveX(ctx)
+	}
+	dir := t.TempDir()
+	write := func(enabled string) {
+		if err := os.WriteFile(filepath.Join(dir, "t.yml"), []byte(
+			"id: t\nname: 证书\nenabled: "+enabled+"\nschedule: '*/5 * * * *'\nprompt: 看看\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("false")
+	runner := &levelRunner{db: client, levels: map[string]string{gA.ID.String(): "ok", gB.ID.String(): "urgent"}}
+	var mu sync.Mutex
+	var titles []string
+	s := &Scheduler{
+		DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute,
+		Notify: func(_ context.Context, title, _, _ string) error {
+			mu.Lock()
+			defer mu.Unlock()
+			titles = append(titles, title)
+			return nil
+		},
+		start: time.Now().Add(-10 * time.Minute),
+	}
+	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
+		t.Fatal(err)
+	}
+	task := client.Task.UpdateOneID("t").SetCreatedAt(s.start).SaveX(ctx)
+	if task.Enabled {
+		t.Fatal("enabled: false 的任务首次入库应为关闭")
+	}
+	if err := s.tick(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s.wg.Wait()
+	if len(runner.ran) != 0 {
+		t.Fatalf("全局关闭且没有按组开启时不应运行：%v", runner.ran)
+	}
+
+	client.Task.UpdateOneID("t").SetGroupEnabled(map[string]bool{gA.ID.String(): true, gB.ID.String(): true}).ExecX(ctx)
+	if err := s.tick(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s.wg.Wait()
+	if len(runner.ran) != 2 || strings.Contains(strings.Join(runner.ran, ","), gC.ID.String()) {
+		t.Fatalf("只应在 A、B 上运行：%v", runner.ran)
+	}
+	if len(titles) != 1 || titles[0] != "【紧急】证书检查" {
+		t.Fatalf("ok 级不推送、urgent 加前缀，得到 %q", titles)
+	}
+
+	// YAML 改成 enabled: true 也不覆盖界面上的开关
+	write("true")
+	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if client.Task.GetX(ctx, "t").Enabled {
+		t.Fatal("同步不应覆盖已入库任务的开关")
+	}
+}

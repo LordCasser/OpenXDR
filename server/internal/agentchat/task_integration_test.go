@@ -49,7 +49,11 @@ func TestRunTask(t *testing.T) {
 					return nil, err
 				}
 				if c.report {
-					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 正常"}`)); err != nil {
+					// 级别只收 ok / attention / urgent；无异常的巡检交 ok，只存档不推送
+					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 正常","level":"info"}`)); err == nil {
+						t.Error("未知级别应被拒绝")
+					}
+					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 正常","level":"ok"}`)); err != nil {
 						return nil, err
 					}
 				}
@@ -61,6 +65,11 @@ func TestRunTask(t *testing.T) {
 			}
 			if got := db.AgentSession.GetX(ctx, session.ID); got.Status != c.wantStatus {
 				t.Errorf("会话状态应为 %s，得到 %s", c.wantStatus, got.Status)
+			}
+			for _, r := range db.Report.Query().Where(report.SessionIDEQ(session.ID)).AllX(ctx) {
+				if r.Level != "ok" {
+					t.Errorf("报告级别应为 ok，得到 %q", r.Level)
+				}
 			}
 		})
 	}

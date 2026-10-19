@@ -47,7 +47,10 @@ func minRole(method, path string) string {
 	// 情报订阅影响全局检测
 	case strings.HasPrefix(path, "/api/intel/feeds") && method != http.MethodGet:
 		return "admin"
-	// 预设任务跨组运行，启停与改周期只有 admin 能动
+	// 任务在某个组上的开关由该组管理员决定，handler 按组检查
+	case strings.HasPrefix(path, "/api/tasks/") && strings.Contains(path, "/groups/") && method == http.MethodPut:
+		return "viewer"
+	// 预设任务跨组运行，全局启停与改周期只有 admin 能动
 	case strings.HasPrefix(path, "/api/tasks") && method != http.MethodGet:
 		return "admin"
 	// 组的增删、成员与资产归属只有 admin 能改；列表按成员身份过滤，viewer 可读

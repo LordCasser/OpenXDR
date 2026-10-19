@@ -1,0 +1,24 @@
+id: weekly-security-report
+name: 安全周报
+name_en: Weekly security report
+category: report
+description: "给管理层看：事件、结案时长、降噪比、待办与风险的周度变化"
+description_en: "For management: incidents, time to close, noise reduction, open findings and risk trends week over week"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 0 9 * * 1"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  写本组上一周（周一至周日）的安全周报，读者是不看控制台的负责人。用 query：
+  1. 事件：新增、已结案（区分属实处置 closed 与误报 false_positive）、仍未结案；平均结案时长；按级别分布。
+  2. 降噪：原始事件数 → 告警数 → 事件数，各级压掉的比例；与前一周对比。
+  3. 待办：findings 新增、已解决、仍 open 的数量与最久未解决的几项。
+  4. 风险变化：新增的公网暴露、高危告警最多的主机、本周最值得关注的 3 件事。
+  5. 与上一份周报（reports 视图里标题含「周报」的最近一份）对比，指出变好与变差的地方。
+  语言简洁，数字放表格，结论放最前。周报每周都要发出，level 写 attention；本周有未处理的疑似入侵写 urgent。
+  约束：
+  - 本任务只读平台数据（query），不在主机上执行命令。
+  - 先用 memories 看本组已知的环境知识，用得上就用。
+  - 报告结构：结论 → 需要人处理的事项 → 数据与依据 → 未能验证的部分；区分观察、推断与未验证。

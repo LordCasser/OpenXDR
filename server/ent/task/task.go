@@ -17,12 +17,22 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldNameEn holds the string denoting the name_en field in the database.
+	FieldNameEn = "name_en"
+	// FieldDescription holds the string denoting the description field in the database.
+	FieldDescription = "description"
+	// FieldDescriptionEn holds the string denoting the description_en field in the database.
+	FieldDescriptionEn = "description_en"
+	// FieldCategory holds the string denoting the category field in the database.
+	FieldCategory = "category"
 	// FieldSchedule holds the string denoting the schedule field in the database.
 	FieldSchedule = "schedule"
 	// FieldCustomSchedule holds the string denoting the custom_schedule field in the database.
 	FieldCustomSchedule = "custom_schedule"
 	// FieldEnabled holds the string denoting the enabled field in the database.
 	FieldEnabled = "enabled"
+	// FieldGroupEnabled holds the string denoting the group_enabled field in the database.
+	FieldGroupEnabled = "group_enabled"
 	// FieldModel holds the string denoting the model field in the database.
 	FieldModel = "model"
 	// FieldTargetGroup holds the string denoting the target_group field in the database.
@@ -44,9 +54,14 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldName,
+	FieldNameEn,
+	FieldDescription,
+	FieldDescriptionEn,
+	FieldCategory,
 	FieldSchedule,
 	FieldCustomSchedule,
 	FieldEnabled,
+	FieldGroupEnabled,
 	FieldModel,
 	FieldTargetGroup,
 	FieldApprovalTimeoutSeconds,
@@ -68,6 +83,14 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultNameEn holds the default value on creation for the "name_en" field.
+	DefaultNameEn string
+	// DefaultDescription holds the default value on creation for the "description" field.
+	DefaultDescription string
+	// DefaultDescriptionEn holds the default value on creation for the "description_en" field.
+	DefaultDescriptionEn string
+	// DefaultCategory holds the default value on creation for the "category" field.
+	DefaultCategory string
 	// DefaultEnabled holds the default value on creation for the "enabled" field.
 	DefaultEnabled bool
 	// DefaultModel holds the default value on creation for the "model" field.
@@ -96,6 +119,26 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByNameEn orders the results by the name_en field.
+func ByNameEn(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNameEn, opts...).ToFunc()
+}
+
+// ByDescription orders the results by the description field.
+func ByDescription(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByDescriptionEn orders the results by the description_en field.
+func ByDescriptionEn(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDescriptionEn, opts...).ToFunc()
+}
+
+// ByCategory orders the results by the category field.
+func ByCategory(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCategory, opts...).ToFunc()
 }
 
 // BySchedule orders the results by the schedule field.

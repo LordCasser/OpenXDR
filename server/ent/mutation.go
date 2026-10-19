@@ -19618,6 +19618,7 @@ type ReportMutation struct {
 	group_id      *uuid.UUID
 	title         *string
 	markdown      *string
+	level         *string
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*Report, error)
@@ -19908,6 +19909,42 @@ func (m *ReportMutation) ResetMarkdown() {
 	m.markdown = nil
 }
 
+// SetLevel sets the "level" field.
+func (m *ReportMutation) SetLevel(s string) {
+	m.level = &s
+}
+
+// Level returns the value of the "level" field in the mutation.
+func (m *ReportMutation) Level() (r string, exists bool) {
+	v := m.level
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLevel returns the old "level" field's value of the Report entity.
+// If the Report object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ReportMutation) OldLevel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLevel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLevel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLevel: %w", err)
+	}
+	return oldValue.Level, nil
+}
+
+// ResetLevel resets all changes to the "level" field.
+func (m *ReportMutation) ResetLevel() {
+	m.level = nil
+}
+
 // Where appends a list predicates to the ReportMutation builder.
 func (m *ReportMutation) Where(ps ...predicate.Report) {
 	m.predicates = append(m.predicates, ps...)
@@ -19942,7 +19979,7 @@ func (m *ReportMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ReportMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.created_at != nil {
 		fields = append(fields, report.FieldCreatedAt)
 	}
@@ -19957,6 +19994,9 @@ func (m *ReportMutation) Fields() []string {
 	}
 	if m.markdown != nil {
 		fields = append(fields, report.FieldMarkdown)
+	}
+	if m.level != nil {
+		fields = append(fields, report.FieldLevel)
 	}
 	return fields
 }
@@ -19976,6 +20016,8 @@ func (m *ReportMutation) Field(name string) (ent.Value, bool) {
 		return m.Title()
 	case report.FieldMarkdown:
 		return m.Markdown()
+	case report.FieldLevel:
+		return m.Level()
 	}
 	return nil, false
 }
@@ -19995,6 +20037,8 @@ func (m *ReportMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldTitle(ctx)
 	case report.FieldMarkdown:
 		return m.OldMarkdown(ctx)
+	case report.FieldLevel:
+		return m.OldLevel(ctx)
 	}
 	return nil, fmt.Errorf("unknown Report field %s", name)
 }
@@ -20038,6 +20082,13 @@ func (m *ReportMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMarkdown(v)
+		return nil
+	case report.FieldLevel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLevel(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Report field %s", name)
@@ -20102,6 +20153,9 @@ func (m *ReportMutation) ResetField(name string) error {
 		return nil
 	case report.FieldMarkdown:
 		m.ResetMarkdown()
+		return nil
+	case report.FieldLevel:
+		m.ResetLevel()
 		return nil
 	}
 	return fmt.Errorf("unknown Report field %s", name)
@@ -22847,9 +22901,14 @@ type TaskMutation struct {
 	id                          *string
 	created_at                  *time.Time
 	name                        *string
+	name_en                     *string
+	description                 *string
+	description_en              *string
+	category                    *string
 	schedule                    *string
 	custom_schedule             *string
 	enabled                     *bool
+	group_enabled               *map[string]bool
 	model                       *string
 	target_group                *string
 	approval_timeout_seconds    *int64
@@ -23039,6 +23098,150 @@ func (m *TaskMutation) ResetName() {
 	m.name = nil
 }
 
+// SetNameEn sets the "name_en" field.
+func (m *TaskMutation) SetNameEn(s string) {
+	m.name_en = &s
+}
+
+// NameEn returns the value of the "name_en" field in the mutation.
+func (m *TaskMutation) NameEn() (r string, exists bool) {
+	v := m.name_en
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNameEn returns the old "name_en" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldNameEn(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNameEn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNameEn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNameEn: %w", err)
+	}
+	return oldValue.NameEn, nil
+}
+
+// ResetNameEn resets all changes to the "name_en" field.
+func (m *TaskMutation) ResetNameEn() {
+	m.name_en = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *TaskMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *TaskMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *TaskMutation) ResetDescription() {
+	m.description = nil
+}
+
+// SetDescriptionEn sets the "description_en" field.
+func (m *TaskMutation) SetDescriptionEn(s string) {
+	m.description_en = &s
+}
+
+// DescriptionEn returns the value of the "description_en" field in the mutation.
+func (m *TaskMutation) DescriptionEn() (r string, exists bool) {
+	v := m.description_en
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescriptionEn returns the old "description_en" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldDescriptionEn(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescriptionEn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescriptionEn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescriptionEn: %w", err)
+	}
+	return oldValue.DescriptionEn, nil
+}
+
+// ResetDescriptionEn resets all changes to the "description_en" field.
+func (m *TaskMutation) ResetDescriptionEn() {
+	m.description_en = nil
+}
+
+// SetCategory sets the "category" field.
+func (m *TaskMutation) SetCategory(s string) {
+	m.category = &s
+}
+
+// Category returns the value of the "category" field in the mutation.
+func (m *TaskMutation) Category() (r string, exists bool) {
+	v := m.category
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCategory returns the old "category" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldCategory(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCategory is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCategory requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCategory: %w", err)
+	}
+	return oldValue.Category, nil
+}
+
+// ResetCategory resets all changes to the "category" field.
+func (m *TaskMutation) ResetCategory() {
+	m.category = nil
+}
+
 // SetSchedule sets the "schedule" field.
 func (m *TaskMutation) SetSchedule(s string) {
 	m.schedule = &s
@@ -23158,6 +23361,55 @@ func (m *TaskMutation) OldEnabled(ctx context.Context) (v bool, err error) {
 // ResetEnabled resets all changes to the "enabled" field.
 func (m *TaskMutation) ResetEnabled() {
 	m.enabled = nil
+}
+
+// SetGroupEnabled sets the "group_enabled" field.
+func (m *TaskMutation) SetGroupEnabled(value map[string]bool) {
+	m.group_enabled = &value
+}
+
+// GroupEnabled returns the value of the "group_enabled" field in the mutation.
+func (m *TaskMutation) GroupEnabled() (r map[string]bool, exists bool) {
+	v := m.group_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupEnabled returns the old "group_enabled" field's value of the Task entity.
+// If the Task object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaskMutation) OldGroupEnabled(ctx context.Context) (v map[string]bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupEnabled: %w", err)
+	}
+	return oldValue.GroupEnabled, nil
+}
+
+// ClearGroupEnabled clears the value of the "group_enabled" field.
+func (m *TaskMutation) ClearGroupEnabled() {
+	m.group_enabled = nil
+	m.clearedFields[task.FieldGroupEnabled] = struct{}{}
+}
+
+// GroupEnabledCleared returns if the "group_enabled" field was cleared in this mutation.
+func (m *TaskMutation) GroupEnabledCleared() bool {
+	_, ok := m.clearedFields[task.FieldGroupEnabled]
+	return ok
+}
+
+// ResetGroupEnabled resets all changes to the "group_enabled" field.
+func (m *TaskMutation) ResetGroupEnabled() {
+	m.group_enabled = nil
+	delete(m.clearedFields, task.FieldGroupEnabled)
 }
 
 // SetModel sets the "model" field.
@@ -23443,12 +23695,24 @@ func (m *TaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaskMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, task.FieldCreatedAt)
 	}
 	if m.name != nil {
 		fields = append(fields, task.FieldName)
+	}
+	if m.name_en != nil {
+		fields = append(fields, task.FieldNameEn)
+	}
+	if m.description != nil {
+		fields = append(fields, task.FieldDescription)
+	}
+	if m.description_en != nil {
+		fields = append(fields, task.FieldDescriptionEn)
+	}
+	if m.category != nil {
+		fields = append(fields, task.FieldCategory)
 	}
 	if m.schedule != nil {
 		fields = append(fields, task.FieldSchedule)
@@ -23458,6 +23722,9 @@ func (m *TaskMutation) Fields() []string {
 	}
 	if m.enabled != nil {
 		fields = append(fields, task.FieldEnabled)
+	}
+	if m.group_enabled != nil {
+		fields = append(fields, task.FieldGroupEnabled)
 	}
 	if m.model != nil {
 		fields = append(fields, task.FieldModel)
@@ -23489,12 +23756,22 @@ func (m *TaskMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case task.FieldName:
 		return m.Name()
+	case task.FieldNameEn:
+		return m.NameEn()
+	case task.FieldDescription:
+		return m.Description()
+	case task.FieldDescriptionEn:
+		return m.DescriptionEn()
+	case task.FieldCategory:
+		return m.Category()
 	case task.FieldSchedule:
 		return m.Schedule()
 	case task.FieldCustomSchedule:
 		return m.CustomSchedule()
 	case task.FieldEnabled:
 		return m.Enabled()
+	case task.FieldGroupEnabled:
+		return m.GroupEnabled()
 	case task.FieldModel:
 		return m.Model()
 	case task.FieldTargetGroup:
@@ -23520,12 +23797,22 @@ func (m *TaskMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldCreatedAt(ctx)
 	case task.FieldName:
 		return m.OldName(ctx)
+	case task.FieldNameEn:
+		return m.OldNameEn(ctx)
+	case task.FieldDescription:
+		return m.OldDescription(ctx)
+	case task.FieldDescriptionEn:
+		return m.OldDescriptionEn(ctx)
+	case task.FieldCategory:
+		return m.OldCategory(ctx)
 	case task.FieldSchedule:
 		return m.OldSchedule(ctx)
 	case task.FieldCustomSchedule:
 		return m.OldCustomSchedule(ctx)
 	case task.FieldEnabled:
 		return m.OldEnabled(ctx)
+	case task.FieldGroupEnabled:
+		return m.OldGroupEnabled(ctx)
 	case task.FieldModel:
 		return m.OldModel(ctx)
 	case task.FieldTargetGroup:
@@ -23561,6 +23848,34 @@ func (m *TaskMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetName(v)
 		return nil
+	case task.FieldNameEn:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNameEn(v)
+		return nil
+	case task.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case task.FieldDescriptionEn:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescriptionEn(v)
+		return nil
+	case task.FieldCategory:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCategory(v)
+		return nil
 	case task.FieldSchedule:
 		v, ok := value.(string)
 		if !ok {
@@ -23581,6 +23896,13 @@ func (m *TaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEnabled(v)
+		return nil
+	case task.FieldGroupEnabled:
+		v, ok := value.(map[string]bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupEnabled(v)
 		return nil
 	case task.FieldModel:
 		v, ok := value.(string)
@@ -23672,6 +23994,9 @@ func (m *TaskMutation) ClearedFields() []string {
 	if m.FieldCleared(task.FieldCustomSchedule) {
 		fields = append(fields, task.FieldCustomSchedule)
 	}
+	if m.FieldCleared(task.FieldGroupEnabled) {
+		fields = append(fields, task.FieldGroupEnabled)
+	}
 	if m.FieldCleared(task.FieldRunRequestedAt) {
 		fields = append(fields, task.FieldRunRequestedAt)
 	}
@@ -23692,6 +24017,9 @@ func (m *TaskMutation) ClearField(name string) error {
 	case task.FieldCustomSchedule:
 		m.ClearCustomSchedule()
 		return nil
+	case task.FieldGroupEnabled:
+		m.ClearGroupEnabled()
+		return nil
 	case task.FieldRunRequestedAt:
 		m.ClearRunRequestedAt()
 		return nil
@@ -23709,6 +24037,18 @@ func (m *TaskMutation) ResetField(name string) error {
 	case task.FieldName:
 		m.ResetName()
 		return nil
+	case task.FieldNameEn:
+		m.ResetNameEn()
+		return nil
+	case task.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case task.FieldDescriptionEn:
+		m.ResetDescriptionEn()
+		return nil
+	case task.FieldCategory:
+		m.ResetCategory()
+		return nil
 	case task.FieldSchedule:
 		m.ResetSchedule()
 		return nil
@@ -23717,6 +24057,9 @@ func (m *TaskMutation) ResetField(name string) error {
 		return nil
 	case task.FieldEnabled:
 		m.ResetEnabled()
+		return nil
+	case task.FieldGroupEnabled:
+		m.ResetGroupEnabled()
 		return nil
 	case task.FieldModel:
 		m.ResetModel()

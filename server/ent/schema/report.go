@@ -19,6 +19,8 @@ func (Report) Fields() []ent.Field {
 		field.UUID("group_id", uuid.UUID{}),
 		field.String("title").MaxLen(200),
 		field.Text("markdown"),
+		// ok 无需处理（只存档不推送）/ attention 有需要人处理的事项 / urgent 需要立即处理
+		field.String("level").Default("attention"),
 	}
 }
 func (Report) Indexes() []ent.Index {

@@ -1,0 +1,24 @@
+id: memory-hygiene
+name: AI 记忆整理
+name_en: AI memory hygiene
+category: ops
+description: "列出过时、重复或互相矛盾的记忆给人确认，删掉自己写错的"
+description_en: "Flag stale, duplicate or conflicting memories for review and remove incorrect AI-written ones"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 0 10 3 * *"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  整理本组的长期记忆，保证后续研判用的背景是对的：
+  1. 用 query 读 memories 全部条目（source、author、updated_at、content）。
+  2. 找出：内容重复的、互相矛盾的、提到的主机已不在 assets 里的、超过 180 天没更新且描述的是易变状态（版本、地址、负责人）的。
+  3. AI 写的（source=ai）且已被现场证据证伪的：用 forget 删掉，在报告里说明删了什么、依据是什么。
+  4. 人工写的（source=human）不要删，只在报告里列出建议人确认的条目与原因。
+  5. 重复或可合并的 AI 记忆：合并成一条更准确的（remember 新的、forget 旧的）。
+  没有需要处理的条目时 level 写 ok。
+  约束：
+  - 本任务只读平台数据（query），不在主机上执行命令。
+  - 先用 memories 看本组已知的环境知识，用得上就用。
+  - 报告结构：结论 → 需要人处理的事项 → 数据与依据 → 未能验证的部分；区分观察、推断与未验证。

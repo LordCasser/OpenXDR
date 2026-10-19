@@ -30,6 +30,7 @@ func TestParseSpec(t *testing.T) {
 		"坏 cron":   "id: t\nschedule: '61 * * * *'\nprompt: x\n",
 		"坏超时":      "id: t\nschedule: '@daily'\nprompt: x\napproval_timeout: soon\n",
 		"拼错字段":     "id: t\nschedule: '@daily'\nprompt: x\nshedule: '@hourly'\n",
+		"坏分类":      "id: t\nschedule: '@daily'\nprompt: x\ncategory: misc\n",
 	}
 	for name, y := range bad {
 		if _, err := parseSpec([]byte(y)); err == nil {
@@ -45,8 +46,18 @@ func TestBundledTasks(t *testing.T) {
 	if len(files) == 0 {
 		t.Fatal("tasks/ 下没有任务")
 	}
-	if specs := LoadDir(dir); len(specs) != len(files) {
+	specs := LoadDir(dir)
+	if len(specs) != len(files) {
 		t.Errorf("加载 %d 个，文件 %d 个", len(specs), len(files))
+	}
+	// 任务页靠这些字段展示；除每日巡检外，预设任务默认关闭，由管理员按组开启
+	for _, s := range specs {
+		if s.NameEN == "" || s.Description == "" || s.DescriptionEN == "" || s.Category == "" {
+			t.Errorf("%s 缺少 name_en / description / description_en / category", s.ID)
+		}
+		if s.ID != "daily-host-inspection" && (s.Enabled == nil || *s.Enabled) {
+			t.Errorf("%s 应写 enabled: false", s.ID)
+		}
 	}
 }
 

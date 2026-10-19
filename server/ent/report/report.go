@@ -24,6 +24,8 @@ const (
 	FieldTitle = "title"
 	// FieldMarkdown holds the string denoting the markdown field in the database.
 	FieldMarkdown = "markdown"
+	// FieldLevel holds the string denoting the level field in the database.
+	FieldLevel = "level"
 	// Table holds the table name of the report in the database.
 	Table = "reports"
 )
@@ -36,6 +38,7 @@ var Columns = []string{
 	FieldGroupID,
 	FieldTitle,
 	FieldMarkdown,
+	FieldLevel,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -53,6 +56,8 @@ var (
 	DefaultCreatedAt func() time.Time
 	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
 	TitleValidator func(string) error
+	// DefaultLevel holds the default value on creation for the "level" field.
+	DefaultLevel string
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -88,4 +93,9 @@ func ByTitle(opts ...sql.OrderTermOption) OrderOption {
 // ByMarkdown orders the results by the markdown field.
 func ByMarkdown(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMarkdown, opts...).ToFunc()
+}
+
+// ByLevel orders the results by the level field.
+func ByLevel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLevel, opts...).ToFunc()
 }

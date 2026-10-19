@@ -1,6 +1,7 @@
-# server 镜像以仓库根为构建上下文，只需要这三处；其余（Rust 构建产物、node_modules、主页）不进上下文
+# server 镜像以仓库根为构建上下文，只需要这几处；其余（Rust 构建产物、node_modules、主页）不进上下文
 *
 !server
 !rules
 !tasks
+!temporal-rules
 server/pi-runtime/node_modules

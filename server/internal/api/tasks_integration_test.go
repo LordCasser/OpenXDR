@@ -118,3 +118,82 @@ func TestAPITasks(t *testing.T) {
 		}
 	}
 }
+
+// 按组开关：组管理员能开关本组，别的组与组内 viewer 不行；列表只回显看得到的组；
+// 全局关闭但有组开启的任务可以立即运行
+func TestAPITaskGroups(t *testing.T) {
+	ctx, client := testdb.New(t)
+	client.Task.Create().SetID("cert").SetName("证书").SetSchedule("0 2 * * *").SetPrompt("x").SetEnabled(false).SaveX(ctx)
+	gA := client.Group.Create().SetName("A").SaveX(ctx)
+	gB := client.Group.Create().SetName("B").SaveX(ctx)
+	bob := client.User.Create().SetUsername("bob").SetPasswordHash("x").SetRole("analyst").SaveX(ctx)
+	client.GroupMember.Create().SetGroupID(gA.ID).SetUserID(bob.ID).SetRole("admin").SaveX(ctx)
+	alice := client.User.Create().SetUsername("alice").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
+	client.GroupMember.Create().SetGroupID(gA.ID).SetUserID(alice.ID).SetRole("viewer").SaveX(ctx)
+
+	h := Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
+	admin := httptest.NewServer(asAdmin(h))
+	t.Cleanup(admin.Close)
+	groupAdmin := httptest.NewServer(as(bob, h))
+	t.Cleanup(groupAdmin.Close)
+	viewer := httptest.NewServer(as(alice, h))
+	t.Cleanup(viewer.Close)
+
+	put := func(srv *httptest.Server, group, body string) int {
+		req, _ := http.NewRequest("PUT", srv.URL+"/api/tasks/cert/groups/"+group, strings.NewReader(body))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := put(groupAdmin, gA.ID.String(), `{"enabled":true}`); code != 200 {
+		t.Fatalf("组管理员开启本组应 200，得到 %d", code)
+	}
+	if code := put(groupAdmin, gB.ID.String(), `{"enabled":true}`); code != 403 {
+		t.Errorf("开启别的组应 403，得到 %d", code)
+	}
+	if code := put(viewer, gA.ID.String(), `{"enabled":false}`); code != 403 {
+		t.Errorf("组内 viewer 应 403，得到 %d", code)
+	}
+	if code := put(admin, gB.ID.String(), `{"enabled":false}`); code != 200 {
+		t.Fatalf("平台 admin 应能设置任意组，得到 %d", code)
+	}
+	if got := client.Task.GetX(ctx, "cert").GroupEnabled; !got[gA.ID.String()] || got[gB.ID.String()] || len(got) != 2 {
+		t.Errorf("按组开关未落库：%v", got)
+	}
+
+	var rows []struct {
+		ID           string          `json:"id"`
+		GroupEnabled map[string]bool `json:"groupEnabled"`
+		NextRun      *time.Time      `json:"nextRun"`
+	}
+	_, body := get(t, groupAdmin, "/api/tasks")
+	if err := json.Unmarshal(body, &rows); err != nil || len(rows) != 1 {
+		t.Fatalf("任务列表：%s %v", body, err)
+	}
+	if _, leaked := rows[0].GroupEnabled[gB.ID.String()]; leaked || !rows[0].GroupEnabled[gA.ID.String()] || rows[0].NextRun == nil {
+		t.Errorf("只应回显本组开关且有下次运行时间：%+v", rows[0])
+	}
+
+	if code := put(admin, gA.ID.String(), `{"enabled":null}`); code != 200 {
+		t.Fatal(code)
+	}
+	if _, ok := client.Task.GetX(ctx, "cert").GroupEnabled[gA.ID.String()]; ok {
+		t.Error("null 应恢复跟随全局")
+	}
+	resp, err := http.Post(admin.URL+"/api/tasks/cert/run", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("所有组都关闭时立即运行应 409，得到 %d", resp.StatusCode)
+	}
+	put(admin, gA.ID.String(), `{"enabled":true}`)
+	if resp, _ = http.Post(admin.URL+"/api/tasks/cert/run", "", nil); resp.StatusCode != http.StatusAccepted {
+		t.Errorf("有组开启时应能立即运行，得到 %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+}

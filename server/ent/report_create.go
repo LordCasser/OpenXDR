@@ -59,6 +59,20 @@ func (_c *ReportCreate) SetMarkdown(v string) *ReportCreate {
 	return _c
 }
 
+// SetLevel sets the "level" field.
+func (_c *ReportCreate) SetLevel(v string) *ReportCreate {
+	_c.mutation.SetLevel(v)
+	return _c
+}
+
+// SetNillableLevel sets the "level" field if the given value is not nil.
+func (_c *ReportCreate) SetNillableLevel(v *string) *ReportCreate {
+	if v != nil {
+		_c.SetLevel(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ReportCreate) SetID(v uuid.UUID) *ReportCreate {
 	_c.mutation.SetID(v)
@@ -112,6 +126,10 @@ func (_c *ReportCreate) defaults() {
 		v := report.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.Level(); !ok {
+		v := report.DefaultLevel
+		_c.mutation.SetLevel(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := report.DefaultID()
 		_c.mutation.SetID(v)
@@ -139,6 +157,9 @@ func (_c *ReportCreate) check() error {
 	}
 	if _, ok := _c.mutation.Markdown(); !ok {
 		return &ValidationError{Name: "markdown", err: errors.New(`ent: missing required field "Report.markdown"`)}
+	}
+	if _, ok := _c.mutation.Level(); !ok {
+		return &ValidationError{Name: "level", err: errors.New(`ent: missing required field "Report.level"`)}
 	}
 	return nil
 }
@@ -194,6 +215,10 @@ func (_c *ReportCreate) createSpec() (*Report, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Markdown(); ok {
 		_spec.SetField(report.FieldMarkdown, field.TypeString, value)
 		_node.Markdown = value
+	}
+	if value, ok := _c.mutation.Level(); ok {
+		_spec.SetField(report.FieldLevel, field.TypeString, value)
+		_node.Level = value
 	}
 	return _node, _spec
 }

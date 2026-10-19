@@ -56,6 +56,62 @@ func (_u *TaskUpdate) SetNillableName(v *string) *TaskUpdate {
 	return _u
 }
 
+// SetNameEn sets the "name_en" field.
+func (_u *TaskUpdate) SetNameEn(v string) *TaskUpdate {
+	_u.mutation.SetNameEn(v)
+	return _u
+}
+
+// SetNillableNameEn sets the "name_en" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableNameEn(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetNameEn(*v)
+	}
+	return _u
+}
+
+// SetDescription sets the "description" field.
+func (_u *TaskUpdate) SetDescription(v string) *TaskUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableDescription(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetDescriptionEn sets the "description_en" field.
+func (_u *TaskUpdate) SetDescriptionEn(v string) *TaskUpdate {
+	_u.mutation.SetDescriptionEn(v)
+	return _u
+}
+
+// SetNillableDescriptionEn sets the "description_en" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableDescriptionEn(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetDescriptionEn(*v)
+	}
+	return _u
+}
+
+// SetCategory sets the "category" field.
+func (_u *TaskUpdate) SetCategory(v string) *TaskUpdate {
+	_u.mutation.SetCategory(v)
+	return _u
+}
+
+// SetNillableCategory sets the "category" field if the given value is not nil.
+func (_u *TaskUpdate) SetNillableCategory(v *string) *TaskUpdate {
+	if v != nil {
+		_u.SetCategory(*v)
+	}
+	return _u
+}
+
 // SetSchedule sets the "schedule" field.
 func (_u *TaskUpdate) SetSchedule(v string) *TaskUpdate {
 	_u.mutation.SetSchedule(v)
@@ -101,6 +157,18 @@ func (_u *TaskUpdate) SetNillableEnabled(v *bool) *TaskUpdate {
 	if v != nil {
 		_u.SetEnabled(*v)
 	}
+	return _u
+}
+
+// SetGroupEnabled sets the "group_enabled" field.
+func (_u *TaskUpdate) SetGroupEnabled(v map[string]bool) *TaskUpdate {
+	_u.mutation.SetGroupEnabled(v)
+	return _u
+}
+
+// ClearGroupEnabled clears the value of the "group_enabled" field.
+func (_u *TaskUpdate) ClearGroupEnabled() *TaskUpdate {
+	_u.mutation.ClearGroupEnabled()
 	return _u
 }
 
@@ -248,6 +316,18 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(task.FieldName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.NameEn(); ok {
+		_spec.SetField(task.FieldNameEn, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Description(); ok {
+		_spec.SetField(task.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DescriptionEn(); ok {
+		_spec.SetField(task.FieldDescriptionEn, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Category(); ok {
+		_spec.SetField(task.FieldCategory, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Schedule(); ok {
 		_spec.SetField(task.FieldSchedule, field.TypeString, value)
 	}
@@ -259,6 +339,12 @@ func (_u *TaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(task.FieldEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.GroupEnabled(); ok {
+		_spec.SetField(task.FieldGroupEnabled, field.TypeJSON, value)
+	}
+	if _u.mutation.GroupEnabledCleared() {
+		_spec.ClearField(task.FieldGroupEnabled, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(task.FieldModel, field.TypeString, value)
@@ -332,6 +418,62 @@ func (_u *TaskUpdateOne) SetNillableName(v *string) *TaskUpdateOne {
 	return _u
 }
 
+// SetNameEn sets the "name_en" field.
+func (_u *TaskUpdateOne) SetNameEn(v string) *TaskUpdateOne {
+	_u.mutation.SetNameEn(v)
+	return _u
+}
+
+// SetNillableNameEn sets the "name_en" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableNameEn(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetNameEn(*v)
+	}
+	return _u
+}
+
+// SetDescription sets the "description" field.
+func (_u *TaskUpdateOne) SetDescription(v string) *TaskUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableDescription(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
+	}
+	return _u
+}
+
+// SetDescriptionEn sets the "description_en" field.
+func (_u *TaskUpdateOne) SetDescriptionEn(v string) *TaskUpdateOne {
+	_u.mutation.SetDescriptionEn(v)
+	return _u
+}
+
+// SetNillableDescriptionEn sets the "description_en" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableDescriptionEn(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetDescriptionEn(*v)
+	}
+	return _u
+}
+
+// SetCategory sets the "category" field.
+func (_u *TaskUpdateOne) SetCategory(v string) *TaskUpdateOne {
+	_u.mutation.SetCategory(v)
+	return _u
+}
+
+// SetNillableCategory sets the "category" field if the given value is not nil.
+func (_u *TaskUpdateOne) SetNillableCategory(v *string) *TaskUpdateOne {
+	if v != nil {
+		_u.SetCategory(*v)
+	}
+	return _u
+}
+
 // SetSchedule sets the "schedule" field.
 func (_u *TaskUpdateOne) SetSchedule(v string) *TaskUpdateOne {
 	_u.mutation.SetSchedule(v)
@@ -377,6 +519,18 @@ func (_u *TaskUpdateOne) SetNillableEnabled(v *bool) *TaskUpdateOne {
 	if v != nil {
 		_u.SetEnabled(*v)
 	}
+	return _u
+}
+
+// SetGroupEnabled sets the "group_enabled" field.
+func (_u *TaskUpdateOne) SetGroupEnabled(v map[string]bool) *TaskUpdateOne {
+	_u.mutation.SetGroupEnabled(v)
+	return _u
+}
+
+// ClearGroupEnabled clears the value of the "group_enabled" field.
+func (_u *TaskUpdateOne) ClearGroupEnabled() *TaskUpdateOne {
+	_u.mutation.ClearGroupEnabled()
 	return _u
 }
 
@@ -554,6 +708,18 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(task.FieldName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.NameEn(); ok {
+		_spec.SetField(task.FieldNameEn, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Description(); ok {
+		_spec.SetField(task.FieldDescription, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DescriptionEn(); ok {
+		_spec.SetField(task.FieldDescriptionEn, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Category(); ok {
+		_spec.SetField(task.FieldCategory, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Schedule(); ok {
 		_spec.SetField(task.FieldSchedule, field.TypeString, value)
 	}
@@ -565,6 +731,12 @@ func (_u *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) {
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(task.FieldEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.GroupEnabled(); ok {
+		_spec.SetField(task.FieldGroupEnabled, field.TypeJSON, value)
+	}
+	if _u.mutation.GroupEnabledCleared() {
+		_spec.ClearField(task.FieldGroupEnabled, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(task.FieldModel, field.TypeString, value)

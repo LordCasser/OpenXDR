@@ -1,0 +1,26 @@
+id: container-audit
+name: 容器审计
+name_en: Container audit
+category: security
+description: "特权容器、映射出来的端口、挂载宿主机敏感目录、过期镜像与 LXC 配置"
+description_en: "Privileged containers, published ports, sensitive host mounts, stale images and LXC settings"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 0 10 * * 5"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  审计本组主机上的容器（没有容器运行时的主机直接跳过）：
+  1. Docker：`docker ps --format '{{.Names}} {{.Image}} {{.Ports}} {{.Status}}'`，
+     `docker inspect --format '{{.Name}} privileged={{.HostConfig.Privileged}} pid={{.HostConfig.PidMode}} net={{.HostConfig.NetworkMode}} caps={{.HostConfig.CapAdd}} mounts={{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}' $(docker ps -q)`。
+  2. 风险项：特权容器、host 网络或 host PID、挂载 docker.sock、/、/etc、/root 等宿主机敏感路径、映射到 0.0.0.0 的管理端口、以 latest 标签运行且镜像超过 180 天未更新。
+  3. Proxmox / LXC：`pct list`，`grep -E 'unprivileged|features|lxc.apparmor|lxc.cgroup' /etc/pve/lxc/*.conf`，特权 LXC 与关闭 AppArmor 的单独列出。
+  4. Kubernetes 节点（有 kubelet 的）：只列出 kubelet 是否开放匿名访问与 10250 端口暴露情况。
+  已知合理的（memories 里有说明的）不重复报。待办 key 用 container: 前缀。
+  没有风险项时 level 写 ok。
+  约束：
+  - 只用只读命令；命令在等待批准或执行失败时，在报告里如实注明，不要换一种写法绕过。
+  - 先用 memories 看本组已知的环境知识（哪些是正常的、各类东西在哪），用得上就用；查明的、以后用得上的环境事实用 remember 记下。
+  - 主机系统不同（Linux / Windows）用对应命令；主机离线或命令不可用的，写进「未能验证」。
+  - 报告结构：结论 → 需要人处理的事项（新增 / 仍未解决 / 本轮已修复）→ 按主机的证据 → 未能验证的部分；区分观察、推断与未验证。

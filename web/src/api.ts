@@ -820,6 +820,8 @@ export interface AgentReport {
   group_id: string
   title: string
   markdown: string
+  // ok 无需处理（只存档不推送）/ attention 有需要人处理的事项 / urgent 需要立即处理
+  level: 'ok' | 'attention' | 'urgent'
 }
 
 export const fetchAgentReports = (groupId: string) =>
@@ -840,12 +842,20 @@ export async function downloadAgentPdf(r: AgentReport): Promise<void> {
 }
 
 // 预设任务：定义在仓库 YAML，界面只能启停与改周期（admin）
+export type TaskCategory = 'ops' | 'security' | 'report' | ''
 export interface TaskRow {
   id: string
   name: string
+  nameEn: string
+  description: string
+  descriptionEn: string
+  category: TaskCategory
   schedule: string
   customSchedule: string | null
+  // 全局默认：没有单独设置的组跟它走
   enabled: boolean
+  // 按组开关：组 ID → 是否运行，只含自己看得到的组
+  groupEnabled: Record<string, boolean>
   model: string
   targetGroup: string
   prompt: string
@@ -877,6 +887,8 @@ export const updateTask = async (
 export const fetchTaskRuns = (id: string) => get<TaskRunRow[]>(`/api/tasks/${id}/runs`)
 // 立即运行只是记下请求，调度器下一次检查（默认 30 秒内）拉起
 export const runTask = (id: string) => send('POST', `/api/tasks/${id}/run`)
+// 任务在某个组上的开关；null 恢复跟随全局默认
+export const setTaskGroup = (id: string, groupId: string, enabled: boolean | null) => send('PUT', `/api/tasks/${id}/groups/${groupId}`, { enabled })
 
 // 采集配置：随 Register 下发给 agent；字段缺省表示用 agent 内置默认
 export interface AgentConfig {

@@ -62,6 +62,8 @@ services:
       PI_GROUP_DAILY_TOKENS: ${PI_GROUP_DAILY_TOKENS:-0}
       RESPONSE_ENABLED: ${RESPONSE_ENABLED:-false}
       RETENTION_DAYS: ${RETENTION_DAYS:-30}
+      # 跨事件的计数与序列检测（开发中，默认关闭）：在 .env 写 TEMPORAL_RULES_PATH=/opt/openxdr/temporal-rules 开启，规则已随镜像带上
+      TEMPORAL_RULES_PATH: ${TEMPORAL_RULES_PATH:-}
     volumes:
       - ./certs:/certs:ro
     ports:

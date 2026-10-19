@@ -1,5 +1,9 @@
 id: daily-host-inspection
 name: 每日主机巡检
+name_en: Daily host inspection
+category: ops
+description: "每天一次广而浅的巡检：容量、服务、时间同步、账户、登录、监听与外联，并逐条复查遗留待办"
+description_en: "A broad daily sweep: capacity, services, time sync, accounts, logons, listeners and egress, plus a review of every open finding"
 # 五段 cron；不写 CRON_TZ 时按 server 本地时区（容器里通常是 UTC），这里固定北京时间上午 10 点。
 # 放在工作时间：巡检里命中高风险名单的命令要组管理员批准，凌晨跑时没人批，到期全部作废
 schedule: "CRON_TZ=Asia/Shanghai 0 10 * * *"
@@ -18,8 +22,8 @@ prompt: |
      近 24 小时的登录失败与异地登录、平台已有的未处理告警与 incident。
   3. 平台告警用 query 按主机拆开：近 24 小时每台主机命中了哪些规则、级别与次数，
      以及仍处于 triaged（未人工结案）的 incident 标题与 AI 结论。
-  4. 待办闭环：先逐条复查 open_findings（遗留待办），已修复的 track 标 resolved，仍存在的 track 标 open；
+  4. 待办闭环（本任务全量复查）：先逐条复查 open_findings（遗留待办），已修复的 track 标 resolved，仍存在的 track 标 open；
      本次新发现、需要人处理的问题逐个用 track 登记。ignored_findings 是人工忽略的，不再报。
   巡检只使用只读命令。命令在等待批准或执行失败时，在报告中如实注明，不要换一种写法绕过。
-  最后用 report 提交一份报告：先给总体结论与需要人处理的事项（分新增、仍未解决、本轮已修复三类），再按主机列出发现；
+  最后用 report 提交一份报告（没有需要人处理的事项 level 写 ok，只存档不推送；有新增或仍未解决的写 attention；疑似入侵写 urgent）：先给总体结论与需要人处理的事项（分新增、仍未解决、本轮已修复三类），再按主机列出发现；
   明确区分已观察到的事实、推断与未能验证的部分。
