@@ -702,6 +702,13 @@ export const testAISettings = async (p: AISettingsPatch & { target: 'model' | 'p
 // AI 用量：按天、用途、模型聚合；用途 chat AI 助手 / task 定时任务 / triage 事件研判 / annotate 资产标注
 export interface AIUsageRow { day: string; feature: 'chat' | 'task' | 'triage' | 'annotate' | 'explain'; model: string; input: number; output: number; cacheRead: number; calls: number }
 export interface AIUsageTop { id: string; title: string; kind: string; group: string; model: string; tokens: number; calls: number; lastAt: string }
+// 研判准确度：只有人写理由的结案算独立判断，采纳 AI 与自动结案只计数
+export interface AccuracyCounts { reviewed: number; aiBenign: number; missed: number; aiAlarm: number; falseAlarm: number; adopted: number; auto: number }
+export interface AccuracyRow extends AccuracyCounts { key: string; title?: string }
+export interface AccuracyCase { id: string; title: string; verdict: string; model: string; status: string; resolvedBy: string; resolvedAt: string }
+export const fetchAIAccuracy = (days: number) =>
+  get<{ days: number; total: AccuracyCounts; byModel: AccuracyRow[] | null; byRule: AccuracyRow[] | null; missed: AccuracyCase[] | null; falseAlarms: AccuracyCase[] | null }>(`/api/settings/ai/accuracy?days=${days}`)
+
 export const fetchAIUsage = (days: number) =>
   get<{ rows: AIUsageRow[]; top: AIUsageTop[] }>(`/api/settings/ai/usage?days=${days}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`)
 

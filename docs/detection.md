@@ -282,6 +282,19 @@ temperature 0.1，超时 `AI_TIMEOUT_SECONDS` 默认 120s
 引擎只取 `content` 里的 JSON。推理服务在内网时注意 `NO_PROXY`——Go 默认
 读 `HTTP_PROXY`，内网端点可能被错误代理。
 
+### 准确度（`server/internal/api/accuracy.go`）
+
+研判结论落库时记下当次用的模型（`ai_verdict.model`，`triage/engine.go` 的 `withModel`），
+控制台「系统设置 → 研判准确度」拿已结案事件对照 AI 结论：
+
+- **只有人写了理由的结案算独立复核**。一键采纳 AI 研判或结案建议（`resolution_source` 非空）、
+  系统自动结案（`resolved_by=system`）的结论就是 AI 的结论，只计数、不进比例，否则准确率会被自己抬高。
+  早期版本结案不记时间与结案人，那时只有人能结案，按独立复核算，时间取事件创建时间。
+- **漏判率** = AI 判良性的事件里，人认定属实（closed）的比例——回答「AI 说良性时能不能信」，
+  决定能否让 AI 结更多的案。**误判率** = AI 判可疑或恶意的事件里，人认定误报（false_positive）的比例。
+- 按研判模型、按规则分别统计；一个事件带多条规则时每条规则各算一次。没记录模型的旧结论单独成组。
+- 比例旁边同时给分子分母，独立复核少于 20 个时界面提示只作参考。
+
 ## 响应处置（`server/internal/response`）
 
 **这是系统中唯一能影响被监控主机的功能。**

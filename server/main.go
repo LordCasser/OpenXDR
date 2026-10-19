@@ -431,6 +431,8 @@ func main() {
 	setup := api.Setup(client)
 	routes.Handle("/api/setup", setup)
 	routes.Handle("/api/setup/", setup)
+	// 比 /api/settings/ 更具体，ServeMux 优先匹配；门槛同样是 admin
+	routes.Handle("/api/settings/ai/accuracy", api.AIAccuracy(db, rules))
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook, aiConf, db))
 	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))
 	routes.Handle("/api/intel/feeds/", api.IntelFeeds(client, intelFeeds))

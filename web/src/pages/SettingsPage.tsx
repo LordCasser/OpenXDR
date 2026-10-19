@@ -4,12 +4,13 @@ import { useEffect } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchNotifySettings, saveNotifySettings, testNotifySettings, type NotifySettings } from '../api'
 import { AIModelSettings, IntelLookupSettings } from '../components/AISettings'
+import { AIAccuracy } from '../components/AIAccuracy'
 import { AIUsageOverview } from '../components/AIUsage'
 import { Page } from '../components/Page'
 import { useI18n } from '../i18n'
 import { errText } from '../components/format'
 
-const TABS = ['notify', 'ai', 'intel', 'usage'] as const
+const TABS = ['notify', 'ai', 'intel', 'usage', 'accuracy'] as const
 
 // 系统设置：运营中会改的配置集中在这里，按标签分开；当前标签记在地址栏，链接可以直接打开某一页
 export function SettingsPage() {
@@ -24,6 +25,7 @@ export function SettingsPage() {
           { key: 'ai', label: t('settingsAI'), children: <AIModelSettings /> },
           { key: 'intel', label: t('settingsIntelLookup'), children: <IntelLookupSettings /> },
           { key: 'usage', label: t('settingsUsage'), children: <AIUsageOverview /> },
+          { key: 'accuracy', label: t('settingsAccuracy'), children: <AIAccuracy /> },
         ]} />
     </Page>
   )

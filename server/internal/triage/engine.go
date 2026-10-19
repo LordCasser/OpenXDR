@@ -89,11 +89,13 @@ func (e *Engine) batch(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		// 模型可以在控制台随时换，结论里记下这一次实际用的，准确度才能按模型对比
+		_, model, _ := e.LLM.endpoint()
 		answer, err := e.investigate(ctx, context_)
 		if err != nil {
 			return err
 		}
-		verdict := parseVerdict(inc.ID.String(), answer)
+		verdict := withModel(parseVerdict(inc.ID.String(), answer), model)
 		// LLM 调用慢，逐个落库，中途挂了不丢已完成的研判
 		if err := e.DB.Incident.UpdateOneID(inc.ID).
 			SetAiVerdict(verdict).
@@ -145,6 +147,20 @@ func (e *Engine) investigate(ctx context.Context, incidentContext string) (strin
 		{Role: "user", Content: incidentContext},
 	}, "调查轮数已用尽，基于以上全部信息立即输出最终 JSON 结论。")
 	return answer, err
+}
+
+// withModel 在结论对象里记下研判用的模型；结论不是对象（解析失败的存档）时原样返回
+func withModel(verdict json.RawMessage, model string) json.RawMessage {
+	var obj map[string]any
+	if model == "" || json.Unmarshal(verdict, &obj) != nil || obj == nil {
+		return verdict
+	}
+	obj["model"] = model
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return verdict
+	}
+	return out
 }
 
 func parseVerdict(incidentID, answer string) json.RawMessage {

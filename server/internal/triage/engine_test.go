@@ -81,3 +81,21 @@ func TestExecToolUnknownTool(t *testing.T) {
 		t.Errorf("未知工具错误文本应明确，实际 %q", got)
 	}
 }
+
+func TestWithModelRecordsTriageModel(t *testing.T) {
+	got := withModel(json.RawMessage(`{"verdict":"benign","confidence":80}`), "glm-4.6")
+	var v map[string]any
+	if err := json.Unmarshal(got, &v); err != nil || v["model"] != "glm-4.6" || v["verdict"] != "benign" {
+		t.Fatalf("应记下模型且保留原字段: %s", got)
+	}
+	// 没有模型名、或结论不是对象时原样返回
+	for _, raw := range []string{`{"verdict":"benign"}`, `"x"`, `[1]`} {
+		model := "m"
+		if raw == `{"verdict":"benign"}` {
+			model = ""
+		}
+		if out := withModel(json.RawMessage(raw), model); string(out) != raw {
+			t.Errorf("%s 应原样返回，得到 %s", raw, out)
+		}
+	}
+}
