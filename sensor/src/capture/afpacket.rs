@@ -216,31 +216,7 @@ impl Capture for AfPacket {
             }
         }
 
-        let (num_pkts, first_offset) = unsafe { ((*desc).num_pkts, (*desc).offset_to_first_pkt) };
-        let block_base = desc as *mut u8;
-        let mut offset = first_offset as usize;
-
-        for _ in 0..num_pkts {
-            let hdr = unsafe { block_base.add(offset) as *const Tpacket3Hdr };
-            let (next, mac, snaplen, sec, nsec) = unsafe {
-                (
-                    (*hdr).tp_next_offset as usize,
-                    (*hdr).tp_mac as usize,
-                    (*hdr).tp_snaplen as usize,
-                    (*hdr).tp_sec as u64,
-                    (*hdr).tp_nsec as u64,
-                )
-            };
-            // 零拷贝：帧数据直接借用 mmap 区域
-            let frame =
-                unsafe { std::slice::from_raw_parts(block_base.add(offset + mac), snaplen) };
-            f(frame, sec * 1_000_000_000 + nsec);
-
-            if next == 0 {
-                break;
-            }
-            offset += next;
-        }
+        let num_pkts = unsafe { walk_block(desc, f) };
 
         // 归还块给内核
         unsafe { std::ptr::write_volatile(&mut (*desc).block_status, 0) };
@@ -266,6 +242,40 @@ impl Capture for AfPacket {
         };
         if rc < 0 { 0 } else { stats.tp_drops as u64 }
     }
+}
+
+/// 遍历一个已交给用户态的块，对每帧调用 `f`，返回块头声明的包数。
+///
+/// # Safety
+/// `desc` 必须指向一个完整、可读的 TPACKET_V3 块（块头 + 帧数据），且块内各帧的
+/// 偏移、mac 偏移与 snaplen 都落在块内；遍历期间块内容不被并发改写（内核置了
+/// TP_STATUS_USER 之后、用户态归还之前即是如此）。块头与帧头须按 4 字节对齐。
+unsafe fn walk_block(desc: *const BlockDescV1, f: &mut dyn FnMut(&[u8], u64)) -> u32 {
+    let (num_pkts, first_offset) = unsafe { ((*desc).num_pkts, (*desc).offset_to_first_pkt) };
+    let block_base = desc as *const u8;
+    let mut offset = first_offset as usize;
+
+    for _ in 0..num_pkts {
+        let hdr = unsafe { block_base.add(offset) as *const Tpacket3Hdr };
+        let (next, mac, snaplen, sec, nsec) = unsafe {
+            (
+                (*hdr).tp_next_offset as usize,
+                (*hdr).tp_mac as usize,
+                (*hdr).tp_snaplen as usize,
+                (*hdr).tp_sec as u64,
+                (*hdr).tp_nsec as u64,
+            )
+        };
+        // 零拷贝：帧数据直接借用 mmap 区域
+        let frame = unsafe { std::slice::from_raw_parts(block_base.add(offset + mac), snaplen) };
+        f(frame, sec * 1_000_000_000 + nsec);
+
+        if next == 0 {
+            break;
+        }
+        offset += next;
+    }
+    num_pkts
 }
 
 impl AsRawFd for AfPacket {
@@ -331,4 +341,205 @@ fn bind_iface(fd: RawFd, iface: &str) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem::{ManuallyDrop, offset_of};
+
+    const BLOCK: usize = 4096;
+    const FIRST: usize = 48;
+
+    /// 用 8 字节对齐的堆内存模拟 mmap 环：块头与帧头按内核布局逐字段写进去
+    struct FakeRing(Vec<u64>);
+
+    impl FakeRing {
+        fn new(blocks: usize) -> Self {
+            Self(vec![0; blocks * BLOCK / 8])
+        }
+
+        fn bytes(&mut self) -> &mut [u8] {
+            let len = self.0.len() * 8;
+            // SAFETY: Vec<u64> 的缓冲区是 len 个已初始化字节，u8 无对齐要求，借用期间独占
+            unsafe { std::slice::from_raw_parts_mut(self.0.as_mut_ptr().cast(), len) }
+        }
+
+        fn put_u32(&mut self, at: usize, v: u32) {
+            self.bytes()[at..at + 4].copy_from_slice(&v.to_ne_bytes());
+        }
+
+        fn put_u16(&mut self, at: usize, v: u16) {
+            self.bytes()[at..at + 2].copy_from_slice(&v.to_ne_bytes());
+        }
+
+        fn status(&mut self, block: usize) -> u32 {
+            let at = block * BLOCK + offset_of!(BlockDescV1, block_status);
+            u32::from_ne_bytes(self.bytes()[at..at + 4].try_into().unwrap())
+        }
+
+        /// 写一个就绪块：frames 为（mac 偏移、帧数据、线上长度、秒、纳秒），帧头按 next 链接
+        fn block(&mut self, block: usize, num_pkts: u32, frames: &[(u16, &[u8], u32, u32, u32)]) {
+            let base = block * BLOCK;
+            self.put_u32(base + offset_of!(BlockDescV1, block_status), TP_STATUS_USER);
+            self.put_u32(base + offset_of!(BlockDescV1, num_pkts), num_pkts);
+            self.put_u32(
+                base + offset_of!(BlockDescV1, offset_to_first_pkt),
+                FIRST as u32,
+            );
+            let mut off = FIRST;
+            for (i, (mac, data, len, sec, nsec)) in frames.iter().enumerate() {
+                let hdr = base + off;
+                let size = (*mac as usize + data.len()).next_multiple_of(16);
+                let next = if i + 1 == frames.len() {
+                    0
+                } else {
+                    size as u32
+                };
+                self.put_u32(hdr + offset_of!(Tpacket3Hdr, tp_next_offset), next);
+                self.put_u32(hdr + offset_of!(Tpacket3Hdr, tp_sec), *sec);
+                self.put_u32(hdr + offset_of!(Tpacket3Hdr, tp_nsec), *nsec);
+                self.put_u32(hdr + offset_of!(Tpacket3Hdr, tp_snaplen), data.len() as u32);
+                self.put_u32(hdr + offset_of!(Tpacket3Hdr, tp_len), *len);
+                self.put_u16(hdr + offset_of!(Tpacket3Hdr, tp_mac), *mac);
+                let at = hdr + *mac as usize;
+                self.bytes()[at..at + data.len()].copy_from_slice(data);
+                off += size;
+            }
+        }
+
+        fn walk(&mut self, block: usize) -> (u32, Vec<(Vec<u8>, u64)>) {
+            let mut seen = Vec::new();
+            let desc = self.bytes()[block * BLOCK..].as_ptr().cast::<BlockDescV1>();
+            // SAFETY: desc 指向本测试按内核布局构造的完整块，偏移都在块内，8 字节对齐
+            let n = unsafe { walk_block(desc, &mut |f, ts| seen.push((f.to_vec(), ts))) };
+            (n, seen)
+        }
+    }
+
+    #[test]
+    fn kernel_struct_layout() {
+        // 与 linux/if_packet.h 一致：块头 48 字节，帧头前 28 字节
+        assert_eq!(offset_of!(BlockDescV1, block_status), 8);
+        assert_eq!(offset_of!(BlockDescV1, num_pkts), 12);
+        assert_eq!(offset_of!(BlockDescV1, offset_to_first_pkt), 16);
+        assert_eq!(offset_of!(BlockDescV1, seq_num), 24);
+        assert_eq!(size_of::<BlockDescV1>(), 48);
+        assert_eq!(offset_of!(Tpacket3Hdr, tp_snaplen), 12);
+        assert_eq!(offset_of!(Tpacket3Hdr, tp_mac), 24);
+        assert_eq!(size_of::<Tpacket3Hdr>(), 28);
+        assert_eq!(size_of::<TpacketReq3>(), 28);
+        assert_eq!(size_of::<TpacketStatsV3>(), 12);
+    }
+
+    #[test]
+    fn walks_chained_frames_with_timestamps() {
+        let mut ring = FakeRing::new(1);
+        ring.block(
+            0,
+            3,
+            &[
+                (32, b"first", 5, 1, 2),
+                (34, b"second-frame", 12, 10, 999_999_999),
+                (32, b"x", 1, u32::MAX, 0),
+            ],
+        );
+        let (n, seen) = ring.walk(0);
+        assert_eq!(n, 3);
+        assert_eq!(
+            seen,
+            [
+                (b"first".to_vec(), 1_000_000_002),
+                (b"second-frame".to_vec(), 10_999_999_999),
+                (b"x".to_vec(), u32::MAX as u64 * 1_000_000_000),
+            ]
+        );
+    }
+
+    #[test]
+    fn frame_length_is_snaplen_not_wire_length() {
+        // 被 snaplen 截短的帧只交付抓到的部分；snaplen 为 0 交付空帧
+        let mut ring = FakeRing::new(1);
+        ring.block(0, 2, &[(32, b"head", 1500, 0, 0), (32, b"", 60, 0, 0)]);
+        let (_, seen) = ring.walk(0);
+        assert_eq!(seen[0].0, b"head");
+        assert!(seen[1].0.is_empty());
+    }
+
+    #[test]
+    fn empty_block_delivers_nothing() {
+        let mut ring = FakeRing::new(1);
+        ring.block(0, 0, &[]);
+        assert_eq!(ring.walk(0), (0, vec![]));
+    }
+
+    #[test]
+    fn next_offset_zero_ends_block_early() {
+        // 块头声明的包数多于链上实际的帧：以 next == 0 为准停下，返回值仍是块头的包数
+        let mut ring = FakeRing::new(1);
+        ring.block(0, 5, &[(32, b"only", 4, 0, 0)]);
+        let (n, seen) = ring.walk(0);
+        assert_eq!(n, 5);
+        assert_eq!(seen.len(), 1);
+    }
+
+    #[test]
+    fn num_pkts_caps_walk_even_if_chain_continues() {
+        let mut ring = FakeRing::new(1);
+        ring.block(
+            0,
+            2,
+            &[
+                (32, b"a", 1, 0, 0),
+                (32, b"b", 1, 0, 0),
+                (32, b"c", 1, 0, 0),
+            ],
+        );
+        let (n, seen) = ring.walk(0);
+        assert_eq!(n, 2);
+        let frames: Vec<_> = seen.into_iter().map(|s| s.0).collect();
+        assert_eq!(frames, [b"a", b"b"]);
+    }
+
+    /// 不经 open 拼出一个指向假环的 AfPacket。ManuallyDrop 防止 Drop 去 munmap 堆内存、close(-1)
+    fn fake_capture(ring: &mut FakeRing, blocks: usize) -> ManuallyDrop<AfPacket> {
+        ManuallyDrop::new(AfPacket {
+            fd: -1,
+            ring: ring.bytes().as_mut_ptr(),
+            ring_len: blocks * BLOCK,
+            block_size: BLOCK,
+            block_count: blocks,
+            next_block: 0,
+        })
+    }
+
+    #[test]
+    fn poll_batch_returns_blocks_and_wraps_index() {
+        let mut ring = FakeRing::new(2);
+        ring.block(0, 1, &[(32, b"b0", 2, 0, 0)]);
+        ring.block(1, 2, &[(32, b"b1a", 3, 0, 0), (32, b"b1b", 3, 0, 0)]);
+        let mut cap = fake_capture(&mut ring, 2);
+        let mut seen = Vec::new();
+        let mut sink = |f: &[u8], _| seen.push(f.to_vec());
+
+        assert_eq!(cap.poll_batch(&mut sink).unwrap(), 1);
+        assert_eq!(cap.next_block, 1);
+        assert_eq!(cap.poll_batch(&mut sink).unwrap(), 2);
+        assert_eq!(cap.next_block, 0, "最后一块之后回到第 0 块");
+        assert_eq!(seen, [b"b0".to_vec(), b"b1a".to_vec(), b"b1b".to_vec()]);
+        // 消费完的块状态清零，归还内核
+        assert_eq!(ring.status(0), 0);
+        assert_eq!(ring.status(1), 0);
+    }
+
+    #[test]
+    fn poll_batch_on_unready_block_does_not_advance() {
+        // 块未就绪时去 poll(fd = -1)：负 fd 被忽略，等满 1 秒超时返回 0，不动块序号
+        let mut ring = FakeRing::new(2);
+        let mut cap = fake_capture(&mut ring, 2);
+        let mut calls = 0;
+        assert_eq!(cap.poll_batch(&mut |_, _| calls += 1).unwrap(), 0);
+        assert_eq!(cap.next_block, 0);
+        assert_eq!(calls, 0);
+    }
 }
