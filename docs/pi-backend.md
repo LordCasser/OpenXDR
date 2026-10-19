@@ -13,6 +13,7 @@
 | `AI_API_KEY` | 空 | 模型凭据，仅通过子进程 stdin 传递 |
 | `PI_RUNNER_PATH` | `/app/pi-runtime/runner.mjs` | 容器内 runner；本地运行改为绝对路径 |
 | `PI_TIMEOUT_SECONDS` | `1800` | 一轮对话总超时，含模型、工具和审批等待 |
+| `PI_GROUP_DAILY_TOKENS` | `0` | 每组近 24 小时 Pi 会话（对话与预设任务）输入加输出 token 上限，0 不限。到顶时新一轮拒绝发起；正在跑的在下一次模型调用前停下，对话回到可继续状态，任务记失败 |
 | `PI_APPROVAL_TIMEOUT_SECONDS` | `600` | AI 和人工 exec 审批等待上限 |
 | `PI_QUERY_DATABASE_URLS` | 空 | JSON 对象：组 UUID → 专属只读 DSN；未配置的组不开放 SQL |
 | `RESPONSE_ENABLED` | `false` | 现有响应总开关，exec 同样受其控制 |

@@ -46,6 +46,8 @@ type Service struct {
 	Timeout time.Duration
 	// 规则 UUID 换标题；视图里只有 rule_id，模型自己查不到规则名
 	Rules interface{ TitleOf(id string) string }
+	// GroupDailyTokens 每组近 24 小时 Pi 会话的输入加输出 token 上限，0 表示不限
+	GroupDailyTokens int
 	// running 后台运行中的对话：停机时等它们把终态写完再退出
 	running sync.WaitGroup
 }
@@ -147,6 +149,9 @@ func (s *Service) claim(ctx context.Context, id uuid.UUID, u *ent.User, prompt s
 	if err != nil {
 		return nil, err
 	}
+	if err := s.checkBudget(ctx, session.GroupID); err != nil {
+		return nil, err
+	}
 	n, err := s.DB.AgentSession.Update().Where(agentsession.IDEQ(id), agentsession.StatusEQ("idle")).SetStatus("running").
 		SetRunExpiresAt(time.Now().Add(s.timeout() + time.Minute)).ClearError().ClearFinishedAt().ClearCancelRequestedAt().Save(ctx)
 	if err != nil {
@@ -199,6 +204,12 @@ func (s *Service) run(ctx context.Context, session *ent.AgentSession, u *ent.Use
 				slog.Error("补齐被中断的工具调用失败", "session", id, "err", err)
 			}
 			update.SetError(interruptedNote)
+		case errors.Is(retErr, errOverBudget):
+			// 用量到顶在两次模型调用之间停下：同停止一样补齐、回到 idle，额度回落后接着发送就能继续
+			if err := s.closeDangling(finish, id, &seq); err != nil {
+				slog.Error("补齐超额停下的工具调用失败", "session", id, "err", err)
+			}
+			update.SetError(retErr.Error())
 		case retErr != nil:
 			update.SetStatus("failed").SetError(retErr.Error())
 		}
@@ -224,7 +235,7 @@ func (s *Service) run(ctx context.Context, session *ent.AgentSession, u *ent.Use
 		deadline, _ := ctx.Deadline()
 		return s.tool(ctx, current, commandgate.Request{UserID: u.ID, ApprovalTimeout: time.Until(deadline)}, name, args)
 	}
-	record := s.recorder(id, &seq, emit)
+	record := s.recorder(session, &seq, emit)
 	result, err = s.Runtime.Run(ctx, request, handle, record)
 	if err != nil {
 		return nil, err
@@ -480,7 +491,8 @@ func turnBudget(hosts, findings int) int {
 }
 
 // recorder 完整消息先入库再转发，seq 从已有历史之后接着编号。
-func (s *Service) recorder(id uuid.UUID, seq *int, emit piruntime.Observer) piruntime.Observer {
+func (s *Service) recorder(session *ent.AgentSession, seq *int, emit piruntime.Observer) piruntime.Observer {
+	id := session.ID
 	return func(ctx context.Context, event piruntime.Event) error {
 		if event.Type == "event" {
 			var e struct {
@@ -503,6 +515,12 @@ func (s *Service) recorder(id uuid.UUID, seq *int, emit piruntime.Observer) piru
 				*seq++
 				if err := s.DB.SessionMessage.Create().SetSessionID(id).SetSeq(*seq).SetRole(message.Role).SetContent(e.Message).Exec(ctx); err != nil {
 					return err
+				}
+				// 每次模型返回后看一眼额度：到顶就在下一次调用前停下，已记下的这条不丢
+				if message.Role == "assistant" {
+					if err := s.checkBudget(ctx, session.GroupID); err != nil {
+						return err
+					}
 				}
 			}
 		}

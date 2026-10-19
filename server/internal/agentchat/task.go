@@ -40,6 +40,9 @@ func (s *Service) RunTask(ctx context.Context, job schedule.Job) (retErr error) 
 	if err := s.DB.AgentSession.UpdateOneID(session.ID).Where(agentsession.StatusEQ("running")).SetRunExpiresAt(expiry(ctx)).Exec(ctx); err != nil {
 		return err
 	}
+	if err := s.checkBudget(ctx, session.GroupID); err != nil {
+		return err
+	}
 	request, err := s.request(ctx, session, job.Prompt, nil)
 	if err != nil {
 		return err
@@ -54,7 +57,7 @@ func (s *Service) RunTask(ctx context.Context, job schedule.Job) (retErr error) 
 		}
 		return s.tool(ctx, current, who, name, args)
 	}
-	record := s.recorder(session.ID, &seq, nil)
+	record := s.recorder(session, &seq, nil)
 	result, err := s.Runtime.Run(ctx, request, handle, record)
 	if err != nil {
 		return err

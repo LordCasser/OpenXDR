@@ -73,6 +73,8 @@ services:
       AI_MODEL: ${AI_MODEL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       PI_MODEL: ${PI_MODEL:-}
+      # 每组近 24 小时 Pi 用量上限（输入加输出 token），0 不限
+      PI_GROUP_DAILY_TOKENS: ${PI_GROUP_DAILY_TOKENS:-0}
       # 配置后 Pi 在独立沙箱主机的隔离容器里运行，见 docs/pi-backend.md#沙箱模式
       SANDBOX_URL: ${SANDBOX_URL:-}
       SANDBOX_KEY: ${SANDBOX_KEY:-}

@@ -353,7 +353,8 @@ func main() {
 	}
 	chat := &agentchat.Service{Base: ctx, Rules: rules, Timeout: time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second, DB: client, Gate: &commandgate.Gate{DB: client, Hub: hub, ApprovalTimeout: time.Duration(getenvInt("PI_APPROVAL_TIMEOUT_SECONDS", 600)) * time.Second, Notify: webhook.Send},
 		Runtime: piRuntime, Sandboxed: piRuntime.Sandboxed(),
-		AI: func() (string, string, string) { c := conf(); return c.BaseURL, c.APIKey, c.PiModel }, Query: queryRoles}
+		AI: func() (string, string, string) { c := conf(); return c.BaseURL, c.APIKey, c.PiModel }, Query: queryRoles,
+		GroupDailyTokens: getenvInt("PI_GROUP_DAILY_TOKENS", 0)}
 	go chat.Recover(ctx)
 	// 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
 	report.Chromium = getenv("CHROMIUM_PATH", "chromium")

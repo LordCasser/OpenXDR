@@ -29,6 +29,7 @@ const ERRORS: [RegExp, MsgKey][] = [
   [/context canceled/, 'workerErrInterrupted'],
   [/deadline exceeded|超时/, 'workerErrTimeout'],
   [/max_turns/, 'workerErrTurns'],
+  [/模型用量已到上限/, 'workerErrBudget'],
   [/没有提交报告/, 'workerErrNoReport'],
 ]
 const errorText = (err: string, t: (k: MsgKey) => string) => {

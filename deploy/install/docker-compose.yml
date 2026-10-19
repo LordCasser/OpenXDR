@@ -57,6 +57,8 @@ services:
       AI_MODEL: ${AI_MODEL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       PI_MODEL: ${PI_MODEL:-}
+      # 每组近 24 小时 Pi 用量上限（输入加输出 token），0 不限
+      PI_GROUP_DAILY_TOKENS: ${PI_GROUP_DAILY_TOKENS:-0}
       RESPONSE_ENABLED: ${RESPONSE_ENABLED:-false}
       RETENTION_DAYS: ${RETENTION_DAYS:-30}
     volumes:
