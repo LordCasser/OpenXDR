@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# 标签与属主经环境变量进 shell，不直接拼进脚本
+env:
+  TAG: ${{ github.ref_name }}
+  OWNER: ${{ github.repository_owner }}
+
 jobs:
   binaries:
     name: 采集端安装包
@@ -72,8 +77,8 @@ jobs:
       - name: 标签
         id: tags
         run: |
-          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          tag='${{ github.ref_name }}'
+          owner=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          tag=$TAG
           for img in server web; do
             list="ghcr.io/$owner/openxdr-$img:$tag"
             # 预发布版（带 -）不动 latest
@@ -114,7 +119,7 @@ jobs:
           path: out
       - name: 附件
         run: |
-          tag='${{ github.ref_name }}'
+          tag=$TAG
           mkdir assets
           cp out/dist/* out/openxdr-sensor-linux-amd64 assets/
           # 安装脚本钉住本版本：用户拿到的哪个 Release 的脚本，就装哪个版本
@@ -123,7 +128,7 @@ jobs:
           (cd assets && sha256sum -- * > SHA256SUMS)
       - name: 说明
         run: |
-          tag='${{ github.ref_name }}'
+          tag=$TAG
           ver=${tag#v}
           {
             sed "s/__OPENXDR_VERSION__/$tag/g" deploy/install/RELEASE_NOTES.md
@@ -135,6 +140,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag='${{ github.ref_name }}'
+          tag=$TAG
           pre=""; case $tag in *-*) pre="--prerelease" ;; esac
           gh release create "$tag" --title "OpenXDR $tag" --notes-file notes.md $pre assets/*
