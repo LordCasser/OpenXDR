@@ -158,6 +158,10 @@ func TestOAuthConfiguredKeycloakRead(t *testing.T) {
 			fmt.Fprint(w, `{"access_token":"directory-token","token_type":"Bearer","expires_in":300}`)
 			return
 		}
+		if r.URL.Path == "/admin/realms/company/users/count" {
+			fmt.Fprint(w, "1")
+			return
+		}
 		if r.URL.Path != "/admin/realms/company/users" || r.Header.Get("Authorization") != "Bearer directory-token" {
 			t.Error("目录认证或路径错误")
 		}

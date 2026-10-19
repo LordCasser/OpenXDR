@@ -25,6 +25,10 @@ func keycloakFixture(t *testing.T, handler http.HandlerFunc) *Keycloak {
 func TestKeycloakPaginationAndUnknownState(t *testing.T) {
 	requests := 0
 	k := keycloakFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/auth/admin/realms/company/users/count" {
+			fmt.Fprint(w, "3")
+			return
+		}
 		requests++
 		if r.Method != "GET" || r.URL.Path != "/auth/admin/realms/company/users" || r.Header.Get("Authorization") != "Bearer private-token" || r.URL.Query().Get("max") != "100" {
 			t.Error("请求契约错误")
@@ -54,6 +58,10 @@ func TestKeycloakFailureDiscardsPartialResults(t *testing.T) {
 	for _, body := range []string{`null`, `{}`, `[] []`, `[{"username":"missing-id"}]`, `[{"id":"one","username":"duplicate"}]`, `[{"id":"two","username":"bad","enabled":"false"}]`, strings.Repeat(" ", maxPageBytes+1)} {
 		t.Run(fmt.Sprintf("body-%d", len(body)), func(t *testing.T) {
 			k := keycloakFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/count") {
+					fmt.Fprint(w, "1")
+					return
+				}
 				if r.URL.Query().Get("first") == "0" {
 					fmt.Fprint(w, `[{"id":"one","username":"ok"}]`)
 					return
@@ -86,6 +94,10 @@ func TestKeycloakFailureDiscardsPartialResults(t *testing.T) {
 func TestKeycloakBoundsAndCancellation(t *testing.T) {
 	calls := 0
 	k := keycloakFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/count") {
+			fmt.Fprint(w, "5000")
+			return
+		}
 		calls++
 		fmt.Fprint(w, "[")
 		for i := 0; i < 100; i++ {
@@ -148,5 +160,55 @@ func TestAccountIdentityNamespaces(t *testing.T) {
 	source.GroupID = uuid.Nil
 	if _, err := source.AccountID("stable-id"); err == nil {
 		t.Fatal("无归组来源获准")
+	}
+}
+
+// 偏移分页遇上扫描期间的增删：错位出重复或漏掉账号时整轮重扫，取得一致快照才返回；一直在变就拒绝
+func TestKeycloakConsistentSnapshot(t *testing.T) {
+	type round struct {
+		count int
+		pages []string
+	}
+	serve := func(rounds []round) (*Keycloak, *int) {
+		scans := 0
+		var cur round
+		counts := 0
+		k := keycloakFixture(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/count") {
+				// 每轮扫描前后各查一次总数：奇数次开始一轮
+				if counts%2 == 0 && scans < len(rounds) {
+					cur = rounds[scans]
+					scans++
+				}
+				counts++
+				fmt.Fprint(w, cur.count)
+				return
+			}
+			first := r.URL.Query().Get("first")
+			i := map[string]int{"0": 0, "1": 1, "2": 2, "3": 3}[first]
+			if i < len(cur.pages) {
+				fmt.Fprint(w, cur.pages[i])
+			} else {
+				fmt.Fprint(w, "[]")
+			}
+		})
+		return k, &scans
+	}
+	ok := []string{`[{"id":"a","username":"a"}]`, `[{"id":"b","username":"b"}]`}
+	// 第一轮：第二页错位又给了 a；第二轮正常
+	k, scans := serve([]round{{2, []string{`[{"id":"a","username":"a"}]`, `[{"id":"a","username":"a"}]`}}, {2, ok}})
+	if scan, err := k.ReadAccounts(context.Background()); err != nil || len(scan.Accounts) != 2 || *scans != 2 {
+		t.Fatalf("错位后应重扫取得一致快照: %v %d", err, *scans)
+	}
+	// 漏掉账号：扫到 1 个、总数是 2，重扫
+	k, scans = serve([]round{{2, ok[:1]}, {2, ok}})
+	if scan, err := k.ReadAccounts(context.Background()); err != nil || len(scan.Accounts) != 2 || *scans != 2 {
+		t.Fatalf("漏掉账号应重扫: %v %d", err, *scans)
+	}
+	// 一直对不上：三轮后拒绝，不给部分结果
+	bad := round{3, ok}
+	k, scans = serve([]round{bad, bad, bad, {2, ok}})
+	if scan, err := k.ReadAccounts(context.Background()); err == nil || len(scan.Accounts) != 0 || *scans != 3 || !strings.Contains(err.Error(), "一致快照") {
+		t.Fatalf("持续不一致应在三轮后拒绝: %v %d", err, *scans)
 	}
 }
