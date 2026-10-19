@@ -126,6 +126,14 @@ func TestRotatedKeyFallsBackToEnv(t *testing.T) {
 	if got := rotated.Get(ctx); got.APIKey != env.APIKey {
 		t.Fatalf("新钥匙解不开旧密文时应退回环境变量: %q", got.APIKey)
 	}
+	// 界面要如实说明生效的是环境变量，提示也是环境变量密钥的末四位
+	v, err := rotated.View(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Source["apiKey"] != "env" || v.APIKeyHint != tail(env.APIKey) {
+		t.Fatalf("解不开的密钥应显示为环境变量: source=%q hint=%q", v.Source["apiKey"], v.APIKeyHint)
+	}
 }
 
 // 库里配置损坏按未保存处理，用环境变量
