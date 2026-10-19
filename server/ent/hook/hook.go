@@ -104,6 +104,18 @@ func (f AuditLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuditLogMutation", m)
 }
 
+// The BeaconBaselineFunc type is an adapter to allow the use of ordinary
+// function as BeaconBaseline mutator.
+type BeaconBaselineFunc func(context.Context, *ent.BeaconBaselineMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BeaconBaselineFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BeaconBaselineMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BeaconBaselineMutation", m)
+}
+
 // The CommandFunc type is an adapter to allow the use of ordinary
 // function as Command mutator.
 type CommandFunc func(context.Context, *ent.CommandMutation) (ent.Value, error)

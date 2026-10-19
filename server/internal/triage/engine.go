@@ -213,6 +213,10 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 		}
 		fmt.Fprintf(&sb, "- [%s] severity=%d count=%d rule=%s event=%s\n",
 			a.Ts.Format("15:04:05"), a.Severity, a.Count, rule, raw)
+		// 合成检测（心跳等）的依据在 detail 里，单看那一条连接事件判断不出规律
+		if a.Detail != nil {
+			fmt.Fprintf(&sb, "  依据：%s\n", *a.Detail)
+		}
 	}
 	e.appendCaseHistory(ctx, &sb, inc, alerts)
 	e.appendMemories(ctx, &sb, alerts)

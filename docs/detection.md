@@ -27,6 +27,7 @@ correlate：未归属告警 → incident（10s 一批）
 triage：   open incident → LLM 研判 → verdict（30s 一批，需 AI_MODEL）
 notify：   研判后事件 → webhook（30s 一批，benign 不推，高危 benign 照推待复核）
 ueba：     扫进程事件维护基线，首次出现合成 low 告警进同一管线（30s 一批）
+beacon：   增量读出站连接，新出现的规律公网外联合成 medium 告警（300s 一批）
 janitor：  过期事件/会话清理（60min 一批，告警引用的证据不删）
 ```
 
@@ -34,6 +35,7 @@ janitor：  过期事件/会话清理（60min 一批，告警引用的证据不�
 
 - `xdr:bruteforce-success`（critical）：爆破得手升级，见下文
 - `xdr:new-process`（low）：UEBA 首次出现，见下文
+- `xdr:beacon`（medium）：新出现的外联心跳，见下文
 
 sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 （sensor 按源 IP 归属资产，`sensor.go:67-98`；syslog 按主机名→源 IP 两级，
@@ -234,8 +236,7 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 
 ## UEBA 首次出现（`server/internal/ueba`）
 
-- **只做"新进程首次出现"一种**（包注释 `engine.go:1-6`）；外连基线偏离
-  刻意不做（信噪比不够）
+- **只做"新进程首次出现"一种**（包注释 `engine.go:1-6`）；外连侧的规律外联由下面的外联心跳检测负责
 - 基线表 `process_baselines`：`(asset_id, exe_path)` 唯一
   （`ent/schema/processbaseline.go:18-27`）
 - 扫描：只扫 class 1007 且有资产的事件，游标按 ts 推进每批 1000 条；
@@ -245,6 +246,28 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
   就避开告警风暴（`engine.go:126-158`）
 - 合成告警 `xdr:new-process`，severity=2，进关联管道、可被抑制
   （`engine.go:159-168`）
+
+## 外联心跳（`server/internal/beacon`）
+
+C2 心跳的样子是同一进程隔着差不多的时间反复连同一个公网目的地。**只看规律会被淹没**：
+生产两台主机一天就有一百七十多条规律的公网外联（grafana.com 每 10 分钟、NTP、tailscale、自家 git），
+所以检测的是**新出现的**规律外联：
+
+- **判定规律**（`beacon.go` 的 `Periodic`）：最近 `BEACON_WINDOW_HOURS`（默认 12）小时内至少 8 次连接、
+  跨度至少 1 小时，间隔中位数在 50 秒到 90 分钟之间，四分位距 ÷ 中位数 ≤ 0.2。只看公网目的地，
+  平台指令拉起的连接不算。agent 同一目标 60 秒只报一次连接（`netwatch.rs` 的 `ConnSampler`），
+  比这更密的连接看起来都像每分钟一次；周期长于 90 分钟的在窗口里凑不够次数——这两头看不到。
+- **身份是（资产, 容器, 进程, 目的端口）**，目的地址与域名只写进告警详情：中继服务换着地址连、
+  同一目的地有时带域名有时不带，按地址认每天多出十几条「新心跳」，按进程与端口认只剩几条（生产 7 天数据离线模拟）。
+  **已知缺口**：注入进本来就规律连同一端口的进程（比如往一直连 443 的 node 里塞 C2）看不出来；
+  新落地的程序、老程序连新端口都能抓到。
+- **基线** `beacon_baselines`：`(asset_id, flow)` 唯一，见过即不再报。学习期 `BEACON_LEARNING_DAYS`（默认 7）
+  按**资产接入时间**（`assets.first_seen`）算，不按基线最早一条——平时没有规律外联的干净主机进不了基线，
+  它冒出的第一条心跳恰恰最可疑。
+- **首次启用**（基线为空）回放库里学习期内的历史，只学不报，有历史的资产上线即可检测；之后重启从一个窗口之前接着看，
+  重复的由基线唯一索引挡住。单活运行（`cluster.RunLeader`），增量游标 `(ts, id)`，内存只留窗口内的连接时刻。
+- 告警 `xdr:beacon`，severity=3，`count` 为窗口内连接次数，`detail` 写一行依据（谁、约多久一次、连哪、几次、离散度），
+  研判上下文、事件页与 Pi 只读视图都看得到；可被抑制。`BEACON_ENABLED=0` 关闭。
 
 ## AI 研判（`server/internal/triage`）
 
@@ -407,6 +430,10 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 | `CORRELATE_MAX_GRAPH_NODES` | `500` | 事件图节点上限 |
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测学习期 |
 | `UEBA_INTERVAL_SECONDS` | `30` | UEBA 批次周期 |
+| `BEACON_ENABLED` | `1` | 外联心跳检测开关，0 关闭 |
+| `BEACON_LEARNING_DAYS` | `7` | 外联心跳按资产接入时间的学习期 |
+| `BEACON_WINDOW_HOURS` | `12` | 判定规律看的时间窗 |
+| `BEACON_INTERVAL_SECONDS` | `300` | 外联心跳批次周期 |
 | `RETENTION_DAYS` | `30`（0 不清） | 原始事件保留期 |
 | `RETENTION_INTERVAL_MINUTES` | `60` | 清理周期 |
 | `SYSLOG_ADDR` | 空（不启用） | syslog UDP+TCP 监听 |

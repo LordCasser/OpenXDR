@@ -538,9 +538,13 @@ const RuleBruteforceSuccess = "xdr:bruteforce-success"
 // RuleNewProcess UEBA 合成检测：学习期满的资产上首次出现的可执行文件。
 const RuleNewProcess = "xdr:new-process"
 
+// RuleBeacon 外联心跳合成检测：学习期满的资产上新出现的规律公网外联，逻辑在 internal/beacon
+const RuleBeacon = "xdr:beacon"
+
 var syntheticTitles = map[string]string{
 	RuleBruteforceSuccess: "Brute Force Success (多次失败后登录成功)",
 	RuleNewProcess:        "New Process First Seen (新进程首次出现)",
+	RuleBeacon:            "Periodic Beacon to New Destination (新出现的周期外联)",
 }
 
 // AuthorOf 规则作者，没有写或规则已不在返回空

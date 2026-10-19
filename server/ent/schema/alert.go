@@ -26,6 +26,8 @@ func (Alert) Fields() []ent.Field {
 		field.Time("last_ts").Optional().Nillable(),
 		// 平台下发的指令（人工或 AI exec）拉起的进程触发的告警：照常留痕、挂在指令上，不进事件关联与研判
 		field.UUID("command_id", uuid.UUID{}).Optional().Nillable(),
+		// 合成检测的依据（如心跳的间隔统计），一行人读的话；研判上下文与事件页一并展示。规则命中为空
+		field.Text("detail").Optional().Nillable(),
 	}
 }
 

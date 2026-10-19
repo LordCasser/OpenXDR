@@ -46,6 +46,7 @@ function AlertTimeline({ alerts }: { alerts: AlertRow[] }) {
               {a.count > 1 && <Typography.Text type="secondary">×{a.count}</Typography.Text>}
               {a.ruleAuthor && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('ruleBy', { author: a.ruleAuthor })}</Typography.Text>}
             </Space>
+            {a.detail && <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 13 }}>{a.detail}</Typography.Paragraph>}
             {evidence(a.event) && <div className="mono timeline-evidence">{evidence(a.event)}</div>}
           </div>
         ),

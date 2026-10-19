@@ -92,6 +92,8 @@ type alertRow struct {
 	// RuleAuthor 规则作者：社区规则的许可要求命中展示时保留
 	RuleAuthor string          `json:"ruleAuthor,omitempty"`
 	Event      json.RawMessage `json:"event"`
+	// 合成检测（心跳等）的依据，一行人读的话；规则命中为空
+	Detail *string `json:"detail,omitempty"`
 }
 
 type incidentDetail struct {
@@ -257,7 +259,7 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 			}
 			row := alertRow{
 				ID: a.ID, Ts: a.Ts, LastTs: a.LastTs, Count: a.Count,
-				Severity: a.Severity, RuleID: a.RuleID,
+				Severity: a.Severity, RuleID: a.RuleID, Detail: a.Detail,
 			}
 			if title := rules.TitleOf(a.RuleID); title != "" {
 				row.RuleTitle = &title

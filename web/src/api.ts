@@ -63,6 +63,8 @@ export interface AlertRow {
   // 规则作者：社区规则（DRL 1.1）要求命中展示时保留
   ruleAuthor?: string
   event: unknown
+  // 合成检测（心跳等）的依据
+  detail?: string
 }
 
 export interface IncidentDetail extends Omit<IncidentSummary, 'alertCount'> {

@@ -30,6 +30,7 @@ import (
 	"openxdr/server/internal/api"
 	"openxdr/server/internal/assetmap"
 	"openxdr/server/internal/auth"
+	"openxdr/server/internal/beacon"
 	"openxdr/server/internal/cluster"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/correlate"
@@ -151,6 +152,17 @@ func main() {
 		Interval:       time.Duration(getenvInt("UEBA_INTERVAL_SECONDS", 30)) * time.Second,
 	}
 	go cluster.RunLeader(ctx, db, "ueba", uebaEngine.Run)
+
+	// 外联心跳：新出现的规律公网外联。首次上线回放学习期内的历史只学不报
+	if getenvInt("BEACON_ENABLED", 1) == 1 {
+		beaconEngine := &beacon.Engine{
+			DB: client, SQL: db, Suppress: suppressions,
+			LearningPeriod: time.Duration(getenvInt("BEACON_LEARNING_DAYS", 7)) * 24 * time.Hour,
+			Window:         time.Duration(getenvInt("BEACON_WINDOW_HOURS", 12)) * time.Hour,
+			Interval:       time.Duration(getenvInt("BEACON_INTERVAL_SECONDS", 300)) * time.Second,
+		}
+		go cluster.RunLeader(ctx, db, "beacon", beaconEngine.Run)
+	}
 
 	janitorEngine := &janitor.Janitor{
 		SQL:       db,

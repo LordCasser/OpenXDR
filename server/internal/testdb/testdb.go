@@ -80,6 +80,7 @@ func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 		func(ctx context.Context) (int, error) { return c.Intel.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Suppression.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.ProcessBaseline.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.BeaconBaseline.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Setting.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AssetLink.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.IPInfo.Delete().Exec(ctx) },

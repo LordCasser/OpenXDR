@@ -11,6 +11,7 @@ import (
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/assetlink"
 	"openxdr/server/ent/auditlog"
+	"openxdr/server/ent/beaconbaseline"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/enrolltoken"
@@ -143,6 +144,12 @@ func init() {
 	auditlogDescID := auditlogFields[0].Descriptor()
 	// auditlog.DefaultID holds the default value on creation for the id field.
 	auditlog.DefaultID = auditlogDescID.Default.(func() uuid.UUID)
+	beaconbaselineFields := schema.BeaconBaseline{}.Fields()
+	_ = beaconbaselineFields
+	// beaconbaselineDescID is the schema descriptor for id field.
+	beaconbaselineDescID := beaconbaselineFields[0].Descriptor()
+	// beaconbaseline.DefaultID holds the default value on creation for the id field.
+	beaconbaseline.DefaultID = beaconbaselineDescID.Default.(func() uuid.UUID)
 	commandFields := schema.Command{}.Fields()
 	_ = commandFields
 	// commandDescCreatedAt is the schema descriptor for created_at field.

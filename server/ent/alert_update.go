@@ -202,6 +202,26 @@ func (_u *AlertUpdate) ClearCommandID() *AlertUpdate {
 	return _u
 }
 
+// SetDetail sets the "detail" field.
+func (_u *AlertUpdate) SetDetail(v string) *AlertUpdate {
+	_u.mutation.SetDetail(v)
+	return _u
+}
+
+// SetNillableDetail sets the "detail" field if the given value is not nil.
+func (_u *AlertUpdate) SetNillableDetail(v *string) *AlertUpdate {
+	if v != nil {
+		_u.SetDetail(*v)
+	}
+	return _u
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (_u *AlertUpdate) ClearDetail() *AlertUpdate {
+	_u.mutation.ClearDetail()
+	return _u
+}
+
 // SetEvent sets the "event" edge to the Event entity.
 func (_u *AlertUpdate) SetEvent(v *Event) *AlertUpdate {
 	return _u.SetEventID(v.ID)
@@ -305,6 +325,12 @@ func (_u *AlertUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CommandIDCleared() {
 		_spec.ClearField(alert.FieldCommandID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.Detail(); ok {
+		_spec.SetField(alert.FieldDetail, field.TypeString, value)
+	}
+	if _u.mutation.DetailCleared() {
+		_spec.ClearField(alert.FieldDetail, field.TypeString)
 	}
 	if _u.mutation.EventCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -583,6 +609,26 @@ func (_u *AlertUpdateOne) ClearCommandID() *AlertUpdateOne {
 	return _u
 }
 
+// SetDetail sets the "detail" field.
+func (_u *AlertUpdateOne) SetDetail(v string) *AlertUpdateOne {
+	_u.mutation.SetDetail(v)
+	return _u
+}
+
+// SetNillableDetail sets the "detail" field if the given value is not nil.
+func (_u *AlertUpdateOne) SetNillableDetail(v *string) *AlertUpdateOne {
+	if v != nil {
+		_u.SetDetail(*v)
+	}
+	return _u
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (_u *AlertUpdateOne) ClearDetail() *AlertUpdateOne {
+	_u.mutation.ClearDetail()
+	return _u
+}
+
 // SetEvent sets the "event" edge to the Event entity.
 func (_u *AlertUpdateOne) SetEvent(v *Event) *AlertUpdateOne {
 	return _u.SetEventID(v.ID)
@@ -716,6 +762,12 @@ func (_u *AlertUpdateOne) sqlSave(ctx context.Context) (_node *Alert, err error)
 	}
 	if _u.mutation.CommandIDCleared() {
 		_spec.ClearField(alert.FieldCommandID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.Detail(); ok {
+		_spec.SetField(alert.FieldDetail, field.TypeString, value)
+	}
+	if _u.mutation.DetailCleared() {
+		_spec.ClearField(alert.FieldDetail, field.TypeString)
 	}
 	if _u.mutation.EventCleared() {
 		edge := &sqlgraph.EdgeSpec{

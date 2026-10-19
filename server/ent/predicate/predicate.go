@@ -30,6 +30,9 @@ type AssetLink func(*sql.Selector)
 // AuditLog is the predicate function for auditlog builders.
 type AuditLog func(*sql.Selector)
 
+// BeaconBaseline is the predicate function for beaconbaseline builders.
+type BeaconBaseline func(*sql.Selector)
+
 // Command is the predicate function for command builders.
 type Command func(*sql.Selector)
 

@@ -101,6 +101,11 @@ func CommandID(v uuid.UUID) predicate.Alert {
 	return predicate.Alert(sql.FieldEQ(FieldCommandID, v))
 }
 
+// Detail applies equality check predicate on the "detail" field. It's identical to DetailEQ.
+func Detail(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldEQ(FieldDetail, v))
+}
+
 // TsEQ applies the EQ predicate on the "ts" field.
 func TsEQ(v time.Time) predicate.Alert {
 	return predicate.Alert(sql.FieldEQ(FieldTs, v))
@@ -474,6 +479,81 @@ func CommandIDIsNil() predicate.Alert {
 // CommandIDNotNil applies the NotNil predicate on the "command_id" field.
 func CommandIDNotNil() predicate.Alert {
 	return predicate.Alert(sql.FieldNotNull(FieldCommandID))
+}
+
+// DetailEQ applies the EQ predicate on the "detail" field.
+func DetailEQ(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldEQ(FieldDetail, v))
+}
+
+// DetailNEQ applies the NEQ predicate on the "detail" field.
+func DetailNEQ(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldNEQ(FieldDetail, v))
+}
+
+// DetailIn applies the In predicate on the "detail" field.
+func DetailIn(vs ...string) predicate.Alert {
+	return predicate.Alert(sql.FieldIn(FieldDetail, vs...))
+}
+
+// DetailNotIn applies the NotIn predicate on the "detail" field.
+func DetailNotIn(vs ...string) predicate.Alert {
+	return predicate.Alert(sql.FieldNotIn(FieldDetail, vs...))
+}
+
+// DetailGT applies the GT predicate on the "detail" field.
+func DetailGT(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldGT(FieldDetail, v))
+}
+
+// DetailGTE applies the GTE predicate on the "detail" field.
+func DetailGTE(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldGTE(FieldDetail, v))
+}
+
+// DetailLT applies the LT predicate on the "detail" field.
+func DetailLT(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldLT(FieldDetail, v))
+}
+
+// DetailLTE applies the LTE predicate on the "detail" field.
+func DetailLTE(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldLTE(FieldDetail, v))
+}
+
+// DetailContains applies the Contains predicate on the "detail" field.
+func DetailContains(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldContains(FieldDetail, v))
+}
+
+// DetailHasPrefix applies the HasPrefix predicate on the "detail" field.
+func DetailHasPrefix(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldHasPrefix(FieldDetail, v))
+}
+
+// DetailHasSuffix applies the HasSuffix predicate on the "detail" field.
+func DetailHasSuffix(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldHasSuffix(FieldDetail, v))
+}
+
+// DetailIsNil applies the IsNil predicate on the "detail" field.
+func DetailIsNil() predicate.Alert {
+	return predicate.Alert(sql.FieldIsNull(FieldDetail))
+}
+
+// DetailNotNil applies the NotNil predicate on the "detail" field.
+func DetailNotNil() predicate.Alert {
+	return predicate.Alert(sql.FieldNotNull(FieldDetail))
+}
+
+// DetailEqualFold applies the EqualFold predicate on the "detail" field.
+func DetailEqualFold(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldEqualFold(FieldDetail, v))
+}
+
+// DetailContainsFold applies the ContainsFold predicate on the "detail" field.
+func DetailContainsFold(v string) predicate.Alert {
+	return predicate.Alert(sql.FieldContainsFold(FieldDetail, v))
 }
 
 // HasEvent applies the HasEdge predicate on the "event" edge.

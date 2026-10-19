@@ -126,6 +126,20 @@ func (_c *AlertCreate) SetNillableCommandID(v *uuid.UUID) *AlertCreate {
 	return _c
 }
 
+// SetDetail sets the "detail" field.
+func (_c *AlertCreate) SetDetail(v string) *AlertCreate {
+	_c.mutation.SetDetail(v)
+	return _c
+}
+
+// SetNillableDetail sets the "detail" field if the given value is not nil.
+func (_c *AlertCreate) SetNillableDetail(v *string) *AlertCreate {
+	if v != nil {
+		_c.SetDetail(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AlertCreate) SetID(v uuid.UUID) *AlertCreate {
 	_c.mutation.SetID(v)
@@ -272,6 +286,10 @@ func (_c *AlertCreate) createSpec() (*Alert, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CommandID(); ok {
 		_spec.SetField(alert.FieldCommandID, field.TypeUUID, value)
 		_node.CommandID = &value
+	}
+	if value, ok := _c.mutation.Detail(); ok {
+		_spec.SetField(alert.FieldDetail, field.TypeString, value)
+		_node.Detail = &value
 	}
 	if nodes := _c.mutation.EventIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

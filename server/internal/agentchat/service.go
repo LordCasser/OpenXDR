@@ -539,7 +539,7 @@ const queryDescription = "通过当前组专属只读数据库身份查询授权
 	"suppressions(id, rule_id, asset_id, reason, status, conditions, expires_at, matched_count, last_matched_at)；" +
 	"memories(id, asset_id, content, source, author, updated_at)；asset_links(src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen)；" +
 	"ip_infos(ip, ptr, as_owner, country, malicious, suspicious, domains)；reports(id, created_at, title, level, markdown)；" +
-	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id)；" +
+	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id, detail：合成检测如外联心跳 xdr:beacon 的间隔统计依据)；" +
 	"incidents(id, created_at, status, title, ai_verdict)；" +
 	"events(id, ts, class_uid, source, asset_id, username, conn_tuple, raw)；" +
 	"commands(id, created_at, asset_id, cmd, status, exit_code, stdout)。" +

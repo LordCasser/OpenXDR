@@ -19,6 +19,7 @@ import (
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/assetlink"
 	"openxdr/server/ent/auditlog"
+	"openxdr/server/ent/beaconbaseline"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/enrolltoken"
@@ -70,6 +71,8 @@ type Client struct {
 	AssetLink *AssetLinkClient
 	// AuditLog is the client for interacting with the AuditLog builders.
 	AuditLog *AuditLogClient
+	// BeaconBaseline is the client for interacting with the BeaconBaseline builders.
+	BeaconBaseline *BeaconBaselineClient
 	// Command is the client for interacting with the Command builders.
 	Command *CommandClient
 	// CommandPolicy is the client for interacting with the CommandPolicy builders.
@@ -133,6 +136,7 @@ func (c *Client) init() {
 	c.Asset = NewAssetClient(c.config)
 	c.AssetLink = NewAssetLinkClient(c.config)
 	c.AuditLog = NewAuditLogClient(c.config)
+	c.BeaconBaseline = NewBeaconBaselineClient(c.config)
 	c.Command = NewCommandClient(c.config)
 	c.CommandPolicy = NewCommandPolicyClient(c.config)
 	c.EnrollToken = NewEnrollTokenClient(c.config)
@@ -255,6 +259,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Asset:           NewAssetClient(cfg),
 		AssetLink:       NewAssetLinkClient(cfg),
 		AuditLog:        NewAuditLogClient(cfg),
+		BeaconBaseline:  NewBeaconBaselineClient(cfg),
 		Command:         NewCommandClient(cfg),
 		CommandPolicy:   NewCommandPolicyClient(cfg),
 		EnrollToken:     NewEnrollTokenClient(cfg),
@@ -304,6 +309,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Asset:           NewAssetClient(cfg),
 		AssetLink:       NewAssetLinkClient(cfg),
 		AuditLog:        NewAuditLogClient(cfg),
+		BeaconBaseline:  NewBeaconBaselineClient(cfg),
 		Command:         NewCommandClient(cfg),
 		CommandPolicy:   NewCommandPolicyClient(cfg),
 		EnrollToken:     NewEnrollTokenClient(cfg),
@@ -356,10 +362,10 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AIJob, c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
-		c.AuditLog, c.Command, c.CommandPolicy, c.EnrollToken, c.Event, c.Finding,
-		c.Group, c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Intel,
-		c.Memory, c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
-		c.Suppression, c.Task, c.TaskRun, c.User, c.Zone,
+		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.EnrollToken,
+		c.Event, c.Finding, c.Group, c.GroupMember, c.HostCredential, c.IPInfo,
+		c.Incident, c.Intel, c.Memory, c.ProcessBaseline, c.Report, c.Session,
+		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User, c.Zone,
 	} {
 		n.Use(hooks...)
 	}
@@ -370,10 +376,10 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AIJob, c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
-		c.AuditLog, c.Command, c.CommandPolicy, c.EnrollToken, c.Event, c.Finding,
-		c.Group, c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Intel,
-		c.Memory, c.ProcessBaseline, c.Report, c.Session, c.SessionMessage, c.Setting,
-		c.Suppression, c.Task, c.TaskRun, c.User, c.Zone,
+		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.EnrollToken,
+		c.Event, c.Finding, c.Group, c.GroupMember, c.HostCredential, c.IPInfo,
+		c.Incident, c.Intel, c.Memory, c.ProcessBaseline, c.Report, c.Session,
+		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User, c.Zone,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -398,6 +404,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AssetLink.mutate(ctx, m)
 	case *AuditLogMutation:
 		return c.AuditLog.mutate(ctx, m)
+	case *BeaconBaselineMutation:
+		return c.BeaconBaseline.mutate(ctx, m)
 	case *CommandMutation:
 		return c.Command.mutate(ctx, m)
 	case *CommandPolicyMutation:
@@ -1604,6 +1612,139 @@ func (c *AuditLogClient) mutate(ctx context.Context, m *AuditLogMutation) (Value
 		return (&AuditLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AuditLog mutation op: %q", m.Op())
+	}
+}
+
+// BeaconBaselineClient is a client for the BeaconBaseline schema.
+type BeaconBaselineClient struct {
+	config
+}
+
+// NewBeaconBaselineClient returns a client for the BeaconBaseline from the given config.
+func NewBeaconBaselineClient(c config) *BeaconBaselineClient {
+	return &BeaconBaselineClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `beaconbaseline.Hooks(f(g(h())))`.
+func (c *BeaconBaselineClient) Use(hooks ...Hook) {
+	c.hooks.BeaconBaseline = append(c.hooks.BeaconBaseline, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `beaconbaseline.Intercept(f(g(h())))`.
+func (c *BeaconBaselineClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BeaconBaseline = append(c.inters.BeaconBaseline, interceptors...)
+}
+
+// Create returns a builder for creating a BeaconBaseline entity.
+func (c *BeaconBaselineClient) Create() *BeaconBaselineCreate {
+	mutation := newBeaconBaselineMutation(c.config, OpCreate)
+	return &BeaconBaselineCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BeaconBaseline entities.
+func (c *BeaconBaselineClient) CreateBulk(builders ...*BeaconBaselineCreate) *BeaconBaselineCreateBulk {
+	return &BeaconBaselineCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BeaconBaselineClient) MapCreateBulk(slice any, setFunc func(*BeaconBaselineCreate, int)) *BeaconBaselineCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BeaconBaselineCreateBulk{err: fmt.Errorf("calling to BeaconBaselineClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BeaconBaselineCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BeaconBaselineCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BeaconBaseline.
+func (c *BeaconBaselineClient) Update() *BeaconBaselineUpdate {
+	mutation := newBeaconBaselineMutation(c.config, OpUpdate)
+	return &BeaconBaselineUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BeaconBaselineClient) UpdateOne(_m *BeaconBaseline) *BeaconBaselineUpdateOne {
+	mutation := newBeaconBaselineMutation(c.config, OpUpdateOne, withBeaconBaseline(_m))
+	return &BeaconBaselineUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BeaconBaselineClient) UpdateOneID(id uuid.UUID) *BeaconBaselineUpdateOne {
+	mutation := newBeaconBaselineMutation(c.config, OpUpdateOne, withBeaconBaselineID(id))
+	return &BeaconBaselineUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BeaconBaseline.
+func (c *BeaconBaselineClient) Delete() *BeaconBaselineDelete {
+	mutation := newBeaconBaselineMutation(c.config, OpDelete)
+	return &BeaconBaselineDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BeaconBaselineClient) DeleteOne(_m *BeaconBaseline) *BeaconBaselineDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BeaconBaselineClient) DeleteOneID(id uuid.UUID) *BeaconBaselineDeleteOne {
+	builder := c.Delete().Where(beaconbaseline.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BeaconBaselineDeleteOne{builder}
+}
+
+// Query returns a query builder for BeaconBaseline.
+func (c *BeaconBaselineClient) Query() *BeaconBaselineQuery {
+	return &BeaconBaselineQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBeaconBaseline},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BeaconBaseline entity by its id.
+func (c *BeaconBaselineClient) Get(ctx context.Context, id uuid.UUID) (*BeaconBaseline, error) {
+	return c.Query().Where(beaconbaseline.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BeaconBaselineClient) GetX(ctx context.Context, id uuid.UUID) *BeaconBaseline {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BeaconBaselineClient) Hooks() []Hook {
+	return c.hooks.BeaconBaseline
+}
+
+// Interceptors returns the client interceptors.
+func (c *BeaconBaselineClient) Interceptors() []Interceptor {
+	return c.inters.BeaconBaseline
+}
+
+func (c *BeaconBaselineClient) mutate(ctx context.Context, m *BeaconBaselineMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BeaconBaselineCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BeaconBaselineUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BeaconBaselineUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BeaconBaselineDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BeaconBaseline mutation op: %q", m.Op())
 	}
 }
 
@@ -4601,16 +4742,16 @@ func (c *ZoneClient) mutate(ctx context.Context, m *ZoneMutation) (Value, error)
 type (
 	hooks struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
-		Command, CommandPolicy, EnrollToken, Event, Finding, Group, GroupMember,
-		HostCredential, IPInfo, Incident, Intel, Memory, ProcessBaseline, Report,
-		Session, SessionMessage, Setting, Suppression, Task, TaskRun, User,
+		BeaconBaseline, Command, CommandPolicy, EnrollToken, Event, Finding, Group,
+		GroupMember, HostCredential, IPInfo, Incident, Intel, Memory, ProcessBaseline,
+		Report, Session, SessionMessage, Setting, Suppression, Task, TaskRun, User,
 		Zone []ent.Hook
 	}
 	inters struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
-		Command, CommandPolicy, EnrollToken, Event, Finding, Group, GroupMember,
-		HostCredential, IPInfo, Incident, Intel, Memory, ProcessBaseline, Report,
-		Session, SessionMessage, Setting, Suppression, Task, TaskRun, User,
+		BeaconBaseline, Command, CommandPolicy, EnrollToken, Event, Finding, Group,
+		GroupMember, HostCredential, IPInfo, Incident, Intel, Memory, ProcessBaseline,
+		Report, Session, SessionMessage, Setting, Suppression, Task, TaskRun, User,
 		Zone []ent.Interceptor
 	}
 )
