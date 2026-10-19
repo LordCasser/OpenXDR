@@ -14,10 +14,10 @@ const MAX_LEN: usize = 128;
 pub fn display() -> Option<String> {
     // 规范位置 /etc/os-release，个别发行版只放 /usr/lib/os-release
     for path in ["/etc/os-release", "/usr/lib/os-release"] {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if let Some(name) = os_release_display(&content) {
-                return Some(truncate(name));
-            }
+        if let Ok(content) = std::fs::read_to_string(path)
+            && let Some(name) = os_release_display(&content)
+        {
+            return Some(truncate(name));
         }
     }
     None
@@ -65,7 +65,9 @@ pub(crate) fn os_release_display(content: &str) -> Option<String> {
     }
 }
 
-/// 组装 Windows 显示名：ProductName + 版本号 + build。
+/// 组装 Windows 显示名：ProductName + 版本号 + build。只有 Windows 的
+/// display() 会调用；Linux 目标下仅供单测编译
+#[cfg(any(target_os = "windows", test))]
 pub(crate) fn windows_display(
     product: Option<String>,
     version: Option<String>,
