@@ -3,6 +3,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
@@ -21,8 +22,8 @@ func TestAPIGroupScope(t *testing.T) {
 	ctx, client := testdb.New(t)
 	gA := client.Group.Create().SetName("A").SaveX(ctx)
 	gB := client.Group.Create().SetName("B").SaveX(ctx)
-	a1 := client.Asset.Create().SetHostname("a1").SetGroupID(gA.ID).SaveX(ctx)
-	b1 := client.Asset.Create().SetHostname("b1").SetGroupID(gB.ID).SaveX(ctx)
+	a1 := client.Asset.Create().SetHostname("a1").SetCollectorHealth(json.RawMessage(`{"bootId":"health-visible"}`)).SetGroupID(gA.ID).SaveX(ctx)
+	b1 := client.Asset.Create().SetHostname("b1").SetCollectorHealth(json.RawMessage(`{"bootId":"health-hidden"}`)).SetGroupID(gB.ID).SaveX(ctx)
 	client.Asset.Create().SetHostname("loose").SaveX(ctx)
 
 	alertOn := func(asset *ent.Asset, inc *ent.Incident) {
@@ -61,6 +62,10 @@ func TestAPIGroupScope(t *testing.T) {
 	}
 	if n := count("/api/assets"); n != 1 {
 		t.Errorf("资产应只见 1 台，得到 %d", n)
+	}
+	_, healthBody := get(t, ts, "/api/assets")
+	if !bytes.Contains(healthBody, []byte("health-visible")) || bytes.Contains(healthBody, []byte("health-hidden")) {
+		t.Fatal("采集状态未返回或跨组泄露")
 	}
 	if n := count("/api/events"); n != 2 {
 		t.Errorf("事件应只见 a1 的 2 条，得到 %d", n)
@@ -118,8 +123,8 @@ func TestAPISuppressionScope(t *testing.T) {
 	ctx, client := testdb.New(t)
 	gA := client.Group.Create().SetName("A").SaveX(ctx)
 	gB := client.Group.Create().SetName("B").SaveX(ctx)
-	a1 := client.Asset.Create().SetHostname("a1").SetGroupID(gA.ID).SaveX(ctx)
-	b1 := client.Asset.Create().SetHostname("b1").SetGroupID(gB.ID).SaveX(ctx)
+	a1 := client.Asset.Create().SetHostname("a1").SetCollectorHealth(json.RawMessage(`{"bootId":"health-visible"}`)).SetGroupID(gA.ID).SaveX(ctx)
+	b1 := client.Asset.Create().SetHostname("b1").SetCollectorHealth(json.RawMessage(`{"bootId":"health-hidden"}`)).SetGroupID(gB.ID).SaveX(ctx)
 	supA := client.Suppression.Create().SetRuleID("r").SetAssetID(a1.ID).SetCreatedBy("t").SaveX(ctx)
 	supB := client.Suppression.Create().SetRuleID("r").SetAssetID(b1.ID).SetCreatedBy("t").SaveX(ctx)
 	supAll := client.Suppression.Create().SetRuleID("r").SetCreatedBy("t").SaveX(ctx)

@@ -70,8 +70,8 @@ func (r *NATSRouter) Deliver(ctx context.Context, agentID uuid.UUID, cmd *pb.Com
 	}
 	reply, err := r.nc.RequestWithContext(ctx, "openxdr.commands."+agentID.String(), body)
 	if err != nil {
-		if err == nats.ErrNoResponders || err == context.DeadlineExceeded {
-			return fmt.Errorf("agent 未连接任何集群节点")
+		if err == nats.ErrNoResponders {
+			return fmt.Errorf("agent 未连接任何集群节点: %w", err)
 		}
 		return fmt.Errorf("跨节点指令投递失败: %w", err)
 	}

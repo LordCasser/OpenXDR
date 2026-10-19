@@ -52,15 +52,31 @@ pub type Resolver = Arc<dyn Fn(u16) -> Option<Origin> + Send + Sync>;
 pub fn spawn(agent_id: String, sink: EventSink, resolver: Option<Resolver>) {
     match open() {
         Ok(fd) => {
+            sink.capability(
+                "dns",
+                "af_packet",
+                if resolver.is_some() {
+                    "active"
+                } else {
+                    "degraded"
+                },
+            );
             let how = if resolver.is_some() {
                 "，按 eBPF UDP 事件归属进程"
             } else {
                 "，没有 eBPF，不归属进程"
             };
             eprintln!("DNS 采集: AF_PACKET（UDP 53{how}）");
-            std::thread::spawn(move || run(fd, agent_id, sink, resolver));
+            std::thread::spawn(move || {
+                let status = sink.clone();
+                run(fd, agent_id, sink, resolver);
+                status.capability("dns", "af_packet", "unavailable");
+            });
         }
-        Err(e) => eprintln!("DNS 采集不可用（{e}）"),
+        Err(e) => {
+            sink.capability("dns", "af_packet", "unavailable");
+            eprintln!("DNS 采集不可用（{e}）");
+        }
     }
 }
 

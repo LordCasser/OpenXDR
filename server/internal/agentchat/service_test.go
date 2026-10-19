@@ -59,3 +59,29 @@ func TestTurnBudget(t *testing.T) {
 		}
 	}
 }
+
+func TestCommandReceiptsDoNotClaimEffectOrRetry(t *testing.T) {
+	for _, status := range []string{"succeeded", "failed", "unsupported"} {
+		id := uuid.New()
+		out, err := (&Service{}).waitCommand(context.Background(), &ent.Command{ID: id, Status: status}, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result struct {
+			ID                    uuid.UUID
+			Status, Effect, Retry string
+		}
+		if err := json.Unmarshal([]byte(out), &result); err != nil || result.ID != id || result.Status != status || result.Effect != "not_assessed_by_this_tool" || result.Retry != "not_authorized_by_this_tool" {
+			t.Fatalf("回执语义错误: %s %v", out, err)
+		}
+	}
+	for _, status := range []string{"pending", "sent", "unknown"} {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		id := uuid.New()
+		out, err := (&Service{}).waitCommand(ctx, &ent.Command{ID: id, Status: status}, 1)
+		if err == nil || out != "" || !strings.Contains(err.Error(), id.String()) || !strings.Contains(err.Error(), "command_status") || !strings.Contains(err.Error(), "禁止自动重试") {
+			t.Fatalf("丢失追溯入口: %q %v", out, err)
+		}
+	}
+}

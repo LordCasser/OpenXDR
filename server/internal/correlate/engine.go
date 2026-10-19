@@ -31,7 +31,7 @@ var (
 
 type Engine struct {
 	DB            *ent.Client
-	Rules         *sigma.Engine
+	Rules         sigma.Catalog
 	Window        time.Duration
 	Interval      time.Duration
 	MaxGraphNodes int

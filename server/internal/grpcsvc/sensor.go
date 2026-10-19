@@ -36,7 +36,7 @@ const protoTCP = 6
 type SensorServer struct {
 	pb.UnimplementedSensorServiceServer
 	DB          *ent.Client
-	Rules       *sigma.Engine
+	Rules       sigma.Catalog
 	DedupWindow time.Duration
 	Suppress    *suppress.Store
 	Intel       *intel.Store

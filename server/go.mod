@@ -4,6 +4,8 @@ go 1.26.0
 
 require (
 	entgo.io/ent v0.14.6
+	github.com/go-asn1-ber/asn1-ber v1.5.8
+	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/nats-io/nats.go v1.46.1
@@ -18,6 +20,7 @@ require (
 
 require (
 	ariga.io/atlas v0.36.2-0.20250730182955-2c6300d0a3e1 // indirect
+	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

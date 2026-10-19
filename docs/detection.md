@@ -173,15 +173,22 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
   理由必填，有效期 1–90 天；条件相同的生效或待批抑制不重复提，30 天内被拒过的同样条件不再接受。主机所在组的管理员在抑制页批准（有效期从批准时重新算，立即生效）或拒绝，
   与命令审批同一档权限，写审计；侧栏显示待批数量
 
-## 爆破得手升级（`server/internal/grpcsvc/bruteforce.go`）
+## 爆破得手升级（`internal/ingest/processor.go` 与旧接入路径 `internal/grpcsvc/bruteforce.go`）
 
 - 每条 class 3002 且 `status_id=1` 的成功登录事件触发回查：同资产同用户
-  前 **10 分钟**内失败（status_id=2）≥ **5 次**则合成 critical 告警
-  （`bruteforce.go:18-54`；窗口/阈值常量 `bruteforce.go:27-28`）
+  前 **10 分钟**内失败（status_id=2）≥ **5 次**则合成 critical 告警。窗口按事件时间为
+  `[成功时间−10分钟, 成功时间)`；同一时间戳不证明先后顺序，成功之后的失败不参与计数。
 - 合成告警 `rule_id = "xdr:bruteforce-success"`，severity=5，指纹按
   username 去重，可抑制（`agent.go:250-269`）
 - 设计取舍：成功登录稀少，回查一次库即可，无需引擎状态；Linux/Windows
-  通用（两侧 3002 同构）
+  通用（两侧 3002 同构）。生产事务处理器在失败日志迟到时，还会回看该失败之后十分钟内已入库的成功登录；
+  命中仍绑定成功事件及其原始时间，按同资产、同用户名隔离。旧的无事件总线 gRPC 路径仅在成功时回查。
+- 生产路径在写入认证事件前获取同资产/用户名的 PostgreSQL 事务锁，避免并发事件互相不可见。
+  `temporal_matches` 以规则和成功事件 ID 唯一记录已消费命中，和事件、告警在同一事务提交；
+  后续补传不会再次增加同一成功事件的告警计数。被抑制的命中同样记录为已消费。
+- 回看依赖数据库仍保留的事件；清理过的失败证据不能恢复。命中记录随成功事件删除级联清理，不能单独清空。
+  旧版已合并告警没有保存全部成功事件 ID，升级前历史告警的命中记录迁移仍待补齐，不能据此承诺跨旧版升级完全去重。
+  此实现仍是固定爆破检测，不代表已有通用计数/序列规则引擎。
 
 ## 平台指令触发的告警（`server/internal/cmdorigin`）
 
@@ -300,7 +307,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
    （`main.go:203-211`、`api/commands.go:73-76`）
 
 结构性防护：agent 不在线即失败不攒指令；每 agent 通道缓冲 32 条满即失败；
-断线重连补发未回执指令；指令流冒领防护 `verifyAgentID`；结果回写必须对上
+断线重连不自动重放任何旧指令，迟到回执仍可更新结果；指令流冒领防护 `verifyAgentID`；结果回写必须对上
 库里的 command_id（`hub.go:25-215`、`grpcsvc/commands.go:29-44`）。
 
 ### 自动响应保险（`response/auto.go`）
@@ -372,7 +379,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 | `NATS_URL` | 空（单机直连） | NATS 集群地址；配置后启用 JetStream |
 | `QUEUE_SHARDS` | `32` | 按 partition_key 一致性分片数 |
 | `QUEUE_REPLICAS` | `1` | JetStream stream 副本数 |
-| `QUEUE_MAX_BYTES_GB` / `QUEUE_MAX_AGE_HOURS` | `20` / `168` | 队列容量与未处理消息保留上限 |
+| `QUEUE_MAX_BYTES_GB` / `QUEUE_MAX_AGE_HOURS` | `20` / `0` | 容量满时拒收新消息，时间必须为 0（不自动过期） |
 | `LOG_FORMAT` / `LOG_LEVEL` | text / info | 结构化日志格式与等级 |
 | `HTTP_ADDR` / `GRPC_ADDR` | `:8080` / `:8081` | REST / gRPC 监听 |
 | `TLS_CA_FILE` / `TLS_CERT_FILE` / `TLS_KEY_FILE` | 空 | gRPC mTLS，三者必须同配否则启动报错；全空=明文（仅本机调试） |

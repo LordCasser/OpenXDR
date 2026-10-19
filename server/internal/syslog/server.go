@@ -38,7 +38,7 @@ const (
 
 type Server struct {
 	DB          *ent.Client
-	Rules       *sigma.Engine
+	Rules       sigma.Catalog
 	Addr        string
 	DedupWindow time.Duration
 	Suppress    *suppress.Store

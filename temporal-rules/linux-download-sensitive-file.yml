@@ -1,0 +1,9 @@
+id: temporal:linux-download-sensitive-file
+title: 同主机下载执行后出现敏感文件变更
+author: OpenXDR
+kind: sequence
+within: 10m
+rules:
+  - 223020a8-492c-4258-9bc3-230e5777aa24
+  - 5a7c1d9e-3b64-4f28-a0d5-8e9f2c4b6a17
+level: high

@@ -6,10 +6,11 @@ name: openxdr
 services:
   nats:
     image: nats:2.11-alpine
-    command: ["--jetstream", "--store_dir", "/data"]
+    command: ["--config", "/etc/nats/openxdr.conf"]
     restart: unless-stopped
     volumes:
       - natsdata:/data
+      - ./nats.conf:/etc/nats/openxdr.conf:ro
 
   postgres:
     image: postgres:16-alpine

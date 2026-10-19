@@ -102,7 +102,7 @@ type incidentDetail struct {
 	Alerts  []alertRow `json:"alerts"`
 }
 
-func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, selfEndpoints []string, chats ...*agentchat.Service) http.Handler {
+func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, selfEndpoints []string, chats ...*agentchat.Service) http.Handler {
 	mux := http.NewServeMux()
 	gate := &commandgate.Gate{DB: db, Hub: hub}
 	var chat *agentchat.Service
@@ -379,12 +379,13 @@ func Handler(db *ent.Client, rules *sigma.Engine, hub *response.Hub, suppression
 			LastSeen  time.Time  `json:"lastSeen"`
 			GroupID   *uuid.UUID `json:"groupId"`
 			// 失联通知已发出时的起始时刻，前端据此标红
-			SilentSince  *time.Time `json:"silentSince"`
-			AgentVersion *string    `json:"agentVersion"`
+			SilentSince     *time.Time      `json:"silentSince"`
+			AgentVersion    *string         `json:"agentVersion"`
+			CollectorHealth json.RawMessage `json:"collectorHealth"`
 		}
 		out := make([]assetRow, len(assets))
 		for i, a := range assets {
-			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen, a.GroupID, a.SilentSince, a.AgentVersion}
+			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen, a.GroupID, a.SilentSince, a.AgentVersion, a.CollectorHealth}
 		}
 		writeJSON(w, out)
 	})

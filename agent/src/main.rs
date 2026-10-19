@@ -9,9 +9,13 @@ pub mod pb {
 }
 
 mod collector;
+mod delivery;
 mod enroll;
+mod health;
 mod process_identity;
+mod receipts;
 mod respond;
+mod spool;
 mod tls;
 mod upgrade;
 
@@ -46,60 +50,286 @@ fn exit(msg: &str) -> ! {
 async fn agent() {
     let server = std::env::var("OPENXDR_SERVER").unwrap_or_else(|_| "http://127.0.0.1:8081".into());
 
+    let queue = delivery::open(&server, health::Health::new())
+        .unwrap_or_else(|err| exit(&format!("无法打开事件缓存：{err}")));
+    let cached = delivery::access(&queue, |spool| spool.session())
+        .await
+        .unwrap_or_else(|err| exit(&format!("无法恢复注册身份：{err}")));
+    let mut identity = cached.as_ref().map(|session| session.agent_id.clone());
+    let mut collector_task = cached.map(|session| start_collection(&queue, session));
+    let stopping = stop_signal();
+    tokio::pin!(stopping);
     loop {
-        if let Err(e) = run(&server).await {
-            eprintln!("link down: {e}, retrying in 5s");
+        refresh_collection(&queue, &mut collector_task).await;
+        let registration = tokio::select! {
+            result = register(&server) => result,
+            _ = &mut stopping => {
+                finish(&queue, collector_task.take(), None, 0).await;
+            }
+        };
+        match registration {
+            Ok((mut client, session)) => {
+                if identity.as_ref().is_some_and(|id| id != &session.agent_id) {
+                    exit("服务端注册身份已变化，原缓存保留，请核对资产身份后处理");
+                }
+                if identity.is_none() {
+                    let snapshot = session.clone();
+                    delivery::access(&queue, move |spool| spool.save_session(&snapshot))
+                        .await
+                        .unwrap_or_else(|err| exit(&format!("无法保存注册身份：{err}")));
+                    identity = Some(session.agent_id.clone());
+                    collector_task = Some(start_collection(&queue, session.clone()));
+                }
+                if !session.upgrade_sha256.is_empty() {
+                    let result = tokio::select! {
+                        result = tokio::time::timeout(Duration::from_secs(120), upgrade::apply(
+                            &mut client, &session.upgrade_platform, &session.upgrade_sha256,
+                        )) => Some(result),
+                        _ = &mut stopping => None,
+                    };
+                    match result {
+                        Some(Ok(Ok(()))) => {
+                            finish(
+                                &queue,
+                                collector_task.take(),
+                                Some((client, session.agent_id.clone())),
+                                upgrade::EXIT_UPGRADED,
+                            )
+                            .await
+                        }
+                        Some(Ok(Err(err))) => eprintln!("自动升级失败，继续运行当前版本：{err}"),
+                        Some(Err(err)) => eprintln!("自动升级下载超时，继续运行当前版本：{err}"),
+                        None => {
+                            finish(
+                                &queue,
+                                collector_task.take(),
+                                Some((client, session.agent_id.clone())),
+                                0,
+                            )
+                            .await
+                        }
+                    }
+                }
+                let commands = tokio::spawn(command_loop(
+                    client.clone(),
+                    session.agent_id.clone(),
+                    queue.clone(),
+                ));
+                let reporting = tokio::spawn(health::report(
+                    client.clone(),
+                    session.agent_id.clone(),
+                    queue.health.clone(),
+                ));
+                let collection = collector_task.as_mut().expect("已注册采集任务");
+                if collection.config != session.config_json || collection.next.is_some() {
+                    collection.next = Some(session.clone());
+                    if let Some(stop) = collection.stop.take() {
+                        let _ = stop.send(());
+                    }
+                }
+                let stop_requested = {
+                    let transfer = delivery::upload(&queue, &mut client, &session.agent_id);
+                    tokio::pin!(transfer);
+                    loop {
+                        tokio::select! {
+                            _ = &mut stopping => break true,
+                            result = &mut transfer => {
+                                if let Err(err) = result { eprintln!("事件补传中断，缓存保留：{err}"); }
+                                break false;
+                            }
+                            _ = tokio::time::sleep(Duration::from_millis(250)) => refresh_collection(&queue, &mut collector_task).await,
+                        }
+                    }
+                };
+                commands.abort();
+                reporting.abort();
+                if stop_requested {
+                    finish(
+                        &queue,
+                        collector_task.take(),
+                        Some((client, session.agent_id.clone())),
+                        0,
+                    )
+                    .await;
+                }
+            }
+            Err(err) => eprintln!("连接失败，采集缓存继续，5 秒后重试：{err}"),
         }
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(5)) => {},
+            _ = &mut stopping => finish(&queue, collector_task.take(), None, 0).await,
+        }
     }
 }
 
-async fn run(server: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = AgentServiceClient::new(tls::connect(server).await?);
+async fn stop_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut terminate = signal(SignalKind::terminate())
+            .unwrap_or_else(|err| exit(&format!("无法监听停止信号：{err}")));
+        let mut interrupt = signal(SignalKind::interrupt())
+            .unwrap_or_else(|err| exit(&format!("无法监听中断信号：{err}")));
+        tokio::select! { _ = terminate.recv() => {}, _ = interrupt.recv() => {} }
+    }
+    #[cfg(windows)]
+    {
+        let mut interrupt = tokio::signal::windows::ctrl_c()
+            .unwrap_or_else(|err| exit(&format!("无法监听中断信号：{err}")));
+        let mut terminate = tokio::signal::windows::ctrl_break()
+            .unwrap_or_else(|err| exit(&format!("无法监听停止信号：{err}")));
+        tokio::select! { _ = terminate.recv() => {}, _ = interrupt.recv() => {} }
+    }
+}
 
-    let resp = client
-        .register(pb::RegisterRequest {
+async fn finish(
+    queue: &delivery::Queue,
+    collection: Option<Collection>,
+    connection: Option<(AgentServiceClient<tonic::transport::Channel>, String)>,
+    code: i32,
+) -> ! {
+    let transfer = async {
+        if let Some((mut client, identity)) = connection
+            && let Err(err) = delivery::upload(queue, &mut client, &identity).await
+        {
+            eprintln!("停止期间补传中断，已落盘批次保留：{err}");
+        }
+        std::future::pending::<()>().await;
+    };
+    let result = tokio::select! {
+        result = drain_collection(collection, Duration::from_secs(30)) => result,
+        _ = transfer => unreachable!(),
+    };
+    match result {
+        Ok(()) => {
+            eprintln!("采集入口已关闭，已接收事件落盘完成；未确认批次留待下次补传");
+            std::process::exit(code);
+        }
+        Err(err) => exit(&format!(
+            "停止排空失败，已落盘批次保留，内存中事件可能丢失：{err}"
+        )),
+    }
+}
+
+async fn drain_collection(
+    collection: Option<Collection>,
+    timeout: Duration,
+) -> std::io::Result<()> {
+    let Some(mut collection) = collection else {
+        return Ok(());
+    };
+    if let Some(stop) = collection.stop.take() {
+        let _ = stop.send(());
+    }
+    // 丢弃 next，停止进程时不再启动配置切换后的采集器。
+    let result = tokio::time::timeout(timeout, &mut collection.task).await;
+    match result {
+        Ok(result) => result.map_err(std::io::Error::other)?,
+        Err(_) => {
+            collection.task.abort();
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "等待事件落盘超时",
+            ))
+        }
+    }
+}
+
+struct Collection {
+    task: tokio::task::JoinHandle<std::io::Result<()>>,
+    stop: Option<tokio::sync::oneshot::Sender<()>>,
+    config: String,
+    next: Option<pb::RegisterResponse>,
+}
+
+async fn refresh_collection(queue: &delivery::Queue, collection: &mut Option<Collection>) {
+    if !collection
+        .as_ref()
+        .is_some_and(|value| value.task.is_finished())
+    {
+        return;
+    }
+    let previous = collection.take().expect("已检查采集任务");
+    match previous.task.await {
+        Ok(Ok(())) if previous.next.is_some() => {
+            let session = previous.next.expect("已确认配置切换");
+            let snapshot = session.clone();
+            delivery::access(queue, move |spool| spool.save_session(&snapshot))
+                .await
+                .unwrap_or_else(|err| exit(&format!("保存采集配置失败：{err}")));
+            *collection = Some(start_collection(queue, session));
+        }
+        result => exit(&format!("事件持久化任务退出：{result:?}")),
+    }
+}
+
+fn start_collection(queue: &delivery::Queue, session: pb::RegisterResponse) -> Collection {
+    let events = collector::spawn(
+        session.agent_id,
+        collector::Config::parse(&session.config_json),
+        queue.health.clone(),
+    );
+    let (stop, stopping) = tokio::sync::oneshot::channel();
+    Collection {
+        task: tokio::spawn(delivery::collect(queue.clone(), events, stopping)),
+        stop: Some(stop),
+        config: session.config_json,
+        next: None,
+    }
+}
+
+async fn register(
+    server: &str,
+) -> Result<
+    (
+        AgentServiceClient<tonic::transport::Channel>,
+        pb::RegisterResponse,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let channel = tokio::time::timeout(Duration::from_secs(15), tls::connect(server)).await??;
+    let mut client = AgentServiceClient::new(channel);
+
+    let resp = tokio::time::timeout(
+        Duration::from_secs(30),
+        client.register(pb::RegisterRequest {
             hostname: enroll::hostname(),
             os: std::env::consts::OS.into(),
             ip_addrs: local_ips(),
             agent_version: env!("CARGO_PKG_VERSION").into(),
             arch: std::env::consts::ARCH.into(),
             binary_sha256: upgrade::self_sha256().into(),
-        })
-        .await?
-        .into_inner();
-    if !resp.upgrade_sha256.is_empty() {
-        match upgrade::apply(&mut client, &resp.upgrade_platform, &resp.upgrade_sha256).await {
-            Ok(()) => std::process::exit(upgrade::EXIT_UPGRADED),
-            Err(e) => eprintln!("自动升级失败，继续运行当前版本：{e}"),
-        }
-    }
-    let cfg = collector::Config::parse(&resp.config_json);
-    println!("registered: agent_id={} config={cfg:?}", resp.agent_id);
-
-    // 指令通道与事件上报并行：上报是长连接，不能让它挡住指令
-    let commands = tokio::spawn(command_loop(client.clone(), resp.agent_id.clone()));
-
-    let events = collector::spawn(resp.agent_id, cfg);
-    let report = client.report_events(ReceiverStream::new(events)).await;
-    commands.abort();
-    report?;
-    Ok(())
+        }),
+    )
+    .await??
+    .into_inner();
+    Ok((client, resp))
 }
 
 /// 常驻指令通道：先发一条带 agent_id 的空结果认领连接，
 /// 之后逐条执行 server 推来的指令并回执。
-async fn command_loop(client: AgentServiceClient<tonic::transport::Channel>, agent_id: String) {
-    loop {
-        command_stream(client.clone(), agent_id.clone()).await;
-        eprintln!("指令通道断开，5 秒后重连");
-        tokio::time::sleep(Duration::from_secs(5)).await;
-    }
+async fn command_loop(
+    client: AgentServiceClient<tonic::transport::Channel>,
+    agent_id: String,
+    queue: delivery::Queue,
+) {
+    let receiving = async {
+        loop {
+            command_stream(client.clone(), agent_id.clone(), queue.clone()).await;
+            eprintln!("指令通道断开，5 秒后重连");
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    };
+    tokio::join!(
+        receiving,
+        receipts::upload(client.clone(), queue.clone(), agent_id.clone())
+    );
 }
 
 async fn command_stream(
     mut client: AgentServiceClient<tonic::transport::Channel>,
     agent_id: String,
+    queue: delivery::Queue,
 ) {
     let (tx, rx) = tokio::sync::mpsc::channel(32);
     // 认领消息：只带 agent_id，command_id 为空
@@ -125,22 +355,38 @@ async fn command_stream(
     while let Ok(Some(cmd)) = inbound.message().await {
         // exec 可能跑很久，并发执行；结束进程与隔离保持顺序，先隔离后解除不能颠倒
         if cmd.kind() == pb::CommandKind::Exec {
-            tokio::spawn(run_command(agent_id.clone(), cmd, tx.clone()));
-        } else if !run_command(agent_id.clone(), cmd, tx.clone()).await {
+            tokio::spawn(run_command(agent_id.clone(), cmd, queue.clone()));
+        } else if !run_command(agent_id.clone(), cmd, queue.clone()).await {
             return;
         }
     }
 }
 
-/// 执行一条指令并回执；回执通道已关闭时返回 false。
-async fn run_command(
-    agent_id: String,
-    cmd: pb::Command,
-    tx: tokio::sync::mpsc::Sender<pb::CommandResult>,
-) -> bool {
+/// 先持久记录执行占位；断线不取消执行，结果独立重传。
+async fn run_command(agent_id: String, cmd: pb::Command, queue: delivery::Queue) -> bool {
+    let id = agent_id.clone();
+    let command = cmd.id.clone();
+    match delivery::access(&queue, move |s| s.receipts.reserve(&id, &command)).await {
+        Ok(true) => (),
+        Ok(false) => {
+            eprintln!("指令已有执行记录，不重复执行: {}", cmd.id);
+            return true;
+        }
+        Err(error) => {
+            eprintln!("无法持久预留回执，拒绝执行: {error}");
+            return false;
+        }
+    }
     let result = respond::execute(&agent_id, &cmd).await;
     println!("执行指令 {}: {}", cmd.id, result.detail);
-    tx.send(result).await.is_ok()
+    loop {
+        let retained = result.clone();
+        match delivery::access(&queue, move |s| s.receipts.finish(retained)).await {
+            Ok(()) => return true,
+            Err(error) => eprintln!("回执落盘失败，保留内存结果等待重写，不重执行: {error}"),
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
 }
 
 /// 本机非回环 IP。server 按这些地址把探针看到的网络流量归属到本资产，
@@ -160,9 +406,37 @@ mod command_tests {
     use pb::agent_service_server::{AgentService, AgentServiceServer};
     use tonic::{Request, Response, Status, Streaming};
 
-    struct Server(tokio::sync::mpsc::Sender<()>);
+    struct Server {
+        seen: tokio::sync::mpsc::Sender<()>,
+        results: std::sync::Arc<std::sync::Mutex<Vec<pb::CommandResult>>>,
+        mode: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
     #[tonic::async_trait]
     impl AgentService for Server {
+        async fn report_command_result(
+            &self,
+            request: Request<pb::CommandResult>,
+        ) -> Result<Response<pb::CommandResultAck>, Status> {
+            let result = request.into_inner();
+            self.results.lock().unwrap().push(result.clone());
+            match self.mode.load(std::sync::atomic::Ordering::SeqCst) {
+                0 => Err(Status::unimplemented("旧服务端")),
+                1 => Err(Status::unavailable("模拟持久接收后丢失 ACK")),
+                2 => Ok(Response::new(pb::CommandResultAck {
+                    command_id: uuid::Uuid::new_v4().to_string(),
+                })),
+                _ => Ok(Response::new(pb::CommandResultAck {
+                    command_id: result.command_id,
+                })),
+            }
+        }
+
+        async fn report_health(
+            &self,
+            _: Request<pb::HealthRequest>,
+        ) -> Result<Response<pb::HealthAck>, Status> {
+            Err(Status::unimplemented("测试不使用状态通道"))
+        }
         async fn register(
             &self,
             _: Request<pb::RegisterRequest>,
@@ -190,11 +464,94 @@ mod command_tests {
         ) -> Result<Response<Self::CommandsStream>, Status> {
             let first = request.into_inner().message().await?.unwrap();
             assert_eq!(first.agent_id, "reconnect-test");
-            self.0.send(()).await.unwrap();
+            self.seen.send(()).await.unwrap();
             // 正常关闭指令流，不断开 HTTP/2 连接。
             Ok(Response::new(tokio_stream::iter(Vec::new())))
         }
     }
+    #[tokio::test]
+    async fn receipt_replays_after_lost_ack_and_restart() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (connections, incoming) = tokio::sync::mpsc::channel(4);
+        let accept = tokio::spawn(async move {
+            while let Ok((socket, _)) = listener.accept().await {
+                if connections
+                    .send(Ok::<_, std::io::Error>(socket))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+        let (seen, _) = tokio::sync::mpsc::channel(4);
+        let results = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mode = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let server = tokio::spawn(
+            tonic::transport::Server::builder()
+                .add_service(AgentServiceServer::new(Server {
+                    seen,
+                    results: results.clone(),
+                    mode: mode.clone(),
+                }))
+                .serve_with_incoming(ReceiverStream::new(incoming)),
+        );
+        let mut client = AgentServiceClient::connect(format!("http://{addr}"))
+            .await
+            .unwrap();
+        let dir = std::env::temp_dir().join(format!("receipt-rpc-test-{}", uuid::Uuid::new_v4()));
+        let agent = uuid::Uuid::new_v4().to_string();
+        let command = pb::Command {
+            id: uuid::Uuid::new_v4().to_string(),
+            ..Default::default()
+        };
+        let queue = delivery::Queue::new(
+            spool::Spool::open(&dir, 4 * 1024 * 1024).unwrap(),
+            health::Health::new(),
+        );
+        // 未指定动作会产生明确失败回执，不触碰系统；重复投递也不能覆盖首次结果。
+        assert!(run_command(agent.clone(), command.clone(), queue.clone()).await);
+        assert!(run_command(agent.clone(), command, queue.clone()).await);
+        assert!(
+            receipts::upload_once(&mut client, &queue, &agent)
+                .await
+                .is_err()
+        );
+        mode.store(1, std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            receipts::upload_once(&mut client, &queue, &agent)
+                .await
+                .is_err()
+        );
+        drop(queue);
+        let queue = delivery::Queue::new(
+            spool::Spool::open(&dir, 4 * 1024 * 1024).unwrap(),
+            health::Health::new(),
+        );
+        mode.store(2, std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            receipts::upload_once(&mut client, &queue, &agent)
+                .await
+                .is_err()
+        );
+        mode.store(3, std::sync::atomic::Ordering::SeqCst);
+        receipts::upload_once(&mut client, &queue, &agent)
+            .await
+            .unwrap();
+        receipts::upload_once(&mut client, &queue, &agent)
+            .await
+            .unwrap();
+        let received = results.lock().unwrap();
+        assert_eq!(received.len(), 4);
+        assert!(received.iter().all(|r| r == &received[0]));
+        drop(received);
+        drop(queue);
+        server.abort();
+        accept.abort();
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[tokio::test]
     async fn command_stream_reconnects_without_event_stream_restart() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -211,13 +568,22 @@ mod command_tests {
         let (seen, mut calls) = tokio::sync::mpsc::channel(4);
         let server = tokio::spawn(
             tonic::transport::Server::builder()
-                .add_service(AgentServiceServer::new(Server(seen)))
+                .add_service(AgentServiceServer::new(Server {
+                    seen,
+                    results: Default::default(),
+                    mode: Default::default(),
+                }))
                 .serve_with_incoming(ReceiverStream::new(incoming)),
         );
         let client = AgentServiceClient::connect(format!("http://{addr}"))
             .await
             .unwrap();
-        let commands = tokio::spawn(command_loop(client, "reconnect-test".into()));
+        let dir = std::env::temp_dir().join(format!("command-test-{}", uuid::Uuid::new_v4()));
+        let queue = delivery::Queue::new(
+            spool::Spool::open(&dir, 4 * 1024 * 1024).unwrap(),
+            health::Health::new(),
+        );
+        let commands = tokio::spawn(command_loop(client, "reconnect-test".into(), queue));
         let result = tokio::time::timeout(Duration::from_secs(8), async {
             assert!(calls.recv().await.is_some());
             assert!(calls.recv().await.is_some());
@@ -226,6 +592,110 @@ mod command_tests {
         commands.abort();
         server.abort();
         accept.abort();
+        let _ = commands.await;
+        std::fs::remove_dir_all(dir).unwrap();
         result.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod shutdown_tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    #[ignore = "由 sigterm_reaches_shutdown_listener 启动的隔离子进程"]
+    async fn signal_listener_child() {
+        let ready = std::env::var_os("OPENXDR_TEST_SIGNAL_READY").expect("仅由父测试调用");
+        let stopping = stop_signal();
+        tokio::pin!(stopping);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut stopping)
+                .await
+                .is_err()
+        );
+        std::fs::write(ready, "ready").unwrap();
+        tokio::time::timeout(Duration::from_secs(5), &mut stopping)
+            .await
+            .unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn sigterm_reaches_shutdown_listener() {
+        let ready = std::env::temp_dir().join(format!("openxdr-signal-{}", uuid::Uuid::new_v4()));
+        let child = tokio::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "shutdown_tests::signal_listener_child",
+                "--ignored",
+            ])
+            .env("OPENXDR_TEST_SIGNAL_READY", &ready)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !ready.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            unsafe { libc::kill(child.id().unwrap() as i32, libc::SIGTERM) },
+            0
+        );
+        let result = tokio::time::timeout(Duration::from_secs(3), child.wait_with_output())
+            .await
+            .unwrap()
+            .unwrap();
+        std::fs::remove_file(ready).unwrap();
+        assert!(result.status.success(), "{:?}", result);
+    }
+
+    #[tokio::test]
+    async fn failed_writer_is_not_reported_as_flushed() {
+        let task = tokio::spawn(async { Err(std::io::Error::other("模拟磁盘故障")) });
+        let error = drain_collection(
+            Some(Collection {
+                task,
+                stop: None,
+                config: String::new(),
+                next: None,
+            }),
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("模拟磁盘故障"));
+    }
+
+    #[tokio::test]
+    async fn blocked_writer_times_out_and_is_aborted() {
+        let (dropped, received) = tokio::sync::oneshot::channel::<()>();
+        let task = tokio::spawn(async move {
+            let _dropped = dropped;
+            std::future::pending::<std::io::Result<()>>().await
+        });
+        let error = drain_collection(
+            Some(Collection {
+                task,
+                stop: None,
+                config: String::new(),
+                next: None,
+            }),
+            Duration::from_millis(20),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), received)
+                .await
+                .unwrap()
+                .is_err()
+        );
     }
 }

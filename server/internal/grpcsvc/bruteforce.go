@@ -42,6 +42,7 @@ func (s *Server) countAuthFailures(ctx context.Context, assetID uuid.UUID, user 
 			event.AssetIDEQ(assetID),
 			event.UsernameEQ(user),
 			event.TsGTE(ts.Add(-bruteforceWindow)),
+			event.TsLT(ts),
 			func(sel *sql.Selector) {
 				sel.Where(sqljson.ValueEQ(event.FieldRaw, authStatusFailure, sqljson.Path("status_id")))
 			},

@@ -11,9 +11,11 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/internal/cmdorigin"
+	"openxdr/server/internal/identity"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
+	"openxdr/server/internal/temporal"
 )
 
 type Metrics interface {
@@ -23,15 +25,16 @@ type Metrics interface {
 
 type Processor struct {
 	DB          *sql.DB
-	Rules       *sigma.Engine
+	Temporal    *temporal.Store
+	Rules       sigma.Catalog
 	Suppress    *suppress.Store
 	Intel       *intel.Store
 	DedupWindow time.Duration
 	Metrics     Metrics
 }
 
-// EnsureSchema 创建跨节点告警去重状态。它不是业务实体，而是可重建的处理状态，
-// 因此不塞进 Ent schema，避免生成层污染。
+// EnsureSchema 创建事务处理状态。temporal_matches 是已消费命中的持久记录，
+// 不能在事件仍保留时清空，否则迟到回看可能重复生成告警。
 func EnsureSchema(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS alert_dedup_state (
@@ -40,20 +43,37 @@ CREATE TABLE IF NOT EXISTS alert_dedup_state (
   first_ts timestamptz NOT NULL,
   last_ts timestamptz NOT NULL
 );
-CREATE INDEX IF NOT EXISTS alert_dedup_last_ts ON alert_dedup_state(last_ts);`)
-	return err
+CREATE INDEX IF NOT EXISTS alert_dedup_last_ts ON alert_dedup_state(last_ts);
+CREATE TABLE IF NOT EXISTS temporal_matches (
+ rule_id text NOT NULL,
+ event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ PRIMARY KEY(rule_id,event_id)
+);`)
+	if err != nil {
+		return err
+	}
+	if err := temporal.EnsureSchema(ctx, db); err != nil {
+		return err
+	}
+	return identity.EnsureSchema(ctx, db)
 }
 
 func (p *Processor) Process(ctx context.Context, e Envelope) (err error) {
 	started := time.Now()
 	alerts := 0
 	duplicate := false
+	temporalSkipReason := ""
 	defer func() {
 		if p.Metrics != nil {
 			if err != nil {
 				p.Metrics.Failed("process")
 			} else {
 				p.Metrics.Processed(e.Source, duplicate, alerts, time.Since(started))
+				if temporalSkipReason != "" {
+					if metrics, ok := p.Metrics.(interface{ TemporalSkipped(string) }); ok {
+						metrics.TemporalSkipped(temporalSkipReason)
+					}
+				}
 			}
 		}
 	}()
@@ -61,12 +81,26 @@ func (p *Processor) Process(ctx context.Context, e Envelope) (err error) {
 		return err
 	}
 
+	var snapshot *temporal.Snapshot
+	if p.Temporal != nil {
+		snapshot = p.Temporal.Current()
+		if snapshot == nil {
+			return fmt.Errorf("时序规则已配置但没有有效快照")
+		}
+	}
 	tx, err := p.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// 同一身份的认证写入先串行，避免并发失败和成功都看不到对方未提交的事件。
+	if authEntity(e) {
+		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
+			"auth-sequence|"+e.AssetID.String()+"|"+e.Username); err != nil {
+			return err
+		}
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO events
   (id, ts, class_uid, source, asset_id, process_guid, parent_process_guid, username, conn_tuple, raw)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
@@ -82,24 +116,47 @@ ON CONFLICT (id) DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 		return tx.Commit()
 	}
 
+	if e.Source == "agent" && e.ClassUID == 3002 && e.AssetID != nil {
+		if err := identity.ObserveWindows(ctx, tx, e.ID); err != nil {
+			return err
+		}
+		if err := identity.ObserveLinuxLogin(ctx, tx, e.ID); err != nil {
+			return err
+		}
+	}
+	if e.Source == "agent" && e.ClassUID == 5001 && e.AssetID != nil {
+		if err := identity.ObserveLinuxAccounts(ctx, tx, e.ID); err != nil {
+			return err
+		}
+	}
 	var raw map[string]any
 	if json.Unmarshal(e.Raw, &raw) != nil {
 		raw = map[string]any{}
 	}
 	sigma.WithActor(raw, e.Username)
-	hits := intel.Detections(p.Rules.Evaluate(e.ClassUID, e.AssetOS, raw), p.Intel.Match(raw, e.Timestamp))
-	if e.ClassUID == 3002 && authStatus(raw) == 1 && e.AssetID != nil && e.Username != "" {
-		var failures int
-		err := tx.QueryRowContext(ctx, `SELECT count(*) FROM events
-WHERE class_uid=3002 AND asset_id=$1 AND username=$2 AND ts >= $3
-  AND raw->>'status_id'='2'`, *e.AssetID, e.Username, e.Timestamp.Add(-10*time.Minute)).Scan(&failures)
-		if err != nil {
-			return err
-		}
-		if failures >= 5 {
-			hits = append(hits, intel.Hit{RuleID: sigma.RuleBruteforceSuccess, Severity: 5})
+	var baseHits []*sigma.Rule
+	if snapshot != nil {
+		baseHits = snapshot.EvaluateBase(e.ClassUID, e.AssetOS, raw)
+	} else {
+		baseHits = p.Rules.Evaluate(e.ClassUID, e.AssetOS, raw)
+	}
+	var observation temporal.Observation
+	if snapshot != nil {
+		ids := snapshot.CandidateRules(baseHits)
+		if len(ids) > 0 {
+			observation, err = snapshot.Observe(ctx, tx, e.ID, ids)
+			if err != nil {
+				return err
+			}
+			if observation.Unscoped {
+				temporalSkipReason = "unscoped"
+			}
+			if observation.CapacityExceeded {
+				temporalSkipReason = "candidate_limit"
+			}
 		}
 	}
+	hits := intel.Detections(baseHits, p.Intel.Match(raw, e.Timestamp))
 	var command *uuid.UUID
 	if len(hits) > 0 {
 		if command, err = cmdorigin.Of(ctx, tx, raw, e.AssetID, e.Timestamp); err != nil {
@@ -118,18 +175,25 @@ WHERE class_uid=3002 AND asset_id=$1 AND username=$2 AND ts >= $3
 			alerts++
 		}
 	}
+	n, err := p.authSequence(ctx, tx, e, authStatus(raw))
+	if err != nil {
+		return err
+	}
+	alerts += n
+	for _, match := range observation.Matches {
+		created, err := p.temporalAlert(ctx, tx, match)
+		if err != nil {
+			return err
+		}
+		if created {
+			alerts++
+		}
+	}
 	return tx.Commit()
 }
 
 func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit intel.Hit, command *uuid.UUID) (bool, error) {
-	fingerprint := hit.RuleID + "|" + e.PartitionKey + e.FingerprintSuffix
-	if hit.RuleID == sigma.RuleBruteforceSuccess {
-		fingerprint += "|" + e.Username
-	}
-	// 指令触发的告警单独去重：否则之后同规则的真实命中会被并进这条「已知来源」的告警里
-	if command != nil {
-		fingerprint += "|cmd:" + command.String()
-	}
+	fingerprint := alertFingerprint(e, hit, command)
 	// 同一指纹的所有集群节点在事务内串行，窗口判断与告警计数不会竞争。
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, fingerprint); err != nil {
 		return false, err
@@ -178,4 +242,16 @@ func nullString(v string) any {
 		return nil
 	}
 	return v
+}
+
+func alertFingerprint(e Envelope, hit intel.Hit, command *uuid.UUID) string {
+	fingerprint := hit.RuleID + "|" + e.PartitionKey + e.FingerprintSuffix
+	if hit.RuleID == sigma.RuleBruteforceSuccess {
+		fingerprint += "|" + e.Username
+	}
+	// 指令触发的告警单独去重：否则之后同规则的真实命中会被并进这条「已知来源」的告警里
+	if command != nil {
+		fingerprint += "|cmd:" + command.String()
+	}
+	return fingerprint
 }

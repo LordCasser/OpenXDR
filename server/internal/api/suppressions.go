@@ -35,7 +35,7 @@ type suppressionRow struct {
 	Conditions []suppress.Condition `json:"conditions"`
 }
 
-func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, rules *sigma.Engine) {
+func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, rules sigma.Catalog) {
 	api.HandleFunc("GET /api/suppressions", func(w http.ResponseWriter, r *http.Request) {
 		sc, ok := requireScope(w, r, db, "viewer")
 		if !ok {

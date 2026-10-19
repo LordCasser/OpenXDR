@@ -69,7 +69,7 @@ func (a *Auto) isolate(ctx context.Context, incidentID uuid.UUID, asset *ent.Ass
 			asset.Hostname+" 在自动响应白名单内")
 		return
 	}
-	// 重开重判会再次触发钩子，同一 incident 对同一资产只自动隔离一次
+	// 兼容旧版随机 ID 的自动指令；新指令另由固定 ID 主键防止并发重复创建。
 	done, err := db.Command.Query().
 		Where(
 			entcommand.IncidentIDEQ(incidentID),
@@ -83,6 +83,7 @@ func (a *Auto) isolate(ctx context.Context, incidentID uuid.UUID, asset *ent.Ass
 	}
 
 	cmd, err := a.Hub.Issue(ctx, Request{
+		automatic:      true,
 		AssetID:        asset.ID,
 		Kind:           "isolate_host",
 		IncidentID:     &incidentID,
@@ -95,7 +96,7 @@ func (a *Auto) isolate(ctx context.Context, incidentID uuid.UUID, asset *ent.Ass
 		return
 	}
 	audit.System(ctx, db, "auto_response", cmd.ID.String(),
-		"isolate_host "+asset.Hostname+" (confidence "+strconv.Itoa(confidence)+")")
-	slog.Info("自动响应已下发隔离", "incident", incidentID,
-		"host", asset.Hostname, "confidence", confidence)
+		"isolate_host "+asset.Hostname+" (confidence "+strconv.Itoa(confidence)+", status "+cmd.Status+")")
+	slog.Info("自动响应指令状态", "incident", incidentID,
+		"host", asset.Hostname, "confidence", confidence, "command", cmd.ID, "status", cmd.Status)
 }

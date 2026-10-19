@@ -27,6 +27,8 @@ const (
 	FieldFirstSeen = "first_seen"
 	// FieldLastSeen holds the string denoting the last_seen field in the database.
 	FieldLastSeen = "last_seen"
+	// FieldCollectorHealth holds the string denoting the collector_health field in the database.
+	FieldCollectorHealth = "collector_health"
 	// FieldConfig holds the string denoting the config field in the database.
 	FieldConfig = "config"
 	// FieldGroupID holds the string denoting the group_id field in the database.
@@ -105,6 +107,7 @@ var Columns = []string{
 	FieldAgentID,
 	FieldFirstSeen,
 	FieldLastSeen,
+	FieldCollectorHealth,
 	FieldConfig,
 	FieldGroupID,
 	FieldAgentVersion,

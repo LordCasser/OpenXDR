@@ -1,18 +1,21 @@
 // Package janitor 数据保留：按期清理过期的原始事件。
 //
-// 策略：只删没有被任何告警引用的事件。被引用的事件是 incident 的证据，
+// 策略：只删没有被告警或时序证据引用的事件。被引用的事件是 incident 的证据，
 // 跟着 incident 的生命周期走，不能因为到期就抹掉。
 // 存储膨胀的主体本来就是无人问津的原始遥测，删掉它们即可。
 package janitor
 
 import (
 	"context"
+	stdsql "database/sql"
+	"entgo.io/ent/dialect/sql"
 	"log/slog"
 	"time"
 
 	"openxdr/server/ent"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/session"
+	"openxdr/server/internal/temporal"
 )
 
 // 单批删除量：太大容易长事务锁表，太小则清理跟不上写入
@@ -20,6 +23,7 @@ const batchSize = 10000
 
 type Janitor struct {
 	DB        *ent.Client
+	SQL       *stdsql.DB
 	Retention time.Duration
 	Interval  time.Duration
 }
@@ -43,6 +47,13 @@ func (j *Janitor) Run(ctx context.Context) {
 					slog.Info("清理过期事件", "deleted", deleted)
 				}
 			}
+			if j.Retention > 0 && j.SQL != nil {
+				if n, err := temporal.PruneArchives(ctx, j.SQL, time.Now().Add(-j.Retention)); err != nil {
+					slog.Error("清理无引用时序归档失败", "err", err)
+				} else if n > 0 {
+					slog.Info("清理无引用时序归档", "deleted", n)
+				}
+			}
 			// 过期会话是纯垃圾：认证早已拒绝它们，行却一直躺在表里
 			if n, err := j.DB.Session.Delete().
 				Where(session.ExpiresAtLT(time.Now())).
@@ -60,7 +71,7 @@ func (j *Janitor) sweep(ctx context.Context) (int, error) {
 	total := 0
 	for {
 		ids, err := j.DB.Event.Query().
-			Where(event.TsLT(cutoff), event.Not(event.HasAlerts())).
+			Where(event.TsLT(cutoff), event.Not(event.HasAlerts()), withoutTemporalEvidence).
 			Limit(batchSize).
 			IDs(ctx)
 		if err != nil || len(ids) == 0 {
@@ -82,4 +93,14 @@ func (j *Janitor) sweep(ctx context.Context) (int, error) {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+// 时序前序事件不一定直接挂告警，仍属于告警证据。数据库外键负责并发删除的最终保护。
+func withoutTemporalEvidence(selector *sql.Selector) {
+	detections := sql.Table("temporal_detections")
+	selector.Where(sql.NotExists(sql.Select(detections.C("anchor_id")).From(detections).
+		Where(sql.And(sql.ColumnsEQ(detections.C("anchor_id"), selector.C(event.FieldID)), sql.NotNull(detections.C("alert_id"))))))
+	evidence := sql.Table("temporal_evidence")
+	selector.Where(sql.NotExists(sql.Select(evidence.C("event_id")).From(evidence).
+		Where(sql.ColumnsEQ(evidence.C("event_id"), selector.C(event.FieldID)))))
 }

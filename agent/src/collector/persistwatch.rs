@@ -75,7 +75,7 @@ fn run(agent_id: &str, sink: &EventSink) {
     let mut task_seen = tasks_snapshot();
     let mut wmi_seen = wmi_snapshot();
 
-    loop {
+    while !sink.is_closed() {
         std::thread::sleep(POLL_INTERVAL);
 
         // 五类快照各自独立 diff，一类读取失败只跳过自己这一轮

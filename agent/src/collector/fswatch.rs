@@ -113,14 +113,27 @@ pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<u
     match fa_setup(&targets) {
         Ok((st, n)) => {
             eprintln!("文件监控: fanotify 递归盯 {n} 个目录（含进程上下文）");
-            std::thread::spawn(move || fa_run(st, &agent_id, &sink));
+            sink.capability(
+                "files",
+                "fanotify",
+                if n > 0 { "active" } else { "degraded" },
+            );
+            std::thread::spawn(move || {
+                fa_run(st, &agent_id, &sink);
+                sink.capability("files", "fanotify", "unavailable");
+            });
             Ok(n)
         }
         Err(e) => {
             eprintln!("fanotify 不可用（{e}），回落 inotify 递归监控");
-            let (fd, watched) = ino_init(&targets)?;
+            let (fd, watched) = ino_init(&targets)
+                .inspect_err(|_| sink.capability("files", "inotify", "unavailable"))?;
             let n = watched.len();
-            std::thread::spawn(move || ino_run(fd, watched, targets, &agent_id, &sink));
+            sink.capability("files", "inotify", "degraded");
+            std::thread::spawn(move || {
+                ino_run(fd, watched, targets, &agent_id, &sink);
+                sink.capability("files", "inotify", "unavailable");
+            });
             Ok(n)
         }
     }
@@ -885,6 +898,8 @@ mod tests {
             EventSink {
                 tx,
                 dropped: Arc::new(AtomicU64::new(0)),
+                health: crate::health::Health::new(),
+                generation: 0,
             },
             rx,
         )

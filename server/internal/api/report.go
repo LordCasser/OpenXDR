@@ -195,7 +195,7 @@ func mdCell(s string) string {
 	return "`" + s + "`"
 }
 
-func mapReport(api *http.ServeMux, db *ent.Client, rules *sigma.Engine) {
+func mapReport(api *http.ServeMux, db *ent.Client, rules sigma.Catalog) {
 	api.HandleFunc("GET /api/incidents/{id}/report", func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
@@ -221,7 +221,7 @@ func mapReport(api *http.ServeMux, db *ent.Client, rules *sigma.Engine) {
 	})
 }
 
-func collectReport(r *http.Request, db *ent.Client, rules *sigma.Engine, id uuid.UUID) (reportData, error) {
+func collectReport(r *http.Request, db *ent.Client, rules sigma.Catalog, id uuid.UUID) (reportData, error) {
 	ctx := r.Context()
 	inc, err := db.Incident.Get(ctx, id)
 	if err != nil {

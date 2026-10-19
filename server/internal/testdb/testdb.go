@@ -19,6 +19,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/temporal"
 )
 
 // New 连接测试库、重建 schema 并清空表。未配置 INTEGRATION_DATABASE_URL 时跳过。
@@ -38,6 +39,9 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 	ctx := context.Background()
 	if err := client.Schema.Create(ctx); err != nil {
 		t.Fatalf("schema 迁移失败: %v", err)
+	}
+	if err := temporal.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("时序处理状态初始化失败: %v", err)
 	}
 	truncate(ctx, t, client)
 	return ctx, client

@@ -230,6 +230,29 @@ export async function issueCommand(body: {
   return r.json()
 }
 
+export interface CommandVerificationInput {
+  outcome: 'effective' | 'ineffective' | 'inconclusive'
+  expected: string
+  observed: string
+  eventIds: string[]
+}
+export interface CommandVerification extends Omit<CommandVerificationInput, 'eventIds'> {
+  id: string
+  commandId: string
+  groupId: string | null
+  createdAt: string
+  reviewer: string
+  commandStatus: string
+  evidence: { id: string; ts: string; source: string; classUid: number; raw?: unknown }[]
+}
+export const fetchCommandVerifications = (id: string) =>
+  get<{ items: CommandVerification[]; truncated: boolean }>(`/api/commands/${id}/verifications`)
+export const fetchCommandVerification = (id: string, verificationId: string) =>
+  get<CommandVerification>(`/api/commands/${id}/verifications/${verificationId}`)
+export async function recordCommandVerification(id: string, input: CommandVerificationInput): Promise<CommandVerification> {
+  return (await send('POST', `/api/commands/${id}/verifications`, input)).json()
+}
+
 export interface Suppression {
   id: string
   createdAt: string
@@ -259,6 +282,13 @@ export interface SuppressCondition {
 export const reviewSuppression = (id: string, decision: 'approve' | 'reject') =>
   send('POST', `/api/suppressions/${id}/review`, { decision })
 
+export interface CollectorCapability { path: string; state: 'active' | 'degraded' | 'unavailable' | 'disabled' | 'unknown' }
+export interface CollectorHealthSnapshot {
+  bootId: string; sequence: number; reportedUnixMs: number; receivedAt: string
+  queueBytes: number; queueBatches: number; queueLimitBytes: number; droppedEvents: number; writeBlocked: boolean
+  receipts?: { pending: number; incomplete: number }
+  capabilities: Record<string, CollectorCapability>
+}
 export interface Asset {
   id: string
   hostname: string
@@ -271,9 +301,97 @@ export interface Asset {
   // 已发出失联通知的起始时刻，恢复后为 null
   silentSince: string | null
   agentVersion: string | null
+  collectorHealth?: CollectorHealthSnapshot | null
 }
 
 export const fetchAssets = () => get<Asset[]>('/api/assets')
+
+export interface TemporalGap {
+  revision: string
+  eventId: string
+  assetId: string
+  groupId: string
+  reason: string
+  candidateCountLowerBound: number
+  windowFrom: string
+  windowTo: string
+  createdAt: string
+}
+export function fetchTemporalGaps(assetId: string, hours: number) {
+  const to = new Date()
+  const from = new Date(to.getTime() - hours * 3600000)
+  const params = new URLSearchParams({ assetId, from: from.toISOString(), to: to.toISOString(), limit: '200' })
+  return get<{ items: TemporalGap[]; truncated: boolean }>(`/api/temporal-gaps?${params}`)
+}
+
+export interface DirectorySource {
+  id: string
+  groupId: string
+  kind: string
+  authority: string
+  lastStartedAt: string | null
+  lastFinishedAt: string | null
+  latestRunId: string | null
+  latestStatus: string | null
+  latestErrorCode: string | null
+  latestStartedAt: string | null
+  latestFinishedAt: string | null
+}
+export interface DirectoryAccount {
+  windowsSid: string | null
+  id: string
+  sourceId: string
+  externalId: string
+  username: string
+  enabled: boolean | null
+  observedAt: string
+}
+export interface DirectoryRun {
+  id: string
+  sourceId: string
+  startedAt: string
+  finishedAt: string | null
+  status: string
+  errorCode: string
+  accountCount: number
+}
+export const fetchDirectories = (groupId: string) => get<{ items: DirectorySource[]; truncated: boolean }>(`/api/identity-directories?${new URLSearchParams({ groupId, limit: '200' })}`)
+export const fetchDirectoryAccounts = (sourceId: string, after = '') => get<{ items: DirectoryAccount[]; truncated: boolean; next: string | null }>(`/api/identity-directories/${encodeURIComponent(sourceId)}/accounts?${new URLSearchParams({ limit: '25', ...(after ? { after } : {}) })}`)
+export const fetchDirectoryRuns = (sourceId: string) => get<{ items: DirectoryRun[]; truncated: boolean }>(`/api/identity-directories/${encodeURIComponent(sourceId)}/runs?limit=200`)
+
+export interface IdentityObservation {
+  eventId: string
+  assetId: string
+  groupId: string | null
+  ts: string
+  sid: string | null
+  name: string | null
+  domain: string | null
+  logonId: string | null
+  success: boolean | null
+  state: string
+  detail: string
+}
+
+export interface IdentityDirectoryCandidate {
+  accountId: string
+  sourceId: string
+  authority: string
+  username: string
+  sid: string
+  enabled: boolean | null
+  observedAt: string
+  lastSuccessfulSync: string | null
+  seenInLatestSync: boolean
+}
+export const fetchIdentityCandidates = (eventId: string) => get<{ items: IdentityDirectoryCandidate[]; truncated: boolean; ambiguous: boolean }>(`/api/identity-observations/${encodeURIComponent(eventId)}/directory-accounts`)
+
+export function fetchIdentityObservations(assetId: string, hours: number) {
+  const to = new Date()
+  const from = new Date(to.getTime() - hours * 3600000)
+  const params = new URLSearchParams({ assetId, from: from.toISOString(), to: to.toISOString(), limit: '200' })
+  return get<{ items: IdentityObservation[]; truncated: boolean }>(`/api/identity-observations?${params}`)
+}
 
 export const fetchSuppressions = () => get<Suppression[]>('/api/suppressions')
 
@@ -375,6 +493,10 @@ export interface AttackCoverage {
 export const fetchAttack = () => get<AttackCoverage>('/api/attack')
 
 export interface RuleRow {
+  kind?: 'event_count' | 'sequence'
+  windowSeconds?: number
+  threshold?: number
+  references?: string[]
   id: string
   title: string
   author?: string
@@ -903,6 +1025,33 @@ export const saveServiceNote = async (id: string, body: { port: string; name: st
 }
 export const requestAnnotate = async (id: string) => { await send('POST', `/api/assets/${id}/annotate`) }
 
+export interface LocalAccountSnapshot {
+  eventId: string
+  assetId: string
+  groupId: string | null
+  ts: string
+  state: string
+  source: string
+  accountCount: number | null
+}
+export interface LocalAccount {
+  name: string
+  uid: number
+  gid: number
+  shell: string
+}
+export function fetchLocalAccountSnapshots(assetId: string, hours: number) {
+  const to = new Date()
+  const params = new URLSearchParams({ assetId, from: new Date(to.getTime() - hours * 3600000).toISOString(), to: to.toISOString(), limit: '200' })
+  return get<{ items: LocalAccountSnapshot[]; truncated: boolean }>(`/api/local-account-snapshots?${params}`)
+}
+export const fetchLocalAccountSnapshot = (eventId: string) => get<LocalAccountSnapshot & { items: LocalAccount[] | null }>(`/api/local-account-snapshots/${encodeURIComponent(eventId)}`)
+
+export interface LocalIdentityCandidate extends LocalAccount {
+  eventId: string
+  observedAt: string
+}
+export const fetchLocalIdentityCandidates = (eventId: string) => get<{ items: LocalIdentityCandidate[]; truncated: boolean }>(`/api/identity-observations/${encodeURIComponent(eventId)}/local-accounts`)
 export interface HostDocumentImage { name: string; dataUrl: string }
 export async function extractHostDocument(groupId: string, file: File): Promise<{ document: string; images: HostDocumentImage[] | null }> {
   const body = new FormData()
