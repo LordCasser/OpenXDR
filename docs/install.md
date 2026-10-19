@@ -44,7 +44,9 @@ docker compose ps                     # nats、postgres、server、web、caddy �
 curl -fsS https://<地址>/ -o /dev/null -w '%{http_code}\n'   # 自建 CA 时加 --cacert certs/ca.crt；应为 200
 ```
 
-用 admin 与打印出的口令登录控制台。忘了口令：`grep ADMIN_PASSWORD /opt/openxdr/.env`（只在首次启动时生效，之后改口令请在控制台改）。
+用 admin 与打印出的口令登录控制台。第一次登录先看到欢迎页与用户协议，管理员同意后进入四步引导
+（AI 模型、项目、资产、Webhook，每步都能跳过，之后在设置、组、资产页里随时再改）；协议同意之前其他账号进不了控制台。
+已有组或主机的实例升级后只补同意协议，不再走引导。忘了口令：`grep ADMIN_PASSWORD /opt/openxdr/.env`（只在首次启动时生效，之后改口令请在控制台改）。
 
 ## 4. 接上 AI 与主机
 

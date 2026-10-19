@@ -6,6 +6,7 @@ import { SessionProvider, useMe, useSession } from './app/session'
 import { useI18n } from './i18n'
 import { LoadError } from './components/LoadError'
 import { LoginPage } from './pages/LoginPage'
+import { SetupGate } from './welcome/SetupGate'
 
 // Webhook 里的老链接是 /?incident= 与 /?session=，进来后转到对应页面
 function Home() {
@@ -92,7 +93,9 @@ export default function App() {
   if (!me) return <LoginPage />
   return (
     <SessionProvider me={me}>
-      <RouterProvider router={router} />
+      <SetupGate>
+        <RouterProvider router={router} />
+      </SetupGate>
     </SessionProvider>
   )
 }

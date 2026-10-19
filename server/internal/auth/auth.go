@@ -44,6 +44,9 @@ func minRole(method, path string) string {
 	switch {
 	case strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/audit"), strings.HasPrefix(path, "/api/settings"):
 		return "admin"
+	// 同意用户协议、结束首次引导代表整个安装，只有 admin 能做；读取对所有人开放
+	case strings.HasPrefix(path, "/api/setup") && method != http.MethodGet:
+		return "admin"
 	// 情报订阅影响全局检测
 	case strings.HasPrefix(path, "/api/intel/feeds") && method != http.MethodGet:
 		return "admin"
