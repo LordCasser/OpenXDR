@@ -1,5 +1,5 @@
 import {
-  CaretRightOutlined, CheckCircleFilled, CloseCircleFilled, CodeOutlined, DatabaseOutlined, EditOutlined, EditFilled,
+  CaretRightOutlined, CheckCircleFilled, CloseCircleFilled, ExclamationCircleFilled, CodeOutlined, DatabaseOutlined, EditOutlined, EditFilled,
   FileTextOutlined, LoadingOutlined, ReadOutlined, RobotOutlined, ToolOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -104,14 +104,17 @@ function OnDuty({ run, groupName, hosts, now }: { run: TaskRunRow; groupName: st
 function LastShift({ run }: { run: TaskRunRow }) {
   const { t } = useI18n()
   const ok = run.status === 'succeeded'
+  const interrupted = run.status === 'interrupted'
   const took = run.finishedAt ? duration(Date.parse(run.finishedAt) - Date.parse(run.startedAt)) : '-'
   return (
     <Space wrap size={8} style={{ marginTop: 12 }}>
-      {ok ? <CheckCircleFilled style={{ color: 'var(--ant-color-success)' }} /> : <CloseCircleFilled style={{ color: 'var(--ant-color-error)' }} />}
-      <Typography.Text>{t(ok ? 'workerLastOk' : 'workerLastFailed')}</Typography.Text>
+      {ok ? <CheckCircleFilled style={{ color: 'var(--ant-color-success)' }} />
+        : interrupted ? <ExclamationCircleFilled style={{ color: 'var(--ant-color-warning)' }} />
+          : <CloseCircleFilled style={{ color: 'var(--ant-color-error)' }} />}
+      <Typography.Text>{t(ok ? 'workerLastOk' : interrupted ? 'workerLastInterrupted' : 'workerLastFailed')}</Typography.Text>
       <Typography.Text type="secondary"><Ago iso={run.finishedAt ?? run.startedAt} /> · {t('workerTook', { took })} · {t('workerSteps', { n: run.steps })}</Typography.Text>
       {run.reportId && <a href={`/api/agent-reports/${run.reportId}/html`} target="_blank" rel="noreferrer"><FileTextOutlined /> {run.reportTitle}</a>}
-      {!ok && run.error && <Tooltip title={run.error}><Typography.Text type="danger" ellipsis style={{ maxWidth: 360 }}>{errorText(run.error, t)}</Typography.Text></Tooltip>}
+      {!ok && !interrupted && run.error && <Tooltip title={run.error}><Typography.Text type="danger" ellipsis style={{ maxWidth: 360 }}>{errorText(run.error, t)}</Typography.Text></Tooltip>}
       {run.sessionId && <Link to={`/chat/${run.sessionId}`}>{t('openSession')}</Link>}
     </Space>
   )
@@ -121,7 +124,7 @@ function LastShift({ run }: { run: TaskRunRow }) {
 function ShiftStrip({ runs }: { runs: TaskRunRow[] }) {
   const { t } = useI18n()
   const { token } = theme.useToken()
-  const color = { succeeded: token.colorSuccess, failed: token.colorError, running: token.colorPrimary }
+  const color = { succeeded: token.colorSuccess, failed: token.colorError, interrupted: token.colorWarning, running: token.colorPrimary }
   return (
     <Space size={3} wrap>
       {[...runs].slice(0, 20).reverse().map(r => (

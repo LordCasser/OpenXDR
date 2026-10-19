@@ -54,7 +54,7 @@ func (TaskRun) Fields() []ent.Field {
 		field.Time("started_at").Default(time.Now),
 		field.Time("scheduled_at").Optional().Nillable(),
 		field.Time("finished_at").Optional().Nillable(),
-		// running / succeeded / failed
+		// running / succeeded / failed / interrupted（停机或失去租约打断，新 leader 接手后重跑）
 		field.String("status").Default("running"),
 		field.Text("error").Optional().Nillable(),
 	}

@@ -742,7 +742,8 @@ export interface TaskRunRow {
   sessionId: string | null
   startedAt: string
   finishedAt: string | null
-  status: 'running' | 'succeeded' | 'failed'
+  // interrupted：被停机打断，接手的调度器稍后重跑
+  status: 'running' | 'succeeded' | 'failed' | 'interrupted'
   error: string | null
 }
 

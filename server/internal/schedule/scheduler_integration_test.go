@@ -284,3 +284,48 @@ func TestSchedulerWaitsForPiModel(t *testing.T) {
 		t.Fatalf("配上模型后应运行一次，得到 %d 次", n)
 	}
 }
+
+// 停机打断的一轮记为 interrupted、不发失败通知；接手的调度器用新会话重跑同一轮，跑完不再补
+func TestSchedulerRerunsInterrupted(t *testing.T) {
+	ctx, client := testdb.New(t)
+	g := client.Group.Create().SetName("A").SaveX(ctx)
+	client.Asset.Create().SetHostname("a1").SetGroupID(g.ID).SaveX(ctx)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "t.yml"), []byte("id: t\nname: 巡检\nschedule: '0 2 * * *'\nprompt: 看看\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
+		t.Fatal(err)
+	}
+	client.Task.UpdateOneID("t").SetRunRequestedAt(time.Now()).ExecX(ctx)
+	var notes []string
+	notify := func(_ context.Context, title, _, _ string) error { notes = append(notes, title); return nil }
+
+	blocked := &blockedRunner{started: make(chan struct{}, 1), release: make(chan struct{})}
+	old := &Scheduler{DB: client, Runner: blocked, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, Notify: notify}
+	stop, cancel := context.WithCancel(ctx)
+	if err := old.tick(stop, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	<-blocked.started
+	cancel()
+	old.wg.Wait()
+	run := client.TaskRun.Query().OnlyX(ctx)
+	if run.Status != StatusInterrupted || len(notes) != 0 {
+		t.Fatalf("停机打断应记 interrupted 且不通知：%s %v", run.Status, notes)
+	}
+	first := *run.SessionID
+
+	runner := &fakeRunner{db: client}
+	next := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, Notify: notify}
+	for range 2 {
+		if err := next.tick(ctx, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		next.wg.Wait()
+	}
+	runs := client.TaskRun.Query().Where(taskrun.TaskIDEQ("t")).AllX(ctx)
+	if len(runner.jobs) != 1 || len(runs) != 1 || runs[0].Status != "succeeded" || *runs[0].SessionID == first {
+		t.Fatalf("应换新会话重跑同一轮一次：%d 次 %+v", len(runner.jobs), runs)
+	}
+}

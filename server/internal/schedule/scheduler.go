@@ -20,6 +20,9 @@ import (
 	"openxdr/server/internal/commandgate"
 )
 
+// StatusInterrupted 运行被停机或失去租约打断：结果不算数，接手的 leader 用新会话重跑
+const StatusInterrupted = "interrupted"
+
 // Initiator 定时任务会话的发起人，即审批闸门的系统身份。
 const Initiator = commandgate.SystemActor
 
@@ -149,13 +152,21 @@ func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 		model = def
 	}
 	for _, g := range groups {
-		scheduled, err := s.due(ctx, t, g.ID, now)
+		// 上一轮被停机打断的先接着重跑，不等下一个周期
+		retry, err := s.interrupted(ctx, t, g.ID, now)
 		if err != nil {
-			slog.Error("任务到期判断失败", "task", t.ID, "group", g.ID, "err", err)
+			slog.Error("查询被打断的任务运行失败", "task", t.ID, "group", g.ID, "err", err)
 			continue
 		}
-		if scheduled.IsZero() {
-			continue
+		var scheduled time.Time
+		if retry == nil {
+			if scheduled, err = s.due(ctx, t, g.ID, now); err != nil {
+				slog.Error("任务到期判断失败", "task", t.ID, "group", g.ID, "err", err)
+				continue
+			}
+			if scheduled.IsZero() {
+				continue
+			}
 		}
 		n, err := s.DB.Asset.Query().Where(entasset.GroupIDEQ(g.ID)).Count(ctx)
 		if err != nil || n == 0 {
@@ -175,7 +186,13 @@ func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 		case <-ctx.Done():
 			return
 		}
-		run, session, err := s.begin(ctx, t, g, model, scheduled)
+		run, session := retry, (*ent.AgentSession)(nil)
+		if retry != nil {
+			slog.Info("重跑被停机打断的任务", "task", t.ID, "group", g.Name, "run", retry.ID)
+			session, err = s.rerun(ctx, t, g, retry, model)
+		} else {
+			run, session, err = s.begin(ctx, t, g, model, scheduled)
+		}
 		if err != nil {
 			<-s.slots
 			slog.Error("创建任务运行失败", "task", t.ID, "group", g.Name, "err", err)
@@ -188,6 +205,25 @@ func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 			s.execute(ctx, t, g, run, session)
 		}()
 	}
+}
+
+// interruptedWithin 多久以内被打断的运行才重跑：再早的那一轮已经过时，等下一个周期
+const interruptedWithin = 12 * time.Hour
+
+// interrupted 这个组上一轮是否被停机打断、还值得重跑。只看最近一轮：之后已经跑过就不补
+func (s *Scheduler) interrupted(ctx context.Context, t *ent.Task, groupID uuid.UUID, now time.Time) (*ent.TaskRun, error) {
+	last, err := s.DB.TaskRun.Query().Where(taskrun.TaskIDEQ(t.ID), taskrun.GroupIDEQ(groupID)).
+		Order(ent.Desc(taskrun.FieldStartedAt)).First(ctx)
+	if ent.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if last.Status != StatusInterrupted || last.StartedAt.Before(now.Add(-interruptedWithin)) {
+		return nil, nil
+	}
+	return last, nil
 }
 
 func (s *Scheduler) begin(ctx context.Context, t *ent.Task, g *ent.Group, model string, scheduled time.Time) (*ent.TaskRun, *ent.AgentSession, error) {
@@ -238,6 +274,10 @@ func (s *Scheduler) newSession(ctx context.Context, tx *ent.Tx, t *ent.Task, g *
 
 func (s *Scheduler) execute(ctx context.Context, t *ent.Task, g *ent.Group, run *ent.TaskRun, session *ent.AgentSession) {
 	err := s.attempt(ctx, t, g, run, session)
+	// 停机或失去租约打断的：已记为 interrupted，由接手的 leader 重跑，不算失败也不通知
+	if err != nil && ctx.Err() != nil {
+		return
+	}
 	// 模型偶尔乱写、漏交报告，换个新会话重跑一次通常就好；超时与失去租约不重跑
 	if err != nil && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
 		slog.Warn("任务失败，新开会话重试一次", "task", t.ID, "group", g.Name, "err", err)
@@ -280,7 +320,11 @@ func (s *Scheduler) attempt(ctx context.Context, t *ent.Task, g *ent.Group, run 
 	defer cancelDone()
 	update := s.DB.TaskRun.UpdateOneID(run.ID).Where(taskrun.StatusEQ("running")).SetFinishedAt(time.Now()).SetStatus("succeeded")
 	if err != nil {
-		update.SetStatus("failed").SetError(err.Error())
+		status := "failed"
+		if ctx.Err() != nil {
+			status = StatusInterrupted
+		}
+		update.SetStatus(status).SetError(err.Error())
 	}
 	if uerr := update.Exec(done); uerr != nil {
 		slog.Error("保存任务运行终态失败", "run", run.ID, "err", uerr)
