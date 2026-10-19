@@ -6,7 +6,8 @@ services:
       - natsdata:/data
       - ./deploy/nats.conf:/etc/nats/openxdr.conf:ro
     ports:
-      - "8222:8222"
+      # 监控端口只给本机看，不对外开
+      - "127.0.0.1:8222:8222"
 
   postgres:
     image: postgres:16-alpine

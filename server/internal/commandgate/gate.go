@@ -14,6 +14,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/approval"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/response"
 )
@@ -169,11 +170,11 @@ func (g *Gate) Issue(ctx context.Context, req Request) (out *ent.Command, retErr
 		return nil, err
 	}
 	req.Command.IssuedBy = actor
-	return g.Hub.Issue(ctx, req.Command)
+	return g.Hub.IssueExec(ctx, req.Command)
 }
 
 func (g *Gate) log(ctx context.Context, actor, action, target, detail string) error {
-	return g.DB.AuditLog.Create().SetUsername(actor).SetAction(action).SetTarget(target).SetDetail(detail).SetRemoteAddr("server").Exec(ctx)
+	return audit.Checked(ctx, g.DB.AuditLog.Create(), actor, "server", action, target, detail)
 }
 
 func (g *Gate) await(ctx context.Context, req Request, username string) error {
@@ -307,7 +308,7 @@ func (g *Gate) Decide(ctx context.Context, id uuid.UUID, u *ent.User, approved b
 	if n != 1 {
 		return errors.New("审批已结束或已过期")
 	}
-	if err := tx.AuditLog.Create().SetUsername(u.Username).SetAction("approval_decided").SetTarget(id.String()).SetDetail(string(status)).SetRemoteAddr("server").Exec(ctx); err != nil {
+	if err := audit.Checked(ctx, tx.AuditLog.Create(), u.Username, "server", "approval_decided", id.String(), string(status)); err != nil {
 		return err
 	}
 	return tx.Commit()

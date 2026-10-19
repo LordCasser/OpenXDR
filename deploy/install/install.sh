@@ -50,10 +50,27 @@ if [ -z "$TLS" ]; then
 fi
 case $TLS in acme|internal) ;; *) die "OPENXDR_TLS 只能是 acme 或 internal" ;; esac
 
+# 端口是否被监听：ss 优先，netstat 兜底；两者都没有返回 2，让调用方明确说跳过
+listening() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnH "sport = :$1" 2>/dev/null | grep -q .
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ltn 2>/dev/null | awk -v p=":$1" '$4 ~ p"$" {found=1} END {exit !found}'
+  else
+    return 2
+  fi
+}
+
 # 已经是我们自己在占用就不算冲突（重复执行 / 升级）
 busy=""
 for port in 80 443 8081; do
-  if ss -ltnH "sport = :$port" 2>/dev/null | grep -q . && ! docker ps --format '{{.Names}} {{.Ports}}' | grep -q "^openxdr-.*:$port->"; then busy="$busy $port"; fi
+  code=0
+  listening "$port" || code=$?
+  if [ $code -eq 2 ]; then
+    say "没有 ss 或 netstat，跳过端口占用检查（有冲突时 Docker 启动会报错）"
+    break
+  fi
+  if [ $code -eq 0 ] && ! docker ps --format '{{.Names}} {{.Ports}}' | grep -q "^openxdr-.*:$port->"; then busy="$busy $port"; fi
 done
 [ -z "$busy" ] || die "端口被占用：$busy（OpenXDR 需要 80、443 与 8081）"
 
@@ -100,6 +117,8 @@ if [ "$TLS" = acme ]; then
 }
 $HOST {
 	encode gzip
+	# HSTS 只在这里发：这层才是浏览器看到的 HTTPS；安全头（CSP 等）由 web 镜像里的 nginx 发
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy web:80
 }
 EOF
@@ -114,6 +133,7 @@ else
 https://$HOST {
 	tls /certs/server.crt /certs/server.key
 	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy web:80
 }
 # 明文口只做两件事：给主机下载 CA（下载后按指纹核对），其余跳到 HTTPS

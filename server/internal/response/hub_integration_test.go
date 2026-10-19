@@ -74,7 +74,7 @@ func TestExecRoundTrip(t *testing.T) {
 	ch := hub.Attach(agentID)
 
 	line := "uname -a"
-	cmd, err := hub.Issue(ctx, Request{AssetID: asset.ID, Kind: "exec", Cmd: &line, TimeoutMS: 5000, IssuedBy: "admin"})
+	cmd, err := hub.IssueExec(ctx, Request{AssetID: asset.ID, Kind: "exec", Cmd: &line, TimeoutMS: 5000, IssuedBy: "admin"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestResultBoundToAgentAndFirstTerminal(t *testing.T) {
 	h := NewHub(db, true)
 	ch := h.Attach(agentID)
 	line := "whoami"
-	cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
+	cmd, err := h.IssueExec(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestDeliveryCannotOverwriteEarlyResult(t *testing.T) {
 			h := NewHub(db, true)
 			h.Router = completingRouter{hub: h, fail: fail, complete: true}
 			line := "whoami"
-			cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
+			cmd, err := h.IssueExec(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -186,7 +186,11 @@ func TestAllActionsUnknownDelivery(t *testing.T) {
 			h := NewHub(db, true)
 			h.Router = completingRouter{hub: h, fail: true}
 			line := "whoami"
-			cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: kind, Cmd: &line})
+			issue := h.Issue
+			if kind == "exec" {
+				issue = h.IssueExec
+			}
+			cmd, err := issue(ctx, Request{AssetID: a.ID, Kind: kind, Cmd: &line})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -208,7 +212,7 @@ func TestUnknownReceiptAllowsLaterResult(t *testing.T) {
 	h := NewHub(db, true)
 	ch := h.Attach(id)
 	line := "whoami"
-	cmd, err := h.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
+	cmd, err := h.IssueExec(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &line})
 	if err != nil {
 		t.Fatal(err)
 	}

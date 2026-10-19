@@ -96,9 +96,26 @@ func (h *Hub) Detach(agentID uuid.UUID, ch chan *pb.Command) {
 	h.mu.Unlock()
 }
 
-// Issue 下发一条指令。agent 不在线时直接失败——指令攒着等主机上线才执行，
-// 到时候的处置意图很可能已经过期，比不执行更危险。
+// Issue 下发一条非 exec 指令。exec 必须经 commandgate 的来源、组权限、名单与
+// 审批，这里一律拒绝，新增调用点也绕不过去。
 func (h *Hub) Issue(ctx context.Context, req Request) (*ent.Command, error) {
+	if req.Kind == "exec" {
+		return nil, errors.New("exec 必须经 commandgate 下发")
+	}
+	return h.issue(ctx, req)
+}
+
+// IssueExec 仅供 commandgate.Gate.Issue 调用：它已完成判权并写入 IssuedBy。
+func (h *Hub) IssueExec(ctx context.Context, req Request) (*ent.Command, error) {
+	if req.Kind != "exec" {
+		return nil, errors.New("IssueExec 只处理 exec")
+	}
+	return h.issue(ctx, req)
+}
+
+// issue 真正的下发：agent 不在线时直接失败——指令攒着等主机上线才执行，
+// 到时候的处置意图很可能已经过期，比不执行更危险。
+func (h *Hub) issue(ctx context.Context, req Request) (*ent.Command, error) {
 	if !h.Enabled {
 		return nil, fmt.Errorf("响应能力未启用")
 	}

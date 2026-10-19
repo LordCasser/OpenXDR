@@ -39,7 +39,7 @@ func TestUnknownSurvivesWriteFailure(t *testing.T) {
 	hub := NewHub(db, true)
 	hub.Router = router
 	cmd := "只用于内存路由测试，不执行"
-	out, err := hub.Issue(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &cmd, IssuedBy: "audit"})
+	out, err := hub.IssueExec(ctx, Request{AssetID: a.ID, Kind: "exec", Cmd: &cmd, IssuedBy: "audit"})
 	if !router.accepted || err == nil {
 		t.Fatal("未触发目标分支")
 	}
