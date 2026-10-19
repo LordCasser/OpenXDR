@@ -208,6 +208,8 @@ var (
 		{Name: "listening", Type: field.TypeJSON, Nullable: true},
 		{Name: "cloud", Type: field.TypeJSON, Nullable: true},
 		{Name: "inventory_at", Type: field.TypeTime, Nullable: true},
+		{Name: "software", Type: field.TypeJSON, Nullable: true},
+		{Name: "software_at", Type: field.TypeTime, Nullable: true},
 		{Name: "service_notes", Type: field.TypeJSON, Nullable: true},
 		{Name: "egress_notes", Type: field.TypeJSON, Nullable: true},
 		{Name: "zone_id", Type: field.TypeUUID, Nullable: true},
@@ -861,6 +863,33 @@ var (
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
 	}
+	// VulnRecordsColumns holds the columns for the "vuln_records" table.
+	VulnRecordsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "osv_id", Type: field.TypeString},
+		{Name: "ecosystem", Type: field.TypeString},
+		{Name: "package", Type: field.TypeString},
+		{Name: "ranges", Type: field.TypeJSON},
+		{Name: "aliases", Type: field.TypeJSON, Nullable: true},
+		{Name: "summary", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "score", Type: field.TypeFloat64, Default: 0},
+		{Name: "vector", Type: field.TypeString, Nullable: true},
+		{Name: "published", Type: field.TypeTime, Nullable: true},
+		{Name: "synced_at", Type: field.TypeTime},
+	}
+	// VulnRecordsTable holds the schema information for the "vuln_records" table.
+	VulnRecordsTable = &schema.Table{
+		Name:       "vuln_records",
+		Columns:    VulnRecordsColumns,
+		PrimaryKey: []*schema.Column{VulnRecordsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "vulnrecord_ecosystem_package",
+				Unique:  false,
+				Columns: []*schema.Column{VulnRecordsColumns[2], VulnRecordsColumns[3]},
+			},
+		},
+	}
 	// ZonesColumns holds the columns for the "zones" table.
 	ZonesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -915,6 +944,7 @@ var (
 		TasksTable,
 		TaskRunsTable,
 		UsersTable,
+		VulnRecordsTable,
 		ZonesTable,
 	}
 )

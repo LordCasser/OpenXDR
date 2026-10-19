@@ -1,4 +1,5 @@
 import { ArrowLeftOutlined, RobotOutlined } from '@ant-design/icons'
+import { AssetVulns } from '../components/AssetVulns'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert, App, Button, Card, Col, Descriptions, Empty, Form, Result, Row, Select, Skeleton, Space, Switch, Table, Tabs, Tag, Tooltip, Typography,
@@ -111,7 +112,8 @@ export function AssetDetailPage() {
   const { message } = App.useApp()
   const { groups, isAdmin } = useSession()
   const [starting, setStarting] = useState(false)
-  const [tab, setTab] = useState('incidents')
+  // 从攻击面等处带 ?tab= 进来时直接打开对应标签
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') ?? 'incidents')
   const [verifying, setVerifying] = useState<CommandRow | null>(null)
   const [incPage, setIncPage] = useState(1)
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 15000 })
@@ -259,6 +261,7 @@ export function AssetDetailPage() {
                 { key: 'detectionGaps', label: t('temporalGapsTitle'), children: tab === 'detectionGaps' ? <TemporalGaps key={asset.id} asset={asset} /> : null },
                 { key: 'localAccounts', label: t('collectorLocalAccounts'), children: tab === 'localAccounts' ? <LocalAccounts key={asset.id} asset={asset} /> : null },
                 { key: 'identity', label: t('identityTitle'), children: tab === 'identity' ? <IdentityObservations key={asset.id} asset={asset} /> : null },
+                { key: 'vulns', label: t('tabVulns'), children: tab === 'vulns' ? <AssetVulns key={asset.id} assetId={asset.id} /> : null },
                 { key: 'config', label: t('tabConfig'), children: <ConfigTab assetId={asset.id} canEdit={canAct} /> },
               ]}
             />

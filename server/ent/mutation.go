@@ -39,6 +39,7 @@ import (
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
+	"openxdr/server/ent/vulnrecord"
 	"openxdr/server/ent/zone"
 	"sync"
 	"time"
@@ -87,6 +88,7 @@ const (
 	TypeTask            = "Task"
 	TypeTaskRun         = "TaskRun"
 	TypeUser            = "User"
+	TypeVulnRecord      = "VulnRecord"
 	TypeZone            = "Zone"
 )
 
@@ -4769,6 +4771,9 @@ type AssetMutation struct {
 	cloud                  *json.RawMessage
 	appendcloud            json.RawMessage
 	inventory_at           *time.Time
+	software               *json.RawMessage
+	appendsoftware         json.RawMessage
+	software_at            *time.Time
 	service_notes          *json.RawMessage
 	appendservice_notes    json.RawMessage
 	egress_notes           *json.RawMessage
@@ -5631,6 +5636,120 @@ func (m *AssetMutation) ResetInventoryAt() {
 	delete(m.clearedFields, asset.FieldInventoryAt)
 }
 
+// SetSoftware sets the "software" field.
+func (m *AssetMutation) SetSoftware(jm json.RawMessage) {
+	m.software = &jm
+	m.appendsoftware = nil
+}
+
+// Software returns the value of the "software" field in the mutation.
+func (m *AssetMutation) Software() (r json.RawMessage, exists bool) {
+	v := m.software
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSoftware returns the old "software" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldSoftware(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSoftware is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSoftware requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSoftware: %w", err)
+	}
+	return oldValue.Software, nil
+}
+
+// AppendSoftware adds jm to the "software" field.
+func (m *AssetMutation) AppendSoftware(jm json.RawMessage) {
+	m.appendsoftware = append(m.appendsoftware, jm...)
+}
+
+// AppendedSoftware returns the list of values that were appended to the "software" field in this mutation.
+func (m *AssetMutation) AppendedSoftware() (json.RawMessage, bool) {
+	if len(m.appendsoftware) == 0 {
+		return nil, false
+	}
+	return m.appendsoftware, true
+}
+
+// ClearSoftware clears the value of the "software" field.
+func (m *AssetMutation) ClearSoftware() {
+	m.software = nil
+	m.appendsoftware = nil
+	m.clearedFields[asset.FieldSoftware] = struct{}{}
+}
+
+// SoftwareCleared returns if the "software" field was cleared in this mutation.
+func (m *AssetMutation) SoftwareCleared() bool {
+	_, ok := m.clearedFields[asset.FieldSoftware]
+	return ok
+}
+
+// ResetSoftware resets all changes to the "software" field.
+func (m *AssetMutation) ResetSoftware() {
+	m.software = nil
+	m.appendsoftware = nil
+	delete(m.clearedFields, asset.FieldSoftware)
+}
+
+// SetSoftwareAt sets the "software_at" field.
+func (m *AssetMutation) SetSoftwareAt(t time.Time) {
+	m.software_at = &t
+}
+
+// SoftwareAt returns the value of the "software_at" field in the mutation.
+func (m *AssetMutation) SoftwareAt() (r time.Time, exists bool) {
+	v := m.software_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSoftwareAt returns the old "software_at" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldSoftwareAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSoftwareAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSoftwareAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSoftwareAt: %w", err)
+	}
+	return oldValue.SoftwareAt, nil
+}
+
+// ClearSoftwareAt clears the value of the "software_at" field.
+func (m *AssetMutation) ClearSoftwareAt() {
+	m.software_at = nil
+	m.clearedFields[asset.FieldSoftwareAt] = struct{}{}
+}
+
+// SoftwareAtCleared returns if the "software_at" field was cleared in this mutation.
+func (m *AssetMutation) SoftwareAtCleared() bool {
+	_, ok := m.clearedFields[asset.FieldSoftwareAt]
+	return ok
+}
+
+// ResetSoftwareAt resets all changes to the "software_at" field.
+func (m *AssetMutation) ResetSoftwareAt() {
+	m.software_at = nil
+	delete(m.clearedFields, asset.FieldSoftwareAt)
+}
+
 // SetServiceNotes sets the "service_notes" field.
 func (m *AssetMutation) SetServiceNotes(jm json.RawMessage) {
 	m.service_notes = &jm
@@ -6484,7 +6603,7 @@ func (m *AssetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 28)
 	if m.hostname != nil {
 		fields = append(fields, asset.FieldHostname)
 	}
@@ -6526,6 +6645,12 @@ func (m *AssetMutation) Fields() []string {
 	}
 	if m.inventory_at != nil {
 		fields = append(fields, asset.FieldInventoryAt)
+	}
+	if m.software != nil {
+		fields = append(fields, asset.FieldSoftware)
+	}
+	if m.software_at != nil {
+		fields = append(fields, asset.FieldSoftwareAt)
 	}
 	if m.service_notes != nil {
 		fields = append(fields, asset.FieldServiceNotes)
@@ -6599,6 +6724,10 @@ func (m *AssetMutation) Field(name string) (ent.Value, bool) {
 		return m.Cloud()
 	case asset.FieldInventoryAt:
 		return m.InventoryAt()
+	case asset.FieldSoftware:
+		return m.Software()
+	case asset.FieldSoftwareAt:
+		return m.SoftwareAt()
 	case asset.FieldServiceNotes:
 		return m.ServiceNotes()
 	case asset.FieldEgressNotes:
@@ -6660,6 +6789,10 @@ func (m *AssetMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldCloud(ctx)
 	case asset.FieldInventoryAt:
 		return m.OldInventoryAt(ctx)
+	case asset.FieldSoftware:
+		return m.OldSoftware(ctx)
+	case asset.FieldSoftwareAt:
+		return m.OldSoftwareAt(ctx)
 	case asset.FieldServiceNotes:
 		return m.OldServiceNotes(ctx)
 	case asset.FieldEgressNotes:
@@ -6790,6 +6923,20 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetInventoryAt(v)
+		return nil
+	case asset.FieldSoftware:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSoftware(v)
+		return nil
+	case asset.FieldSoftwareAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSoftwareAt(v)
 		return nil
 	case asset.FieldServiceNotes:
 		v, ok := value.(json.RawMessage)
@@ -6953,6 +7100,12 @@ func (m *AssetMutation) ClearedFields() []string {
 	if m.FieldCleared(asset.FieldInventoryAt) {
 		fields = append(fields, asset.FieldInventoryAt)
 	}
+	if m.FieldCleared(asset.FieldSoftware) {
+		fields = append(fields, asset.FieldSoftware)
+	}
+	if m.FieldCleared(asset.FieldSoftwareAt) {
+		fields = append(fields, asset.FieldSoftwareAt)
+	}
 	if m.FieldCleared(asset.FieldServiceNotes) {
 		fields = append(fields, asset.FieldServiceNotes)
 	}
@@ -7035,6 +7188,12 @@ func (m *AssetMutation) ClearField(name string) error {
 		return nil
 	case asset.FieldInventoryAt:
 		m.ClearInventoryAt()
+		return nil
+	case asset.FieldSoftware:
+		m.ClearSoftware()
+		return nil
+	case asset.FieldSoftwareAt:
+		m.ClearSoftwareAt()
 		return nil
 	case asset.FieldServiceNotes:
 		m.ClearServiceNotes()
@@ -7121,6 +7280,12 @@ func (m *AssetMutation) ResetField(name string) error {
 		return nil
 	case asset.FieldInventoryAt:
 		m.ResetInventoryAt()
+		return nil
+	case asset.FieldSoftware:
+		m.ResetSoftware()
+		return nil
+	case asset.FieldSoftwareAt:
+		m.ResetSoftwareAt()
 		return nil
 	case asset.FieldServiceNotes:
 		m.ResetServiceNotes()
@@ -26000,6 +26165,972 @@ func (m *UserMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *UserMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown User edge %s", name)
+}
+
+// VulnRecordMutation represents an operation that mutates the VulnRecord nodes in the graph.
+type VulnRecordMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	osv_id        *string
+	ecosystem     *string
+	_package      *string
+	ranges        *[]schema.VulnRange
+	appendranges  []schema.VulnRange
+	aliases       *[]string
+	appendaliases []string
+	summary       *string
+	score         *float64
+	addscore      *float64
+	vector        *string
+	published     *time.Time
+	synced_at     *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*VulnRecord, error)
+	predicates    []predicate.VulnRecord
+}
+
+var _ ent.Mutation = (*VulnRecordMutation)(nil)
+
+// vulnrecordOption allows management of the mutation configuration using functional options.
+type vulnrecordOption func(*VulnRecordMutation)
+
+// newVulnRecordMutation creates new mutation for the VulnRecord entity.
+func newVulnRecordMutation(c config, op Op, opts ...vulnrecordOption) *VulnRecordMutation {
+	m := &VulnRecordMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeVulnRecord,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withVulnRecordID sets the ID field of the mutation.
+func withVulnRecordID(id int) vulnrecordOption {
+	return func(m *VulnRecordMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *VulnRecord
+		)
+		m.oldValue = func(ctx context.Context) (*VulnRecord, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().VulnRecord.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withVulnRecord sets the old VulnRecord of the mutation.
+func withVulnRecord(node *VulnRecord) vulnrecordOption {
+	return func(m *VulnRecordMutation) {
+		m.oldValue = func(context.Context) (*VulnRecord, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m VulnRecordMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m VulnRecordMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of VulnRecord entities.
+func (m *VulnRecordMutation) SetID(id int) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *VulnRecordMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *VulnRecordMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().VulnRecord.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetOsvID sets the "osv_id" field.
+func (m *VulnRecordMutation) SetOsvID(s string) {
+	m.osv_id = &s
+}
+
+// OsvID returns the value of the "osv_id" field in the mutation.
+func (m *VulnRecordMutation) OsvID() (r string, exists bool) {
+	v := m.osv_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOsvID returns the old "osv_id" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldOsvID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOsvID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOsvID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOsvID: %w", err)
+	}
+	return oldValue.OsvID, nil
+}
+
+// ResetOsvID resets all changes to the "osv_id" field.
+func (m *VulnRecordMutation) ResetOsvID() {
+	m.osv_id = nil
+}
+
+// SetEcosystem sets the "ecosystem" field.
+func (m *VulnRecordMutation) SetEcosystem(s string) {
+	m.ecosystem = &s
+}
+
+// Ecosystem returns the value of the "ecosystem" field in the mutation.
+func (m *VulnRecordMutation) Ecosystem() (r string, exists bool) {
+	v := m.ecosystem
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEcosystem returns the old "ecosystem" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldEcosystem(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEcosystem is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEcosystem requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEcosystem: %w", err)
+	}
+	return oldValue.Ecosystem, nil
+}
+
+// ResetEcosystem resets all changes to the "ecosystem" field.
+func (m *VulnRecordMutation) ResetEcosystem() {
+	m.ecosystem = nil
+}
+
+// SetPackage sets the "package" field.
+func (m *VulnRecordMutation) SetPackage(s string) {
+	m._package = &s
+}
+
+// Package returns the value of the "package" field in the mutation.
+func (m *VulnRecordMutation) Package() (r string, exists bool) {
+	v := m._package
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPackage returns the old "package" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldPackage(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPackage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPackage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPackage: %w", err)
+	}
+	return oldValue.Package, nil
+}
+
+// ResetPackage resets all changes to the "package" field.
+func (m *VulnRecordMutation) ResetPackage() {
+	m._package = nil
+}
+
+// SetRanges sets the "ranges" field.
+func (m *VulnRecordMutation) SetRanges(sr []schema.VulnRange) {
+	m.ranges = &sr
+	m.appendranges = nil
+}
+
+// Ranges returns the value of the "ranges" field in the mutation.
+func (m *VulnRecordMutation) Ranges() (r []schema.VulnRange, exists bool) {
+	v := m.ranges
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRanges returns the old "ranges" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldRanges(ctx context.Context) (v []schema.VulnRange, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRanges is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRanges requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRanges: %w", err)
+	}
+	return oldValue.Ranges, nil
+}
+
+// AppendRanges adds sr to the "ranges" field.
+func (m *VulnRecordMutation) AppendRanges(sr []schema.VulnRange) {
+	m.appendranges = append(m.appendranges, sr...)
+}
+
+// AppendedRanges returns the list of values that were appended to the "ranges" field in this mutation.
+func (m *VulnRecordMutation) AppendedRanges() ([]schema.VulnRange, bool) {
+	if len(m.appendranges) == 0 {
+		return nil, false
+	}
+	return m.appendranges, true
+}
+
+// ResetRanges resets all changes to the "ranges" field.
+func (m *VulnRecordMutation) ResetRanges() {
+	m.ranges = nil
+	m.appendranges = nil
+}
+
+// SetAliases sets the "aliases" field.
+func (m *VulnRecordMutation) SetAliases(s []string) {
+	m.aliases = &s
+	m.appendaliases = nil
+}
+
+// Aliases returns the value of the "aliases" field in the mutation.
+func (m *VulnRecordMutation) Aliases() (r []string, exists bool) {
+	v := m.aliases
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAliases returns the old "aliases" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldAliases(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAliases is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAliases requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAliases: %w", err)
+	}
+	return oldValue.Aliases, nil
+}
+
+// AppendAliases adds s to the "aliases" field.
+func (m *VulnRecordMutation) AppendAliases(s []string) {
+	m.appendaliases = append(m.appendaliases, s...)
+}
+
+// AppendedAliases returns the list of values that were appended to the "aliases" field in this mutation.
+func (m *VulnRecordMutation) AppendedAliases() ([]string, bool) {
+	if len(m.appendaliases) == 0 {
+		return nil, false
+	}
+	return m.appendaliases, true
+}
+
+// ClearAliases clears the value of the "aliases" field.
+func (m *VulnRecordMutation) ClearAliases() {
+	m.aliases = nil
+	m.appendaliases = nil
+	m.clearedFields[vulnrecord.FieldAliases] = struct{}{}
+}
+
+// AliasesCleared returns if the "aliases" field was cleared in this mutation.
+func (m *VulnRecordMutation) AliasesCleared() bool {
+	_, ok := m.clearedFields[vulnrecord.FieldAliases]
+	return ok
+}
+
+// ResetAliases resets all changes to the "aliases" field.
+func (m *VulnRecordMutation) ResetAliases() {
+	m.aliases = nil
+	m.appendaliases = nil
+	delete(m.clearedFields, vulnrecord.FieldAliases)
+}
+
+// SetSummary sets the "summary" field.
+func (m *VulnRecordMutation) SetSummary(s string) {
+	m.summary = &s
+}
+
+// Summary returns the value of the "summary" field in the mutation.
+func (m *VulnRecordMutation) Summary() (r string, exists bool) {
+	v := m.summary
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSummary returns the old "summary" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldSummary(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSummary is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSummary requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSummary: %w", err)
+	}
+	return oldValue.Summary, nil
+}
+
+// ClearSummary clears the value of the "summary" field.
+func (m *VulnRecordMutation) ClearSummary() {
+	m.summary = nil
+	m.clearedFields[vulnrecord.FieldSummary] = struct{}{}
+}
+
+// SummaryCleared returns if the "summary" field was cleared in this mutation.
+func (m *VulnRecordMutation) SummaryCleared() bool {
+	_, ok := m.clearedFields[vulnrecord.FieldSummary]
+	return ok
+}
+
+// ResetSummary resets all changes to the "summary" field.
+func (m *VulnRecordMutation) ResetSummary() {
+	m.summary = nil
+	delete(m.clearedFields, vulnrecord.FieldSummary)
+}
+
+// SetScore sets the "score" field.
+func (m *VulnRecordMutation) SetScore(f float64) {
+	m.score = &f
+	m.addscore = nil
+}
+
+// Score returns the value of the "score" field in the mutation.
+func (m *VulnRecordMutation) Score() (r float64, exists bool) {
+	v := m.score
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScore returns the old "score" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldScore(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScore is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScore requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScore: %w", err)
+	}
+	return oldValue.Score, nil
+}
+
+// AddScore adds f to the "score" field.
+func (m *VulnRecordMutation) AddScore(f float64) {
+	if m.addscore != nil {
+		*m.addscore += f
+	} else {
+		m.addscore = &f
+	}
+}
+
+// AddedScore returns the value that was added to the "score" field in this mutation.
+func (m *VulnRecordMutation) AddedScore() (r float64, exists bool) {
+	v := m.addscore
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetScore resets all changes to the "score" field.
+func (m *VulnRecordMutation) ResetScore() {
+	m.score = nil
+	m.addscore = nil
+}
+
+// SetVector sets the "vector" field.
+func (m *VulnRecordMutation) SetVector(s string) {
+	m.vector = &s
+}
+
+// Vector returns the value of the "vector" field in the mutation.
+func (m *VulnRecordMutation) Vector() (r string, exists bool) {
+	v := m.vector
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVector returns the old "vector" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldVector(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVector is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVector requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVector: %w", err)
+	}
+	return oldValue.Vector, nil
+}
+
+// ClearVector clears the value of the "vector" field.
+func (m *VulnRecordMutation) ClearVector() {
+	m.vector = nil
+	m.clearedFields[vulnrecord.FieldVector] = struct{}{}
+}
+
+// VectorCleared returns if the "vector" field was cleared in this mutation.
+func (m *VulnRecordMutation) VectorCleared() bool {
+	_, ok := m.clearedFields[vulnrecord.FieldVector]
+	return ok
+}
+
+// ResetVector resets all changes to the "vector" field.
+func (m *VulnRecordMutation) ResetVector() {
+	m.vector = nil
+	delete(m.clearedFields, vulnrecord.FieldVector)
+}
+
+// SetPublished sets the "published" field.
+func (m *VulnRecordMutation) SetPublished(t time.Time) {
+	m.published = &t
+}
+
+// Published returns the value of the "published" field in the mutation.
+func (m *VulnRecordMutation) Published() (r time.Time, exists bool) {
+	v := m.published
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPublished returns the old "published" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldPublished(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPublished is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPublished requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPublished: %w", err)
+	}
+	return oldValue.Published, nil
+}
+
+// ClearPublished clears the value of the "published" field.
+func (m *VulnRecordMutation) ClearPublished() {
+	m.published = nil
+	m.clearedFields[vulnrecord.FieldPublished] = struct{}{}
+}
+
+// PublishedCleared returns if the "published" field was cleared in this mutation.
+func (m *VulnRecordMutation) PublishedCleared() bool {
+	_, ok := m.clearedFields[vulnrecord.FieldPublished]
+	return ok
+}
+
+// ResetPublished resets all changes to the "published" field.
+func (m *VulnRecordMutation) ResetPublished() {
+	m.published = nil
+	delete(m.clearedFields, vulnrecord.FieldPublished)
+}
+
+// SetSyncedAt sets the "synced_at" field.
+func (m *VulnRecordMutation) SetSyncedAt(t time.Time) {
+	m.synced_at = &t
+}
+
+// SyncedAt returns the value of the "synced_at" field in the mutation.
+func (m *VulnRecordMutation) SyncedAt() (r time.Time, exists bool) {
+	v := m.synced_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncedAt returns the old "synced_at" field's value of the VulnRecord entity.
+// If the VulnRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *VulnRecordMutation) OldSyncedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncedAt: %w", err)
+	}
+	return oldValue.SyncedAt, nil
+}
+
+// ResetSyncedAt resets all changes to the "synced_at" field.
+func (m *VulnRecordMutation) ResetSyncedAt() {
+	m.synced_at = nil
+}
+
+// Where appends a list predicates to the VulnRecordMutation builder.
+func (m *VulnRecordMutation) Where(ps ...predicate.VulnRecord) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the VulnRecordMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *VulnRecordMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.VulnRecord, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *VulnRecordMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *VulnRecordMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (VulnRecord).
+func (m *VulnRecordMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *VulnRecordMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.osv_id != nil {
+		fields = append(fields, vulnrecord.FieldOsvID)
+	}
+	if m.ecosystem != nil {
+		fields = append(fields, vulnrecord.FieldEcosystem)
+	}
+	if m._package != nil {
+		fields = append(fields, vulnrecord.FieldPackage)
+	}
+	if m.ranges != nil {
+		fields = append(fields, vulnrecord.FieldRanges)
+	}
+	if m.aliases != nil {
+		fields = append(fields, vulnrecord.FieldAliases)
+	}
+	if m.summary != nil {
+		fields = append(fields, vulnrecord.FieldSummary)
+	}
+	if m.score != nil {
+		fields = append(fields, vulnrecord.FieldScore)
+	}
+	if m.vector != nil {
+		fields = append(fields, vulnrecord.FieldVector)
+	}
+	if m.published != nil {
+		fields = append(fields, vulnrecord.FieldPublished)
+	}
+	if m.synced_at != nil {
+		fields = append(fields, vulnrecord.FieldSyncedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *VulnRecordMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case vulnrecord.FieldOsvID:
+		return m.OsvID()
+	case vulnrecord.FieldEcosystem:
+		return m.Ecosystem()
+	case vulnrecord.FieldPackage:
+		return m.Package()
+	case vulnrecord.FieldRanges:
+		return m.Ranges()
+	case vulnrecord.FieldAliases:
+		return m.Aliases()
+	case vulnrecord.FieldSummary:
+		return m.Summary()
+	case vulnrecord.FieldScore:
+		return m.Score()
+	case vulnrecord.FieldVector:
+		return m.Vector()
+	case vulnrecord.FieldPublished:
+		return m.Published()
+	case vulnrecord.FieldSyncedAt:
+		return m.SyncedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *VulnRecordMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case vulnrecord.FieldOsvID:
+		return m.OldOsvID(ctx)
+	case vulnrecord.FieldEcosystem:
+		return m.OldEcosystem(ctx)
+	case vulnrecord.FieldPackage:
+		return m.OldPackage(ctx)
+	case vulnrecord.FieldRanges:
+		return m.OldRanges(ctx)
+	case vulnrecord.FieldAliases:
+		return m.OldAliases(ctx)
+	case vulnrecord.FieldSummary:
+		return m.OldSummary(ctx)
+	case vulnrecord.FieldScore:
+		return m.OldScore(ctx)
+	case vulnrecord.FieldVector:
+		return m.OldVector(ctx)
+	case vulnrecord.FieldPublished:
+		return m.OldPublished(ctx)
+	case vulnrecord.FieldSyncedAt:
+		return m.OldSyncedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown VulnRecord field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *VulnRecordMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case vulnrecord.FieldOsvID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOsvID(v)
+		return nil
+	case vulnrecord.FieldEcosystem:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEcosystem(v)
+		return nil
+	case vulnrecord.FieldPackage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPackage(v)
+		return nil
+	case vulnrecord.FieldRanges:
+		v, ok := value.([]schema.VulnRange)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRanges(v)
+		return nil
+	case vulnrecord.FieldAliases:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAliases(v)
+		return nil
+	case vulnrecord.FieldSummary:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSummary(v)
+		return nil
+	case vulnrecord.FieldScore:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScore(v)
+		return nil
+	case vulnrecord.FieldVector:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVector(v)
+		return nil
+	case vulnrecord.FieldPublished:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPublished(v)
+		return nil
+	case vulnrecord.FieldSyncedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown VulnRecord field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *VulnRecordMutation) AddedFields() []string {
+	var fields []string
+	if m.addscore != nil {
+		fields = append(fields, vulnrecord.FieldScore)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *VulnRecordMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case vulnrecord.FieldScore:
+		return m.AddedScore()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *VulnRecordMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case vulnrecord.FieldScore:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddScore(v)
+		return nil
+	}
+	return fmt.Errorf("unknown VulnRecord numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *VulnRecordMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(vulnrecord.FieldAliases) {
+		fields = append(fields, vulnrecord.FieldAliases)
+	}
+	if m.FieldCleared(vulnrecord.FieldSummary) {
+		fields = append(fields, vulnrecord.FieldSummary)
+	}
+	if m.FieldCleared(vulnrecord.FieldVector) {
+		fields = append(fields, vulnrecord.FieldVector)
+	}
+	if m.FieldCleared(vulnrecord.FieldPublished) {
+		fields = append(fields, vulnrecord.FieldPublished)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *VulnRecordMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *VulnRecordMutation) ClearField(name string) error {
+	switch name {
+	case vulnrecord.FieldAliases:
+		m.ClearAliases()
+		return nil
+	case vulnrecord.FieldSummary:
+		m.ClearSummary()
+		return nil
+	case vulnrecord.FieldVector:
+		m.ClearVector()
+		return nil
+	case vulnrecord.FieldPublished:
+		m.ClearPublished()
+		return nil
+	}
+	return fmt.Errorf("unknown VulnRecord nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *VulnRecordMutation) ResetField(name string) error {
+	switch name {
+	case vulnrecord.FieldOsvID:
+		m.ResetOsvID()
+		return nil
+	case vulnrecord.FieldEcosystem:
+		m.ResetEcosystem()
+		return nil
+	case vulnrecord.FieldPackage:
+		m.ResetPackage()
+		return nil
+	case vulnrecord.FieldRanges:
+		m.ResetRanges()
+		return nil
+	case vulnrecord.FieldAliases:
+		m.ResetAliases()
+		return nil
+	case vulnrecord.FieldSummary:
+		m.ResetSummary()
+		return nil
+	case vulnrecord.FieldScore:
+		m.ResetScore()
+		return nil
+	case vulnrecord.FieldVector:
+		m.ResetVector()
+		return nil
+	case vulnrecord.FieldPublished:
+		m.ResetPublished()
+		return nil
+	case vulnrecord.FieldSyncedAt:
+		m.ResetSyncedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown VulnRecord field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *VulnRecordMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *VulnRecordMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *VulnRecordMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *VulnRecordMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *VulnRecordMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *VulnRecordMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *VulnRecordMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown VulnRecord unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *VulnRecordMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown VulnRecord edge %s", name)
 }
 
 // ZoneMutation represents an operation that mutates the Zone nodes in the graph.

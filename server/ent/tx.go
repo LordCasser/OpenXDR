@@ -72,6 +72,8 @@ type Tx struct {
 	TaskRun *TaskRunClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// VulnRecord is the client for interacting with the VulnRecord builders.
+	VulnRecord *VulnRecordClient
 	// Zone is the client for interacting with the Zone builders.
 	Zone *ZoneClient
 
@@ -235,6 +237,7 @@ func (tx *Tx) init() {
 	tx.Task = NewTaskClient(tx.config)
 	tx.TaskRun = NewTaskRunClient(tx.config)
 	tx.User = NewUserClient(tx.config)
+	tx.VulnRecord = NewVulnRecordClient(tx.config)
 	tx.Zone = NewZoneClient(tx.config)
 }
 

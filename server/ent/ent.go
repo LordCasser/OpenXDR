@@ -36,6 +36,7 @@ import (
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
+	"openxdr/server/ent/vulnrecord"
 	"openxdr/server/ent/zone"
 	"reflect"
 	"sync"
@@ -133,6 +134,7 @@ func checkColumn(t, c string) error {
 			task.Table:            task.ValidColumn,
 			taskrun.Table:         taskrun.ValidColumn,
 			user.Table:            user.ValidColumn,
+			vulnrecord.Table:      vulnrecord.ValidColumn,
 			zone.Table:            zone.ValidColumn,
 		})
 	})

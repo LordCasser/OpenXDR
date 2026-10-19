@@ -13,7 +13,8 @@ OpenXDR 采用 OCSF 风格事件模型。本文列出所有事件类别、字段
 | 4001 | 网络活动（Network Activity） | agent / sensor | agent netwatch 连接（Linux eBPF：TCP 出入站、UDP 出站；Windows ETW Kernel-Network：TCP 出站）；sensor 非 DNS 会话 |
 | 4003 | DNS 活动（DNS Activity） | agent / sensor | agent dnswatch 本机与容器的 DNS 问答（Linux）；sensor 会话带 dns_query 时判定 |
 | 1005 | 模块活动（Module Activity） | agent | Linux kmodwatch（/proc/modules diff） |
-| 5001 | 设备清单（Device Inventory Info） | agent | inventory：监听端口与云环境快照，供资产图谱与攻击面 |
+| 5001 | 设备清单（Device Inventory Info） | agent | inventory：监听端口（含服务进程所属的包）与云环境快照，供资产图谱与攻击面 |
+| 5020 | 软件清单（Software Inventory Info） | agent | software：发行版与 dpkg 已装包（包名、版本、源码包、源码版本），供漏洞匹配，见 [vulns.md](vulns.md) |
 | 201002 | 注册表值活动（Registry Value Activity） | agent | Windows persistwatch 注册表键/服务快照 |
 | 100001 | 应用日志（OCSF 私有段） | syslog | server syslog 接入 |
 

@@ -23,6 +23,9 @@ mod authwatch;
 mod local_accounts;
 
 #[cfg(target_os = "linux")]
+mod software;
+
+#[cfg(target_os = "linux")]
 mod container;
 
 #[cfg(target_os = "linux")]
@@ -98,6 +101,10 @@ pub fn spawn(
             "local-accounts",
             cfg.collect_inventory && cfg!(target_os = "linux"),
         ),
+        (
+            "software",
+            cfg.collect_inventory && cfg!(target_os = "linux"),
+        ),
     ]);
     periodic::set_enabled(cfg.collapse_periodic);
     let sink = EventSink {
@@ -147,6 +154,7 @@ pub fn spawn(
     #[cfg(target_os = "linux")]
     if cfg.collect_inventory {
         inventory_linux::spawn(agent_id.clone(), sink.clone());
+        software::spawn(agent_id.clone(), sink.clone());
     }
     #[cfg(target_os = "windows")]
     if cfg.collect_inventory {

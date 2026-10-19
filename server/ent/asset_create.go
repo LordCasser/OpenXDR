@@ -173,6 +173,26 @@ func (_c *AssetCreate) SetNillableInventoryAt(v *time.Time) *AssetCreate {
 	return _c
 }
 
+// SetSoftware sets the "software" field.
+func (_c *AssetCreate) SetSoftware(v json.RawMessage) *AssetCreate {
+	_c.mutation.SetSoftware(v)
+	return _c
+}
+
+// SetSoftwareAt sets the "software_at" field.
+func (_c *AssetCreate) SetSoftwareAt(v time.Time) *AssetCreate {
+	_c.mutation.SetSoftwareAt(v)
+	return _c
+}
+
+// SetNillableSoftwareAt sets the "software_at" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableSoftwareAt(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetSoftwareAt(*v)
+	}
+	return _c
+}
+
 // SetServiceNotes sets the "service_notes" field.
 func (_c *AssetCreate) SetServiceNotes(v json.RawMessage) *AssetCreate {
 	_c.mutation.SetServiceNotes(v)
@@ -518,6 +538,14 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.InventoryAt(); ok {
 		_spec.SetField(asset.FieldInventoryAt, field.TypeTime, value)
 		_node.InventoryAt = &value
+	}
+	if value, ok := _c.mutation.Software(); ok {
+		_spec.SetField(asset.FieldSoftware, field.TypeJSON, value)
+		_node.Software = value
+	}
+	if value, ok := _c.mutation.SoftwareAt(); ok {
+		_spec.SetField(asset.FieldSoftwareAt, field.TypeTime, value)
+		_node.SoftwareAt = &value
 	}
 	if value, ok := _c.mutation.ServiceNotes(); ok {
 		_spec.SetField(asset.FieldServiceNotes, field.TypeJSON, value)

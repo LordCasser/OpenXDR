@@ -34,6 +34,7 @@ import (
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
+	"openxdr/server/ent/vulnrecord"
 	"openxdr/server/ent/zone"
 	"time"
 
@@ -512,6 +513,16 @@ func init() {
 	userDescID := userFields[0].Descriptor()
 	// user.DefaultID holds the default value on creation for the id field.
 	user.DefaultID = userDescID.Default.(func() uuid.UUID)
+	vulnrecordFields := schema.VulnRecord{}.Fields()
+	_ = vulnrecordFields
+	// vulnrecordDescScore is the schema descriptor for score field.
+	vulnrecordDescScore := vulnrecordFields[7].Descriptor()
+	// vulnrecord.DefaultScore holds the default value on creation for the score field.
+	vulnrecord.DefaultScore = vulnrecordDescScore.Default.(float64)
+	// vulnrecordDescSyncedAt is the schema descriptor for synced_at field.
+	vulnrecordDescSyncedAt := vulnrecordFields[10].Descriptor()
+	// vulnrecord.DefaultSyncedAt holds the default value on creation for the synced_at field.
+	vulnrecord.DefaultSyncedAt = vulnrecordDescSyncedAt.Default.(func() time.Time)
 	zoneFields := schema.Zone{}.Fields()
 	_ = zoneFields
 	// zoneDescName is the schema descriptor for name field.

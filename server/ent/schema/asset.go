@@ -41,6 +41,9 @@ func (Asset) Fields() []ent.Field {
 		field.JSON("listening", json.RawMessage{}).Optional(),
 		field.JSON("cloud", json.RawMessage{}).Optional(),
 		field.Time("inventory_at").Optional().Nillable(),
+		// 软件清单：agent 上报的发行版与已装包（OCSF 5020），由 assetmap 物化，漏洞匹配读它
+		field.JSON("software", json.RawMessage{}).Optional(),
+		field.Time("software_at").Optional().Nillable(),
 		// 监听服务说明：键为 协议/端口（如 udp/5405），值含服务名、说明、风险与来源（ai / investigation / human）。
 		// 端口表认不出的服务靠它命名；人工写的优先级最高，AI 不覆盖
 		field.JSON("service_notes", json.RawMessage{}).Optional(),

@@ -43,6 +43,10 @@ const (
 	FieldCloud = "cloud"
 	// FieldInventoryAt holds the string denoting the inventory_at field in the database.
 	FieldInventoryAt = "inventory_at"
+	// FieldSoftware holds the string denoting the software field in the database.
+	FieldSoftware = "software"
+	// FieldSoftwareAt holds the string denoting the software_at field in the database.
+	FieldSoftwareAt = "software_at"
 	// FieldServiceNotes holds the string denoting the service_notes field in the database.
 	FieldServiceNotes = "service_notes"
 	// FieldEgressNotes holds the string denoting the egress_notes field in the database.
@@ -115,6 +119,8 @@ var Columns = []string{
 	FieldListening,
 	FieldCloud,
 	FieldInventoryAt,
+	FieldSoftware,
+	FieldSoftwareAt,
 	FieldServiceNotes,
 	FieldEgressNotes,
 	FieldZoneID,
@@ -199,6 +205,11 @@ func BySilentSince(opts ...sql.OrderTermOption) OrderOption {
 // ByInventoryAt orders the results by the inventory_at field.
 func ByInventoryAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInventoryAt, opts...).ToFunc()
+}
+
+// BySoftwareAt orders the results by the software_at field.
+func BySoftwareAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSoftwareAt, opts...).ToFunc()
 }
 
 // ByZoneID orders the results by the zone_id field.

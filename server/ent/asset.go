@@ -47,6 +47,10 @@ type Asset struct {
 	Cloud json.RawMessage `json:"cloud,omitempty"`
 	// InventoryAt holds the value of the "inventory_at" field.
 	InventoryAt *time.Time `json:"inventory_at,omitempty"`
+	// Software holds the value of the "software" field.
+	Software json.RawMessage `json:"software,omitempty"`
+	// SoftwareAt holds the value of the "software_at" field.
+	SoftwareAt *time.Time `json:"software_at,omitempty"`
 	// ServiceNotes holds the value of the "service_notes" field.
 	ServiceNotes json.RawMessage `json:"service_notes,omitempty"`
 	// EgressNotes holds the value of the "egress_notes" field.
@@ -124,13 +128,13 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case asset.FieldAgentID, asset.FieldGroupID, asset.FieldZoneID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case asset.FieldIPAddrs, asset.FieldCollectorHealth, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldServiceNotes, asset.FieldEgressNotes, asset.FieldRelationNotes, asset.FieldLockedFields:
+		case asset.FieldIPAddrs, asset.FieldCollectorHealth, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldSoftware, asset.FieldServiceNotes, asset.FieldEgressNotes, asset.FieldRelationNotes, asset.FieldLockedFields:
 			values[i] = new([]byte)
 		case asset.FieldCriticality:
 			values[i] = new(sql.NullInt64)
 		case asset.FieldHostname, asset.FieldOs, asset.FieldAgentVersion, asset.FieldRole, asset.FieldSummary, asset.FieldAnnotationReason, asset.FieldAnnotatedFacts:
 			values[i] = new(sql.NullString)
-		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince, asset.FieldInventoryAt, asset.FieldAnnotatedAt, asset.FieldAnnotateRequestedAt:
+		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince, asset.FieldInventoryAt, asset.FieldSoftwareAt, asset.FieldAnnotatedAt, asset.FieldAnnotateRequestedAt:
 			values[i] = new(sql.NullTime)
 		case asset.FieldID:
 			values[i] = new(uuid.UUID)
@@ -254,6 +258,21 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.InventoryAt = new(time.Time)
 				*_m.InventoryAt = value.Time
+			}
+		case asset.FieldSoftware:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field software", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Software); err != nil {
+					return fmt.Errorf("unmarshal field software: %w", err)
+				}
+			}
+		case asset.FieldSoftwareAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field software_at", values[i])
+			} else if value.Valid {
+				_m.SoftwareAt = new(time.Time)
+				*_m.SoftwareAt = value.Time
 			}
 		case asset.FieldServiceNotes:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -445,6 +464,14 @@ func (_m *Asset) String() string {
 	builder.WriteString(", ")
 	if v := _m.InventoryAt; v != nil {
 		builder.WriteString("inventory_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("software=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Software))
+	builder.WriteString(", ")
+	if v := _m.SoftwareAt; v != nil {
+		builder.WriteString("software_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

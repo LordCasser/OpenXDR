@@ -997,6 +997,8 @@ export interface ExposedService {
   assetId: string; hostname: string; zone: ZoneRef; level: ExposureLevel; proto: string; addrs: string[]; port: number
   process?: string; service: PortService; criticality?: number; score: number; peers: string[] | null; peerCount: number; fromPublic: boolean
   note?: ServiceNote
+  // 服务进程所属的包，用来对上这台资产的漏洞
+  package?: string
 }
 // 服务说明：端口表认不出时靠它命名；来源优先级 human > investigation > ai
 export interface ServiceNote { name: string; note?: string; risk?: 'high' | 'medium' | 'low'; source: 'ai' | 'investigation' | 'human'; by?: string; at: string }
@@ -1037,6 +1039,20 @@ export interface AssetProfile {
 export type ProfileEdit = { role?: string; summary?: string; criticality?: number; unlock?: string[] }
 
 export const fetchAssetMap = (groupId: string) => get<AssetMap>(`/api/asset-map?groupId=${groupId}`)
+// 软件漏洞：按源码包归组，可升级修复与暂无修复分开
+export interface VulnItem { id: string; aliases?: string[]; summary?: string; score: number; vector?: string; fixed?: string }
+export interface VulnPackage { source: string; version: string; binaries: string[]; exposed: boolean; maxScore: number; fixedIn?: string; vulns: VulnItem[] }
+export interface VulnReport {
+  ecosystem: string; packages: number; fixable: VulnPackage[] | null; unfixed: VulnPackage[] | null
+  softwareAt: string | null; sync: { at: string; records: number; error?: string } | null
+}
+export interface VulnSummary {
+  assetId: string; fixable: number; high: number; exposed: number; unfixed: number; maxScore: number
+  exposedPackages: { source: string; binaries: string[]; maxScore: number; vulns: number; fixedIn?: string }[] | null
+}
+export const fetchAssetVulns = (assetId: string) => get<VulnReport | null>(`/api/assets/${assetId}/vulns`)
+export const fetchVulnSummary = () => get<VulnSummary[]>('/api/vulns/summary')
+
 export const fetchAttackSurface = (groupId: string) => get<AttackSurface>(`/api/attack-surface?groupId=${groupId}`)
 export const fetchZones = (groupId: string) => get<ZoneRow[]>(`/api/zones?groupId=${groupId}`)
 export const createZone = async (z: { groupId: string; name: string; kind: ZoneKind; cidrs: string[] }) => { await send('POST', '/api/zones', z) }

@@ -60,7 +60,7 @@ func parseHealth(raw string, now time.Time) (collectorHealth, error) {
 	}
 	for name, cap := range h.Capabilities {
 		switch name {
-		case "process", "files", "network", "dns", "auth", "inventory", "local-accounts", "persist", "kmod", "powershell":
+		case "process", "files", "network", "dns", "auth", "inventory", "local-accounts", "persist", "kmod", "powershell", "software":
 		default:
 			return h, status.Error(codes.InvalidArgument, "未知采集组件")
 		}

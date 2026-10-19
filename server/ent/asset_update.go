@@ -286,6 +286,44 @@ func (_u *AssetUpdate) ClearInventoryAt() *AssetUpdate {
 	return _u
 }
 
+// SetSoftware sets the "software" field.
+func (_u *AssetUpdate) SetSoftware(v json.RawMessage) *AssetUpdate {
+	_u.mutation.SetSoftware(v)
+	return _u
+}
+
+// AppendSoftware appends value to the "software" field.
+func (_u *AssetUpdate) AppendSoftware(v json.RawMessage) *AssetUpdate {
+	_u.mutation.AppendSoftware(v)
+	return _u
+}
+
+// ClearSoftware clears the value of the "software" field.
+func (_u *AssetUpdate) ClearSoftware() *AssetUpdate {
+	_u.mutation.ClearSoftware()
+	return _u
+}
+
+// SetSoftwareAt sets the "software_at" field.
+func (_u *AssetUpdate) SetSoftwareAt(v time.Time) *AssetUpdate {
+	_u.mutation.SetSoftwareAt(v)
+	return _u
+}
+
+// SetNillableSoftwareAt sets the "software_at" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableSoftwareAt(v *time.Time) *AssetUpdate {
+	if v != nil {
+		_u.SetSoftwareAt(*v)
+	}
+	return _u
+}
+
+// ClearSoftwareAt clears the value of the "software_at" field.
+func (_u *AssetUpdate) ClearSoftwareAt() *AssetUpdate {
+	_u.mutation.ClearSoftwareAt()
+	return _u
+}
+
 // SetServiceNotes sets the "service_notes" field.
 func (_u *AssetUpdate) SetServiceNotes(v json.RawMessage) *AssetUpdate {
 	_u.mutation.SetServiceNotes(v)
@@ -767,6 +805,23 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.InventoryAtCleared() {
 		_spec.ClearField(asset.FieldInventoryAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Software(); ok {
+		_spec.SetField(asset.FieldSoftware, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedSoftware(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldSoftware, value)
+		})
+	}
+	if _u.mutation.SoftwareCleared() {
+		_spec.ClearField(asset.FieldSoftware, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SoftwareAt(); ok {
+		_spec.SetField(asset.FieldSoftwareAt, field.TypeTime, value)
+	}
+	if _u.mutation.SoftwareAtCleared() {
+		_spec.ClearField(asset.FieldSoftwareAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ServiceNotes(); ok {
 		_spec.SetField(asset.FieldServiceNotes, field.TypeJSON, value)
@@ -1262,6 +1317,44 @@ func (_u *AssetUpdateOne) SetNillableInventoryAt(v *time.Time) *AssetUpdateOne {
 // ClearInventoryAt clears the value of the "inventory_at" field.
 func (_u *AssetUpdateOne) ClearInventoryAt() *AssetUpdateOne {
 	_u.mutation.ClearInventoryAt()
+	return _u
+}
+
+// SetSoftware sets the "software" field.
+func (_u *AssetUpdateOne) SetSoftware(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.SetSoftware(v)
+	return _u
+}
+
+// AppendSoftware appends value to the "software" field.
+func (_u *AssetUpdateOne) AppendSoftware(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.AppendSoftware(v)
+	return _u
+}
+
+// ClearSoftware clears the value of the "software" field.
+func (_u *AssetUpdateOne) ClearSoftware() *AssetUpdateOne {
+	_u.mutation.ClearSoftware()
+	return _u
+}
+
+// SetSoftwareAt sets the "software_at" field.
+func (_u *AssetUpdateOne) SetSoftwareAt(v time.Time) *AssetUpdateOne {
+	_u.mutation.SetSoftwareAt(v)
+	return _u
+}
+
+// SetNillableSoftwareAt sets the "software_at" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableSoftwareAt(v *time.Time) *AssetUpdateOne {
+	if v != nil {
+		_u.SetSoftwareAt(*v)
+	}
+	return _u
+}
+
+// ClearSoftwareAt clears the value of the "software_at" field.
+func (_u *AssetUpdateOne) ClearSoftwareAt() *AssetUpdateOne {
+	_u.mutation.ClearSoftwareAt()
 	return _u
 }
 
@@ -1776,6 +1869,23 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.InventoryAtCleared() {
 		_spec.ClearField(asset.FieldInventoryAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Software(); ok {
+		_spec.SetField(asset.FieldSoftware, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedSoftware(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldSoftware, value)
+		})
+	}
+	if _u.mutation.SoftwareCleared() {
+		_spec.ClearField(asset.FieldSoftware, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SoftwareAt(); ok {
+		_spec.SetField(asset.FieldSoftwareAt, field.TypeTime, value)
+	}
+	if _u.mutation.SoftwareAtCleared() {
+		_spec.ClearField(asset.FieldSoftwareAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ServiceNotes(); ok {
 		_spec.SetField(asset.FieldServiceNotes, field.TypeJSON, value)

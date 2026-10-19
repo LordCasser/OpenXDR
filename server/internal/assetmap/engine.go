@@ -102,7 +102,7 @@ type linkAgg struct {
 
 func (e *Engine) batch(ctx context.Context) (int, error) {
 	events, err := e.DB.Event.Query().
-		Where(event.ClassUIDIn(classNetwork, ClassInventory), event.TsGT(e.cursor)).
+		Where(event.ClassUIDIn(classNetwork, ClassInventory, ClassSoftware), event.TsGT(e.cursor)).
 		Order(ent.Asc(event.FieldTs)).
 		Limit(batchLimit).
 		All(ctx)
@@ -131,7 +131,18 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		cloud     *Cloud
 	}
 	inventories := map[uuid.UUID]snapshot{}
+	type softwareSnap struct {
+		ts time.Time
+		sw *Software
+	}
+	softwares := map[uuid.UUID]softwareSnap{}
 	for _, ev := range events {
+		if ev.ClassUID == ClassSoftware {
+			if sw, ok := software(ev.Raw); ok && ev.AssetID != nil {
+				softwares[*ev.AssetID] = softwareSnap{ev.Ts, sw}
+			}
+			continue
+		}
 		if ev.ClassUID == ClassInventory {
 			if ev.AssetID != nil {
 				l, c := inventory(ev.Raw)
@@ -195,6 +206,13 @@ ON CONFLICT (src_ip, dst_ip, dst_port, proto, process) DO UPDATE SET
   last_seen = GREATEST(asset_links.last_seen, EXCLUDED.last_seen),
   src_asset_id = COALESCE(EXCLUDED.src_asset_id, asset_links.src_asset_id)`,
 			uuid.Must(uuid.NewV7()), k.srcIP, a.srcAsset, k.dstIP, k.port, k.proto, k.process, a.count, a.first, a.last); err != nil {
+			return 0, err
+		}
+	}
+	for id, s := range softwares {
+		sw, _ := json.Marshal(s.sw)
+		if _, err := tx.ExecContext(ctx, `UPDATE assets SET software=$2::jsonb, software_at=$3
+WHERE id=$1 AND (software_at IS NULL OR software_at < $3)`, id, string(sw), s.ts); err != nil {
 			return 0, err
 		}
 	}

@@ -368,6 +368,18 @@ func (f UserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserMutation", m)
 }
 
+// The VulnRecordFunc type is an adapter to allow the use of ordinary
+// function as VulnRecord mutator.
+type VulnRecordFunc func(context.Context, *ent.VulnRecordMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f VulnRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.VulnRecordMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.VulnRecordMutation", m)
+}
+
 // The ZoneFunc type is an adapter to allow the use of ordinary
 // function as Zone mutator.
 type ZoneFunc func(context.Context, *ent.ZoneMutation) (ent.Value, error)

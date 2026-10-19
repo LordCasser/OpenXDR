@@ -101,6 +101,11 @@ func InventoryAt(v time.Time) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldInventoryAt, v))
 }
 
+// SoftwareAt applies equality check predicate on the "software_at" field. It's identical to SoftwareAtEQ.
+func SoftwareAt(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSoftwareAt, v))
+}
+
 // ZoneID applies equality check predicate on the "zone_id" field. It's identical to ZoneIDEQ.
 func ZoneID(v uuid.UUID) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldZoneID, v))
@@ -684,6 +689,66 @@ func InventoryAtIsNil() predicate.Asset {
 // InventoryAtNotNil applies the NotNil predicate on the "inventory_at" field.
 func InventoryAtNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldInventoryAt))
+}
+
+// SoftwareIsNil applies the IsNil predicate on the "software" field.
+func SoftwareIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSoftware))
+}
+
+// SoftwareNotNil applies the NotNil predicate on the "software" field.
+func SoftwareNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSoftware))
+}
+
+// SoftwareAtEQ applies the EQ predicate on the "software_at" field.
+func SoftwareAtEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSoftwareAt, v))
+}
+
+// SoftwareAtNEQ applies the NEQ predicate on the "software_at" field.
+func SoftwareAtNEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldSoftwareAt, v))
+}
+
+// SoftwareAtIn applies the In predicate on the "software_at" field.
+func SoftwareAtIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldSoftwareAt, vs...))
+}
+
+// SoftwareAtNotIn applies the NotIn predicate on the "software_at" field.
+func SoftwareAtNotIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldSoftwareAt, vs...))
+}
+
+// SoftwareAtGT applies the GT predicate on the "software_at" field.
+func SoftwareAtGT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldSoftwareAt, v))
+}
+
+// SoftwareAtGTE applies the GTE predicate on the "software_at" field.
+func SoftwareAtGTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldSoftwareAt, v))
+}
+
+// SoftwareAtLT applies the LT predicate on the "software_at" field.
+func SoftwareAtLT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldSoftwareAt, v))
+}
+
+// SoftwareAtLTE applies the LTE predicate on the "software_at" field.
+func SoftwareAtLTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldSoftwareAt, v))
+}
+
+// SoftwareAtIsNil applies the IsNil predicate on the "software_at" field.
+func SoftwareAtIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSoftwareAt))
+}
+
+// SoftwareAtNotNil applies the NotNil predicate on the "software_at" field.
+func SoftwareAtNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSoftwareAt))
 }
 
 // ServiceNotesIsNil applies the IsNil predicate on the "service_notes" field.

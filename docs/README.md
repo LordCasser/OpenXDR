@@ -21,6 +21,7 @@
 | [api.md](api.md) | REST API 参考：端点、参数、权限约定、对接示例 | 对接外部系统；改 `server/internal/api` |
 | [roadmap.md](roadmap.md) | 路线图：现状快照、已完成项的教训、后续工作详细规划（P0/P1/P2）、不做清单 | 决定"接下来做什么"之前 |
 | [pi-backend.md](pi-backend.md) | AI 助手后端：会话与后台运行、命令名单与审批、只读查询、运维待办、预设任务 | 配置 AI 助手与巡检；改 `agentchat`、`commandgate` |
+| [vulns.md](vulns.md) | 软件漏洞：dpkg 软件清单、OSV 漏洞库同步、版本比较与暴露服务标注、已知限制 | 看主机漏洞；改 `vuln` 或 agent 软件清单 |
 | [asset-map.md](asset-map.md) | 资产图谱与攻击面：设备清单、依赖边、区域与暴露级别、风险分、AI 标注 | 看资产关系与暴露面；改 `assetmap` 或 agent inventory |
 | [host-enrollment.md](host-enrollment.md) | 运维文档导入、凭据加密存储、按组授权与 SSH 纳管 | 导入含主机密码或私钥的文档；配置远程安装 |
 | [ai-native.md](ai-native.md) | AI 原生架构设计稿（M1 已实现，当前接口以 pi-backend.md 为准）：agent 执行器、平台托管 Pi、定时巡检、对话页、组与审批 | 参与 AI 原生改造之前 |

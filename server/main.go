@@ -55,6 +55,7 @@ import (
 	"openxdr/server/internal/telemetry"
 	"openxdr/server/internal/triage"
 	"openxdr/server/internal/ueba"
+	"openxdr/server/internal/vuln"
 	"openxdr/server/pb"
 )
 
@@ -445,6 +446,15 @@ func main() {
 	routes.Handle("/api/setup/", setup)
 	// 比 /api/settings/ 更具体，ServeMux 优先匹配；门槛同样是 admin
 	routes.Handle("/api/settings/ai/accuracy", api.AIAccuracy(db, rules))
+	// 软件漏洞：资产详情与攻击面；漏洞库每天从 OSV 同步（VULN_DIR 指向离线目录时不联网）
+	vulnAPI := api.Vulns(client, db)
+	routes.Handle("/api/assets/{id}/vulns", vulnAPI)
+	routes.Handle("/api/vulns/summary", vulnAPI)
+	if getenvInt("VULN_SYNC_HOURS", 24) > 0 {
+		syncer := &vuln.Syncer{DB: client, SQL: db, BaseURL: getenv("VULN_OSV_URL", vuln.DefaultBaseURL), Dir: os.Getenv("VULN_DIR"),
+			Interval: time.Duration(getenvInt("VULN_SYNC_HOURS", 24)) * time.Hour}
+		go cluster.RunLeader(ctx, db, "vuln-sync", syncer.Run)
+	}
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook, aiConf, db))
 	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))
 	routes.Handle("/api/intel/feeds/", api.IntelFeeds(client, intelFeeds))
