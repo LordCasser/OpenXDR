@@ -87,6 +87,8 @@ jobs:
       - working-directory: web
         run: npm ci
       - working-directory: web
+        run: npm run lint
+      - working-directory: web
         run: npm run build
 
   # 默认构建不需要 nightly 和 bpf-linker，这一项守住"开箱即用"
