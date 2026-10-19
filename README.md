@@ -23,7 +23,11 @@
 - **层层降噪**：Sigma 兼容规则（热重载、ATT&CK 矩阵标出「有规则无数据源」的缺口）、
   威胁情报碰撞（内置 abuse.ch 等公开订阅）、持久去重、可撤销的误报抑制、按实体关联成事件图、
   UEBA 首次出现检测，最后由 AI 带调查工具主动研判。低危良性事件到期自动结案，
-  需要人复核的永远留给人。
+  需要人复核的永远留给人。另有时序检测（计数与序列规则，独立目录，显式开启，开发中）。
+- **软件漏洞**：agent 上报 dpkg 软件清单，server 按 OSV 漏洞库比对，标出可升级修复的漏洞与
+  受影响的对外服务；支持离线漏洞库。目前只覆盖 Debian / Ubuntu。
+- **身份关联**（开发中）：归一化 Linux / Windows 登录与本地账号，可从 Keycloak、Entra ID、AD / LDAP
+  同步目录账号；未核实目录权威前不跨设备合并同名账号。
 - **资产图谱与攻击面**：agent 上报监听端口与云环境，连接关系聚合成依赖图；AI 标注每台资产的
   角色、功能与重要程度（人工可改可锁）。资产按网段、云环境、IP 自动划成内网 / 隔离区 / 公网区 / 云上，
   每个对外服务按暴露级别 × 端口风险 × 重要程度排序，连过却没纳管的机器列为盲区。
@@ -94,6 +98,8 @@ docker compose logs server | grep admin   # 首次启动生成的 admin 密码
 | [资产图谱与攻击面](docs/asset-map.md) | 设备清单、依赖边、区域划分、风险分与 AI 标注 |
 | [AI 助手与巡检](docs/pi-backend.md) | 会话、命令名单与审批、只读查询、运维待办、预设任务 |
 | [文档导入与主机纳管](docs/host-enrollment.md) | 运维文档导入、凭据加密、SSH 纳管 |
+| [软件漏洞](docs/vulns.md) | dpkg 软件清单、OSV 漏洞库同步、版本比较、已知限制 |
+| [时序检测](docs/temporal-detection.md) · [身份关联](docs/identity-correlation.md) | 计数与序列规则；登录归一化与目录同步（均开发中） |
 | [架构](docs/architecture.md) · [采集端](docs/collection.md) · [事件模型](docs/events.md) · [检测链路](docs/detection.md) | 设计与实现细节 |
 | [REST API](docs/api.md) · [集群与可观测性](docs/cluster.md) · [路线图](docs/roadmap.md) | 对接、运维与规划 |
 
@@ -108,10 +114,13 @@ docker compose logs server | grep admin   # 首次启动生成的 admin 密码
 | `server/` | Go 后端：接入、检测、关联、AI 研判与助手、REST / gRPC |
 | `web/` | React 管理控制台 |
 | `rules/` | Sigma 兼容检测规则 |
+| `temporal-rules/` | 时序检测规则（计数 / 序列），与 Sigma 规则分开存放 |
 | `tasks/` | 预设巡检任务（YAML） |
 | `validation/` | [检测验证语料](validation/README.md)：真实攻击命令回放过规则引擎，CI 守住检测能力 |
 | `deploy/` | 集群与高可用部署 |
 | `proto/` | gRPC 契约 |
+| `schema/` | 设计参考 DDL，实际表结构以 `server/ent/schema/` 为准 |
+| `pages/` | 项目主页（GitHub Pages），与产品代码无关 |
 
 ## 当前状态
 

@@ -29,7 +29,14 @@ People make the calls instead of digging through alert lists.
   "rule exists but no data source"), threat intel matching with built-in public feeds such as abuse.ch,
   persistent dedup, revocable suppressions, entity-based correlation into incident graphs, UEBA first-seen detection,
   and finally AI triage that investigates with tools. Low-severity benign incidents are auto-closed after a grace period;
-  anything that needs human review stays with humans.
+  anything that needs human review stays with humans. Temporal detection (count and sequence rules in a separate
+  directory, opt-in) is under development.
+- **Software vulnerabilities**: agents report the dpkg package inventory and the server matches it against the OSV
+  database, flagging vulnerabilities fixable by upgrade and the exposed services they affect; an offline feed is supported.
+  Debian / Ubuntu only for now.
+- **Identity correlation** (under development): Linux / Windows logons and local accounts are normalized, and directory
+  accounts can be synced from Keycloak, Entra ID and AD / LDAP. Same-name accounts are not merged across devices until
+  the directory authority is verified.
 - **Asset map and attack surface**: agents report listening ports and cloud metadata, and observed connections
   become a dependency graph; AI annotates each asset's role, function and criticality (editable and lockable by people).
   Assets are zoned automatically as internal / DMZ / internet-facing / cloud by CIDR, cloud metadata and IP, every
@@ -105,8 +112,29 @@ docker compose logs server | grep admin   # admin password generated on first st
 | [Asset map and attack surface](docs/asset-map.md) | Inventory, dependencies, zones, risk scores and AI annotation |
 | [AI assistant and inspections](docs/pi-backend.md) | Sessions, command list and approvals, read-only queries, findings, preset tasks |
 | [Document import and onboarding](docs/host-enrollment.md) | Ops document import, credential encryption, SSH onboarding |
+| [Software vulnerabilities](docs/vulns.md) | dpkg inventory, OSV sync, version comparison, known limits |
+| [Temporal detection](docs/temporal-detection.md) · [Identity correlation](docs/identity-correlation.md) | Count and sequence rules; logon normalization and directory sync (both under development) |
 | [Architecture](docs/architecture.md) · [Collection](docs/collection.md) · [Event model](docs/events.md) · [Detection](docs/detection.md) | Design and implementation |
 | [REST API](docs/api.md) · [Cluster](docs/cluster.md) · [Roadmap](docs/roadmap.md) | Integration, operations and plans |
+
+See [docs/README.md](docs/README.md) for the full index.
+
+## Repository layout
+
+| Directory | Content |
+|---|---|
+| `agent/` | Rust endpoint agent (Linux / Windows), including response actions |
+| `sensor/` | Rust network sensor, AF_PACKET v3 / AF_XDP backends |
+| `server/` | Go backend: ingestion, detection, correlation, AI triage and assistant, REST / gRPC |
+| `web/` | React management console |
+| `rules/` | Sigma-compatible detection rules |
+| `temporal-rules/` | Temporal detection rules (count / sequence), kept apart from Sigma rules |
+| `tasks/` | Preset inspection tasks (YAML) |
+| `validation/` | [Detection validation corpus](validation/README.md): real attack commands replayed through the rule engine, guarded in CI |
+| `deploy/` | Cluster and HA deployment |
+| `proto/` | gRPC contracts |
+| `schema/` | Reference DDL; the actual schema lives in `server/ent/schema/` |
+| `pages/` | Project homepage (GitHub Pages), unrelated to the product code |
 
 ## Status
 
