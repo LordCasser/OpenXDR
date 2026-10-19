@@ -280,33 +280,30 @@ mod inspect {
         if status != 0 || pbi.peb_base_address.is_null() {
             return None;
         }
-        // SAFETY: 只做地址运算，不解引用：PEB 地址属于目标进程，随后交给 ReadProcessMemory 跨进程读。
-        // 注意 byte_add 要求结果落在本进程的同一分配内，这里并不成立，严格说应改用
-        // wrapping_byte_add（已知隐患，本次不改逻辑）。
-        let params: *mut core::ffi::c_void = read_mem(handle, unsafe {
-            pbi.peb_base_address.byte_add(PEB_PROCESS_PARAMETERS_OFF)
-        })?;
+        // PEB 地址属于目标进程，只做地址运算交给 ReadProcessMemory，本进程不解引用
+        let params: *mut core::ffi::c_void = read_mem(
+            handle,
+            pbi.peb_base_address
+                .wrapping_byte_add(PEB_PROCESS_PARAMETERS_OFF),
+        )?;
         if params.is_null() {
             return None;
         }
-        // SAFETY: 同上：只为 ReadProcessMemory 计算目标进程内的地址，本进程不解引用。
-        let us: UNICODE_STRING =
-            read_mem(handle, unsafe { params.byte_add(RUPP_COMMAND_LINE_OFF) })?;
+        let us: UNICODE_STRING = read_mem(handle, params.wrapping_byte_add(RUPP_COMMAND_LINE_OFF))?;
         if us.Buffer.is_null() || us.Length == 0 || us.Length > MAX_CMDLINE_BYTES {
             return None;
         }
+        // PEB 在目标进程手里、可被它改写成奇数 Length，读取长度按本地缓冲算，不信对方给的
         let mut buf = vec![0u16; (us.Length / 2) as usize];
         let mut got = 0usize;
-        // SAFETY: us.Buffer 是目标进程内的地址，只交给 ReadProcessMemory 跨进程读；got 为栈上出参。
-        // 本地 buf 是 (Length / 2) 个 u16，即 Length 向下取偶的字节数，而读取长度传的是 Length：
-        // 只有 Length 为偶数时才不越界。系统写的 UNICODE_STRING 总是偶数，但 PEB 在目标进程
-        // 手里、可被它自己改写，奇数 Length 会让本地缓冲被多写 1 字节——已知隐患，本次不改逻辑。
+        // SAFETY: us.Buffer 是目标进程内的地址，只交给 ReadProcessMemory 跨进程读；读取长度正是
+        // 本地 buf 的字节数，系统最多写这么多；got 为栈上出参。
         let ok = unsafe {
             ReadProcessMemory(
                 handle,
                 us.Buffer.cast(),
                 buf.as_mut_ptr().cast(),
-                us.Length as usize,
+                buf.len() * 2,
                 &mut got,
             )
         };
