@@ -137,23 +137,43 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 	mapMemories(mux, db)
 	mapReportRender(mux, db)
 
-	mux.HandleFunc("GET /api/incidents", func(w http.ResponseWriter, r *http.Request) {
+	mapIncidents(mux, db, rules)
+	mux.HandleFunc("GET /api/assets", listAssets(db))
+	return mux
+}
+
+// mapIncidents 事件列表、详情、结案与忽略结案建议。
+func mapIncidents(mux *http.ServeMux, db *ent.Client, rules sigma.Catalog) {
+	mux.HandleFunc("GET /api/incidents", listIncidents(db))
+	mux.HandleFunc("GET /api/incidents/{id}", getIncident(db, rules))
+	mux.HandleFunc("POST /api/incidents/{id}/status", setIncidentStatus(db))
+	mux.HandleFunc("DELETE /api/incidents/{id}/closure-proposal", dismissClosureProposal(db))
+}
+
+// filterIncidentStatus 列表的状态筛选，空串不过滤。
+func filterIncidentStatus(q *ent.IncidentQuery, status string) *ent.IncidentQuery {
+	switch status {
+	case "":
+	case "unresolved":
+		// 待处置：引擎已研判但分析师还没结案的也算
+		q = q.Where(incident.StatusIn("open", "triaged"))
+	case "review":
+		// 需人工复核：与通知推送同一口径
+		q = q.Where(review.Needed())
+	default:
+		q = q.Where(incident.StatusEQ(status))
+	}
+	return q
+}
+
+// listIncidents 事件列表：按状态、资产过滤，分页，附告警数、最高级别与所属组。
+func listIncidents(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		s, ok := requireScope(w, r, db, "viewer")
 		if !ok {
 			return
 		}
-		q := db.Incident.Query().Where(s.incident()...)
-		switch status := r.URL.Query().Get("status"); status {
-		case "":
-		case "unresolved":
-			// 待处置：引擎已研判但分析师还没结案的也算
-			q = q.Where(incident.StatusIn("open", "triaged"))
-		case "review":
-			// 需人工复核：与通知推送同一口径
-			q = q.Where(review.Needed())
-		default:
-			q = q.Where(incident.StatusEQ(status))
-		}
+		q := filterIncidentStatus(db.Incident.Query().Where(s.incident()...), r.URL.Query().Get("status"))
 		// 资产详情页：涉及这台主机的事件
 		if v := r.URL.Query().Get("assetId"); v != "" {
 			id, err := uuid.Parse(v)
@@ -216,9 +236,12 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 		}
 		w.Header().Set("X-Total-Count", strconv.Itoa(total))
 		writeJSON(w, out)
-	})
+	}
+}
 
-	mux.HandleFunc("GET /api/incidents/{id}", func(w http.ResponseWriter, r *http.Request) {
+// getIncident 事件详情：事件图与按时间排列的告警。
+func getIncident(db *ent.Client, rules sigma.Catalog) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "无效的 incident id", http.StatusBadRequest)
@@ -284,10 +307,12 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 			AssetID:         assetID,
 			Alerts:          rows,
 		})
-	})
+	}
+}
 
-	// 结案必须写结论备注：closed 属实已处置，false_positive 误报或良性；备注会作为案例喂回研判
-	mux.HandleFunc("POST /api/incidents/{id}/status", func(w http.ResponseWriter, r *http.Request) {
+// setIncidentStatus 结案必须写结论备注：closed 属实已处置，false_positive 误报或良性；备注会作为案例喂回研判
+func setIncidentStatus(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "无效的 incident id", http.StatusBadRequest)
@@ -342,10 +367,12 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 		}
 		audit.Log(r.Context(), db, r, "incident_status", id.String(), strings.TrimSpace(body.Status+" "+note))
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	// 忽略 AI 的结案建议
-	mux.HandleFunc("DELETE /api/incidents/{id}/closure-proposal", func(w http.ResponseWriter, r *http.Request) {
+// dismissClosureProposal 忽略 AI 的结案建议
+func dismissClosureProposal(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
 			http.Error(w, "无效的 incident id", http.StatusBadRequest)
@@ -360,9 +387,12 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 		}
 		audit.Log(r.Context(), db, r, "incident_proposal_dismissed", id.String(), "")
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	mux.HandleFunc("GET /api/assets", func(w http.ResponseWriter, r *http.Request) {
+// listAssets 可见范围内的资产清单。
+func listAssets(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		s, ok := requireScope(w, r, db, "viewer")
 		if !ok {
 			return
@@ -391,9 +421,7 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen, a.GroupID, a.SilentSince, a.AgentVersion, a.CollectorHealth}
 		}
 		writeJSON(w, out)
-	})
-
-	return mux
+	}
 }
 
 func summarize(inc *ent.Incident, alertCount int, severity int16) incidentSummary {
