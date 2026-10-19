@@ -136,7 +136,6 @@ impl AfPacket {
         let ring_len = cfg.block_size as usize * cfg.block_count as usize;
         // SAFETY: 不指定地址、长度 ring_len 恰为 PACKET_RX_RING 申请的 block_size × block_count（内核要求
         // 整块映射），fd 是上面打开并已设好环的 AF_PACKET 套接字；MAP_FAILED 在下面检查。
-        // 注意之后 bind / fanout 失败返回时 FdGuard 只关 fd，这段映射会泄漏到进程退出（不是 UB）。
         let ring = unsafe {
             libc::mmap(
                 std::ptr::null_mut(),
@@ -150,6 +149,16 @@ impl AfPacket {
         if ring == libc::MAP_FAILED {
             return Err(io::Error::last_os_error());
         }
+        // 映射与 fd 自此归 AfPacket 管：后面任何一步失败返回，Drop 会一起释放
+        std::mem::forget(guard);
+        let this = Self {
+            fd,
+            ring: ring as *mut u8,
+            ring_len,
+            block_size: cfg.block_size as usize,
+            block_count: cfg.block_count as usize,
+            next_block: 0,
+        };
 
         bind_iface(fd, iface)?;
 
@@ -163,15 +172,7 @@ impl AfPacket {
             }
         }
 
-        std::mem::forget(guard);
-        Ok(Self {
-            fd,
-            ring: ring as *mut u8,
-            ring_len,
-            block_size: cfg.block_size as usize,
-            block_count: cfg.block_count as usize,
-            next_block: 0,
-        })
+        Ok(this)
     }
 
     fn block_ptr(&self, index: usize) -> *mut BlockDescV1 {
