@@ -77,7 +77,7 @@ func (in VerificationInput) validate() error {
 
 // RecordVerification 记录人工复核意见，不改变执行回执，也不把事件存在解释成机器验证成功。
 // 归属/成员资格在事务内锁定，审计失败则整体回滚。证据快照随复核留存。
-func RecordVerification(ctx context.Context, db *sql.DB, userID, commandID uuid.UUID, in VerificationInput) (*Verification, error) {
+func RecordVerification(ctx context.Context, db *sql.DB, userID, commandID uuid.UUID, remoteAddr string, in VerificationInput) (*Verification, error) {
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func RecordVerification(ctx context.Context, db *sql.DB, userID, commandID uuid.
 		return nil, err
 	}
 	detail, _ := json.Marshal(map[string]any{"verificationId": out.ID, "outcome": out.Outcome, "eventIds": in.EventIDs, "commandStatus": status})
-	_, err = tx.ExecContext(ctx, `INSERT INTO audit_logs(id,ts,username,action,target,detail,remote_addr) VALUES($1,$2,$3,'command_verification_recorded',$4,$5,'verification-service')`, uuid.New(), out.CreatedAt, reviewer, commandID.String(), string(detail))
+	_, err = tx.ExecContext(ctx, `INSERT INTO audit_logs(id,ts,username,action,target,detail,remote_addr) VALUES($1,$2,$3,'command_verification_recorded',$4,$5,$6)`, uuid.New(), out.CreatedAt, reviewer, commandID.String(), string(detail), remoteAddr)
 	if err != nil {
 		return nil, err
 	}

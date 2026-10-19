@@ -38,8 +38,8 @@ func TestRemoteAddr(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			req := &http.Request{RemoteAddr: tc.addr}
-			if got := remoteAddr(req); got != tc.want {
-				t.Errorf("remoteAddr(%q) = %q, want %q", tc.addr, got, tc.want)
+			if got := RemoteAddr(req); got != tc.want {
+				t.Errorf("RemoteAddr(%q) = %q, want %q", tc.addr, got, tc.want)
 			}
 		})
 	}

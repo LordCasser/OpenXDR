@@ -28,7 +28,7 @@ func Actor(ctx context.Context) string {
 
 // Log 记一条审计。target/detail 可为空串，空串不落列。
 func Log(ctx context.Context, db *ent.Client, r *http.Request, action, target, detail string) {
-	write(ctx, db, Actor(ctx), remoteAddr(r), action, target, detail)
+	write(ctx, db, Actor(ctx), RemoteAddr(r), action, target, detail)
 }
 
 // System 系统自动动作的审计：没有请求、没有登录用户，但同样必须留痕。
@@ -52,7 +52,8 @@ func write(ctx context.Context, db *ent.Client, username, remote, action, target
 	}
 }
 
-func remoteAddr(r *http.Request) string {
+// RemoteAddr 请求的来源地址（realip 中间件已还原），与事务里自己写审计的地方共用
+func RemoteAddr(r *http.Request) string {
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
 	}

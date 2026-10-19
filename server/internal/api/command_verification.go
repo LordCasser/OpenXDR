@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"openxdr/server/internal/audit"
 
 	"github.com/google/uuid"
 	"openxdr/server/internal/auth"
@@ -57,7 +58,7 @@ func CommandVerifications(db *sql.DB) http.Handler {
 			http.Error(w, "复核请求含多余数据", http.StatusBadRequest)
 			return
 		}
-		out, err := response.RecordVerification(r.Context(), db, u.ID, id, in)
+		out, err := response.RecordVerification(r.Context(), db, u.ID, id, audit.RemoteAddr(r), in)
 		switch {
 		case errors.Is(err, response.ErrVerificationScope):
 			http.Error(w, "无指令复核权限或指令不存在", http.StatusForbidden)

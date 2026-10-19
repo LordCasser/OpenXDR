@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -82,6 +83,7 @@ func (a *Auto) isolate(ctx context.Context, incidentID uuid.UUID, asset *ent.Ass
 		return
 	}
 
+	started := time.Now()
 	cmd, err := a.Hub.Issue(ctx, Request{
 		automatic:      true,
 		AssetID:        asset.ID,
@@ -93,6 +95,11 @@ func (a *Auto) isolate(ctx context.Context, incidentID uuid.UUID, asset *ent.Ass
 	if err != nil {
 		audit.System(ctx, db, "auto_response_failed", incidentID.String(),
 			asset.Hostname+": "+err.Error())
+		return
+	}
+	// 并发研判撞上同一事件的同一条隔离：Issue 返回之前那条，已经审计过，不再重复记
+	if cmd.CreatedAt.Before(started) {
+		slog.Info("自动隔离已下发过，跳过重复审计", "incident", incidentID, "command", cmd.ID)
 		return
 	}
 	audit.System(ctx, db, "auto_response", cmd.ID.String(),

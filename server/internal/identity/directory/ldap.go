@@ -118,7 +118,8 @@ func (l *LDAP) connect(ctx context.Context) (*ldap.Conn, error) {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	var raw net.Conn
 	var err error
-	isTLS := strings.HasPrefix(l.config.URL, "ldaps:")
+	// url.Parse 会把协议名转小写、校验能过，这里也要不分大小写，否则 LDAPS:// 会按明文连 636
+	isTLS := strings.HasPrefix(strings.ToLower(l.config.URL), "ldaps:")
 	if isTLS {
 		raw, err = (&tls.Dialer{NetDialer: dialer, Config: l.tlsConfig}).DialContext(ctx, "tcp", l.address)
 	} else {
