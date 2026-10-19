@@ -176,12 +176,17 @@ SQL 出错时把 PostgreSQL 报错原文（只取 message）返回给模型，�
 **手工开通**：平台账号没有 CREATEROLE 时（启动日志会提示），用 `deploy/pi-query/group-views.sql`
 （psql 变量传组 UUID、schema、角色与密码，可重复执行）建视图与角色，再写进
 `PI_QUERY_DATABASE_URLS`（JSON：组 UUID → DSN）。手工配置的身份始终优先于自动开通。
-两种方式建的都是 assets / events / alerts / incidents / commands 五个按组固化过滤的视图，
-incident 与 REST 同口径（全部告警都在本组才可见），角色只读、5 秒超时、最多 5 个连接。
+两种方式建的视图相同，都按组固化过滤：assets（含 agent 版本、失联时间、AI 画像、监听端口、云环境与服务 / 外联调查结论）、
+events、alerts、incidents、commands、findings（运维待办）、suppressions（本组主机上的抑制，不含全局抑制）、
+memories（长期记忆）、asset_links（本组主机发起的连接聚合）、ip_infos（只含本组主机连过的地址）、
+reports（历史报告，供定时任务与上一轮对比）。incident 与 REST 同口径（全部告警都在本组才可见），
+角色只读、5 秒超时、最多 5 个连接。
 不得填写平台的 `DATABASE_URL`，也不要让不同组共用可读全部组的账号。
 
 组未开通时完全不注册 query，不回退到平台数据库账号。SQL 不能用于写入报告；报告走
-`report({title,markdown})`，平台强制绑定当前组和会话。
+`report({title,markdown,level})`，平台强制绑定当前组和会话。`level` 取 `ok`（没有需要人处理的事项，只存档）、
+`attention`（默认，有需要人处理的事项）或 `urgent`（需要立即处理）；定时任务的报告只有 attention 与 urgent 会推送通知，
+urgent 的标题加「【紧急】」。报告中心可只看需处理的报告。
 
 ## 运维待办
 
@@ -202,6 +207,11 @@ severity 只有 low / medium / high，detail 必填，每轮最多新登记 10 �
 ```yaml
 id: daily-host-inspection      # 必填，库中主键
 name: 每日主机巡检
+name_en: Daily host inspection # 英文界面显示的名字
+category: ops                  # ops 运维 / security 安全 / report 报告，任务页按它分类
+description: "……"              # 一句话说明（中英各一），任务页显示
+description_en: "……"
+enabled: false                 # 首次入库时的全局默认开关，缺省为开；之后启停归界面，改 YAML 不覆盖
 schedule: "0 2 * * *"          # 五段 cron，支持 @daily 与 CRON_TZ= 前缀
 model: ""                      # 空用 PI_MODEL
 targets: { group: "*" }        # "*" 每组各跑一次，或写组名
@@ -211,6 +221,36 @@ prompt: |
 ```
 
 - 未知字段、坏 cron、重复 id 的文件整份跳过并记日志；YAML 删除的任务标记 removed，保留历史。
+- **开关分两层**：任务的全局默认（平台 admin 在任务页改），以及按组的开关（该组管理员即可设置，覆盖全局默认，
+  可恢复为跟随默认）。仓库自带的预设任务除每日巡检外都是 `enabled: false`，按组按需开启。
+- **自带的预设任务**（`tasks/`，时间按北京时间错开，避免同时占满并发）：
+
+  | 分类 | 任务 | 周期 | 数据来源 |
+  |---|---|---|---|
+  | 运维 | 每日主机巡检（默认开启） | 每天 10:00 | 主机命令 + 平台数据，全量复查待办 |
+  | 运维 | 采集健康检查 | 每天 09:30 | 平台数据 |
+  | 运维 | 备份验证 | 每天 09:00 | 按记忆登记的备份位置上机核对 |
+  | 运维 | 证书到期检查 | 周二 10:00 | 主机命令 |
+  | 运维 | 补丁与重启 | 周四 10:00 | 主机命令 |
+  | 运维 | 容量趋势预测 | 周五 14:00 | 主机命令 + 上一轮报告 |
+  | 运维 | 中间件健康 | 周五 15:00 | 主机命令（只读，不猜口令） |
+  | 运维 | AI 记忆整理 | 每月 3 日 10:00 | 平台数据 |
+  | 安全 | 安全事件积压清理 | 每天 11:00 | 平台数据，良性的写结案建议 |
+  | 安全 | 暴露面周检 | 周一 10:30 | 平台数据 + 上机查明未知服务 |
+  | 安全 | 账户与权限审计 | 周二 14:00 | 主机命令 + 上一轮报告 |
+  | 安全 | 降噪复盘 | 周三 10:30 | 平台数据，提交带条件的抑制提议 |
+  | 安全 | 持久化点基线复核 | 周三 14:00 | 主机命令 + 记忆里的基线 |
+  | 安全 | 外联复核 | 周四 14:00 | 平台数据 + 上机核对 |
+  | 安全 | 容器审计 | 周五 10:00 | 主机命令 |
+  | 安全 | 可疑文件扫描 | 周日 03:30 | 主机命令（低优先级 IO） |
+  | 安全 | 安全基线抽查 | 每月 1 日 14:00 | 主机命令 |
+  | 安全 | 抑制与情报复核 | 每月 2 日 10:00 | 平台数据 |
+  | 报告 | 安全周报 | 周一 09:00 | 平台数据 + 上一份周报 |
+  | 报告 | 采集覆盖月报 | 每月 1 日 09:30 | 平台数据 |
+
+  所有任务只用只读命令，问题用 track 登记（按任务约定的 key 前缀，如 `cert:`、`patch:`），抑制与结案只提议不执行；
+  专项任务只复查与自己主题相关的遗留待办，每日巡检全量复查。环境差异（备份在哪、哪些是正常行为）靠长期记忆，
+  不写死在提示词里。
 - 调度器集群单活，每 `SCHEDULE_INTERVAL_SECONDS` 重载 YAML 并检查到期；从上次运行起算下一个触发点，
   停机或停用期间错过的周期只补跑一次。空组不跑；同组上一轮未结束则跳过本轮。
   接管时遗留的 running 记为失败，不重放。
@@ -224,9 +264,10 @@ prompt: |
 
 | 接口 | 权限 | 说明 |
 |---|---|---|
-| `GET /api/tasks` | viewer | 任务列表 |
-| `PATCH /api/tasks/{id}` | admin | `{enabled?, customSchedule?}`；`customSchedule` 传空串恢复 YAML 周期 |
-| `POST /api/tasks/{id}/run` | admin | 立即运行：记下请求时间，调度器下一次检查时对每个目标组各跑一轮；停用的任务返回 409 |
+| `GET /api/tasks` | viewer | 任务列表：含 nameEn、description(En)、category、全局默认 `enabled` 与 `groupEnabled`（只含调用者看得到的组） |
+| `PATCH /api/tasks/{id}` | admin | `{enabled?, customSchedule?}`：全局默认开关与周期；`customSchedule` 传空串恢复 YAML 周期 |
+| `PUT /api/tasks/{id}/groups/{groupId}` | 组 admin | `{enabled: true / false / null}`：该组单独开关，null 恢复跟随全局默认；写审计 |
+| `POST /api/tasks/{id}/run` | admin | 立即运行：记下请求时间，调度器下一次检查时对每个开启的组各跑一轮；所有组都未开启时返回 409 |
 | `GET /api/tasks/{id}/runs` | viewer | 最近 100 次运行，按组裁剪 |
 | `GET /api/agent-reports/{id}/html` | 组 viewer | goldmark 渲染，原始 HTML 与危险链接被丢弃，带 CSP |
 | `GET /api/agent-reports/{id}/pdf` | 组 viewer | headless Chromium 打印，禁外网；找不到 Chromium 返回 503 |

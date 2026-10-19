@@ -40,7 +40,7 @@ usage() {
                                          字段=值（等于）、字段~=值（包含）、字段$=值（结尾），字段为事件体 dot path
   xdr propose-close <事件 id> <false_positive|closed> <结案说明> [报告 id]
                                          给事件提结案建议，人在事件页一键采纳
-  xdr report <标题> <Markdown 文件>       保存最终报告
+  xdr report <标题> <Markdown 文件> [级别] 保存最终报告；级别 ok（无需处理，只存档）/ attention（默认）/ urgent
 U
 }
 
@@ -96,6 +96,6 @@ case "$cmd" in
     call propose_close "$(jq -cn --arg i "$1" --arg s "$2" --arg n "$3" --arg r "${4:-}" '{incident:$i,status:$s,note:$n} + (if $r == "" then {} else {report:$r} end)')" ;;
   report)
     [ $# -ge 2 ] && [ -f "$2" ] || { usage; exit 2; }
-    call report "$(jq -cn --arg t "$1" --rawfile m "$2" '{title:$t,markdown:$m}')" ;;
+    call report "$(jq -cn --arg t "$1" --rawfile m "$2" --arg l "${3:-}" '{title:$t,markdown:$m} + (if $l == "" then {} else {level:$l} end)')" ;;
   *) usage; [ -z "$cmd" ] || exit 2 ;;
 esac

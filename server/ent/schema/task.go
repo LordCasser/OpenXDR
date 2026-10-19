@@ -22,11 +22,19 @@ func (Task) Fields() []ent.Field {
 		field.String("id").Immutable(),
 		field.Time("created_at").Default(time.Now).Annotations(entsql.DefaultExpr("CURRENT_TIMESTAMP")),
 		field.String("name"),
+		// 以下四项来自 YAML：英文名、一句话说明（中英）与分类（ops / security / report），供任务页展示
+		field.String("name_en").Default(""),
+		field.String("description").Default(""),
+		field.String("description_en").Default(""),
+		field.String("category").Default(""),
 		// 五段 cron，来自 YAML
 		field.String("schedule"),
 		// 界面改过的周期，优先于 schedule
 		field.String("custom_schedule").Optional().Nillable(),
+		// 全局默认开关：没有按组设置的组跟它走
 		field.Bool("enabled").Default(true),
+		// 按组开关，组 ID → 是否运行；覆盖全局默认。归界面所有，同步不覆盖
+		field.JSON("group_enabled", map[string]bool{}).Optional(),
 		// 为空用平台默认模型
 		field.String("model").Default(""),
 		// 组选择器："*" 表示每个组各跑一次，否则为组名

@@ -1,0 +1,25 @@
+id: egress-review
+name: 外联复核
+name_en: Egress review
+category: security
+description: "新出现的公网目的地址、情报判恶意的地址与少见的进程外联"
+description_en: "New public destinations, intel-flagged addresses and unusual process egress"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 0 14 * * 4"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  复核本组主机最近一周的对外连接：
+  1. 用 query 的 asset_links：first_seen 在 7 天内的公网目的（排除内网地址），按主机、进程、目的、端口列出。
+  2. 关联 ip_infos：malicious 或 suspicious 不为 0 的，以及 as_owner、ptr、domains 与进程用途明显不符的（如数据库进程连境外 VPS）。
+  3. 少见：某个进程只在一台主机上连某个目的、或非常规端口（4444、1337、高位随机端口）的长连接。
+  4. 对可疑的外联：上机用只读命令核对进程路径、启动方式与用户（`ls -l /proc/<pid>/exe`、`ss -tnp`），查明后用 egress 写回结论（是什么、为什么连、风险）。
+  5. 已在 egress_notes 或 memories 里说明过的正常外联不重复报。
+  待办 key 用 egress: 前缀（egress:<主机>:<目的>）。没有新的可疑外联时 level 写 ok；情报判恶意且仍在连接的写 urgent。
+  约束：
+  - 只用只读命令；命令在等待批准或执行失败时，在报告里如实注明，不要换一种写法绕过。
+  - 先用 memories 看本组已知的环境知识（哪些是正常的、各类东西在哪），用得上就用；查明的、以后用得上的环境事实用 remember 记下。
+  - 主机系统不同（Linux / Windows）用对应命令；主机离线或命令不可用的，写进「未能验证」。
+  - 报告结构：结论 → 需要人处理的事项（新增 / 仍未解决 / 本轮已修复）→ 按主机的证据 → 未能验证的部分；区分观察、推断与未验证。

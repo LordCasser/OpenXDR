@@ -99,6 +99,20 @@ func (_u *ReportUpdate) SetNillableMarkdown(v *string) *ReportUpdate {
 	return _u
 }
 
+// SetLevel sets the "level" field.
+func (_u *ReportUpdate) SetLevel(v string) *ReportUpdate {
+	_u.mutation.SetLevel(v)
+	return _u
+}
+
+// SetNillableLevel sets the "level" field if the given value is not nil.
+func (_u *ReportUpdate) SetNillableLevel(v *string) *ReportUpdate {
+	if v != nil {
+		_u.SetLevel(*v)
+	}
+	return _u
+}
+
 // Mutation returns the ReportMutation object of the builder.
 func (_u *ReportUpdate) Mutation() *ReportMutation {
 	return _u.mutation
@@ -167,6 +181,9 @@ func (_u *ReportUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Markdown(); ok {
 		_spec.SetField(report.FieldMarkdown, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Level(); ok {
+		_spec.SetField(report.FieldLevel, field.TypeString, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -254,6 +271,20 @@ func (_u *ReportUpdateOne) SetMarkdown(v string) *ReportUpdateOne {
 func (_u *ReportUpdateOne) SetNillableMarkdown(v *string) *ReportUpdateOne {
 	if v != nil {
 		_u.SetMarkdown(*v)
+	}
+	return _u
+}
+
+// SetLevel sets the "level" field.
+func (_u *ReportUpdateOne) SetLevel(v string) *ReportUpdateOne {
+	_u.mutation.SetLevel(v)
+	return _u
+}
+
+// SetNillableLevel sets the "level" field if the given value is not nil.
+func (_u *ReportUpdateOne) SetNillableLevel(v *string) *ReportUpdateOne {
+	if v != nil {
+		_u.SetLevel(*v)
 	}
 	return _u
 }
@@ -356,6 +387,9 @@ func (_u *ReportUpdateOne) sqlSave(ctx context.Context) (_node *Report, err erro
 	}
 	if value, ok := _u.mutation.Markdown(); ok {
 		_spec.SetField(report.FieldMarkdown, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Level(); ok {
+		_spec.SetField(report.FieldLevel, field.TypeString, value)
 	}
 	_node = &Report{config: _u.config}
 	_spec.Assign = _node.assignValues

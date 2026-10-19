@@ -442,7 +442,8 @@ func (s *Service) request(ctx context.Context, session *ent.AgentSession, prompt
 // 遗留待办仅供参考——否则模型会把巡检的活当成自己的，跑偏去处理别的待办。
 func focus(kind string, turns int) string {
 	if kind == "task" {
-		return "open_findings 是本组遗留的运维待办：巡检时逐条复查，已修复用 track 标 resolved，仍存在用 track 标 open；新发现的问题也用 track 登记。" +
+		return "open_findings 是本组遗留的运维待办：复查其中与本任务主题相关的（按 key 与标题判断，任务说明要求全量复查时才全部复查），已修复用 track 标 resolved，仍存在用 track 标 open；新发现的问题也用 track 登记，key 按任务说明的前缀起名。" +
+			"report 的 level 如实选择：没有需要人处理的事项写 ok（只存档、不打扰人），有新增或仍未解决的事项写 attention，疑似入侵或服务即将中断写 urgent。" +
 			fmt.Sprintf("本轮最多 %d 次模型调用（每次可并行多个工具）：先做巡检与待办复查，再按余量深挖，务必在用完前提交 report。", turns)
 	}
 	return "open_findings 是本组遗留的运维待办，仅供参考：用户没有提到或没有交给你的，不要去复查、登记或处理。" +
@@ -515,7 +516,11 @@ func (s *Service) recorder(id uuid.UUID, seq *int, emit piruntime.Observer) piru
 
 // queryDescription 与 queryrole 的视图定义同一口径，改视图时一起改。
 const queryDescription = "通过当前组专属只读数据库身份查询授权视图，最多返回 200 行和 8 KiB。" +
-	"视图：assets(id, hostname, os, ip_addrs, last_seen)；" +
+	"视图：assets(id, hostname, os, ip_addrs, last_seen, agent_version, silent_since, role, criticality, summary, listening, cloud, service_notes, egress_notes)；" +
+	"findings(id, asset_id, key, title, severity, status, first_seen, last_seen, resolved_at, note)；" +
+	"suppressions(id, rule_id, asset_id, reason, status, conditions, expires_at, matched_count, last_matched_at)；" +
+	"memories(id, asset_id, content, source, author, updated_at)；asset_links(src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen)；" +
+	"ip_infos(ip, ptr, as_owner, country, malicious, suspicious, domains)；reports(id, created_at, title, level, markdown)；" +
 	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id)；" +
 	"incidents(id, created_at, status, title, ai_verdict)；" +
 	"events(id, ts, class_uid, source, asset_id, username, conn_tuple, raw)；" +
@@ -527,7 +532,7 @@ const queryDescription = "通过当前组专属只读数据库身份查询授权
 	"status 为 triaged 表示 AI 已研判、尚未人工结案。不确定列名时先查 information_schema.columns，不猜测；" +
 	"优先聚合与字段投影，避免 SELECT *、graph、raw 等大字段；events 查询务必带 ts 范围。"
 
-var reportTool = piruntime.Tool{Name: "report", Description: "保存当前会话的 Markdown 报告。", Parameters: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":200},"markdown":{"type":"string","minLength":1,"maxLength":262144}},"required":["title","markdown"],"additionalProperties":false}`)}
+var reportTool = piruntime.Tool{Name: "report", Description: "保存当前会话的 Markdown 报告。level：ok 本轮没有需要人处理的事项（只存档，不推送通知）；attention 有新增或仍未解决、需要人处理的事项（默认）；urgent 需要立即处理，如疑似入侵、服务即将中断。", Parameters: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":200},"markdown":{"type":"string","minLength":1,"maxLength":262144},"level":{"type":"string","enum":["ok","attention","urgent"]}},"required":["title","markdown"],"additionalProperties":false}`)}
 
 func (s *Service) tools(ctx context.Context, group uuid.UUID) []piruntime.Tool {
 	tools := []piruntime.Tool{
@@ -574,6 +579,7 @@ func (s *Service) tool(ctx context.Context, session *ent.AgentSession, who comma
 		var body struct {
 			Title    string `json:"title"`
 			Markdown string `json:"markdown"`
+			Level    string `json:"level"`
 		}
 		if err := json.Unmarshal(args, &body); err != nil {
 			return "", err
@@ -581,11 +587,18 @@ func (s *Service) tool(ctx context.Context, session *ent.AgentSession, who comma
 		if body.Title == "" || len(body.Title) > 200 || body.Markdown == "" || len(body.Markdown) > 262144 {
 			return "", errors.New("报告长度无效")
 		}
-		report, err := s.DB.Report.Create().SetSessionID(session.ID).SetGroupID(session.GroupID).SetTitle(body.Title).SetMarkdown(body.Markdown).Save(ctx)
+		switch body.Level {
+		case "":
+			body.Level = "attention"
+		case "ok", "attention", "urgent":
+		default:
+			return "", errors.New("level 只能是 ok / attention / urgent")
+		}
+		report, err := s.DB.Report.Create().SetSessionID(session.ID).SetGroupID(session.GroupID).SetTitle(body.Title).SetMarkdown(body.Markdown).SetLevel(body.Level).Save(ctx)
 		if err != nil {
 			return "", err
 		}
-		return marshal(map[string]any{"reportId": report.ID, "title": report.Title})
+		return marshal(map[string]any{"reportId": report.ID, "title": report.Title, "level": report.Level})
 	case "track":
 		return s.track(ctx, session, args)
 	case "identify":

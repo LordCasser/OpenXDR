@@ -658,6 +658,7 @@ var (
 		{Name: "group_id", Type: field.TypeUUID},
 		{Name: "title", Type: field.TypeString, Size: 200},
 		{Name: "markdown", Type: field.TypeString, Size: 2147483647},
+		{Name: "level", Type: field.TypeString, Default: "attention"},
 	}
 	// ReportsTable holds the schema information for the "reports" table.
 	ReportsTable = &schema.Table{
@@ -767,9 +768,14 @@ var (
 		{Name: "id", Type: field.TypeString},
 		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("CURRENT_TIMESTAMP")},
 		{Name: "name", Type: field.TypeString},
+		{Name: "name_en", Type: field.TypeString, Default: ""},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "description_en", Type: field.TypeString, Default: ""},
+		{Name: "category", Type: field.TypeString, Default: ""},
 		{Name: "schedule", Type: field.TypeString},
 		{Name: "custom_schedule", Type: field.TypeString, Nullable: true},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "group_enabled", Type: field.TypeJSON, Nullable: true},
 		{Name: "model", Type: field.TypeString, Default: ""},
 		{Name: "target_group", Type: field.TypeString, Default: "*"},
 		{Name: "approval_timeout_seconds", Type: field.TypeInt64, Default: 600},

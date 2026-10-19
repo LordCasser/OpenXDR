@@ -1,0 +1,25 @@
+id: noise-review
+name: 降噪复盘
+name_en: Noise review
+category: security
+description: "命中最多的规则与主机，对确认良性的高频告警提交带条件的抑制提议"
+description_en: "Noisiest rules and hosts; propose conditional suppressions for confirmed-benign high-volume alerts"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 30 10 * * 3"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  找出本组过去 7 天最吵的告警并提出降噪建议。用 query：
+  1. 按 rule_id、主机聚合 alerts 的 count（排除 command_id 不为空的平台指令），取前 15。
+  2. 对每一类，抽查对应 events 的关键字段（命令行、域名、对端地址、文件路径），判断是业务正常行为还是真实风险。
+  3. 确认良性、且能用字段条件精确限定的：用 suppress 提交抑制提议（单台主机、带条件、写清理由、期限不超过 90 天），由组管理员批准后生效。
+     条件要对得上真实事件里的值，宁窄勿宽；拿不准的不提议。
+  4. 看起来是规则本身写得太宽、影响多台主机的，在报告里点名建议改规则，不用抑制硬压。
+  5. 用 query 看 suppressions 里本组仍在待批（proposed）的提议，避免重复提交。
+  没有可降噪的高频告警时 level 写 ok。
+  约束：
+  - 本任务只读平台数据（query），不在主机上执行命令。
+  - 先用 memories 看本组已知的环境知识，用得上就用。
+  - 报告结构：结论 → 需要人处理的事项 → 数据与依据 → 未能验证的部分；区分观察、推断与未验证。

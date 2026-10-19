@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
+	"openxdr/server/ent"
 	"openxdr/server/internal/testdb"
 )
 
@@ -24,8 +26,24 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 
 	a := client.Group.Create().SetName("a").SaveX(ctx)
 	b := client.Group.Create().SetName("b").SaveX(ctx)
-	client.Asset.Create().SetHostname("a1").SetGroupID(a.ID).SaveX(ctx)
-	client.Asset.Create().SetHostname("b1").SetGroupID(b.ID).SaveX(ctx)
+	a1 := client.Asset.Create().SetHostname("a1").SetGroupID(a.ID).SaveX(ctx)
+	b1 := client.Asset.Create().SetHostname("b1").SetGroupID(b.ID).SaveX(ctx)
+	// 新视图的两组数据：每张表各给 a、b 一份，只读身份只能看到 a 的
+	now := time.Now()
+	for _, x := range []struct {
+		group uuid.UUID
+		asset *ent.Asset
+		ip    string
+	}{{a.ID, a1, "203.0.113.1"}, {b.ID, b1, "198.51.100.1"}} {
+		client.Finding.Create().SetGroupID(x.group).SetAssetID(x.asset.ID).SetKey("k").SetTitle("t").SaveX(ctx)
+		client.Memory.Create().SetGroupID(x.group).SetContent("m").SetSource("human").SetAuthor("u").SaveX(ctx)
+		client.Suppression.Create().SetRuleID("r").SetAssetID(x.asset.ID).SaveX(ctx)
+		client.AssetLink.Create().SetSrcIP("10.0.0.1").SetSrcAssetID(x.asset.ID).SetDstIP(x.ip).SetDstPort(443).SetProto("tcp").
+			SetCount(1).SetFirstSeen(now).SetLastSeen(now).SaveX(ctx)
+		client.IPInfo.Create().SetIP(x.ip).SaveX(ctx)
+		client.Report.Create().SetSessionID(uuid.New()).SetGroupID(x.group).SetTitle("r").SetMarkdown("m").SaveX(ctx)
+	}
+	client.Suppression.Create().SetRuleID("global").SaveX(ctx) // 全局抑制谁的视图里都不该有
 
 	static := uuid.New()
 	p := &Provisioner{DB: db, Client: client, BaseDSN: dsn, Static: map[uuid.UUID]string{static: "postgres://manual"}}
@@ -58,6 +76,19 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 	}
 	if n != 1 || host != "a1" {
 		t.Errorf("只应看到本组资产 a1，实际 %d 条 %q", n, host)
+	}
+	for view, want := range map[string]string{
+		"findings": "1", "memories": "1", "suppressions": "1", "asset_links": "1", "reports": "1",
+		"ip_infos": "203.0.113.1",
+	} {
+		var got string
+		q := `SELECT count(*)::text FROM ` + view
+		if view == "ip_infos" {
+			q = `SELECT string_agg(ip, ',') FROM ip_infos`
+		}
+		if err := ro.QueryRowContext(ctx, q).Scan(&got); err != nil || got != want {
+			t.Errorf("%s 只应看到本组的数据：得到 %q，%v", view, got, err)
+		}
 	}
 	if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM public.assets`).Scan(&n); err == nil {
 		t.Error("不应能读业务基表")

@@ -1,0 +1,23 @@
+id: coverage-report
+name: 采集覆盖月报
+name_en: Monthly coverage report
+category: report
+description: "每台主机近 30 天各类事件是否都有，哪些主机缺网络、文件或登录采集"
+description_en: "Which event types each host produced over 30 days; hosts missing network, file or logon collection"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 30 9 1 * *"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  出一份本组的采集覆盖月报，回答「平台到底看得见什么」：
+  1. 用 query 统计近 30 天每台主机按 class_uid 的事件数：1007 进程、1001 文件、4001 网络、4003 DNS、3002 登录、5001 设备清单、1005 内核模块、201002 注册表（Windows）。
+  2. 做一张「主机 × 事件类型」的覆盖表，缺失的格子说明可能原因（系统不支持、采集开关关闭、Linux 非 eBPF 构建、agent 跑在容器里）。
+  3. 标出：没有网络事件的主机（外联与横向检测失效）、没有登录事件的主机、设备清单超过 7 天未更新的主机、agent 版本落后的主机。
+  4. 与上月报告（reports 里标题含「覆盖」的最近一份）对比，指出改善与退步。
+  待办 key 用 coverage: 前缀（coverage:<主机>:<缺失类型>）。月报每月都要发出，level 写 attention。
+  约束：
+  - 本任务只读平台数据（query），不在主机上执行命令。
+  - 先用 memories 看本组已知的环境知识，用得上就用。
+  - 报告结构：结论 → 需要人处理的事项 → 数据与依据 → 未能验证的部分；区分观察、推断与未验证。

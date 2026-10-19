@@ -381,6 +381,10 @@ func init() {
 	reportDescTitle := reportFields[4].Descriptor()
 	// report.TitleValidator is a validator for the "title" field. It is called by the builders before save.
 	report.TitleValidator = reportDescTitle.Validators[0].(func(string) error)
+	// reportDescLevel is the schema descriptor for level field.
+	reportDescLevel := reportFields[6].Descriptor()
+	// report.DefaultLevel holds the default value on creation for the level field.
+	report.DefaultLevel = reportDescLevel.Default.(string)
 	// reportDescID is the schema descriptor for id field.
 	reportDescID := reportFields[0].Descriptor()
 	// report.DefaultID holds the default value on creation for the id field.
@@ -441,24 +445,40 @@ func init() {
 	taskDescCreatedAt := taskFields[1].Descriptor()
 	// task.DefaultCreatedAt holds the default value on creation for the created_at field.
 	task.DefaultCreatedAt = taskDescCreatedAt.Default.(func() time.Time)
+	// taskDescNameEn is the schema descriptor for name_en field.
+	taskDescNameEn := taskFields[3].Descriptor()
+	// task.DefaultNameEn holds the default value on creation for the name_en field.
+	task.DefaultNameEn = taskDescNameEn.Default.(string)
+	// taskDescDescription is the schema descriptor for description field.
+	taskDescDescription := taskFields[4].Descriptor()
+	// task.DefaultDescription holds the default value on creation for the description field.
+	task.DefaultDescription = taskDescDescription.Default.(string)
+	// taskDescDescriptionEn is the schema descriptor for description_en field.
+	taskDescDescriptionEn := taskFields[5].Descriptor()
+	// task.DefaultDescriptionEn holds the default value on creation for the description_en field.
+	task.DefaultDescriptionEn = taskDescDescriptionEn.Default.(string)
+	// taskDescCategory is the schema descriptor for category field.
+	taskDescCategory := taskFields[6].Descriptor()
+	// task.DefaultCategory holds the default value on creation for the category field.
+	task.DefaultCategory = taskDescCategory.Default.(string)
 	// taskDescEnabled is the schema descriptor for enabled field.
-	taskDescEnabled := taskFields[5].Descriptor()
+	taskDescEnabled := taskFields[9].Descriptor()
 	// task.DefaultEnabled holds the default value on creation for the enabled field.
 	task.DefaultEnabled = taskDescEnabled.Default.(bool)
 	// taskDescModel is the schema descriptor for model field.
-	taskDescModel := taskFields[6].Descriptor()
+	taskDescModel := taskFields[11].Descriptor()
 	// task.DefaultModel holds the default value on creation for the model field.
 	task.DefaultModel = taskDescModel.Default.(string)
 	// taskDescTargetGroup is the schema descriptor for target_group field.
-	taskDescTargetGroup := taskFields[7].Descriptor()
+	taskDescTargetGroup := taskFields[12].Descriptor()
 	// task.DefaultTargetGroup holds the default value on creation for the target_group field.
 	task.DefaultTargetGroup = taskDescTargetGroup.Default.(string)
 	// taskDescApprovalTimeoutSeconds is the schema descriptor for approval_timeout_seconds field.
-	taskDescApprovalTimeoutSeconds := taskFields[8].Descriptor()
+	taskDescApprovalTimeoutSeconds := taskFields[13].Descriptor()
 	// task.DefaultApprovalTimeoutSeconds holds the default value on creation for the approval_timeout_seconds field.
 	task.DefaultApprovalTimeoutSeconds = taskDescApprovalTimeoutSeconds.Default.(int64)
 	// taskDescRemoved is the schema descriptor for removed field.
-	taskDescRemoved := taskFields[10].Descriptor()
+	taskDescRemoved := taskFields[15].Descriptor()
 	// task.DefaultRemoved holds the default value on creation for the removed field.
 	task.DefaultRemoved = taskDescRemoved.Default.(bool)
 	taskrunFields := schema.TaskRun{}.Fields()

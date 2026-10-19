@@ -35,6 +35,8 @@ func TestMinRoleRouteTable(t *testing.T) {
 		// 任务：读开放，改只有 admin
 		{"GET", "/api/tasks", "viewer"},
 		{"PATCH", "/api/tasks/daily", "admin"},
+		{"PUT", "/api/tasks/daily/groups/0190d7b0-0000-7000-8000-000000000000", "viewer"},
+		{"POST", "/api/tasks/daily/run", "admin"},
 	}
 	for _, c := range cases {
 		if got := minRole(c.method, c.path); got != c.want {

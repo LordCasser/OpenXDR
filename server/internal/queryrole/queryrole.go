@@ -176,9 +176,34 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
 	inGroup := "asset_id IN (SELECT id FROM public.assets WHERE group_id = " + gid + ")"
 	stmts := []string{
 		`CREATE SCHEMA IF NOT EXISTS ` + schema,
+		// 新列只能加在末尾：CREATE OR REPLACE VIEW 不允许改已有列的顺序
 		`CREATE OR REPLACE VIEW ` + schema + `.assets WITH (security_barrier) AS
-  SELECT id, hostname, os, ip_addrs, agent_id, first_seen, last_seen
+  SELECT id, hostname, os, ip_addrs, agent_id, first_seen, last_seen,
+         agent_version, silent_since, role, criticality, summary, listening, cloud,
+         service_notes, egress_notes, zone_id, inventory_at
   FROM public.assets WHERE group_id = ` + gid,
+		`CREATE OR REPLACE VIEW ` + schema + `.findings WITH (security_barrier) AS
+  SELECT id, asset_id, key, title, detail, severity, status, first_seen, last_seen, resolved_at, resolved_by, note
+  FROM public.findings WHERE group_id = ` + gid,
+		// 只含本组主机上的抑制；全局抑制只有平台 admin 看得到
+		`CREATE OR REPLACE VIEW ` + schema + `.suppressions WITH (security_barrier) AS
+  SELECT id, created_at, rule_id, asset_id, reason, created_by, expires_at, matched_count, last_matched_at,
+         status, conditions, reviewed_by, reviewed_at
+  FROM public.suppressions WHERE ` + inGroup,
+		`CREATE OR REPLACE VIEW ` + schema + `.memories WITH (security_barrier) AS
+  SELECT id, created_at, updated_at, asset_id, content, source, author
+  FROM public.memories WHERE group_id = ` + gid,
+		`CREATE OR REPLACE VIEW ` + schema + `.asset_links WITH (security_barrier) AS
+  SELECT src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen
+  FROM public.asset_links WHERE src_asset_id IN (SELECT id FROM public.assets WHERE group_id = ` + gid + `)`,
+		// 只给本组主机连过的地址，别组的外联目的不外泄
+		`CREATE OR REPLACE VIEW ` + schema + `.ip_infos WITH (security_barrier) AS
+  SELECT ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at
+  FROM public.ip_infos WHERE ip IN (SELECT dst_ip FROM public.asset_links
+    WHERE src_asset_id IN (SELECT id FROM public.assets WHERE group_id = ` + gid + `))`,
+		`CREATE OR REPLACE VIEW ` + schema + `.reports WITH (security_barrier) AS
+  SELECT id, created_at, title, level, markdown
+  FROM public.reports WHERE group_id = ` + gid,
 		`CREATE OR REPLACE VIEW ` + schema + `.events WITH (security_barrier) AS
   SELECT id, ts, class_uid, source, asset_id, username, conn_tuple, raw
   FROM public.events WHERE ` + inGroup,
@@ -204,6 +229,12 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
 		`COMMENT ON VIEW ` + schema + `.events IS '本组原始事件（OCSF 风格，raw 为 JSON）；查询务必带 ts 范围'`,
 		`COMMENT ON VIEW ` + schema + `.alerts IS '本组告警（去重后，count 为累计次数）'`,
 		`COMMENT ON VIEW ` + schema + `.incidents IS '本组 incident（全部告警都在本组）'`,
+		`COMMENT ON VIEW ` + schema + `.findings IS '本组运维待办（track 登记的问题，status 为 open / resolved / ignored）'`,
+		`COMMENT ON VIEW ` + schema + `.suppressions IS '本组主机上的抑制规则（status：active 生效 / proposed 待批 / rejected 已拒绝）'`,
+		`COMMENT ON VIEW ` + schema + `.memories IS '本组长期记忆（source：human 人工 / ai）'`,
+		`COMMENT ON VIEW ` + schema + `.asset_links IS '本组主机发起的连接聚合成的依赖边'`,
+		`COMMENT ON VIEW ` + schema + `.ip_infos IS '本组主机连过的公网地址：反向解析与 VirusTotal 结果'`,
+		`COMMENT ON VIEW ` + schema + `.reports IS '本组历史报告（level：ok / attention / urgent）'`,
 		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '` + role + `') THEN CREATE ROLE ` + role + ` LOGIN; END IF; END $$`,
 		`ALTER ROLE ` + role + ` WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 5`,
 		`ALTER ROLE ` + role + ` SET search_path = ` + schema,

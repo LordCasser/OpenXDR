@@ -1,0 +1,26 @@
+id: suspicious-files
+name: 可疑文件扫描
+name_en: Suspicious file sweep
+category: security
+description: "Web 目录近期改动的脚本、新出现的 SUID 程序、临时目录里的可执行文件"
+description_en: "Recently changed web scripts, new SUID binaries and executables in temp directories"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 30 3 * * 0"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  在低峰时段做一次可疑文件扫描（只读 find / stat / sha256sum，限制 IO：命令前加 `nice -n 19 ionice -c3`，不扫网络挂载）：
+  1. Web 目录（/var/www、/usr/share/nginx、/srv、/opt 下的 web 应用，以 memories 里登记的为准）：近 7 天新增或修改的 .php/.jsp/.jspx/.asp/.aspx 文件，
+     以及含 eval(base64_decode、assert($_、Runtime.getRuntime 等特征的文件（`grep -lE` 只列文件名）。
+  2. SUID / SGID：`find / -xdev \( -perm -4000 -o -perm -2000 \) -type f 2>/dev/null`，与上一轮报告（reports 里标题含「可疑文件」的最近一份）比较，只报新增。
+  3. 临时目录：/tmp、/var/tmp、/dev/shm 下的 ELF 可执行文件与隐藏目录（`find ... -type f -perm -u+x`，`file` 判断类型）。
+  4. Windows：`Get-ChildItem $env:TEMP,C:\Users\*\AppData\Local\Temp -Include *.exe,*.dll,*.ps1 -Recurse -ErrorAction SilentlyContinue | ? LastWriteTime -gt (Get-Date).AddDays(-7)`。
+  5. 可疑文件给出路径、大小、修改时间、属主与 sha256，不要执行、移动或删除。
+  待办 key 用 file: 前缀。没有发现时 level 写 ok；发现疑似 webshell 或来源不明的 SUID 程序写 urgent。
+  约束：
+  - 只用只读命令；命令在等待批准或执行失败时，在报告里如实注明，不要换一种写法绕过。
+  - 先用 memories 看本组已知的环境知识（哪些是正常的、各类东西在哪），用得上就用；查明的、以后用得上的环境事实用 remember 记下。
+  - 主机系统不同（Linux / Windows）用对应命令；主机离线或命令不可用的，写进「未能验证」。
+  - 报告结构：结论 → 需要人处理的事项（新增 / 仍未解决 / 本轮已修复）→ 按主机的证据 → 未能验证的部分；区分观察、推断与未验证。

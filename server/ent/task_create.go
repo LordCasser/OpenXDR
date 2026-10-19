@@ -40,6 +40,62 @@ func (_c *TaskCreate) SetName(v string) *TaskCreate {
 	return _c
 }
 
+// SetNameEn sets the "name_en" field.
+func (_c *TaskCreate) SetNameEn(v string) *TaskCreate {
+	_c.mutation.SetNameEn(v)
+	return _c
+}
+
+// SetNillableNameEn sets the "name_en" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableNameEn(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetNameEn(*v)
+	}
+	return _c
+}
+
+// SetDescription sets the "description" field.
+func (_c *TaskCreate) SetDescription(v string) *TaskCreate {
+	_c.mutation.SetDescription(v)
+	return _c
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableDescription(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetDescription(*v)
+	}
+	return _c
+}
+
+// SetDescriptionEn sets the "description_en" field.
+func (_c *TaskCreate) SetDescriptionEn(v string) *TaskCreate {
+	_c.mutation.SetDescriptionEn(v)
+	return _c
+}
+
+// SetNillableDescriptionEn sets the "description_en" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableDescriptionEn(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetDescriptionEn(*v)
+	}
+	return _c
+}
+
+// SetCategory sets the "category" field.
+func (_c *TaskCreate) SetCategory(v string) *TaskCreate {
+	_c.mutation.SetCategory(v)
+	return _c
+}
+
+// SetNillableCategory sets the "category" field if the given value is not nil.
+func (_c *TaskCreate) SetNillableCategory(v *string) *TaskCreate {
+	if v != nil {
+		_c.SetCategory(*v)
+	}
+	return _c
+}
+
 // SetSchedule sets the "schedule" field.
 func (_c *TaskCreate) SetSchedule(v string) *TaskCreate {
 	_c.mutation.SetSchedule(v)
@@ -71,6 +127,12 @@ func (_c *TaskCreate) SetNillableEnabled(v *bool) *TaskCreate {
 	if v != nil {
 		_c.SetEnabled(*v)
 	}
+	return _c
+}
+
+// SetGroupEnabled sets the "group_enabled" field.
+func (_c *TaskCreate) SetGroupEnabled(v map[string]bool) *TaskCreate {
+	_c.mutation.SetGroupEnabled(v)
 	return _c
 }
 
@@ -195,6 +257,22 @@ func (_c *TaskCreate) defaults() {
 		v := task.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.NameEn(); !ok {
+		v := task.DefaultNameEn
+		_c.mutation.SetNameEn(v)
+	}
+	if _, ok := _c.mutation.Description(); !ok {
+		v := task.DefaultDescription
+		_c.mutation.SetDescription(v)
+	}
+	if _, ok := _c.mutation.DescriptionEn(); !ok {
+		v := task.DefaultDescriptionEn
+		_c.mutation.SetDescriptionEn(v)
+	}
+	if _, ok := _c.mutation.Category(); !ok {
+		v := task.DefaultCategory
+		_c.mutation.SetCategory(v)
+	}
 	if _, ok := _c.mutation.Enabled(); !ok {
 		v := task.DefaultEnabled
 		_c.mutation.SetEnabled(v)
@@ -221,6 +299,18 @@ func (_c *TaskCreate) defaults() {
 func (_c *TaskCreate) check() error {
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Task.name"`)}
+	}
+	if _, ok := _c.mutation.NameEn(); !ok {
+		return &ValidationError{Name: "name_en", err: errors.New(`ent: missing required field "Task.name_en"`)}
+	}
+	if _, ok := _c.mutation.Description(); !ok {
+		return &ValidationError{Name: "description", err: errors.New(`ent: missing required field "Task.description"`)}
+	}
+	if _, ok := _c.mutation.DescriptionEn(); !ok {
+		return &ValidationError{Name: "description_en", err: errors.New(`ent: missing required field "Task.description_en"`)}
+	}
+	if _, ok := _c.mutation.Category(); !ok {
+		return &ValidationError{Name: "category", err: errors.New(`ent: missing required field "Task.category"`)}
 	}
 	if _, ok := _c.mutation.Schedule(); !ok {
 		return &ValidationError{Name: "schedule", err: errors.New(`ent: missing required field "Task.schedule"`)}
@@ -286,6 +376,22 @@ func (_c *TaskCreate) createSpec() (*Task, *sqlgraph.CreateSpec) {
 		_spec.SetField(task.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
+	if value, ok := _c.mutation.NameEn(); ok {
+		_spec.SetField(task.FieldNameEn, field.TypeString, value)
+		_node.NameEn = value
+	}
+	if value, ok := _c.mutation.Description(); ok {
+		_spec.SetField(task.FieldDescription, field.TypeString, value)
+		_node.Description = value
+	}
+	if value, ok := _c.mutation.DescriptionEn(); ok {
+		_spec.SetField(task.FieldDescriptionEn, field.TypeString, value)
+		_node.DescriptionEn = value
+	}
+	if value, ok := _c.mutation.Category(); ok {
+		_spec.SetField(task.FieldCategory, field.TypeString, value)
+		_node.Category = value
+	}
 	if value, ok := _c.mutation.Schedule(); ok {
 		_spec.SetField(task.FieldSchedule, field.TypeString, value)
 		_node.Schedule = value
@@ -297,6 +403,10 @@ func (_c *TaskCreate) createSpec() (*Task, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(task.FieldEnabled, field.TypeBool, value)
 		_node.Enabled = value
+	}
+	if value, ok := _c.mutation.GroupEnabled(); ok {
+		_spec.SetField(task.FieldGroupEnabled, field.TypeJSON, value)
+		_node.GroupEnabled = value
 	}
 	if value, ok := _c.mutation.Model(); ok {
 		_spec.SetField(task.FieldModel, field.TypeString, value)

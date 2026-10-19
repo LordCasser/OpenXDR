@@ -80,6 +80,11 @@ func Markdown(v string) predicate.Report {
 	return predicate.Report(sql.FieldEQ(FieldMarkdown, v))
 }
 
+// Level applies equality check predicate on the "level" field. It's identical to LevelEQ.
+func Level(v string) predicate.Report {
+	return predicate.Report(sql.FieldEQ(FieldLevel, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Report {
 	return predicate.Report(sql.FieldEQ(FieldCreatedAt, v))
@@ -328,6 +333,71 @@ func MarkdownEqualFold(v string) predicate.Report {
 // MarkdownContainsFold applies the ContainsFold predicate on the "markdown" field.
 func MarkdownContainsFold(v string) predicate.Report {
 	return predicate.Report(sql.FieldContainsFold(FieldMarkdown, v))
+}
+
+// LevelEQ applies the EQ predicate on the "level" field.
+func LevelEQ(v string) predicate.Report {
+	return predicate.Report(sql.FieldEQ(FieldLevel, v))
+}
+
+// LevelNEQ applies the NEQ predicate on the "level" field.
+func LevelNEQ(v string) predicate.Report {
+	return predicate.Report(sql.FieldNEQ(FieldLevel, v))
+}
+
+// LevelIn applies the In predicate on the "level" field.
+func LevelIn(vs ...string) predicate.Report {
+	return predicate.Report(sql.FieldIn(FieldLevel, vs...))
+}
+
+// LevelNotIn applies the NotIn predicate on the "level" field.
+func LevelNotIn(vs ...string) predicate.Report {
+	return predicate.Report(sql.FieldNotIn(FieldLevel, vs...))
+}
+
+// LevelGT applies the GT predicate on the "level" field.
+func LevelGT(v string) predicate.Report {
+	return predicate.Report(sql.FieldGT(FieldLevel, v))
+}
+
+// LevelGTE applies the GTE predicate on the "level" field.
+func LevelGTE(v string) predicate.Report {
+	return predicate.Report(sql.FieldGTE(FieldLevel, v))
+}
+
+// LevelLT applies the LT predicate on the "level" field.
+func LevelLT(v string) predicate.Report {
+	return predicate.Report(sql.FieldLT(FieldLevel, v))
+}
+
+// LevelLTE applies the LTE predicate on the "level" field.
+func LevelLTE(v string) predicate.Report {
+	return predicate.Report(sql.FieldLTE(FieldLevel, v))
+}
+
+// LevelContains applies the Contains predicate on the "level" field.
+func LevelContains(v string) predicate.Report {
+	return predicate.Report(sql.FieldContains(FieldLevel, v))
+}
+
+// LevelHasPrefix applies the HasPrefix predicate on the "level" field.
+func LevelHasPrefix(v string) predicate.Report {
+	return predicate.Report(sql.FieldHasPrefix(FieldLevel, v))
+}
+
+// LevelHasSuffix applies the HasSuffix predicate on the "level" field.
+func LevelHasSuffix(v string) predicate.Report {
+	return predicate.Report(sql.FieldHasSuffix(FieldLevel, v))
+}
+
+// LevelEqualFold applies the EqualFold predicate on the "level" field.
+func LevelEqualFold(v string) predicate.Report {
+	return predicate.Report(sql.FieldEqualFold(FieldLevel, v))
+}
+
+// LevelContainsFold applies the ContainsFold predicate on the "level" field.
+func LevelContainsFold(v string) predicate.Report {
+	return predicate.Report(sql.FieldContainsFold(FieldLevel, v))
 }
 
 // And groups predicates with the AND operator between them.

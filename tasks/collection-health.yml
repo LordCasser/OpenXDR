@@ -1,0 +1,27 @@
+id: collection-health
+name: 采集健康检查
+name_en: Collection health
+category: ops
+description: "静默主机、agent 版本不一致、采集降级与事件量突降，只查平台数据"
+description_en: "Silent hosts, agent version drift, degraded collection and sudden event drops — platform data only"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 30 9 * * *"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  检查本组每台主机的采集是否健康。用 query：
+  1. 失联：assets.silent_since 不为空或 last_seen 超过 10 分钟的主机。
+  2. 版本：assets.agent_version 与本组多数主机不一致的（自动升级可能失败）。
+  3. 采集降级：近 24 小时 events 按主机、class_uid 计数，与此前 7 天的日均比较。重点看：
+     - 4001（网络）为 0 而其他类有数据：网络采集缺失（Linux 非 eBPF 构建或内核不支持）；
+     - 1007（进程）只有启动没有退出、或数量骤降超过 80%：可能退回轮询或采集中断；
+     - 5001（设备清单）超过 24 小时没有更新：清单采集失效。
+  4. 某台主机全部事件量相对 7 日均值骤降超过 80%，或某类事件突增超过 10 倍（可能是日志风暴或攻击）。
+  待办 key 用 collect: 前缀（如 collect:silent、collect:no-network），问题恢复后标 resolved。
+  全部正常时 level 写 ok。
+  约束：
+  - 本任务只读平台数据（query），不在主机上执行命令。
+  - 先用 memories 看本组已知的环境知识，用得上就用。
+  - 报告结构：结论 → 需要人处理的事项 → 数据与依据 → 未能验证的部分；区分观察、推断与未验证。

@@ -27,7 +27,9 @@ type Report struct {
 	// Title holds the value of the "title" field.
 	Title string `json:"title,omitempty"`
 	// Markdown holds the value of the "markdown" field.
-	Markdown     string `json:"markdown,omitempty"`
+	Markdown string `json:"markdown,omitempty"`
+	// Level holds the value of the "level" field.
+	Level        string `json:"level,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -36,7 +38,7 @@ func (*Report) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case report.FieldTitle, report.FieldMarkdown:
+		case report.FieldTitle, report.FieldMarkdown, report.FieldLevel:
 			values[i] = new(sql.NullString)
 		case report.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -93,6 +95,12 @@ func (_m *Report) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Markdown = value.String
 			}
+		case report.FieldLevel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field level", values[i])
+			} else if value.Valid {
+				_m.Level = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -143,6 +151,9 @@ func (_m *Report) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("markdown=")
 	builder.WriteString(_m.Markdown)
+	builder.WriteString(", ")
+	builder.WriteString("level=")
+	builder.WriteString(_m.Level)
 	builder.WriteByte(')')
 	return builder.String()
 }

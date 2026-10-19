@@ -22,8 +22,15 @@ import (
 
 // Spec 任务 YAML 的结构。
 type Spec struct {
-	ID       string `yaml:"id"`
-	Name     string `yaml:"name"`
+	ID            string `yaml:"id"`
+	Name          string `yaml:"name"`
+	NameEN        string `yaml:"name_en"`
+	Description   string `yaml:"description"`
+	DescriptionEN string `yaml:"description_en"`
+	// ops 运维 / security 安全 / report 报告
+	Category string `yaml:"category"`
+	// 首次同步进库时的开关，默认开；之后启停归界面，YAML 改它不覆盖
+	Enabled  *bool  `yaml:"enabled"`
 	Schedule string `yaml:"schedule"`
 	Model    string `yaml:"model"`
 	Targets  struct {
@@ -56,6 +63,11 @@ func parseSpec(data []byte) (Spec, error) {
 	}
 	if s.Name == "" {
 		s.Name = s.ID
+	}
+	switch s.Category {
+	case "", "ops", "security", "report":
+	default:
+		return s, fmt.Errorf("category 只能是 ops / security / report: %q", s.Category)
 	}
 	if s.Targets.Group == "" {
 		s.Targets.Group = "*"
@@ -104,13 +116,16 @@ func Sync(ctx context.Context, db *ent.Client, specs []Spec) error {
 		ids[i] = s.ID
 		timeout := int64(s.approvalTimeout / time.Second)
 		err := db.Task.UpdateOneID(s.ID).
-			SetName(s.Name).SetSchedule(s.Schedule).SetModel(s.Model).
+			SetName(s.Name).SetNameEn(s.NameEN).SetDescription(s.Description).SetDescriptionEn(s.DescriptionEN).SetCategory(s.Category).
+			SetSchedule(s.Schedule).SetModel(s.Model).
 			SetTargetGroup(s.Targets.Group).SetPrompt(s.Prompt).
 			SetApprovalTimeoutSeconds(timeout).SetRemoved(false).
 			Exec(ctx)
 		if ent.IsNotFound(err) {
 			err = db.Task.Create().
-				SetID(s.ID).SetName(s.Name).SetSchedule(s.Schedule).SetModel(s.Model).
+				SetID(s.ID).SetName(s.Name).SetNameEn(s.NameEN).SetDescription(s.Description).SetDescriptionEn(s.DescriptionEN).SetCategory(s.Category).
+				SetEnabled(s.Enabled == nil || *s.Enabled).
+				SetSchedule(s.Schedule).SetModel(s.Model).
 				SetTargetGroup(s.Targets.Group).SetPrompt(s.Prompt).
 				SetApprovalTimeoutSeconds(timeout).
 				Exec(ctx)

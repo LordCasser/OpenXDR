@@ -3,12 +3,12 @@ import {
   FileTextOutlined, LoadingOutlined, ReadOutlined, RobotOutlined, ToolOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Avatar, Button, Card, Col, Empty, Form, Modal, Row, Space, Switch, Table, Tag, Tooltip, Typography, theme } from 'antd'
+import { App, Avatar, Button, Card, Col, Empty, Flex, Form, Modal, Row, Segmented, Space, Switch, Table, Tag, Tooltip, Typography, theme } from 'antd'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
-  fetchAssets, fetchSessionMessages, fetchTaskRuns, fetchTasks, runTask, updateTask,
-  type SessionMessage, type TaskRow, type TaskRunRow,
+  fetchAssets, fetchSessionMessages, fetchTaskRuns, fetchTasks, runTask, setTaskGroup, updateTask,
+  type SessionMessage, type TaskCategory, type TaskRow, type TaskRunRow,
 } from '../api'
 import { useSession } from '../app/session'
 import { Ago } from '../components/Ago'
@@ -35,6 +35,17 @@ const errorText = (err: string, t: (k: MsgKey) => string) => {
   const hit = ERRORS.find(([re]) => re.test(err))
   return hit ? t(hit[1]) : err
 }
+
+const CATEGORY: Record<Exclude<TaskCategory, ''>, { color: string; key: MsgKey }> = {
+  ops: { color: 'blue', key: 'taskCatOps' },
+  security: { color: 'red', key: 'taskCatSecurity' },
+  report: { color: 'purple', key: 'taskCatReport' },
+}
+
+// 任务在某个组上跑不跑：本组单独设置优先，没设置的跟全局默认；没有当前组时看全局默认
+const enabledIn = (task: TaskRow, groupId?: string) =>
+  groupId && groupId in task.groupEnabled ? task.groupEnabled[groupId] : task.enabled
+const anyEnabled = (task: TaskRow) => task.enabled || Object.values(task.groupEnabled).some(Boolean)
 
 function duration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000))
@@ -158,17 +169,25 @@ function Runs({ runs, loading }: { runs: TaskRunRow[]; loading: boolean }) {
 }
 
 // 一位 AI 员工：头像在岗时会呼吸，下面是此刻在做什么，或者上一班的结果与下一次上班的时间
-function Worker({ task, busy, hosts, onToggle, onRun, onEdit }: {
+function Worker({ task, busy, hosts, onToggle, onGroup, onRun, onEdit }: {
   task: TaskRow
   busy: boolean
   hosts: Record<string, string>
   onToggle: (enabled: boolean) => void
+  onGroup: (enabled: boolean | null) => void
   onRun: () => void
   onEdit: () => void
 }) {
   const { t, locale } = useI18n()
   const { token } = theme.useToken()
-  const { isAdmin, groups } = useSession()
+  const { isAdmin, groups, group } = useSession()
+  // 主开关管当前组：组管理员就能开关本组；平台 admin 另有一个全局默认开关
+  const groupId = group?.id
+  const canGroup = !!groupId && (isAdmin || group?.role === 'admin')
+  const overridden = !!groupId && groupId in task.groupEnabled
+  const enabled = enabledIn(task, groupId)
+  const name = locale === 'en' && task.nameEn ? task.nameEn : task.name
+  const description = locale === 'en' ? task.descriptionEn || task.description : task.description
   const [showRuns, setShowRuns] = useState(false)
   const runsQuery = useQuery({ queryKey: ['taskRuns', task.id], queryFn: () => fetchTaskRuns(task.id), refetchInterval: 10_000 })
   const runs = runsQuery.data ?? []
@@ -176,9 +195,9 @@ function Worker({ task, busy, hosts, onToggle, onRun, onEdit }: {
   const last = runs.find(r => r.status !== 'running')
   const now = useNow(working.length > 0)
   const spec = task.customSchedule ?? task.schedule
-  // 职责取第一句；截在冒号上的（「……覆盖：」）去掉冒号
-  const duty = task.prompt.split(/[。\n]/)[0].replace(/[：:]\s*$/, '')
-  const state = working.length ? 'working' : task.enabled ? 'idle' : 'off'
+  // 职责优先用任务说明；没有说明的旧任务取提示词第一句，截在冒号上的（「……覆盖：」）去掉冒号
+  const duty = description || task.prompt.split(/[。\n]/)[0].replace(/[：:]\s*$/, '')
+  const state = working.length ? 'working' : enabled ? 'idle' : 'off'
   const ring = { working: token.colorSuccess, idle: token.colorPrimary, off: token.colorTextQuaternary }[state]
 
   return (
@@ -189,8 +208,9 @@ function Worker({ task, busy, hosts, onToggle, onRun, onEdit }: {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <Space size={8} wrap>
-            <Typography.Text strong style={{ fontSize: 16 }}>{task.name}</Typography.Text>
-            <Tag variant="filled">{task.targetGroup === '*' ? t('taskAllGroups') : task.targetGroup}</Tag>
+            <Typography.Text strong style={{ fontSize: 16 }}>{name}</Typography.Text>
+            {task.category && <Tag color={CATEGORY[task.category].color}>{t(CATEGORY[task.category].key)}</Tag>}
+            {task.targetGroup !== '*' && <Tag>{task.targetGroup}</Tag>}
             {state === 'off' && <Tag>{t('workerOff')}</Tag>}
           </Space>
           <Tooltip title={<pre className="tooltip-pre">{task.prompt}</pre>}>
@@ -204,9 +224,28 @@ function Worker({ task, busy, hosts, onToggle, onRun, onEdit }: {
             {state === 'idle' && task.nextRun && <Typography.Text type="secondary">· {t('workerNext', { time: fmtTime(task.nextRun) })}</Typography.Text>}
           </Space>
         </div>
-        <Space orientation="vertical" align="end" size={8}>
-          <Switch checked={task.enabled} disabled={!isAdmin || busy} loading={busy} onChange={onToggle} checkedChildren={t('taskEnabled')} unCheckedChildren={t('taskDisabled')} />
-          {isAdmin && <Button size="small" icon={<CaretRightOutlined />} disabled={!task.enabled || busy || working.length > 0} onClick={onRun}>{t('workerRunNow')}</Button>}
+        <Space orientation="vertical" align="end" size={6}>
+          {groupId ? (
+            <Tooltip title={t('taskForGroup', { name: group?.name ?? '' })}>
+              <Switch aria-label={t('taskForGroup', { name: group?.name ?? '' })} checked={enabled} disabled={!canGroup || busy} loading={busy} onChange={onGroup} checkedChildren={t('taskEnabled')} unCheckedChildren={t('taskDisabled')} />
+            </Tooltip>
+          ) : (
+            <Switch aria-label={t('taskGlobalDefault')} checked={task.enabled} disabled={!isAdmin || busy} loading={busy} onChange={onToggle} checkedChildren={t('taskEnabled')} unCheckedChildren={t('taskDisabled')} />
+          )}
+          {groupId && (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {overridden
+                ? <>{t('taskGroupOverride')}{canGroup && <> · <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 12 }} disabled={busy} onClick={() => onGroup(null)}>{t('taskResetGroup')}</Button></>}</>
+                : t('taskFollowDefault')}
+            </Typography.Text>
+          )}
+          {groupId && isAdmin && (
+            <Space size={4} style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('taskGlobalDefault')}</Typography.Text>
+              <Switch size="small" aria-label={t('taskGlobalDefault')} checked={task.enabled} disabled={busy} onChange={onToggle} />
+            </Space>
+          )}
+          {isAdmin && <Button size="small" icon={<CaretRightOutlined />} disabled={!anyEnabled(task) || busy || working.length > 0} onClick={onRun}>{t('workerRunNow')}</Button>}
         </Space>
       </div>
 
@@ -233,7 +272,14 @@ export function TasksPage() {
   const [busy, setBusy] = useState<string[]>([])
   const [editing, setEditing] = useState<TaskRow | null>(null)
   const [form] = Form.useForm<{ schedule: string }>()
+  const { group } = useSession()
+  const [category, setCategory] = useState<TaskCategory | 'all'>('all')
+  const [onlyEnabled, setOnlyEnabled] = useState(false)
   const { data, isPending, isError, error, refetch } = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks, refetchInterval: 60_000 })
+  // 在本组启用的排前面；分类与「只看已启用」只是筛选，不改变任务本身
+  const tasks = (data ?? [])
+    .filter(task => (category === 'all' || task.category === category) && (!onlyEnabled || enabledIn(task, group?.id)))
+    .sort((a, b) => Number(enabledIn(b, group?.id)) - Number(enabledIn(a, group?.id)))
   const { data: hosts = {} } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, select: as => Object.fromEntries(as.map(a => [a.id, a.hostname])) })
 
   const perform = async (id: string, action: () => Promise<void>) => {
@@ -246,6 +292,10 @@ export function TasksPage() {
   }
   const update = (id: string, body: { enabled?: boolean; customSchedule?: string }) => perform(id, async () => {
     await updateTask(id, body)
+    await client.invalidateQueries({ queryKey: ['tasks'] })
+  })
+  const toggleGroup = (id: string, groupId: string, enabled: boolean | null) => perform(id, async () => {
+    await setTaskGroup(id, groupId, enabled)
     await client.invalidateQueries({ queryKey: ['tasks'] })
   })
   const runNow = (id: string) => perform(id, async () => {
@@ -268,15 +318,31 @@ export function TasksPage() {
         : isPending ? <Card loading />
         : !data?.length ? <Card><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noTasks')} /></Card>
         : (
+          <>
+            <Flex gap={12} wrap align="center" justify="space-between" style={{ marginBottom: 16 }}>
+              <Segmented value={category} onChange={v => setCategory(v as TaskCategory | 'all')} options={[
+                { value: 'all', label: t('taskCatAll') },
+                ...(['ops', 'security', 'report'] as const).map(c => ({ value: c, label: t(CATEGORY[c].key) })),
+              ]} />
+              <Space size={8}>
+                <Switch size="small" checked={onlyEnabled} onChange={setOnlyEnabled} aria-label={t('taskOnlyEnabled')} />
+                <Typography.Text type="secondary">{t('taskOnlyEnabled')}</Typography.Text>
+                <Typography.Text type="secondary">· {t('taskEnabledCount', { n: data.filter(task => enabledIn(task, group?.id)).length, total: data.length })}</Typography.Text>
+              </Space>
+            </Flex>
+            {!tasks.length ? <Card><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noMatch')} /></Card> : (
           <Row gutter={[16, 16]}>
-            {data.map(task => (
-              <Col key={task.id} xs={24} xxl={12}>
+            {tasks.map(task => (
+              <Col key={task.id} xs={24} lg={12}>
                 <Worker task={task} hosts={hosts} busy={busy.includes(task.id)}
                   onToggle={enabled => update(task.id, { enabled })} onRun={() => runNow(task.id)}
+                  onGroup={enabled => group && toggleGroup(task.id, group.id, enabled)}
                   onEdit={() => { form.setFieldsValue({ schedule: task.customSchedule ?? task.schedule }); setEditing(task) }} />
               </Col>
             ))}
           </Row>
+            )}
+          </>
         )}
       <Modal open={!!editing} title={t('taskEditSchedule')} onCancel={() => { if (!saving) setEditing(null) }} confirmLoading={saving} closable={!saving} maskClosable={!saving} keyboard={!saving} cancelButtonProps={{ disabled: saving }} onOk={() => form.submit()} destroyOnHidden>
         <Form disabled={saving} form={form} layout="vertical" onFinish={saveSchedule}>

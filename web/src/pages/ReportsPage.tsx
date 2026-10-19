@@ -1,6 +1,6 @@
 import { ExportOutlined, FilePdfOutlined, FileSearchOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { App, Button, Drawer, Empty, Input, Space, Table } from 'antd'
+import { App, Button, Drawer, Empty, Input, Segmented, Space, Table, Tag } from 'antd'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { downloadAgentPdf, fetchAgentReports, reportHtmlUrl, type AgentReport } from '../api'
@@ -9,8 +9,15 @@ import { Markdown } from '../components/Markdown'
 import { EmptyHint, Refreshed } from '../components/Ago'
 import { FilterCard, Page } from '../components/Page'
 import { fmtTime, errText } from '../components/format'
-import { useI18n } from '../i18n'
+import { useI18n, type MsgKey } from '../i18n'
 import { LoadError } from '../components/LoadError'
+
+// 报告级别：无异常的只存档，有事项与紧急的会推送通知
+const LEVEL: Record<AgentReport['level'], { color: string; key: MsgKey }> = {
+  ok: { color: 'success', key: 'reportLevelOk' },
+  attention: { color: 'warning', key: 'reportLevelAttention' },
+  urgent: { color: 'error', key: 'reportLevelUrgent' },
+}
 
 // 报告中心：Pi 会话（含定时巡检）提交的报告，按当前组列出
 export function ReportsPage() {
@@ -19,6 +26,7 @@ export function ReportsPage() {
   const { group } = useSession()
   const canChat = group?.role === 'admin' || group?.role === 'analyst'
   const [search, setSearch] = useState('')
+  const [level, setLevel] = useState<'all' | 'action'>('all')
   const [downloads, setDownloads] = useState<Set<string>>(new Set())
   const [preview, setPreview] = useState<AgentReport | null>(null)
   const { data, isPending, isError, error, refetch, isFetching, dataUpdatedAt } = useQuery({
@@ -35,14 +43,17 @@ export function ReportsPage() {
     catch (e) { message.error(errText(e, t)) }
     finally { setDownloads(previous => { const next = new Set(previous); next.delete(r.id); return next }) }
   }
-  const rows = (data ?? []).filter(r => r.title.toLowerCase().includes(search.trim().toLowerCase()))
+  const rows = (data ?? []).filter(r => r.title.toLowerCase().includes(search.trim().toLowerCase()) && (level === 'all' || r.level !== 'ok'))
 
   if (!group) return <Empty style={{ marginTop: 120 }} description={t('noGroupsHint')} />
   return (
     <Page title={t('navReports')} subtitle={t('reportsSubtitle', { name: group.name })}>
       <FilterCard
-        filters={<Input allowClear prefix={<SearchOutlined aria-hidden />} aria-label={t('searchReports')} placeholder={t('searchReports')} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 280, maxWidth: '100%' }} />}
-        onReset={search ? () => setSearch('') : undefined}
+        filters={<>
+          <Input allowClear prefix={<SearchOutlined aria-hidden />} aria-label={t('searchReports')} placeholder={t('searchReports')} value={search} onChange={e => setSearch(e.target.value)} style={{ width: 280, maxWidth: '100%' }} />
+          <Segmented value={level} onChange={v => setLevel(v as 'all' | 'action')} options={[{ value: 'all', label: t('reportLevelAll') }, { value: 'action', label: t('reportLevelAction') }]} />
+        </>}
+        onReset={search || level !== 'all' ? () => { setSearch(''); setLevel('all') } : undefined}
         extra={<Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} />}
       >
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<AgentReport>
@@ -55,6 +66,7 @@ export function ReportsPage() {
             action={canChat && <Link to={`/chat?${new URLSearchParams({ prompt: t('reportPrompt') })}`}><Button type="primary">{t('reportAskAI')}</Button></Link>} /> }}
           columns={[
             { title: t('reportTitle'), dataIndex: 'title', render: (v, r) => <Button type="link" className="report-title-button" icon={<FileSearchOutlined aria-hidden />} onClick={() => setPreview(r)}>{v}</Button> },
+            { title: t('reportLevel'), dataIndex: 'level', width: 110, render: (v: AgentReport['level']) => <Tag color={LEVEL[v]?.color}>{t(LEVEL[v]?.key ?? 'reportLevelAttention')}</Tag> },
             { title: t('thCreatedAt'), dataIndex: 'created_at', width: 190, render: fmtTime },
             { title: t('sourceSession'), dataIndex: 'session_id', width: 140, render: v => <Link to={`/chat/${v}`}>{t('openSession')}</Link> },
             {

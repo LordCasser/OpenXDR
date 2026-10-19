@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"openxdr/server/ent/task"
 	"strings"
@@ -21,12 +22,22 @@ type Task struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
+	// NameEn holds the value of the "name_en" field.
+	NameEn string `json:"name_en,omitempty"`
+	// Description holds the value of the "description" field.
+	Description string `json:"description,omitempty"`
+	// DescriptionEn holds the value of the "description_en" field.
+	DescriptionEn string `json:"description_en,omitempty"`
+	// Category holds the value of the "category" field.
+	Category string `json:"category,omitempty"`
 	// Schedule holds the value of the "schedule" field.
 	Schedule string `json:"schedule,omitempty"`
 	// CustomSchedule holds the value of the "custom_schedule" field.
 	CustomSchedule *string `json:"custom_schedule,omitempty"`
 	// Enabled holds the value of the "enabled" field.
 	Enabled bool `json:"enabled,omitempty"`
+	// GroupEnabled holds the value of the "group_enabled" field.
+	GroupEnabled map[string]bool `json:"group_enabled,omitempty"`
 	// Model holds the value of the "model" field.
 	Model string `json:"model,omitempty"`
 	// TargetGroup holds the value of the "target_group" field.
@@ -47,11 +58,13 @@ func (*Task) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case task.FieldGroupEnabled:
+			values[i] = new([]byte)
 		case task.FieldEnabled, task.FieldRemoved:
 			values[i] = new(sql.NullBool)
 		case task.FieldApprovalTimeoutSeconds:
 			values[i] = new(sql.NullInt64)
-		case task.FieldID, task.FieldName, task.FieldSchedule, task.FieldCustomSchedule, task.FieldModel, task.FieldTargetGroup, task.FieldPrompt:
+		case task.FieldID, task.FieldName, task.FieldNameEn, task.FieldDescription, task.FieldDescriptionEn, task.FieldCategory, task.FieldSchedule, task.FieldCustomSchedule, task.FieldModel, task.FieldTargetGroup, task.FieldPrompt:
 			values[i] = new(sql.NullString)
 		case task.FieldCreatedAt, task.FieldRunRequestedAt:
 			values[i] = new(sql.NullTime)
@@ -88,6 +101,30 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Name = value.String
 			}
+		case task.FieldNameEn:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field name_en", values[i])
+			} else if value.Valid {
+				_m.NameEn = value.String
+			}
+		case task.FieldDescription:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field description", values[i])
+			} else if value.Valid {
+				_m.Description = value.String
+			}
+		case task.FieldDescriptionEn:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field description_en", values[i])
+			} else if value.Valid {
+				_m.DescriptionEn = value.String
+			}
+		case task.FieldCategory:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field category", values[i])
+			} else if value.Valid {
+				_m.Category = value.String
+			}
 		case task.FieldSchedule:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field schedule", values[i])
@@ -106,6 +143,14 @@ func (_m *Task) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field enabled", values[i])
 			} else if value.Valid {
 				_m.Enabled = value.Bool
+			}
+		case task.FieldGroupEnabled:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field group_enabled", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.GroupEnabled); err != nil {
+					return fmt.Errorf("unmarshal field group_enabled: %w", err)
+				}
 			}
 		case task.FieldModel:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -186,6 +231,18 @@ func (_m *Task) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
+	builder.WriteString("name_en=")
+	builder.WriteString(_m.NameEn)
+	builder.WriteString(", ")
+	builder.WriteString("description=")
+	builder.WriteString(_m.Description)
+	builder.WriteString(", ")
+	builder.WriteString("description_en=")
+	builder.WriteString(_m.DescriptionEn)
+	builder.WriteString(", ")
+	builder.WriteString("category=")
+	builder.WriteString(_m.Category)
+	builder.WriteString(", ")
 	builder.WriteString("schedule=")
 	builder.WriteString(_m.Schedule)
 	builder.WriteString(", ")
@@ -196,6 +253,9 @@ func (_m *Task) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))
+	builder.WriteString(", ")
+	builder.WriteString("group_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.GroupEnabled))
 	builder.WriteString(", ")
 	builder.WriteString("model=")
 	builder.WriteString(_m.Model)

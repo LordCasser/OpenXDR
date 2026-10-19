@@ -33,7 +33,7 @@ xdr forget <记忆 id>                         # 删掉被现场证据推翻的 
 xdr suppress pve1 8f1d3b56-7a29-4e03-b5c8-1d4f9e2a7b60 'VM100 vpn-proxy 每天 10:58 解析订阅域名，例行业务' 30 'query.hostname$=.doggygo.top'
 xdr suppress pve1 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90 'Termix 面板每分钟 SSH 健康检查' 30 'process.cmd_line~=__TERMIX_EXIT' 'dst_endpoint.port=22'
 xdr propose-close <事件 id> false_positive '误报/良性：……（定性、关键证据、依据）' <报告 id>
-xdr report '标题' report.md                 # 最终报告（Markdown 文件）
+xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件）；级别 ok 只存档不推送 / attention（默认）/ urgent
 ```
 
 **保持上下文干净**：大结果先重定向到文件，再用 `jq`、`grep`、`head`、`awk` 取需要的部分，不要把整块原始数据读进对话。
@@ -43,11 +43,17 @@ xdr report '标题' report.md                 # 最终报告（Markdown 文件�
 
 | 视图 | 列 |
 |---|---|
-| assets | id, hostname, os, ip_addrs, agent_id, first_seen, last_seen |
+| assets | id, hostname, os, ip_addrs, agent_id, first_seen, last_seen, agent_version, silent_since, role, criticality, summary, listening(jsonb), cloud(jsonb), service_notes(jsonb), egress_notes(jsonb), zone_id, inventory_at |
 | events | id, ts, class_uid, source, asset_id, username, conn_tuple, raw(jsonb) |
 | alerts | id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id |
 | incidents | id, created_at, status, title, ai_verdict(jsonb), graph(jsonb) |
 | commands | id, created_at, completed_at, kind, status, asset_id, incident_id, issued_by, detail, cmd, exit_code, stdout, stderr, truncated |
+| findings | id, asset_id, key, title, detail, severity, status(open/resolved/ignored), first_seen, last_seen, resolved_at, resolved_by, note |
+| suppressions | id, created_at, rule_id, asset_id, reason, created_by, expires_at, matched_count, last_matched_at, status(active/proposed/rejected), conditions(jsonb), reviewed_by, reviewed_at |
+| memories | id, created_at, updated_at, asset_id, content, source(human/ai), author |
+| asset_links | src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen（本组主机发起的连接聚合） |
+| ip_infos | ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at（本组主机连过的公网地址） |
+| reports | id, created_at, title, level(ok/attention/urgent), markdown（本组历史报告，可与上一轮对比） |
 
 - **events 查询必须带 ts 范围**，表很大。
 - `raw` 是 jsonb，用路径取字段，**不要**对 `raw::text` 做截取或 LIKE 切片：

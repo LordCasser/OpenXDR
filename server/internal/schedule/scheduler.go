@@ -79,14 +79,37 @@ func (s *Scheduler) tick(ctx context.Context, now time.Time) error {
 	if err := Sync(ctx, s.DB, LoadDir(s.Dir)); err != nil {
 		return err
 	}
-	tasks, err := s.DB.Task.Query().Where(enttask.Enabled(true), enttask.Removed(false)).All(ctx)
+	tasks, err := s.DB.Task.Query().Where(enttask.Removed(false)).All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, t := range tasks {
-		s.fireDue(ctx, t, now)
+		if AnyEnabled(t) {
+			s.fireDue(ctx, t, now)
+		}
 	}
 	return nil
+}
+
+// EnabledFor 任务在某个组上跑不跑：按组设置优先，没设置的组跟全局默认
+func EnabledFor(t *ent.Task, group uuid.UUID) bool {
+	if on, ok := t.GroupEnabled[group.String()]; ok {
+		return on
+	}
+	return t.Enabled
+}
+
+// AnyEnabled 至少有一个组会跑
+func AnyEnabled(t *ent.Task) bool {
+	if t.Enabled {
+		return true
+	}
+	for _, on := range t.GroupEnabled {
+		if on {
+			return true
+		}
+	}
+	return false
 }
 
 // due 按组从上次运行起算；从未运行的组使用任务的持久创建时间。
@@ -149,6 +172,9 @@ func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 		model = def
 	}
 	for _, g := range groups {
+		if !EnabledFor(t, g.ID) {
+			continue
+		}
 		scheduled, err := s.due(ctx, t, g.ID, now)
 		if err != nil {
 			slog.Error("任务到期判断失败", "task", t.ID, "group", g.ID, "err", err)
@@ -305,8 +331,16 @@ func (s *Scheduler) pushReports(ctx context.Context, g *ent.Group, session *ent.
 		return
 	}
 	for _, r := range reports {
+		// 无异常的只存档：任务多了，「一切正常」的推送本身就是噪音
+		if r.Level == "ok" {
+			continue
+		}
+		title := r.Title
+		if r.Level == "urgent" {
+			title = "【紧急】" + title
+		}
 		text := fmt.Sprintf("组「%s」\n%s", g.Name, excerpt(r.Markdown, 300))
-		if err := s.Notify(ctx, r.Title, text, "/api/agent-reports/"+r.ID.String()+"/html"); err != nil {
+		if err := s.Notify(ctx, title, text, "/api/agent-reports/"+r.ID.String()+"/html"); err != nil {
 			slog.Error("报告推送失败", "report", r.ID, "err", err)
 		}
 	}

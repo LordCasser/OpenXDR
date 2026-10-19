@@ -1,0 +1,27 @@
+id: baseline-compliance
+name: 安全基线抽查
+name_en: Security baseline check
+category: security
+description: "sshd 配置、防火墙、SELinux、口令策略、全局可写目录等 CIS 常见项"
+description_en: "Common CIS items: sshd settings, firewall, SELinux, password policy, world-writable paths"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 0 14 1 * *"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  按 CIS 常见项抽查本组主机的安全基线（只读）：
+  1. SSH：`sshd -T 2>/dev/null | grep -Ei 'permitrootlogin|passwordauthentication|permitemptypasswords|x11forwarding|maxauthtries|clientaliveinterval'`。
+  2. 防火墙：`nft list ruleset | head -50` 或 `iptables -S | head -50`、`ufw status`、`firewall-cmd --state`；Windows：`Get-NetFirewallProfile | Select Name,Enabled`。
+  3. 强制访问控制：`getenforce`、`aa-status --enabled`。
+  4. 口令与锁定策略：/etc/login.defs 的 PASS_MAX_DAYS，pam_faillock / pam_tally2 配置；Windows：`net accounts`。
+  5. 文件权限：/etc/shadow、/etc/passwd、/etc/sudoers 的权限；`find / -xdev -type d -perm -0002 ! -perm -1000 2>/dev/null | head`（无粘滞位的全局可写目录）。
+  6. 审计与日志：auditd、journald 持久化、rsyslog 是否运行；Windows 审核策略 `auditpol /get /category:*` 的关键项。
+  每项给出「符合 / 不符合 / 无法验证」，不符合的写清风险与修改建议。memories 里说明过的例外按例外处理。
+  待办 key 用 baseline: 前缀（baseline:<主机>:<检查项>）。全部符合时 level 写 ok；对公网开放 SSH 且允许口令登录 root 的写 urgent。
+  约束：
+  - 只用只读命令；命令在等待批准或执行失败时，在报告里如实注明，不要换一种写法绕过。
+  - 先用 memories 看本组已知的环境知识（哪些是正常的、各类东西在哪），用得上就用；查明的、以后用得上的环境事实用 remember 记下。
+  - 主机系统不同（Linux / Windows）用对应命令；主机离线或命令不可用的，写进「未能验证」。
+  - 报告结构：结论 → 需要人处理的事项（新增 / 仍未解决 / 本轮已修复）→ 按主机的证据 → 未能验证的部分；区分观察、推断与未验证。

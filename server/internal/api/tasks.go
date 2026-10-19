@@ -20,12 +20,18 @@ import (
 type taskRow struct {
 	ID             string  `json:"id"`
 	Name           string  `json:"name"`
+	NameEN         string  `json:"nameEn"`
+	Description    string  `json:"description"`
+	DescriptionEN  string  `json:"descriptionEn"`
+	Category       string  `json:"category"`
 	Schedule       string  `json:"schedule"`
 	CustomSchedule *string `json:"customSchedule"`
 	Enabled        bool    `json:"enabled"`
-	Model          string  `json:"model"`
-	TargetGroup    string  `json:"targetGroup"`
-	Prompt         string  `json:"prompt"`
+	// 按组开关：组 ID → 是否运行，没有的组跟 enabled 走；只含调用者能看到的组
+	GroupEnabled map[string]bool `json:"groupEnabled"`
+	Model        string          `json:"model"`
+	TargetGroup  string          `json:"targetGroup"`
+	Prompt       string          `json:"prompt"`
 	// NextRun 按当前周期算的下一次运行时间；停用或周期写错时为空
 	NextRun *time.Time `json:"nextRun"`
 }
@@ -45,15 +51,21 @@ type taskRunRow struct {
 	Steps       int        `json:"steps"`
 }
 
-// toTaskRow 任务行，带按当前周期算出的下一次运行时间
-func toTaskRow(t *ent.Task) taskRow {
-	row := taskRow{ID: t.ID, Name: t.Name, Schedule: t.Schedule, CustomSchedule: t.CustomSchedule, Enabled: t.Enabled,
+// toTaskRow 任务行，带按当前周期算出的下一次运行时间。visible 为 nil 表示能看全部组
+func toTaskRow(t *ent.Task, visible map[uuid.UUID]bool) taskRow {
+	row := taskRow{ID: t.ID, Name: t.Name, NameEN: t.NameEn, Description: t.Description, DescriptionEN: t.DescriptionEn, Category: t.Category,
+		Schedule: t.Schedule, CustomSchedule: t.CustomSchedule, Enabled: t.Enabled, GroupEnabled: map[string]bool{},
 		Model: t.Model, TargetGroup: t.TargetGroup, Prompt: t.Prompt}
+	for g, on := range t.GroupEnabled {
+		if id, err := uuid.Parse(g); err == nil && (visible == nil || visible[id]) {
+			row.GroupEnabled[g] = on
+		}
+	}
 	spec := t.Schedule
 	if t.CustomSchedule != nil {
 		spec = *t.CustomSchedule
 	}
-	if sched, err := schedule.ParseSchedule(spec); err == nil && t.Enabled {
+	if sched, err := schedule.ParseSchedule(spec); err == nil && schedule.AnyEnabled(t) {
 		next := sched.Next(time.Now())
 		row.NextRun = &next
 	}
@@ -88,11 +100,68 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		var visible map[uuid.UUID]bool
+		if !scope.all {
+			visible = map[uuid.UUID]bool{}
+			for _, g := range scope.groups {
+				visible[g] = true
+			}
+		}
 		out := make([]taskRow, len(tasks))
 		for i, t := range tasks {
-			out[i] = toTaskRow(t)
+			out[i] = toTaskRow(t, visible)
 		}
 		writeJSON(w, out)
+	})
+
+	// 任务在某个组上的开关：enabled 为 true / false 覆盖全局默认，null 恢复跟随全局。组管理员即可设置
+	api.HandleFunc("PUT /api/tasks/{id}/groups/{groupId}", func(w http.ResponseWriter, r *http.Request) {
+		gid, err := uuid.Parse(r.PathValue("groupId"))
+		if err != nil {
+			http.Error(w, "组 ID 无效", http.StatusBadRequest)
+			return
+		}
+		if !requireGroup(w, r, db, gid, "admin") {
+			return
+		}
+		var body struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if json.NewDecoder(r.Body).Decode(&body) != nil {
+			http.Error(w, "请求体不是合法 JSON", http.StatusBadRequest)
+			return
+		}
+		t, err := db.Task.Query().Where(enttask.IDEQ(r.PathValue("id")), enttask.Removed(false)).Only(r.Context())
+		if ent.IsNotFound(err) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if t.TargetGroup != "*" {
+			if g, err := db.Group.Get(r.Context(), gid); err != nil || g.Name != t.TargetGroup {
+				http.Error(w, "这个任务不针对该组", http.StatusBadRequest)
+				return
+			}
+		}
+		next := map[string]bool{}
+		for k, v := range t.GroupEnabled {
+			next[k] = v
+		}
+		if body.Enabled == nil {
+			delete(next, gid.String())
+		} else {
+			next[gid.String()] = *body.Enabled
+		}
+		if t, err = db.Task.UpdateOneID(t.ID).SetGroupEnabled(next).Save(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		detail, _ := json.Marshal(map[string]any{"group": gid, "enabled": body.Enabled})
+		audit.Log(r.Context(), db, r, "task_group_updated", t.ID, string(detail))
+		writeJSON(w, toTaskRow(t, map[uuid.UUID]bool{gid: true}))
 	})
 
 	// customSchedule 传空串表示恢复 YAML 里的周期
@@ -130,7 +199,7 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 		}
 		detail, _ := json.Marshal(body)
 		audit.Log(r.Context(), db, r, "task_updated", t.ID, string(detail))
-		writeJSON(w, toTaskRow(t))
+		writeJSON(w, toTaskRow(t, nil))
 	})
 
 	// 立即运行：只记请求时间，由集群单活的调度器在下一次检查时拉起，避免多节点各跑一份
@@ -144,8 +213,8 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if !t.Enabled {
-			http.Error(w, "任务已停用，先启用再运行", http.StatusConflict)
+		if !schedule.AnyEnabled(t) {
+			http.Error(w, "任务在所有组都未启用，先启用再运行", http.StatusConflict)
 			return
 		}
 		if err := db.Task.UpdateOneID(t.ID).SetRunRequestedAt(time.Now()).Exec(r.Context()); err != nil {

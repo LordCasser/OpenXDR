@@ -1,0 +1,26 @@
+id: suppression-review
+name: 抑制与情报复核
+name_en: Suppression and intel review
+category: security
+description: "快到期、长期没命中、条件过宽的抑制，以及情报命中的去向"
+description_en: "Suppressions that are expiring, never hit or too broad, and what intel hits led to"
+# 预设任务默认关闭，在「定时任务」页按组开启；时间错开，避免同时占满并发
+enabled: false
+schedule: "CRON_TZ=Asia/Shanghai 0 10 2 * *"
+model: ""
+targets: { group: "*" }
+approval_timeout: 10m
+prompt: |
+  复核本组的抑制规则与情报命中：
+  1. 用 query 的 suppressions（status=active）：
+     - 30 天内到期的：判断是否仍需要，需要的在报告里建议续期（由人操作）；
+     - 创建超过 30 天但 matched_count 为 0 或 last_matched_at 超过 30 天的：建议撤销，减少盲区；
+     - 没有 conditions、压整条规则的：说明风险，建议改为带条件的抑制。
+  2. 情报命中：alerts 里 rule_id 以 intel: 开头的告警，按目的、主机汇总近 30 天的命中，以及对应 incident 的结案结果；
+     长期命中但都被判误报的，提示情报可能过时或需要加白；命中后没有结案的，列出来。
+  3. 待批（proposed）的抑制提议超过 7 天没人处理的，提醒组管理员。
+  不直接撤销或修改任何东西，只给建议。没有需要处理的事项时 level 写 ok。
+  约束：
+  - 本任务只读平台数据（query），不在主机上执行命令。
+  - 先用 memories 看本组已知的环境知识，用得上就用。
+  - 报告结构：结论 → 需要人处理的事项 → 数据与依据 → 未能验证的部分；区分观察、推断与未验证。
