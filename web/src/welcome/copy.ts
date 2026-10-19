@@ -2,7 +2,7 @@ import type { Locale } from '../i18n'
 
 // 欢迎页与用户协议的文案。协议条文改动时同步改 server/internal/api/setup.go 的 AgreementVersion，管理员会被要求重新同意
 // 权利人用工商登记的中文全称，英文界面也不另译，免得译名对不上登记主体
-export const COMPANIES = ['北京玖华智能科技有限公司', '成都御之安科技有限公司', '四维创智（北京）科技发展有限公司']
+export const COMPANIES = ['北京玖华智能科技有限公司', '成都御之安科技有限公司', '万径华章（成都）科技发展有限公司']
 
 const zh = {
   team: 'OpenXDR 开发组',
