@@ -47,7 +47,19 @@ type queryProvisioner interface {
 }
 
 func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
-	api.HandleFunc("GET /api/groups", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/groups", listGroups(db))
+	api.HandleFunc("POST /api/groups", createGroup(db, queries))
+	api.HandleFunc("DELETE /api/groups/{id}", deleteGroup(db, queries))
+	api.HandleFunc("GET /api/groups/{id}/members", listGroupMembers(db))
+	api.HandleFunc("PUT /api/groups/{id}/members/{userId}", setGroupMember(db))
+	api.HandleFunc("DELETE /api/groups/{id}/members/{userId}", removeGroupMember(db))
+	api.HandleFunc("PUT /api/groups/{id}/assets/{assetId}", groupAsset(db))
+	api.HandleFunc("DELETE /api/groups/{id}/assets/{assetId}", ungroupAsset(db))
+}
+
+// listGroups 当前用户能看到的组；非 admin 只看自己所在的组。
+func listGroups(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		u := auth.From(r.Context())
 		q := db.Group.Query()
 		if u.Role != "admin" {
@@ -77,9 +89,12 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 			out[i] = groupRow{g.ID, g.CreatedAt, g.Name, auth.GroupRole(r.Context(), db, u, g.ID), n}
 		}
 		writeJSON(w, out)
-	})
+	}
+}
 
-	api.HandleFunc("POST /api/groups", func(w http.ResponseWriter, r *http.Request) {
+// createGroup 新建组并带上默认高风险命令名单，顺带开通组查询身份。
+func createGroup(db *ent.Client, queries queryProvisioner) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Name string `json:"name"`
 		}
@@ -113,10 +128,12 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 		}
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, groupRow{g.ID, g.CreatedAt, g.Name, "admin", 0})
-	})
+	}
+}
 
-	// 删组：资产退回未分组、成员关系一并清掉，主机本身不受影响
-	api.HandleFunc("DELETE /api/groups/{id}", func(w http.ResponseWriter, r *http.Request) {
+// deleteGroup 删组：资产退回未分组、成员关系一并清掉，主机本身不受影响
+func deleteGroup(db *ent.Client, queries queryProvisioner) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		g, ok := groupFromPath(w, r, db)
 		if !ok {
 			return
@@ -150,10 +167,12 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 		}
 		audit.Log(r.Context(), db, r, "group_deleted", g.ID.String(), g.Name)
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	// 成员名单只给组 admin 看
-	api.HandleFunc("GET /api/groups/{id}/members", func(w http.ResponseWriter, r *http.Request) {
+// listGroupMembers 成员名单只给组 admin 看
+func listGroupMembers(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		g, ok := groupFromPath(w, r, db)
 		if !ok {
 			return
@@ -176,10 +195,12 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 			out = append(out, memberRow{m.UserID, u.Username, m.Role})
 		}
 		writeJSON(w, out)
-	})
+	}
+}
 
-	// 设定成员角色：不存在就加，存在就改
-	api.HandleFunc("PUT /api/groups/{id}/members/{userId}", func(w http.ResponseWriter, r *http.Request) {
+// setGroupMember 设定成员角色：不存在就加，存在就改
+func setGroupMember(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		g, ok := groupFromPath(w, r, db)
 		if !ok {
 			return
@@ -208,9 +229,12 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 		}
 		audit.Log(r.Context(), db, r, "group_member_set", g.Name, u.Username+" → "+body.Role)
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	api.HandleFunc("DELETE /api/groups/{id}/members/{userId}", func(w http.ResponseWriter, r *http.Request) {
+// removeGroupMember 把用户移出组。
+func removeGroupMember(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		g, ok := groupFromPath(w, r, db)
 		if !ok {
 			return
@@ -227,10 +251,12 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 		}
 		audit.Log(r.Context(), db, r, "group_member_removed", g.Name, u.Username)
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	// 资产归组：一台主机只属于一个组，归入新组即离开旧组
-	api.HandleFunc("PUT /api/groups/{id}/assets/{assetId}", func(w http.ResponseWriter, r *http.Request) {
+// groupAsset 资产归组：一台主机只属于一个组，归入新组即离开旧组
+func groupAsset(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		g, ok := groupFromPath(w, r, db)
 		if !ok {
 			return
@@ -256,9 +282,12 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 		}
 		audit.Log(r.Context(), db, r, "asset_grouped", a.Hostname, g.Name)
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	api.HandleFunc("DELETE /api/groups/{id}/assets/{assetId}", func(w http.ResponseWriter, r *http.Request) {
+// ungroupAsset 把资产移出组，退回未分组。
+func ungroupAsset(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		g, ok := groupFromPath(w, r, db)
 		if !ok {
 			return
@@ -291,7 +320,7 @@ func mapGroups(api *http.ServeMux, db *ent.Client, queries queryProvisioner) {
 		}
 		audit.Log(r.Context(), db, r, "asset_ungrouped", a.Hostname, g.Name)
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
 }
 
 func groupFromPath(w http.ResponseWriter, r *http.Request, db *ent.Client) (*ent.Group, bool) {
