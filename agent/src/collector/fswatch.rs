@@ -356,12 +356,15 @@ fn ino_run(
         }
         let mut off = 0usize;
         while off + std::mem::size_of::<libc::inotify_event>() <= n as usize {
-            // SAFETY: 越界：循环条件保证 off + size_of::<inotify_event>() ≤ n ≤ buf.len()，事件头完整落在
+            // SAFETY: 循环条件保证 off + size_of::<inotify_event>() ≤ n ≤ buf.len()，事件头完整落在
             // 本次 read 写入的已初始化字节内；inotify_event 只含整数字段，任意字节都是合法值。
-            // 对齐：内核把每条记录的 name 补齐到 size_of::<inotify_event>() 的整数倍，off 因此始终是
-            // 16 的倍数；但 buf 是 [u8; N]，类型上只保证 1 字节对齐，这里实际依赖栈数组恰好 4 字节对齐。
-            // 严格说应改用 read_unaligned 或对齐的缓冲区（已知隐患，本次不改逻辑）。
-            let ev = unsafe { &*(buf.as_ptr().add(off).cast::<libc::inotify_event>()) };
+            // buf 是 [u8; N]，只保证 1 字节对齐，所以按值非对齐读出，不取引用。
+            let ev = unsafe {
+                buf.as_ptr()
+                    .add(off)
+                    .cast::<libc::inotify_event>()
+                    .read_unaligned()
+            };
             let name_off = off + std::mem::size_of::<libc::inotify_event>();
             let name = std::str::from_utf8(&buf[name_off..name_off + ev.len as usize])
                 .unwrap_or("")
