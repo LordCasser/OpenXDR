@@ -125,12 +125,50 @@ const (
 
 func (s *Server) ReportEvents(stream pb.AgentService_ReportEventsServer) error {
 	ctx := stream.Context()
+	recvCh := recvAgentEvents(ctx, stream)
 
-	// stream.Recv 是阻塞调用，挪进 goroutine 才能和定时 flush 一起 select
-	type recvResult struct {
-		ev  *pb.AgentEvent
-		err error
+	ticker := time.NewTicker(flushInterval)
+	defer ticker.Stop()
+
+	st := &agentStream{
+		s: s, ctx: ctx,
+		verifiedIDs: map[string]bool{},
+		deduper:     dedup.New(s.DedupWindow),
 	}
+	for {
+		select {
+		case <-ticker.C:
+			if err := st.flush(); err != nil {
+				return err
+			}
+		case result, ok := <-recvCh:
+			if !ok {
+				return ctx.Err()
+			}
+			if errors.Is(result.err, io.EOF) {
+				if err := st.flush(); err != nil {
+					return err
+				}
+				return stream.SendAndClose(&pb.ReportAck{Received: st.received})
+			}
+			if result.err != nil {
+				_ = st.flush() // 断流前尽力保住已收的
+				return result.err
+			}
+			if err := st.handle(result.ev); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+type recvResult struct {
+	ev  *pb.AgentEvent
+	err error
+}
+
+// recvAgentEvents stream.Recv 是阻塞调用，挪进 goroutine 才能和定时 flush 一起 select
+func recvAgentEvents(ctx context.Context, stream pb.AgentService_ReportEventsServer) <-chan recvResult {
 	recvCh := make(chan recvResult)
 	go func() {
 		defer close(recvCh)
@@ -146,233 +184,252 @@ func (s *Server) ReportEvents(stream pb.AgentService_ReportEventsServer) error {
 			}
 		}
 	}()
+	return recvCh
+}
 
-	ticker := time.NewTicker(flushInterval)
-	defer ticker.Stop()
-
-	var received uint64
-	var assetID *uuid.UUID
-	var assetOS string
-	var lastDropped uint64
+// agentStream 一条上报流的状态，只在 ReportEvents 的循环里单线程使用。
+type agentStream struct {
+	s           *Server
+	ctx         context.Context
+	received    uint64
+	assetID     *uuid.UUID
+	assetOS     string
+	lastDropped uint64
 	// 每个 agent_id 首次出现时核对证书身份，之后放行；假 id 直接断流
-	verifiedIDs := map[string]bool{}
-	var eventCreates []*ent.EventCreate
-	var alertCreates []*ent.AlertCreate
-
+	verifiedIDs  map[string]bool
+	eventCreates []*ent.EventCreate
+	alertCreates []*ent.AlertCreate
 	// 一条流对应一台主机，告警指纹 (rule_id, asset_id) 在流内就是 rule_id
-	deduper := dedup.New(s.DedupWindow)
+	deduper *dedup.Deduper
+}
 
-	flush := func() error {
-		if len(eventCreates) > 0 {
-			if _, err := s.DB.Event.CreateBulk(eventCreates...).Save(ctx); err != nil {
-				return err
-			}
-			eventCreates = nil
+func (st *agentStream) flush() error {
+	if len(st.eventCreates) > 0 {
+		if _, err := st.s.DB.Event.CreateBulk(st.eventCreates...).Save(st.ctx); err != nil {
+			return err
 		}
-		if len(alertCreates) > 0 {
-			if _, err := s.DB.Alert.CreateBulk(alertCreates...).Save(ctx); err != nil {
-				return err
-			}
-			alertCreates = nil
+		st.eventCreates = nil
+	}
+	if len(st.alertCreates) > 0 {
+		if _, err := st.s.DB.Alert.CreateBulk(st.alertCreates...).Save(st.ctx); err != nil {
+			return err
 		}
-		return deduper.Flush(ctx, s.DB)
+		st.alertCreates = nil
+	}
+	return st.deduper.Flush(st.ctx, st.s.DB)
+}
+
+// handle 处理一条事件：配了事件队列就入队，否则就地检测并攒批落库。
+func (st *agentStream) handle(ev *pb.AgentEvent) error {
+	if err := st.verify(ev); err != nil {
+		return err
 	}
 
-	for {
-		var ev *pb.AgentEvent
-		select {
-		case <-ticker.C:
-			if err := flush(); err != nil {
-				return err
-			}
+	// 累计值只在增长时报，避免每条事件刷屏
+	if ev.DroppedEvents > st.lastDropped {
+		slog.Warn("agent 采集队列溢出",
+			"agent", ev.AgentId, "dropped", ev.DroppedEvents)
+		st.lastDropped = ev.DroppedEvents
+	}
+
+	if st.assetID == nil {
+		st.resolveAsset(ev.AgentId)
+	}
+
+	raw := json.RawMessage(ev.RawJson)
+	var rawMap map[string]any
+	if json.Unmarshal(raw, &rawMap) != nil {
+		raw = json.RawMessage("{}")
+		rawMap = map[string]any{}
+	}
+
+	ts := time.Unix(0, ev.TsUnixNs)
+	if st.s.Events != nil {
+		return st.publish(ev, raw, rawMap, ts)
+	}
+	eventID := uuid.Must(uuid.NewV7())
+	st.queueEvent(ev, eventID, ts, raw)
+	if err := st.detect(ev, eventID, rawMap, ts); err != nil {
+		return err
+	}
+	if err := st.checkBruteforce(ev, eventID, rawMap, ts); err != nil {
+		return err
+	}
+
+	// 长连接流，攒批落库
+	if st.received++; st.received%batchSize == 0 {
+		return st.flush()
+	}
+	return nil
+}
+
+// verify 每个 agent_id 首次出现时核对证书身份。
+func (st *agentStream) verify(ev *pb.AgentEvent) error {
+	if st.verifiedIDs[ev.AgentId] {
+		return nil
+	}
+	id, err := uuid.Parse(ev.AgentId)
+	if err != nil {
+		return status.Error(codes.InvalidArgument, "agent_id 不是合法 UUID")
+	}
+	if err := st.s.verifyAgentID(st.ctx, id); err != nil {
+		_ = st.flush() // 断流前保住此前已核验的事件
+		return err
+	}
+	st.verifiedIDs[ev.AgentId] = true
+	return nil
+}
+
+// resolveAsset 按 agent_id 找到所属资产；找不到下条事件再试。
+func (st *agentStream) resolveAsset(agentID string) {
+	agentGUID, err := uuid.Parse(agentID)
+	if err != nil {
+		return
+	}
+	a, err := st.s.DB.Asset.Query().Where(asset.AgentIDEQ(agentGUID)).First(st.ctx)
+	if err != nil {
+		return
+	}
+	st.assetID = &a.ID
+	if a.Os != nil {
+		st.assetOS = strings.ToLower(*a.Os)
+	}
+}
+
+// fileFingerprintSuffix 文件事件的实体键是路径：同一规则命中不同文件是不同的事，不能被合并；
+// 进程/网络事件保持粗指纹，那正是防告警风暴的设计
+func fileFingerprintSuffix(classUID uint32, rawMap map[string]any) string {
+	if classUID != 1001 {
+		return ""
+	}
+	if f, ok := rawMap["file"].(map[string]any); ok {
+		if p, ok := f["path"].(string); ok {
+			return "|" + p
+		}
+	}
+	return ""
+}
+
+// publish 事件入队，检测与落库交给队列消费端。
+func (st *agentStream) publish(ev *pb.AgentEvent, raw json.RawMessage, rawMap map[string]any, ts time.Time) error {
+	partitionKey := ev.AgentId
+	if st.assetID != nil {
+		partitionKey = st.assetID.String()
+	}
+	var processGUID, parentGUID *uuid.UUID
+	if id, parseErr := uuid.Parse(ev.ProcessGuid); parseErr == nil {
+		processGUID = &id
+	}
+	if id, parseErr := uuid.Parse(ev.ParentProcessGuid); parseErr == nil {
+		parentGUID = &id
+	}
+	eventID := ingest.StableID(ev.AgentId, strconv.FormatInt(ev.TsUnixNs, 10),
+		strconv.FormatUint(uint64(ev.ClassUid), 10), ev.ProcessGuid, ev.ParentProcessGuid,
+		ev.ConnTuple, string(raw))
+	if err := st.s.Events.Publish(st.ctx, ingest.Envelope{
+		Version: ingest.EnvelopeVersion, ID: eventID, PartitionKey: partitionKey,
+		Timestamp: ts, ClassUID: int(ev.ClassUid), Source: "agent", AssetID: st.assetID,
+		AssetOS: st.assetOS, ProcessGUID: processGUID, ParentProcessGUID: parentGUID,
+		Username: ev.Username, ConnTuple: ev.ConnTuple, FingerprintSuffix: fileFingerprintSuffix(ev.ClassUid, rawMap),
+		Raw: sanitizeRawJSON(raw),
+	}); err != nil {
+		return status.Errorf(codes.Unavailable, "事件入队失败: %v", err)
+	}
+	st.received++
+	return nil
+}
+
+// queueEvent 事件加入待落库批次。
+func (st *agentStream) queueEvent(ev *pb.AgentEvent, eventID uuid.UUID, ts time.Time, raw json.RawMessage) {
+	ec := st.s.DB.Event.Create().
+		SetID(eventID).
+		SetTs(ts).
+		SetClassUID(int(ev.ClassUid)).
+		SetSource("agent").
+		SetNillableAssetID(st.assetID).
+		SetRaw(sanitizeRawJSON(raw))
+	if pg, err := uuid.Parse(ev.ProcessGuid); err == nil {
+		ec.SetProcessGUID(pg)
+	}
+	if ppg, err := uuid.Parse(ev.ParentProcessGuid); err == nil {
+		ec.SetParentProcessGUID(ppg)
+	}
+	if ev.Username != "" {
+		ec.SetUsername(ev.Username)
+	}
+	if ev.ConnTuple != "" {
+		ec.SetConnTuple(ev.ConnTuple)
+	}
+	st.eventCreates = append(st.eventCreates, ec)
+}
+
+// detect 规则与情报命中，经抑制、去重后生成告警。
+func (st *agentStream) detect(ev *pb.AgentEvent, eventID uuid.UUID, rawMap map[string]any, ts time.Time) error {
+	fpSuffix := fileFingerprintSuffix(ev.ClassUid, rawMap)
+
+	sigma.WithActor(rawMap, ev.Username)
+	hits := intel.Detections(st.s.Rules.Evaluate(int(ev.ClassUid), st.assetOS, rawMap), st.s.Intel.Match(rawMap, ts))
+	var command *uuid.UUID
+	if len(hits) > 0 {
+		var err error
+		if command, err = cmdorigin.Of(st.ctx, st.s.SQL, rawMap, st.assetID, ts); err != nil {
+			return status.Errorf(codes.Unavailable, "核对平台指令失败: %v", err)
+		}
+	}
+	for _, h := range hits {
+		// 抑制先于去重：被压掉的命中不该占用去重槽位
+		if st.s.Suppress.Suppressed(h.RuleID, st.assetID, rawMap, ts) {
 			continue
-		case result, ok := <-recvCh:
-			if !ok {
-				return ctx.Err()
-			}
-			if errors.Is(result.err, io.EOF) {
-				if err := flush(); err != nil {
-					return err
-				}
-				return stream.SendAndClose(&pb.ReportAck{Received: received})
-			}
-			if result.err != nil {
-				_ = flush() // 断流前尽力保住已收的
-				return result.err
-			}
-			ev = result.ev
 		}
-
-		if !verifiedIDs[ev.AgentId] {
-			id, err := uuid.Parse(ev.AgentId)
-			if err != nil {
-				return status.Error(codes.InvalidArgument, "agent_id 不是合法 UUID")
-			}
-			if err := s.verifyAgentID(ctx, id); err != nil {
-				_ = flush() // 断流前保住此前已核验的事件
-				return err
-			}
-			verifiedIDs[ev.AgentId] = true
+		fingerprint := h.RuleID + fpSuffix
+		if command != nil {
+			fingerprint += "|cmd:" + command.String()
 		}
-
-		// 累计值只在增长时报，避免每条事件刷屏
-		if ev.DroppedEvents > lastDropped {
-			slog.Warn("agent 采集队列溢出",
-				"agent", ev.AgentId, "dropped", ev.DroppedEvents)
-			lastDropped = ev.DroppedEvents
-		}
-
-		if assetID == nil {
-			if agentGUID, err := uuid.Parse(ev.AgentId); err == nil {
-				if a, err := s.DB.Asset.Query().Where(asset.AgentIDEQ(agentGUID)).First(ctx); err == nil {
-					assetID = &a.ID
-					if a.Os != nil {
-						assetOS = strings.ToLower(*a.Os)
-					}
-				}
-			}
-		}
-
-		raw := json.RawMessage(ev.RawJson)
-		var rawMap map[string]any
-		if json.Unmarshal(raw, &rawMap) != nil {
-			raw = json.RawMessage("{}")
-			rawMap = map[string]any{}
-		}
-
-		ts := time.Unix(0, ev.TsUnixNs)
-		eventID := uuid.Must(uuid.NewV7())
-		if s.Events != nil {
-			partitionKey := ev.AgentId
-			if assetID != nil {
-				partitionKey = assetID.String()
-			}
-			var processGUID, parentGUID *uuid.UUID
-			if id, parseErr := uuid.Parse(ev.ProcessGuid); parseErr == nil {
-				processGUID = &id
-			}
-			if id, parseErr := uuid.Parse(ev.ParentProcessGuid); parseErr == nil {
-				parentGUID = &id
-			}
-			fpSuffix := ""
-			if ev.ClassUid == 1001 {
-				if f, ok := rawMap["file"].(map[string]any); ok {
-					if path, ok := f["path"].(string); ok {
-						fpSuffix = "|" + path
-					}
-				}
-			}
-			eventID = ingest.StableID(ev.AgentId, strconv.FormatInt(ev.TsUnixNs, 10),
-				strconv.FormatUint(uint64(ev.ClassUid), 10), ev.ProcessGuid, ev.ParentProcessGuid,
-				ev.ConnTuple, string(raw))
-			if err := s.Events.Publish(ctx, ingest.Envelope{
-				Version: ingest.EnvelopeVersion, ID: eventID, PartitionKey: partitionKey,
-				Timestamp: ts, ClassUID: int(ev.ClassUid), Source: "agent", AssetID: assetID,
-				AssetOS: assetOS, ProcessGUID: processGUID, ParentProcessGUID: parentGUID,
-				Username: ev.Username, ConnTuple: ev.ConnTuple, FingerprintSuffix: fpSuffix,
-				Raw: sanitizeRawJSON(raw),
-			}); err != nil {
-				return status.Errorf(codes.Unavailable, "事件入队失败: %v", err)
-			}
-			received++
+		if st.deduper.Hit(fingerprint, ts) {
 			continue
 		}
-		ec := s.DB.Event.Create().
-			SetID(eventID).
+		alertID := uuid.Must(uuid.NewV7())
+		st.alertCreates = append(st.alertCreates, st.s.DB.Alert.Create().
+			SetID(alertID).
 			SetTs(ts).
-			SetClassUID(int(ev.ClassUid)).
-			SetSource("agent").
-			SetNillableAssetID(assetID).
-			SetRaw(sanitizeRawJSON(raw))
-		if pg, err := uuid.Parse(ev.ProcessGuid); err == nil {
-			ec.SetProcessGUID(pg)
-		}
-		if ppg, err := uuid.Parse(ev.ParentProcessGuid); err == nil {
-			ec.SetParentProcessGUID(ppg)
-		}
-		if ev.Username != "" {
-			ec.SetUsername(ev.Username)
-		}
-		if ev.ConnTuple != "" {
-			ec.SetConnTuple(ev.ConnTuple)
-		}
-		eventCreates = append(eventCreates, ec)
-
-		// 文件事件的实体键是路径：同一规则命中不同文件是不同的事，不能被合并；
-		// 进程/网络事件保持粗指纹，那正是防告警风暴的设计
-		fpSuffix := ""
-		if ev.ClassUid == 1001 {
-			if f, ok := rawMap["file"].(map[string]any); ok {
-				if p, ok := f["path"].(string); ok {
-					fpSuffix = "|" + p
-				}
-			}
-		}
-
-		sigma.WithActor(rawMap, ev.Username)
-		hits := intel.Detections(s.Rules.Evaluate(int(ev.ClassUid), assetOS, rawMap), s.Intel.Match(rawMap, ts))
-		var command *uuid.UUID
-		if len(hits) > 0 {
-			var err error
-			if command, err = cmdorigin.Of(ctx, s.SQL, rawMap, assetID, ts); err != nil {
-				return status.Errorf(codes.Unavailable, "核对平台指令失败: %v", err)
-			}
-		}
-		for _, h := range hits {
-			// 抑制先于去重：被压掉的命中不该占用去重槽位
-			if s.Suppress.Suppressed(h.RuleID, assetID, rawMap, ts) {
-				continue
-			}
-			fingerprint := h.RuleID + fpSuffix
-			if command != nil {
-				fingerprint += "|cmd:" + command.String()
-			}
-			if deduper.Hit(fingerprint, ts) {
-				continue
-			}
-			alertID := uuid.Must(uuid.NewV7())
-			alertCreates = append(alertCreates, s.DB.Alert.Create().
-				SetID(alertID).
-				SetTs(ts).
-				SetRuleID(h.RuleID).
-				SetSeverity(h.Severity).
-				SetEventID(eventID).
-				SetNillableAssetID(assetID).
-				SetNillableCommandID(command).
-				SetLastTs(ts))
-			deduper.Track(fingerprint, alertID, ts)
-		}
-
-		// 爆破得手跨事件升级：成功登录前的窗口内同用户多次失败。
-		// 先 flush 让同批未落库的失败事件可见，再回查——成功登录稀少，不构成负担
-		if int(ev.ClassUid) == classAuth && authStatus(rawMap) == authStatusSuccess &&
-			assetID != nil && ev.Username != "" {
-			if err := flush(); err != nil {
-				return err
-			}
-			if s.countAuthFailures(ctx, *assetID, ev.Username, ts) >= bruteforceThreshold &&
-				!s.Suppress.Suppressed(sigma.RuleBruteforceSuccess, assetID, rawMap, ts) {
-				fingerprint := sigma.RuleBruteforceSuccess + "|" + ev.Username
-				if !deduper.Hit(fingerprint, ts) {
-					alertID := uuid.Must(uuid.NewV7())
-					alertCreates = append(alertCreates, s.DB.Alert.Create().
-						SetID(alertID).
-						SetTs(ts).
-						SetRuleID(sigma.RuleBruteforceSuccess).
-						SetSeverity(5).
-						SetEventID(eventID).
-						SetAssetID(*assetID).
-						SetLastTs(ts))
-					deduper.Track(fingerprint, alertID, ts)
-				}
-			}
-		}
-
-		// 长连接流，攒批落库
-		if received++; received%batchSize == 0 {
-			if err := flush(); err != nil {
-				return err
-			}
-		}
+			SetRuleID(h.RuleID).
+			SetSeverity(h.Severity).
+			SetEventID(eventID).
+			SetNillableAssetID(st.assetID).
+			SetNillableCommandID(command).
+			SetLastTs(ts))
+		st.deduper.Track(fingerprint, alertID, ts)
 	}
+	return nil
+}
+
+// checkBruteforce 爆破得手跨事件升级：成功登录前的窗口内同用户多次失败。
+// 先 flush 让同批未落库的失败事件可见，再回查——成功登录稀少，不构成负担
+func (st *agentStream) checkBruteforce(ev *pb.AgentEvent, eventID uuid.UUID, rawMap map[string]any, ts time.Time) error {
+	if int(ev.ClassUid) != classAuth || authStatus(rawMap) != authStatusSuccess ||
+		st.assetID == nil || ev.Username == "" {
+		return nil
+	}
+	if err := st.flush(); err != nil {
+		return err
+	}
+	if st.s.countAuthFailures(st.ctx, *st.assetID, ev.Username, ts) < bruteforceThreshold ||
+		st.s.Suppress.Suppressed(sigma.RuleBruteforceSuccess, st.assetID, rawMap, ts) {
+		return nil
+	}
+	fingerprint := sigma.RuleBruteforceSuccess + "|" + ev.Username
+	if st.deduper.Hit(fingerprint, ts) {
+		return nil
+	}
+	alertID := uuid.Must(uuid.NewV7())
+	st.alertCreates = append(st.alertCreates, st.s.DB.Alert.Create().
+		SetID(alertID).
+		SetTs(ts).
+		SetRuleID(sigma.RuleBruteforceSuccess).
+		SetSeverity(5).
+		SetEventID(eventID).
+		SetAssetID(*st.assetID).
+		SetLastTs(ts))
+	st.deduper.Track(fingerprint, alertID, ts)
+	return nil
 }
