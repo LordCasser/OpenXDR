@@ -10,7 +10,8 @@
   server 由资产图谱的批处理物化到 `assets.software`（`assetmap/inventory.go` 的 `software`，字段逐个清洗）。
 - **漏洞库**：OSV 按生态打包的公告（`<VULN_OSV_URL>/Debian/all.zip`、`Ubuntu/all.zip`），每 `VULN_SYNC_HOURS`（默认 24）
   小时同步一次，只同步资产实际用到的生态（Debian:13、Ubuntu:22.04……），同一生态在一个事务里整批替换，
-  失败保留旧数据并在资产页提示（`sync.go`，状态存 settings 表 `vuln_sync`）。撤回的公告跳过；Ubuntu 只认普通仓库，
+  失败保留旧数据并在资产页提示，一小时后重试（`sync.go`，状态存 settings 表 `vuln_sync`）。下载按 HTTP Range 每段 8 MB、
+每段限时 90 秒，超时换新连接重下这一段（最多 4 次）：生产实测同一线路上单个连接时快时慢，一条连接走到底会被慢的拖死。撤回的公告跳过；Ubuntu 只认普通仓库，
   Pro / FIPS 是另一套包。**离线部署**把 zip 放进 `VULN_DIR`（文件名 `Debian.zip`、`Ubuntu.zip`），不再联网。
 
 ## 怎么比

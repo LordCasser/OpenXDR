@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -163,31 +164,94 @@ func (s *Syncer) open(ctx context.Context, name string) (string, func(), error) 
 		return "", nil, err
 	}
 	cleanup := func() { tmp.Close(); os.Remove(tmp.Name()) }
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(s.BaseURL, "/")+"/"+name+"/all.zip", nil)
-	if err != nil {
-		cleanup()
-		return "", nil, err
-	}
-	client := s.HTTP
-	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Minute}
-	}
-	resp, err := client.Do(req)
-	if err != nil {
+	url := strings.TrimRight(s.BaseURL, "/") + "/" + name + "/all.zip"
+	if err := s.download(ctx, url, tmp); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("下载 %s 失败：%w", name, err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		cleanup()
-		return "", nil, fmt.Errorf("下载 %s 返回 HTTP %d", name, resp.StatusCode)
-	}
-	// 上限 1 GiB：Debian 全量约 80 MB，远超就是源不对
-	if _, err := io.Copy(tmp, io.LimitReader(resp.Body, 1<<30)); err != nil {
-		cleanup()
-		return "", nil, err
-	}
 	return tmp.Name(), cleanup, nil
+}
+
+// 分段下载：同一条线路上单个连接时快时慢（生产实测同一容器里一条连接 20 秒 55 MB，另一条几分钟不动），
+// 一条连接走到底会被慢的那条拖死。每段单独限时，超时换新连接重下这一段（测试里调小）
+var (
+	chunkSize    = 8 << 20
+	chunkTimeout = 90 * time.Second
+)
+
+const (
+	chunkAttempts = 4
+	maxArchive    = 1 << 30 // Debian 全量约 80 MB，远超就是源不对
+)
+
+// download 按 Range 分段下载到 w；源不支持 Range（返回 200）时退回整包下载
+func (s *Syncer) download(ctx context.Context, url string, w io.Writer) error {
+	client := s.HTTP
+	if client == nil {
+		client = &http.Client{}
+	}
+	for off := int64(0); off < maxArchive; {
+		var n int64
+		var whole, last bool
+		var err error
+		for attempt := 1; attempt <= chunkAttempts; attempt++ {
+			n, whole, last, err = s.chunk(ctx, client, url, off, w)
+			if err == nil || ctx.Err() != nil {
+				break
+			}
+			slog.Warn("漏洞库分段下载重试", "offset", off, "attempt", attempt, "err", err)
+		}
+		if err != nil {
+			return err
+		}
+		if whole || last {
+			return nil
+		}
+		off += n
+	}
+	return errors.New("漏洞库压缩包超过 1 GiB")
+}
+
+// chunk 下载一段。whole：源不支持 Range、已整包写完；last：这是最后一段
+func (s *Syncer) chunk(ctx context.Context, client *http.Client, url string, off int64, w io.Writer) (n int64, whole, last bool, err error) {
+	timeout := chunkTimeout
+	if off == 0 {
+		timeout = 10 * time.Minute // 第一段可能拿到整包（源不支持 Range）
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(cctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, false, false, err
+	}
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", off, off+int64(chunkSize)-1))
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, false, false, err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusRequestedRangeNotSatisfiable:
+		return 0, false, true, nil // 恰好下完
+	case http.StatusOK:
+		if off > 0 {
+			return 0, false, false, errors.New("源中途不再支持分段下载")
+		}
+		n, err = io.Copy(w, io.LimitReader(resp.Body, maxArchive))
+		return n, true, true, err
+	case http.StatusPartialContent:
+	default:
+		return 0, false, false, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	// 先读进内存再写：半段失败重试时文件里不留残片
+	buf, err := io.ReadAll(io.LimitReader(resp.Body, int64(chunkSize)))
+	if err != nil {
+		return 0, false, false, err
+	}
+	if _, err := w.Write(buf); err != nil {
+		return 0, false, false, err
+	}
+	return int64(len(buf)), false, len(buf) < chunkSize, nil
 }
 
 type osvRecord struct {
