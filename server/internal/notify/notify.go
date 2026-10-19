@@ -75,7 +75,7 @@ func (n *Notifier) sweep(ctx context.Context) error {
 		n.start = time.Now()
 	}
 	incidents, err := n.DB.Incident.Query().
-		Where(incident.NotifiedAtIsNil()).
+		Where(incident.NotifiedAtIsNil(), incident.Not(review.DecoyOnly())).
 		Order(ent.Asc(incident.FieldCreatedAt)).
 		Limit(20).
 		All(ctx)

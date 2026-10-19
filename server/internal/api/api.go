@@ -132,6 +132,7 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 	}
 	mapGroups(mux, db, queries)
 	mapTasks(mux, db)
+	mapSSHDecoys(mux, db)
 	mapFindings(mux, db)
 	mapMemories(mux, db)
 	mapReportRender(mux, db)

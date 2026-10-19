@@ -22,6 +22,8 @@ import (
 	"openxdr/server/ent/beaconbaseline"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/ent/decoyobservation"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/finding"
@@ -78,6 +80,10 @@ type Client struct {
 	Command *CommandClient
 	// CommandPolicy is the client for interacting with the CommandPolicy builders.
 	CommandPolicy *CommandPolicyClient
+	// DecoyDeployment is the client for interacting with the DecoyDeployment builders.
+	DecoyDeployment *DecoyDeploymentClient
+	// DecoyObservation is the client for interacting with the DecoyObservation builders.
+	DecoyObservation *DecoyObservationClient
 	// EnrollToken is the client for interacting with the EnrollToken builders.
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
@@ -142,6 +148,8 @@ func (c *Client) init() {
 	c.BeaconBaseline = NewBeaconBaselineClient(c.config)
 	c.Command = NewCommandClient(c.config)
 	c.CommandPolicy = NewCommandPolicyClient(c.config)
+	c.DecoyDeployment = NewDecoyDeploymentClient(c.config)
+	c.DecoyObservation = NewDecoyObservationClient(c.config)
 	c.EnrollToken = NewEnrollTokenClient(c.config)
 	c.Event = NewEventClient(c.config)
 	c.Finding = NewFindingClient(c.config)
@@ -253,40 +261,42 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:             ctx,
-		config:          cfg,
-		AIJob:           NewAIJobClient(cfg),
-		AIUsage:         NewAIUsageClient(cfg),
-		AgentSession:    NewAgentSessionClient(cfg),
-		Alert:           NewAlertClient(cfg),
-		Approval:        NewApprovalClient(cfg),
-		Asset:           NewAssetClient(cfg),
-		AssetLink:       NewAssetLinkClient(cfg),
-		AuditLog:        NewAuditLogClient(cfg),
-		BeaconBaseline:  NewBeaconBaselineClient(cfg),
-		Command:         NewCommandClient(cfg),
-		CommandPolicy:   NewCommandPolicyClient(cfg),
-		EnrollToken:     NewEnrollTokenClient(cfg),
-		Event:           NewEventClient(cfg),
-		Finding:         NewFindingClient(cfg),
-		Group:           NewGroupClient(cfg),
-		GroupMember:     NewGroupMemberClient(cfg),
-		HostCredential:  NewHostCredentialClient(cfg),
-		IPInfo:          NewIPInfoClient(cfg),
-		Incident:        NewIncidentClient(cfg),
-		Intel:           NewIntelClient(cfg),
-		Memory:          NewMemoryClient(cfg),
-		ProcessBaseline: NewProcessBaselineClient(cfg),
-		Report:          NewReportClient(cfg),
-		Session:         NewSessionClient(cfg),
-		SessionMessage:  NewSessionMessageClient(cfg),
-		Setting:         NewSettingClient(cfg),
-		Suppression:     NewSuppressionClient(cfg),
-		Task:            NewTaskClient(cfg),
-		TaskRun:         NewTaskRunClient(cfg),
-		User:            NewUserClient(cfg),
-		VulnRecord:      NewVulnRecordClient(cfg),
-		Zone:            NewZoneClient(cfg),
+		ctx:              ctx,
+		config:           cfg,
+		AIJob:            NewAIJobClient(cfg),
+		AIUsage:          NewAIUsageClient(cfg),
+		AgentSession:     NewAgentSessionClient(cfg),
+		Alert:            NewAlertClient(cfg),
+		Approval:         NewApprovalClient(cfg),
+		Asset:            NewAssetClient(cfg),
+		AssetLink:        NewAssetLinkClient(cfg),
+		AuditLog:         NewAuditLogClient(cfg),
+		BeaconBaseline:   NewBeaconBaselineClient(cfg),
+		Command:          NewCommandClient(cfg),
+		CommandPolicy:    NewCommandPolicyClient(cfg),
+		DecoyDeployment:  NewDecoyDeploymentClient(cfg),
+		DecoyObservation: NewDecoyObservationClient(cfg),
+		EnrollToken:      NewEnrollTokenClient(cfg),
+		Event:            NewEventClient(cfg),
+		Finding:          NewFindingClient(cfg),
+		Group:            NewGroupClient(cfg),
+		GroupMember:      NewGroupMemberClient(cfg),
+		HostCredential:   NewHostCredentialClient(cfg),
+		IPInfo:           NewIPInfoClient(cfg),
+		Incident:         NewIncidentClient(cfg),
+		Intel:            NewIntelClient(cfg),
+		Memory:           NewMemoryClient(cfg),
+		ProcessBaseline:  NewProcessBaselineClient(cfg),
+		Report:           NewReportClient(cfg),
+		Session:          NewSessionClient(cfg),
+		SessionMessage:   NewSessionMessageClient(cfg),
+		Setting:          NewSettingClient(cfg),
+		Suppression:      NewSuppressionClient(cfg),
+		Task:             NewTaskClient(cfg),
+		TaskRun:          NewTaskRunClient(cfg),
+		User:             NewUserClient(cfg),
+		VulnRecord:       NewVulnRecordClient(cfg),
+		Zone:             NewZoneClient(cfg),
 	}, nil
 }
 
@@ -304,40 +314,42 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:             ctx,
-		config:          cfg,
-		AIJob:           NewAIJobClient(cfg),
-		AIUsage:         NewAIUsageClient(cfg),
-		AgentSession:    NewAgentSessionClient(cfg),
-		Alert:           NewAlertClient(cfg),
-		Approval:        NewApprovalClient(cfg),
-		Asset:           NewAssetClient(cfg),
-		AssetLink:       NewAssetLinkClient(cfg),
-		AuditLog:        NewAuditLogClient(cfg),
-		BeaconBaseline:  NewBeaconBaselineClient(cfg),
-		Command:         NewCommandClient(cfg),
-		CommandPolicy:   NewCommandPolicyClient(cfg),
-		EnrollToken:     NewEnrollTokenClient(cfg),
-		Event:           NewEventClient(cfg),
-		Finding:         NewFindingClient(cfg),
-		Group:           NewGroupClient(cfg),
-		GroupMember:     NewGroupMemberClient(cfg),
-		HostCredential:  NewHostCredentialClient(cfg),
-		IPInfo:          NewIPInfoClient(cfg),
-		Incident:        NewIncidentClient(cfg),
-		Intel:           NewIntelClient(cfg),
-		Memory:          NewMemoryClient(cfg),
-		ProcessBaseline: NewProcessBaselineClient(cfg),
-		Report:          NewReportClient(cfg),
-		Session:         NewSessionClient(cfg),
-		SessionMessage:  NewSessionMessageClient(cfg),
-		Setting:         NewSettingClient(cfg),
-		Suppression:     NewSuppressionClient(cfg),
-		Task:            NewTaskClient(cfg),
-		TaskRun:         NewTaskRunClient(cfg),
-		User:            NewUserClient(cfg),
-		VulnRecord:      NewVulnRecordClient(cfg),
-		Zone:            NewZoneClient(cfg),
+		ctx:              ctx,
+		config:           cfg,
+		AIJob:            NewAIJobClient(cfg),
+		AIUsage:          NewAIUsageClient(cfg),
+		AgentSession:     NewAgentSessionClient(cfg),
+		Alert:            NewAlertClient(cfg),
+		Approval:         NewApprovalClient(cfg),
+		Asset:            NewAssetClient(cfg),
+		AssetLink:        NewAssetLinkClient(cfg),
+		AuditLog:         NewAuditLogClient(cfg),
+		BeaconBaseline:   NewBeaconBaselineClient(cfg),
+		Command:          NewCommandClient(cfg),
+		CommandPolicy:    NewCommandPolicyClient(cfg),
+		DecoyDeployment:  NewDecoyDeploymentClient(cfg),
+		DecoyObservation: NewDecoyObservationClient(cfg),
+		EnrollToken:      NewEnrollTokenClient(cfg),
+		Event:            NewEventClient(cfg),
+		Finding:          NewFindingClient(cfg),
+		Group:            NewGroupClient(cfg),
+		GroupMember:      NewGroupMemberClient(cfg),
+		HostCredential:   NewHostCredentialClient(cfg),
+		IPInfo:           NewIPInfoClient(cfg),
+		Incident:         NewIncidentClient(cfg),
+		Intel:            NewIntelClient(cfg),
+		Memory:           NewMemoryClient(cfg),
+		ProcessBaseline:  NewProcessBaselineClient(cfg),
+		Report:           NewReportClient(cfg),
+		Session:          NewSessionClient(cfg),
+		SessionMessage:   NewSessionMessageClient(cfg),
+		Setting:          NewSettingClient(cfg),
+		Suppression:      NewSuppressionClient(cfg),
+		Task:             NewTaskClient(cfg),
+		TaskRun:          NewTaskRunClient(cfg),
+		User:             NewUserClient(cfg),
+		VulnRecord:       NewVulnRecordClient(cfg),
+		Zone:             NewZoneClient(cfg),
 	}, nil
 }
 
@@ -368,11 +380,11 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AIJob, c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
-		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.EnrollToken,
-		c.Event, c.Finding, c.Group, c.GroupMember, c.HostCredential, c.IPInfo,
-		c.Incident, c.Intel, c.Memory, c.ProcessBaseline, c.Report, c.Session,
-		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User,
-		c.VulnRecord, c.Zone,
+		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.DecoyDeployment,
+		c.DecoyObservation, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
+		c.HostCredential, c.IPInfo, c.Incident, c.Intel, c.Memory, c.ProcessBaseline,
+		c.Report, c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task,
+		c.TaskRun, c.User, c.VulnRecord, c.Zone,
 	} {
 		n.Use(hooks...)
 	}
@@ -383,11 +395,11 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AIJob, c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
-		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.EnrollToken,
-		c.Event, c.Finding, c.Group, c.GroupMember, c.HostCredential, c.IPInfo,
-		c.Incident, c.Intel, c.Memory, c.ProcessBaseline, c.Report, c.Session,
-		c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun, c.User,
-		c.VulnRecord, c.Zone,
+		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.DecoyDeployment,
+		c.DecoyObservation, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
+		c.HostCredential, c.IPInfo, c.Incident, c.Intel, c.Memory, c.ProcessBaseline,
+		c.Report, c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task,
+		c.TaskRun, c.User, c.VulnRecord, c.Zone,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -418,6 +430,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Command.mutate(ctx, m)
 	case *CommandPolicyMutation:
 		return c.CommandPolicy.mutate(ctx, m)
+	case *DecoyDeploymentMutation:
+		return c.DecoyDeployment.mutate(ctx, m)
+	case *DecoyObservationMutation:
+		return c.DecoyObservation.mutate(ctx, m)
 	case *EnrollTokenMutation:
 		return c.EnrollToken.mutate(ctx, m)
 	case *EventMutation:
@@ -2037,6 +2053,272 @@ func (c *CommandPolicyClient) mutate(ctx context.Context, m *CommandPolicyMutati
 		return (&CommandPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CommandPolicy mutation op: %q", m.Op())
+	}
+}
+
+// DecoyDeploymentClient is a client for the DecoyDeployment schema.
+type DecoyDeploymentClient struct {
+	config
+}
+
+// NewDecoyDeploymentClient returns a client for the DecoyDeployment from the given config.
+func NewDecoyDeploymentClient(c config) *DecoyDeploymentClient {
+	return &DecoyDeploymentClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `decoydeployment.Hooks(f(g(h())))`.
+func (c *DecoyDeploymentClient) Use(hooks ...Hook) {
+	c.hooks.DecoyDeployment = append(c.hooks.DecoyDeployment, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `decoydeployment.Intercept(f(g(h())))`.
+func (c *DecoyDeploymentClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DecoyDeployment = append(c.inters.DecoyDeployment, interceptors...)
+}
+
+// Create returns a builder for creating a DecoyDeployment entity.
+func (c *DecoyDeploymentClient) Create() *DecoyDeploymentCreate {
+	mutation := newDecoyDeploymentMutation(c.config, OpCreate)
+	return &DecoyDeploymentCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DecoyDeployment entities.
+func (c *DecoyDeploymentClient) CreateBulk(builders ...*DecoyDeploymentCreate) *DecoyDeploymentCreateBulk {
+	return &DecoyDeploymentCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DecoyDeploymentClient) MapCreateBulk(slice any, setFunc func(*DecoyDeploymentCreate, int)) *DecoyDeploymentCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DecoyDeploymentCreateBulk{err: fmt.Errorf("calling to DecoyDeploymentClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DecoyDeploymentCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DecoyDeploymentCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DecoyDeployment.
+func (c *DecoyDeploymentClient) Update() *DecoyDeploymentUpdate {
+	mutation := newDecoyDeploymentMutation(c.config, OpUpdate)
+	return &DecoyDeploymentUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DecoyDeploymentClient) UpdateOne(_m *DecoyDeployment) *DecoyDeploymentUpdateOne {
+	mutation := newDecoyDeploymentMutation(c.config, OpUpdateOne, withDecoyDeployment(_m))
+	return &DecoyDeploymentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DecoyDeploymentClient) UpdateOneID(id uuid.UUID) *DecoyDeploymentUpdateOne {
+	mutation := newDecoyDeploymentMutation(c.config, OpUpdateOne, withDecoyDeploymentID(id))
+	return &DecoyDeploymentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DecoyDeployment.
+func (c *DecoyDeploymentClient) Delete() *DecoyDeploymentDelete {
+	mutation := newDecoyDeploymentMutation(c.config, OpDelete)
+	return &DecoyDeploymentDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DecoyDeploymentClient) DeleteOne(_m *DecoyDeployment) *DecoyDeploymentDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DecoyDeploymentClient) DeleteOneID(id uuid.UUID) *DecoyDeploymentDeleteOne {
+	builder := c.Delete().Where(decoydeployment.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DecoyDeploymentDeleteOne{builder}
+}
+
+// Query returns a query builder for DecoyDeployment.
+func (c *DecoyDeploymentClient) Query() *DecoyDeploymentQuery {
+	return &DecoyDeploymentQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDecoyDeployment},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DecoyDeployment entity by its id.
+func (c *DecoyDeploymentClient) Get(ctx context.Context, id uuid.UUID) (*DecoyDeployment, error) {
+	return c.Query().Where(decoydeployment.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DecoyDeploymentClient) GetX(ctx context.Context, id uuid.UUID) *DecoyDeployment {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DecoyDeploymentClient) Hooks() []Hook {
+	return c.hooks.DecoyDeployment
+}
+
+// Interceptors returns the client interceptors.
+func (c *DecoyDeploymentClient) Interceptors() []Interceptor {
+	return c.inters.DecoyDeployment
+}
+
+func (c *DecoyDeploymentClient) mutate(ctx context.Context, m *DecoyDeploymentMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DecoyDeploymentCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DecoyDeploymentUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DecoyDeploymentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DecoyDeploymentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DecoyDeployment mutation op: %q", m.Op())
+	}
+}
+
+// DecoyObservationClient is a client for the DecoyObservation schema.
+type DecoyObservationClient struct {
+	config
+}
+
+// NewDecoyObservationClient returns a client for the DecoyObservation from the given config.
+func NewDecoyObservationClient(c config) *DecoyObservationClient {
+	return &DecoyObservationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `decoyobservation.Hooks(f(g(h())))`.
+func (c *DecoyObservationClient) Use(hooks ...Hook) {
+	c.hooks.DecoyObservation = append(c.hooks.DecoyObservation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `decoyobservation.Intercept(f(g(h())))`.
+func (c *DecoyObservationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DecoyObservation = append(c.inters.DecoyObservation, interceptors...)
+}
+
+// Create returns a builder for creating a DecoyObservation entity.
+func (c *DecoyObservationClient) Create() *DecoyObservationCreate {
+	mutation := newDecoyObservationMutation(c.config, OpCreate)
+	return &DecoyObservationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DecoyObservation entities.
+func (c *DecoyObservationClient) CreateBulk(builders ...*DecoyObservationCreate) *DecoyObservationCreateBulk {
+	return &DecoyObservationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DecoyObservationClient) MapCreateBulk(slice any, setFunc func(*DecoyObservationCreate, int)) *DecoyObservationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DecoyObservationCreateBulk{err: fmt.Errorf("calling to DecoyObservationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DecoyObservationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DecoyObservationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DecoyObservation.
+func (c *DecoyObservationClient) Update() *DecoyObservationUpdate {
+	mutation := newDecoyObservationMutation(c.config, OpUpdate)
+	return &DecoyObservationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DecoyObservationClient) UpdateOne(_m *DecoyObservation) *DecoyObservationUpdateOne {
+	mutation := newDecoyObservationMutation(c.config, OpUpdateOne, withDecoyObservation(_m))
+	return &DecoyObservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DecoyObservationClient) UpdateOneID(id uuid.UUID) *DecoyObservationUpdateOne {
+	mutation := newDecoyObservationMutation(c.config, OpUpdateOne, withDecoyObservationID(id))
+	return &DecoyObservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DecoyObservation.
+func (c *DecoyObservationClient) Delete() *DecoyObservationDelete {
+	mutation := newDecoyObservationMutation(c.config, OpDelete)
+	return &DecoyObservationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DecoyObservationClient) DeleteOne(_m *DecoyObservation) *DecoyObservationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DecoyObservationClient) DeleteOneID(id uuid.UUID) *DecoyObservationDeleteOne {
+	builder := c.Delete().Where(decoyobservation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DecoyObservationDeleteOne{builder}
+}
+
+// Query returns a query builder for DecoyObservation.
+func (c *DecoyObservationClient) Query() *DecoyObservationQuery {
+	return &DecoyObservationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDecoyObservation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DecoyObservation entity by its id.
+func (c *DecoyObservationClient) Get(ctx context.Context, id uuid.UUID) (*DecoyObservation, error) {
+	return c.Query().Where(decoyobservation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DecoyObservationClient) GetX(ctx context.Context, id uuid.UUID) *DecoyObservation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DecoyObservationClient) Hooks() []Hook {
+	return c.hooks.DecoyObservation
+}
+
+// Interceptors returns the client interceptors.
+func (c *DecoyObservationClient) Interceptors() []Interceptor {
+	return c.inters.DecoyObservation
+}
+
+func (c *DecoyObservationClient) mutate(ctx context.Context, m *DecoyObservationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DecoyObservationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DecoyObservationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DecoyObservationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DecoyObservationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DecoyObservation mutation op: %q", m.Op())
 	}
 }
 
@@ -4885,16 +5167,16 @@ func (c *ZoneClient) mutate(ctx context.Context, m *ZoneMutation) (Value, error)
 type (
 	hooks struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
-		BeaconBaseline, Command, CommandPolicy, EnrollToken, Event, Finding, Group,
-		GroupMember, HostCredential, IPInfo, Incident, Intel, Memory, ProcessBaseline,
-		Report, Session, SessionMessage, Setting, Suppression, Task, TaskRun, User,
-		VulnRecord, Zone []ent.Hook
+		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
+		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, IPInfo,
+		Incident, Intel, Memory, ProcessBaseline, Report, Session, SessionMessage,
+		Setting, Suppression, Task, TaskRun, User, VulnRecord, Zone []ent.Hook
 	}
 	inters struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
-		BeaconBaseline, Command, CommandPolicy, EnrollToken, Event, Finding, Group,
-		GroupMember, HostCredential, IPInfo, Incident, Intel, Memory, ProcessBaseline,
-		Report, Session, SessionMessage, Setting, Suppression, Task, TaskRun, User,
-		VulnRecord, Zone []ent.Interceptor
+		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
+		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, IPInfo,
+		Incident, Intel, Memory, ProcessBaseline, Report, Session, SessionMessage,
+		Setting, Suppression, Task, TaskRun, User, VulnRecord, Zone []ent.Interceptor
 	}
 )

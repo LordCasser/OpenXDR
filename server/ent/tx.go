@@ -34,6 +34,10 @@ type Tx struct {
 	Command *CommandClient
 	// CommandPolicy is the client for interacting with the CommandPolicy builders.
 	CommandPolicy *CommandPolicyClient
+	// DecoyDeployment is the client for interacting with the DecoyDeployment builders.
+	DecoyDeployment *DecoyDeploymentClient
+	// DecoyObservation is the client for interacting with the DecoyObservation builders.
+	DecoyObservation *DecoyObservationClient
 	// EnrollToken is the client for interacting with the EnrollToken builders.
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
@@ -218,6 +222,8 @@ func (tx *Tx) init() {
 	tx.BeaconBaseline = NewBeaconBaselineClient(tx.config)
 	tx.Command = NewCommandClient(tx.config)
 	tx.CommandPolicy = NewCommandPolicyClient(tx.config)
+	tx.DecoyDeployment = NewDecoyDeploymentClient(tx.config)
+	tx.DecoyObservation = NewDecoyObservationClient(tx.config)
 	tx.EnrollToken = NewEnrollTokenClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.Finding = NewFindingClient(tx.config)

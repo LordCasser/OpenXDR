@@ -347,6 +347,8 @@ server 全部通过环境变量配置，均有默认值：
 | `AGENT_SILENT_MINUTES` | `10` | agent 指令通道超过该时长没有心跳即判失联并通知，恢复时再通知一次 |
 | `HOST_CREDENTIAL_KEY` | 空 | 文档导入凭据的 AES-256-GCM 密钥，base64 编码 32 字节；HA 节点必须一致 |
 | `ENROLL_SSH_ENABLED` | `false` | 允许组管理员使用保存凭据进行 SSH 纳管 |
+| `DECOY_SSH_ENABLED` | `false` | 允许组管理员通过已保存凭据安装 Linux 专用诱饵；要求 systemd 250+、独立核对的 SSH 指纹、凭据加密密钥与 HTTPS `ENROLL_PUBLIC_URL` |
+| `DECOY_DIST_DIR` | 镜像中 `/opt/openxdr/decoy-dist`，裸机为空 | 诱饵静态 ELF 安装包目录，固定文件名 `decoyhost-linux-amd64` / `decoyhost-linux-arm64`；不接受用户提供的下载地址 |
 | `ENROLL_PUBLIC_URL` | 空 | 被纳管主机可访问的可信 HTTPS 控制台地址 |
 | `ENROLL_GRPC_URL` | 空（不启用在线接入） | 写进 agent 配置的 gRPC 地址，主机上必须能访问 |
 | `TLS_CA_KEY_FILE` | 空 | CA 私钥，开了 mTLS 时在线接入用它签发主机证书 |

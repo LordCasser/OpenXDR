@@ -1,0 +1,3 @@
+Host 127.0.0.1
+    UserKnownHostsFile /tmp/lab_known_hosts
+    StrictHostKeyChecking yes

@@ -3,6 +3,7 @@
 package migrate
 
 import (
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/dialect/sql/schema"
 	"entgo.io/ent/schema/field"
 )
@@ -383,6 +384,95 @@ var (
 				Name:    "commandpolicy_group_id_origin",
 				Unique:  false,
 				Columns: []*schema.Column{CommandPoliciesColumns[2], CommandPoliciesColumns[3]},
+			},
+		},
+	}
+	// DecoyDeploymentsColumns holds the columns for the "decoy_deployments" table.
+	DecoyDeploymentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "asset_id", Type: field.TypeUUID},
+		{Name: "profile", Type: field.TypeString},
+		{Name: "template", Type: field.TypeString},
+		{Name: "port", Type: field.TypeInt},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"registered", "revoked"}, Default: "registered"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "revoked_by", Type: field.TypeString, Nullable: true},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"ssh", "http", "file", "shell"}, Default: "ssh"},
+		{Name: "resource", Type: field.TypeString, Default: ""},
+		{Name: "marker", Type: field.TypeString, Nullable: true},
+		{Name: "token_hash", Type: field.TypeString, Nullable: true},
+		{Name: "token_group_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "token_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "runtime_instance_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "runtime_seen_at", Type: field.TypeTime, Nullable: true},
+		{Name: "runtime_state", Type: field.TypeEnum, Enums: []string{"unknown", "starting", "running", "stopped", "failed"}, Default: "unknown"},
+		{Name: "runtime_generation", Type: field.TypeString, Nullable: true},
+		{Name: "install_state", Type: field.TypeEnum, Enums: []string{"idle", "installing", "installed", "unconfirmed"}, Default: "idle"},
+		{Name: "install_started_at", Type: field.TypeTime, Nullable: true},
+	}
+	// DecoyDeploymentsTable holds the schema information for the "decoy_deployments" table.
+	DecoyDeploymentsTable = &schema.Table{
+		Name:       "decoy_deployments",
+		Columns:    DecoyDeploymentsColumns,
+		PrimaryKey: []*schema.Column{DecoyDeploymentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "decoydeployment_asset_id_port",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyDeploymentsColumns[1], DecoyDeploymentsColumns[4]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'registered' AND port > 0",
+				},
+			},
+			{
+				Name:    "decoydeployment_asset_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{DecoyDeploymentsColumns[1], DecoyDeploymentsColumns[6]},
+			},
+			{
+				Name:    "decoydeployment_asset_id_kind_resource",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyDeploymentsColumns[1], DecoyDeploymentsColumns[10], DecoyDeploymentsColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'registered' AND kind IN ('file', 'shell')",
+				},
+			},
+		},
+	}
+	// DecoyObservationsColumns holds the columns for the "decoy_observations" table.
+	DecoyObservationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "deployment_id", Type: field.TypeUUID},
+		{Name: "incident_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "kind", Type: field.TypeString},
+		{Name: "generation", Type: field.TypeString, Default: ""},
+		{Name: "received_at", Type: field.TypeTime},
+	}
+	// DecoyObservationsTable holds the schema information for the "decoy_observations" table.
+	DecoyObservationsTable = &schema.Table{
+		Name:       "decoy_observations",
+		Columns:    DecoyObservationsColumns,
+		PrimaryKey: []*schema.Column{DecoyObservationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "decoyobservation_received_at",
+				Unique:  false,
+				Columns: []*schema.Column{DecoyObservationsColumns[5]},
+			},
+			{
+				Name:    "decoyobservation_deployment_id_received_at",
+				Unique:  false,
+				Columns: []*schema.Column{DecoyObservationsColumns[1], DecoyObservationsColumns[5]},
+			},
+			{
+				Name:    "decoyobservation_deployment_id_generation",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyObservationsColumns[1], DecoyObservationsColumns[4]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "kind = 'marker_used'",
+				},
 			},
 		},
 	}
@@ -928,6 +1018,8 @@ var (
 		BeaconBaselinesTable,
 		CommandsTable,
 		CommandPoliciesTable,
+		DecoyDeploymentsTable,
+		DecoyObservationsTable,
 		EnrollTokensTable,
 		EventsTable,
 		FindingsTable,

@@ -39,6 +39,12 @@ type Command func(*sql.Selector)
 // CommandPolicy is the predicate function for commandpolicy builders.
 type CommandPolicy func(*sql.Selector)
 
+// DecoyDeployment is the predicate function for decoydeployment builders.
+type DecoyDeployment func(*sql.Selector)
+
+// DecoyObservation is the predicate function for decoyobservation builders.
+type DecoyObservation func(*sql.Selector)
+
 // EnrollToken is the predicate function for enrolltoken builders.
 type EnrollToken func(*sql.Selector)
 

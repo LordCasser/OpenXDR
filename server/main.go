@@ -458,6 +458,7 @@ func main() {
 			Interval: time.Duration(getenvInt("VULN_SYNC_HOURS", 24)) * time.Hour}
 		go cluster.RunLeader(ctx, db, "vuln-sync", syncer.Run)
 	}
+	routes.Handle("/api/decoy-install/", api.DecoyInstalls(&hostimport.Service{DB: client, Vault: credentialVault}, api.DecoyInstallConfig{Enabled: getenv("DECOY_SSH_ENABLED", "false") == "true", PublicURL: os.Getenv("ENROLL_PUBLIC_URL"), DistDir: os.Getenv("DECOY_DIST_DIR")}))
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook, aiConf, db))
 	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))
 	routes.Handle("/api/intel/feeds/", api.IntelFeeds(client, intelFeeds))
@@ -481,6 +482,7 @@ func main() {
 	mux.Handle("/metrics", telemetry.Handler(registry))
 	// 接入端点免登录：安装脚本与二进制公开，注册靠令牌
 	mux.Handle("/api/enroll/", enrollSvc.Public(dist))
+	mux.Handle("/api/decoy-runtime/", api.DecoyRuntime(client))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := db.PingContext(r.Context()); err != nil || !events.Ready() {

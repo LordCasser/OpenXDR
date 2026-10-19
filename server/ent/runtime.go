@@ -14,6 +14,8 @@ import (
 	"openxdr/server/ent/beaconbaseline"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/ent/decoyobservation"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/finding"
@@ -195,6 +197,48 @@ func init() {
 	commandpolicyDescID := commandpolicyFields[0].Descriptor()
 	// commandpolicy.DefaultID holds the default value on creation for the id field.
 	commandpolicy.DefaultID = commandpolicyDescID.Default.(func() uuid.UUID)
+	decoydeploymentFields := schema.DecoyDeployment{}.Fields()
+	_ = decoydeploymentFields
+	// decoydeploymentDescPort is the schema descriptor for port field.
+	decoydeploymentDescPort := decoydeploymentFields[4].Descriptor()
+	// decoydeployment.PortValidator is a validator for the "port" field. It is called by the builders before save.
+	decoydeployment.PortValidator = func() func(int) error {
+		validators := decoydeploymentDescPort.Validators
+		fns := [...]func(int) error{
+			validators[0].(func(int) error),
+			validators[1].(func(int) error),
+		}
+		return func(port int) error {
+			for _, fn := range fns {
+				if err := fn(port); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// decoydeploymentDescCreatedAt is the schema descriptor for created_at field.
+	decoydeploymentDescCreatedAt := decoydeploymentFields[6].Descriptor()
+	// decoydeployment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	decoydeployment.DefaultCreatedAt = decoydeploymentDescCreatedAt.Default.(func() time.Time)
+	// decoydeploymentDescResource is the schema descriptor for resource field.
+	decoydeploymentDescResource := decoydeploymentFields[11].Descriptor()
+	// decoydeployment.DefaultResource holds the default value on creation for the resource field.
+	decoydeployment.DefaultResource = decoydeploymentDescResource.Default.(string)
+	// decoydeploymentDescID is the schema descriptor for id field.
+	decoydeploymentDescID := decoydeploymentFields[0].Descriptor()
+	// decoydeployment.DefaultID holds the default value on creation for the id field.
+	decoydeployment.DefaultID = decoydeploymentDescID.Default.(func() uuid.UUID)
+	decoyobservationFields := schema.DecoyObservation{}.Fields()
+	_ = decoyobservationFields
+	// decoyobservationDescGeneration is the schema descriptor for generation field.
+	decoyobservationDescGeneration := decoyobservationFields[4].Descriptor()
+	// decoyobservation.DefaultGeneration holds the default value on creation for the generation field.
+	decoyobservation.DefaultGeneration = decoyobservationDescGeneration.Default.(string)
+	// decoyobservationDescReceivedAt is the schema descriptor for received_at field.
+	decoyobservationDescReceivedAt := decoyobservationFields[5].Descriptor()
+	// decoyobservation.DefaultReceivedAt holds the default value on creation for the received_at field.
+	decoyobservation.DefaultReceivedAt = decoyobservationDescReceivedAt.Default.(func() time.Time)
 	enrolltokenFields := schema.EnrollToken{}.Fields()
 	_ = enrolltokenFields
 	// enrolltokenDescCreatedAt is the schema descriptor for created_at field.

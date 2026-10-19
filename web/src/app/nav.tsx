@@ -38,6 +38,7 @@ export const NAV: (NavItem | NavGroup)[] = [
     items: [
       { path: '/assets', key: 'navAssets', icon: <CloudServerOutlined />, hotkey: 'a' },
       { path: '/asset-map', key: 'navAssetMap', icon: <DeploymentUnitOutlined /> },
+      { path: '/decoys', key: 'navDecoys', icon: <SafetyOutlined /> },
       { path: '/attack-surface', key: 'navAttackSurface', icon: <AimOutlined /> },
     ],
   },

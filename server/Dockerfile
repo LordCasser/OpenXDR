@@ -10,6 +10,8 @@ RUN go mod download
 COPY server/ ./
 RUN CGO_ENABLED=0 go build -o /openxdr-server . && CGO_ENABLED=0 go build -o /openxdr-gencerts ./cmd/gencerts
 
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /decoy-dist/decoyhost-linux-amd64 ./cmd/decoyhost && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /decoy-dist/decoyhost-linux-arm64 ./cmd/decoyhost
+
 # agent 安装包：发版时用 --build-context agents=<含 dist/ 的目录> 注入，本地构建为空目录
 FROM alpine:3.22 AS agents
 RUN mkdir /dist
@@ -28,6 +30,8 @@ RUN if [ -n "$ALPINE_MIRROR" ]; then sed -i -E "s#https?://dl-cdn.alpinelinux.or
     apk add --no-cache libstdc++ chromium font-noto-cjk poppler-utils && adduser -D -u 10001 openxdr
 COPY --from=build /openxdr-server /usr/local/bin/openxdr-server
 COPY --from=build /openxdr-gencerts /usr/local/bin/openxdr-gencerts
+COPY --from=build /decoy-dist/ /opt/openxdr/decoy-dist/
+ENV DECOY_DIST_DIR=/opt/openxdr/decoy-dist
 COPY rules/ /opt/openxdr/rules/
 COPY tasks/ /opt/openxdr/tasks/
 # 时序规则随镜像带上，但默认不启用（开发中）：设 TEMPORAL_RULES_PATH=/opt/openxdr/temporal-rules 开启

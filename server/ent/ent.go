@@ -17,6 +17,8 @@ import (
 	"openxdr/server/ent/beaconbaseline"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/ent/decoyobservation"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/finding"
@@ -104,38 +106,40 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			aijob.Table:           aijob.ValidColumn,
-			aiusage.Table:         aiusage.ValidColumn,
-			agentsession.Table:    agentsession.ValidColumn,
-			alert.Table:           alert.ValidColumn,
-			approval.Table:        approval.ValidColumn,
-			asset.Table:           asset.ValidColumn,
-			assetlink.Table:       assetlink.ValidColumn,
-			auditlog.Table:        auditlog.ValidColumn,
-			beaconbaseline.Table:  beaconbaseline.ValidColumn,
-			command.Table:         command.ValidColumn,
-			commandpolicy.Table:   commandpolicy.ValidColumn,
-			enrolltoken.Table:     enrolltoken.ValidColumn,
-			event.Table:           event.ValidColumn,
-			finding.Table:         finding.ValidColumn,
-			group.Table:           group.ValidColumn,
-			groupmember.Table:     groupmember.ValidColumn,
-			hostcredential.Table:  hostcredential.ValidColumn,
-			ipinfo.Table:          ipinfo.ValidColumn,
-			incident.Table:        incident.ValidColumn,
-			intel.Table:           intel.ValidColumn,
-			memory.Table:          memory.ValidColumn,
-			processbaseline.Table: processbaseline.ValidColumn,
-			report.Table:          report.ValidColumn,
-			session.Table:         session.ValidColumn,
-			sessionmessage.Table:  sessionmessage.ValidColumn,
-			setting.Table:         setting.ValidColumn,
-			suppression.Table:     suppression.ValidColumn,
-			task.Table:            task.ValidColumn,
-			taskrun.Table:         taskrun.ValidColumn,
-			user.Table:            user.ValidColumn,
-			vulnrecord.Table:      vulnrecord.ValidColumn,
-			zone.Table:            zone.ValidColumn,
+			aijob.Table:            aijob.ValidColumn,
+			aiusage.Table:          aiusage.ValidColumn,
+			agentsession.Table:     agentsession.ValidColumn,
+			alert.Table:            alert.ValidColumn,
+			approval.Table:         approval.ValidColumn,
+			asset.Table:            asset.ValidColumn,
+			assetlink.Table:        assetlink.ValidColumn,
+			auditlog.Table:         auditlog.ValidColumn,
+			beaconbaseline.Table:   beaconbaseline.ValidColumn,
+			command.Table:          command.ValidColumn,
+			commandpolicy.Table:    commandpolicy.ValidColumn,
+			decoydeployment.Table:  decoydeployment.ValidColumn,
+			decoyobservation.Table: decoyobservation.ValidColumn,
+			enrolltoken.Table:      enrolltoken.ValidColumn,
+			event.Table:            event.ValidColumn,
+			finding.Table:          finding.ValidColumn,
+			group.Table:            group.ValidColumn,
+			groupmember.Table:      groupmember.ValidColumn,
+			hostcredential.Table:   hostcredential.ValidColumn,
+			ipinfo.Table:           ipinfo.ValidColumn,
+			incident.Table:         incident.ValidColumn,
+			intel.Table:            intel.ValidColumn,
+			memory.Table:           memory.ValidColumn,
+			processbaseline.Table:  processbaseline.ValidColumn,
+			report.Table:           report.ValidColumn,
+			session.Table:          session.ValidColumn,
+			sessionmessage.Table:   sessionmessage.ValidColumn,
+			setting.Table:          setting.ValidColumn,
+			suppression.Table:      suppression.ValidColumn,
+			task.Table:             task.ValidColumn,
+			taskrun.Table:          taskrun.ValidColumn,
+			user.Table:             user.ValidColumn,
+			vulnrecord.Table:       vulnrecord.ValidColumn,
+			zone.Table:             zone.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

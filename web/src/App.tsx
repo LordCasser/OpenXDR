@@ -63,6 +63,7 @@ const router = createBrowserRouter([
       { path: 'incidents', ...page(() => import('./pages/IncidentsPage'), 'IncidentsPage') },
       { path: 'incidents/:id', ...page(() => import('./pages/IncidentDetailPage'), 'IncidentDetailPage') },
       { path: 'events', ...page(() => import('./pages/EventsPage'), 'EventsPage') },
+      { path: 'decoys', ...page(() => import('./pages/DecoysPage'), 'DecoysPage') },
       { path: 'assets', ...page(() => import('./pages/AssetsPage'), 'AssetsPage') },
       { path: 'assets/:id', ...page(() => import('./pages/AssetDetailPage'), 'AssetDetailPage') },
       { path: 'asset-map', ...page(() => import('./pages/AssetMapPage'), 'AssetMapPage') },

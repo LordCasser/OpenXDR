@@ -37,13 +37,13 @@ func EnrollmentURL(raw string) (string, error) {
 func Install(ctx context.Context, c *ent.HostCredential, secret Secret, hostname, osName, publicURL, token, script, fingerprint string) error {
 	publicURL, err := EnrollmentURL(publicURL)
 	if err != nil {
-		return err
+		return notStarted(err.Error())
 	}
 	if !ValidFingerprint(fingerprint) {
-		return errors.New("请先提供独立核对过的 SSH SHA256 主机指纹")
+		return notStarted("请先提供独立核对过的 SSH SHA256 主机指纹")
 	}
 	if c.HostKey != "" && c.HostKey != fingerprint {
-		return errors.New("指纹与已保存凭据不一致")
+		return notStarted("指纹与已保存凭据不一致")
 	}
 	var method ssh.AuthMethod
 	if c.Kind == "password" {
@@ -56,39 +56,20 @@ func Install(ctx context.Context, c *ent.HostCredential, secret Secret, hostname
 			signer, err = ssh.ParsePrivateKey([]byte(secret.PrivateKey))
 		}
 		if err != nil {
-			return errors.New("私钥不可用")
+			return notStarted("私钥不可用")
 		}
 		method = ssh.PublicKeys(signer)
 	}
 	addr := net.JoinHostPort(c.Address, strconv.Itoa(c.Port))
-	conn, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, "tcp", addr)
+	client, err := connectVerified(ctx, addr, c.Username, method, fingerprint)
 	if err != nil {
-		return errors.New("无法连接 SSH 地址")
+		return err
 	}
-	defer conn.Close()
-	deadline := time.Now().Add(2 * time.Minute)
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
-	}
-	_ = conn.SetDeadline(deadline)
-	stop := context.AfterFunc(ctx, func() { conn.Close() })
-	defer stop()
-	config := &ssh.ClientConfig{User: c.Username, Auth: []ssh.AuthMethod{method}, HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
-		if subtle.ConstantTimeCompare([]byte(ssh.FingerprintSHA256(key)), []byte(fingerprint)) != 1 {
-			return errors.New("SSH 主机指纹不匹配")
-		}
-		return nil
-	}}
-	cc, ch, req, err := ssh.NewClientConn(conn, addr, config)
-	if err != nil {
-		return errors.New("SSH 身份验证或主机指纹校验失败")
-	}
-	client := ssh.NewClient(cc, ch, req)
 	defer client.Close()
 	// 防止文档地址和主机名错配，导致实际安装到另一个资产。
 	session, err := client.NewSession()
 	if err != nil {
-		return errors.New("无法建立 SSH 会话")
+		return notStarted("无法建立 SSH 会话")
 	}
 	var name limitedName
 	session.Stdout = &name
@@ -96,11 +77,11 @@ func Install(ctx context.Context, c *ent.HostCredential, secret Secret, hostname
 	err = session.Run("hostname")
 	session.Close()
 	if err != nil || strings.TrimSpace(name.value) != hostname {
-		return errors.New("目标主机名与导入记录不一致，未执行安装")
+		return notStarted("目标主机名与导入记录不一致，未执行安装")
 	}
 	session, err = client.NewSession()
 	if err != nil {
-		return errors.New("无法建立 SSH 安装会话")
+		return notStarted("无法建立 SSH 安装会话")
 	}
 	defer session.Close()
 	session.Stdout = io.Discard
@@ -126,6 +107,86 @@ func Install(ctx context.Context, c *ent.HostCredential, secret Secret, hostname
 		return errors.New("安装未确认完成；先核对目标服务与平台心跳，勿直接重试")
 	}
 	return nil
+}
+
+// hostKeyAlgorithms 是逐次握手的主机密钥算法顺序。服务端只出示协商出的那一把，
+// x/crypto 默认先协商 ECDSA，运维按 OpenSSH 习惯核对的 ed25519 指纹就会被判不匹配。
+var hostKeyAlgorithms = [][]string{
+	{ssh.KeyAlgoED25519},
+	{ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521},
+	{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256},
+}
+
+// connectVerified 按 hostKeyAlgorithms 顺序握手，直到拿到操作者核对的那把主机密钥。
+func connectVerified(ctx context.Context, addr, user string, method ssh.AuthMethod, fingerprint string) (*ssh.Client, error) {
+	var err error
+	for _, algorithms := range hostKeyAlgorithms {
+		var client *ssh.Client
+		var mismatch bool
+		client, mismatch, err = dialVerified(ctx, addr, &ssh.ClientConfig{User: user, Auth: []ssh.AuthMethod{method}, HostKeyAlgorithms: algorithms, HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			if subtle.ConstantTimeCompare([]byte(ssh.FingerprintSHA256(key)), []byte(fingerprint)) != 1 {
+				return errors.New("SSH 主机指纹不匹配")
+			}
+			return nil
+		}})
+		var negotiation *ssh.AlgorithmNegotiationError
+		// 指纹不符或对方没有这类主机密钥：认证尚未发生，换下一类算法重新握手。
+		if err == nil {
+			return client, nil
+		}
+		if !mismatch && !errors.As(err, &negotiation) {
+			break
+		}
+	}
+	return nil, err
+}
+
+// dialVerified 建立一次已校验主机密钥的 SSH 连接；mismatch 表示握手拿到的主机密钥与指纹不符。
+func dialVerified(ctx context.Context, addr string, config *ssh.ClientConfig) (*ssh.Client, bool, error) {
+	conn, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, false, notStarted("无法连接 SSH 地址")
+	}
+	deadline := time.Now().Add(2 * time.Minute)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	_ = conn.SetDeadline(deadline)
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	mismatch := false
+	verify := config.HostKeyCallback
+	config.HostKeyCallback = func(host string, remote net.Addr, key ssh.PublicKey) error {
+		err := verify(host, remote, key)
+		mismatch = err != nil
+		return err
+	}
+	cc, ch, req, err := ssh.NewClientConn(conn, addr, config)
+	if err != nil {
+		stop()
+		conn.Close()
+		return nil, mismatch, notStartedWrap("SSH 身份验证或主机指纹校验失败", err)
+	}
+	return ssh.NewClient(cc, ch, req), false, nil
+}
+
+// ErrNotStarted 表示失败发生在安装脚本开始执行之前（连接、认证、指纹、主机名核对），目标没有副作用，可以修正后重试。
+var ErrNotStarted = errors.New("安装未开始")
+
+type notStartedError string
+
+func (e notStartedError) Error() string      { return string(e) }
+func (notStartedError) Is(target error) bool { return target == ErrNotStarted }
+func notStarted(message string) error        { return notStartedError(message) }
+
+// notStartedWrap 保留底层错误供 errors.As 判断，展示文案不带库错误细节。
+type notStartedCause struct {
+	notStartedError
+	cause error
+}
+
+func (e notStartedCause) Unwrap() error { return e.cause }
+func notStartedWrap(message string, cause error) error {
+	return notStartedCause{notStartedError(message), cause}
 }
 
 type limitedName struct{ value string }

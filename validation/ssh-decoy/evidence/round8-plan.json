@@ -1,0 +1,27 @@
+{
+  "visibility_conditions": [
+    "novel-2k-v1",
+    "novel-8k-v1",
+    "novel-32k-v1"
+  ],
+  "model_conditions": [
+    "inject-en-v1",
+    "novel-2k-v1",
+    "novel-8k-v1"
+  ],
+  "provider": "glm53-h20",
+  "model": "ZhipuAI/GLM-5.3-Flash",
+  "command_turns": 1,
+  "repeats": 1,
+  "max_tokens": 16384,
+  "request_timeout": 180,
+  "trial_seconds": 210,
+  "executor_output_bytes": 16384,
+  "configured_context_window": 524288,
+  "configured_context_window_verified": false,
+  "frozen": {
+    "server/internal/sshdecoy/server.go": "976b1ab56f62d307a2fe52f06e019c5e3831f3c9a62da8226a2c686e8e95d873",
+    "validation/ssh-decoy/evaluate.py": "6026b134de732fba5968fe3b1b227d11bdf90fbd3ba2b322632a4a52a19e32e8",
+    "validation/ssh-decoy/Dockerfile": "33af14a6886596c8615fdadf25d035c5309b916735b5f4ec3bfbdb82f2a3597f"
+  }
+}

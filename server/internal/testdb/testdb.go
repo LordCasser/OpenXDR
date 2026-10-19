@@ -55,6 +55,8 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 	t.Helper()
 	dels := []func(context.Context) (int, error){
+		func(ctx context.Context) (int, error) { return c.DecoyObservation.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.DecoyDeployment.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AIJob.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.HostCredential.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Finding.Delete().Exec(ctx) },

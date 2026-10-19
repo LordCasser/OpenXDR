@@ -140,6 +140,30 @@ func (f CommandPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommandPolicyMutation", m)
 }
 
+// The DecoyDeploymentFunc type is an adapter to allow the use of ordinary
+// function as DecoyDeployment mutator.
+type DecoyDeploymentFunc func(context.Context, *ent.DecoyDeploymentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DecoyDeploymentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DecoyDeploymentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DecoyDeploymentMutation", m)
+}
+
+// The DecoyObservationFunc type is an adapter to allow the use of ordinary
+// function as DecoyObservation mutator.
+type DecoyObservationFunc func(context.Context, *ent.DecoyObservationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DecoyObservationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DecoyObservationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DecoyObservationMutation", m)
+}
+
 // The EnrollTokenFunc type is an adapter to allow the use of ordinary
 // function as EnrollToken mutator.
 type EnrollTokenFunc func(context.Context, *ent.EnrollTokenMutation) (ent.Value, error)

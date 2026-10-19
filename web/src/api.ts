@@ -1103,3 +1103,48 @@ export async function extractHostDocument(groupId: string, file: File): Promise<
   if (!r.ok) await fail(r)
   return await r.json()
 }
+
+export type DecoyKind = 'ssh' | 'http' | 'file' | 'shell'
+export interface DecoyProfile {
+  kind: DecoyKind
+  id: string
+  name: string
+  layer: string
+  template: string
+  evidence: string
+}
+export const fetchDecoyInstallStatus = () => get<{ enabled: boolean }>('/api/decoy-install/status')
+export const installDecoy = (id: string, body: { fingerprint: string; arch: string; listenHost: string; fileRoot?: string }) => send('POST', `/api/decoy-install/${encodeURIComponent(id)}`, body)
+export interface DecoyDeployment {
+  remote_installable: boolean
+  install_state: 'idle' | 'installing' | 'installed' | 'unconfirmed'
+  install_started_at?: string
+  runtime_status?: 'unreported' | 'starting' | 'running' | 'stopped' | 'failed' | 'stale' | 'stopping'
+  runtime_seen_at?: string
+  kind: DecoyKind
+  resource: string
+  id: string
+  asset_id: string
+  profile: string
+  template: string
+  port: number
+  status: 'registered' | 'revoked'
+  created_at: string
+  created_by: string
+  revoked_at?: string
+  revoked_by?: string
+}
+export const fetchDecoyProfiles = () => get<DecoyProfile[]>('/api/decoy-profiles')
+export const fetchDecoys = (groupId: string, offset: number) => get<{ items: DecoyDeployment[]; more: boolean }>(`/api/decoys?groupId=${encodeURIComponent(groupId)}&offset=${offset}`)
+export const registerDecoy = (body: { assetId: string; profile: string; port: number; kind: DecoyKind; resource: string }) => send('POST', '/api/decoys', body)
+export const revokeDecoy = (id: string) => send('POST', `/api/decoys/${encodeURIComponent(id)}/revoke`)
+
+export async function issueDecoyToken(id: string): Promise<{ token: string; expiresAt: string }> {
+  return (await send('POST', `/api/decoys/${encodeURIComponent(id)}/token`)).json()
+}
+export interface DecoyObservation { id: string; kind: string; received_at: string; incident_id?: string | null }
+export const fetchDecoyObservations = (id: string) => get<{ items: DecoyObservation[]; more: boolean }>(`/api/decoys/${encodeURIComponent(id)}/observations`)
+
+export async function reviewDecoyObservation(id: string, observation: string): Promise<{ incidentId: string }> {
+  return (await send('POST', `/api/decoys/${encodeURIComponent(id)}/observations/${encodeURIComponent(observation)}/review`)).json()
+}

@@ -11,6 +11,7 @@ import (
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/predicate"
+	"openxdr/server/internal/decoy"
 )
 
 // Severity 及以上的事件即使 AI 判良性也要人复核：AI 会看错，高危被一句"良性"吞掉代价太大
@@ -31,12 +32,22 @@ func benign() predicate.Incident {
 
 func severe() predicate.Incident { return incident.HasAlertsWith(alert.SeverityGTE(Severity)) }
 
-// Needed 未结案，且 AI 没判良性或最高级别达到 Severity。
+func decoyAlert() predicate.Alert { return alert.RuleIDHasPrefix(decoy.ObservationRulePrefix) }
+
+// decoyReview 含分析师提交的诱饵观察：人点名要复核，AI 判良性也不能替人结案。
+func decoyReview() predicate.Incident { return incident.HasAlertsWith(decoyAlert()) }
+
+// DecoyOnly 只有诱饵观察：按约定只做站内复核不推送；同主机真实告警并入后照常通知。
+func DecoyOnly() predicate.Incident {
+	return incident.And(decoyReview(), incident.Not(incident.HasAlertsWith(alert.Not(decoyAlert()))))
+}
+
+// Needed 未结案，且 AI 没判良性、最高级别达到 Severity 或含人工提交的诱饵观察。
 func Needed() predicate.Incident {
-	return incident.And(unresolved(), incident.Or(incident.Not(benign()), severe()))
+	return incident.And(unresolved(), incident.Or(incident.Not(benign()), severe(), decoyReview()))
 }
 
 // StaleBenign 未结案、AI 判良性、级别低于 Severity 且创建早于 before：没人看也不必看的噪声。
 func StaleBenign(before time.Time) predicate.Incident {
-	return incident.And(unresolved(), benign(), incident.Not(severe()), incident.CreatedAtLT(before))
+	return incident.And(unresolved(), benign(), incident.Not(severe()), incident.Not(decoyReview()), incident.CreatedAtLT(before))
 }
