@@ -11,7 +11,7 @@ use std::io;
 use std::os::fd::RawFd;
 
 use super::{
-    ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, process_event, username_of,
+    ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, emit_process, username_of,
 };
 
 const NETLINK_CONNECTOR: libc::c_int = 11;
@@ -82,7 +82,7 @@ fn pump(sock: Socket, agent_id: String, tx: EventSink) {
         };
         for event in parse_events(&buf[..n]) {
             let Some(d) = describe(&event) else { continue };
-            let event = process_event(
+            let events = emit_process(
                 &agent_id,
                 &mut registry,
                 d.activity,
@@ -96,10 +96,10 @@ fn pump(sock: Socket, agent_id: String, tx: EventSink) {
                     exit_code: d.exit_code,
                 },
             );
-            if let Some(event) = event
-                && !tx.send(event)
-            {
-                return; // 上报端已断开
+            for event in events {
+                if !tx.send(event) {
+                    return; // 上报端已断开
+                }
             }
         }
     }

@@ -7,6 +7,14 @@
 
 第一个公开版本。
 
+### 安装与发布
+
+- 一行安装：`install.sh` 生成口令与密钥、签发 mTLS 证书、配好 HTTPS（公网域名自动申请 Let's Encrypt，内网地址用自建 CA），装好即可在控制台添加主机；重复执行即升级。
+- 发版自动化：推 `v*` 标签即构建 GHCR 镜像（amd64 / arm64）与 GitHub Release。server 镜像内置默认规则、预设任务与 agent 安装包，升级镜像在线 agent 跟着升级。
+- Linux agent 安装包静态链接（musl）并带 eBPF，CentOS 7 这类老发行版也能直接运行。
+- [安装文档](docs/install.md) 同时写给 AI agent，README 给出一句可直接交给 Claude Code / Codex 等代为安装的提示词。
+- 发版前依赖安全清零：server 升到 Go 1.26 并升级 x/net、x/crypto、x/text、grpc（govulncheck 无可达漏洞）；agent / sensor 升级 rustls 0.23.46、h2 0.4.20（cargo audit 无告警）；前端与主页 npm audit 无告警。
+
 ### 接入与纳管
 
 - 控制台按组签发接入令牌，Linux / Windows 一行命令安装 agent，本机生成私钥、server 签发主机绑定证书。

@@ -1,12 +1,16 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
 	entevent "openxdr/server/ent/event"
+	"openxdr/server/internal/aijob"
+	"openxdr/server/internal/auth"
 	"openxdr/server/internal/eventai"
 	"openxdr/server/internal/triage"
 )
@@ -16,8 +20,8 @@ type relatedGroup struct {
 	Events   []eventRow `json:"events"`
 }
 
-// EventAIPaths 只挂这两个精确路径：挂 /api/events/ 子树会让 ServeMux 把 /api/events 重定向进子树，日志检索就没了
-var EventAIPaths = []string{"GET /api/events/{id}/related", "POST /api/events/{id}/explain"}
+// EventAIPaths 只挂这几个精确路径：挂 /api/events/ 子树会让 ServeMux 把 /api/events 重定向进子树，日志检索就没了
+var EventAIPaths = []string{"GET /api/events/{id}/related", "GET /api/events/{id}/explain", "POST /api/events/{id}/explain"}
 
 // EventAI 日志检索里的「问 AI」：related 只查库给出确定关联的日志；explain 让模型读日志和这些候选，
 // 给出解读并挑出相关的几条。两者都只在调用者能看的资产范围内取数
@@ -65,6 +69,22 @@ func EventAI(db *ent.Client, llm *triage.LLM) http.Handler {
 		writeJSON(w, out)
 	})
 
+	// 解读在后台跑：POST 发起（已有在跑的或已有结果就直接返回它，refresh=1 才重来），GET 读当前这次。
+	// 结果按发起人存：候选是按调用者能看的范围捞的，别人的解读可能提到他看不到的主机
+	key := func(r *http.Request) aijob.Key {
+		return aijob.Key{Kind: "explain", Subject: r.PathValue("id"), Variant: r.URL.Query().Get("lang"), Owner: auth.From(r.Context()).ID.String()}
+	}
+	mux.HandleFunc("GET /api/events/{id}/explain", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireScope(w, r, db, "viewer"); !ok {
+			return
+		}
+		j, err := aijob.Latest(r.Context(), db, key(r))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, aijob.ViewOf(j))
+	})
 	mux.HandleFunc("POST /api/events/{id}/explain", func(w http.ResponseWriter, r *http.Request) {
 		if !llm.Enabled() {
 			http.Error(w, "未配置研判与标注模型，无法解读", http.StatusServiceUnavailable)
@@ -74,24 +94,35 @@ func EventAI(db *ent.Client, llm *triage.LLM) http.Handler {
 		if !ok {
 			return
 		}
+		k := key(r)
+		prev, err := aijob.Latest(r.Context(), db, k)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if aijob.Running(prev) || (prev != nil && prev.Status == "done" && r.URL.Query().Get("refresh") != "1") {
+			writeJSON(w, aijob.ViewOf(prev))
+			return
+		}
 		host := map[string]any{}
 		if e.AssetID != nil {
 			if a, err := db.Asset.Get(r.Context(), *e.AssetID); err == nil {
 				host = map[string]any{"hostname": a.Hostname, "os": a.Os, "ips": a.IPAddrs, "role": a.Role, "summary": a.Summary}
 			}
 		}
-		system, user := eventai.Messages(e, host, groups, r.URL.Query().Get("lang"))
-		reply, err := llm.Chat(r.Context(), []triage.Message{{Role: "system", Content: system}, {Role: "user", Content: user}}, nil)
+		system, user := eventai.Messages(e, host, groups, k.Variant)
+		j, err := aijob.Start(r.Context(), db, k, func(ctx context.Context) (any, error) {
+			reply, err := llm.Chat(ctx, []triage.Message{{Role: "system", Content: system}, {Role: "user", Content: user}}, nil)
+			if err != nil {
+				return nil, fmt.Errorf("模型调用失败：%w", err)
+			}
+			return eventai.Parse(reply.Content, groups)
+		}, nil)
 		if err != nil {
-			http.Error(w, "模型调用失败："+err.Error(), http.StatusBadGateway)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		x, err := eventai.Parse(reply.Content, groups)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		writeJSON(w, x)
+		writeJSON(w, aijob.ViewOf(j))
 	})
 	return mux
 }

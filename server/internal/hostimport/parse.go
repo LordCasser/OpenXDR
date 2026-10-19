@@ -20,7 +20,7 @@ import (
 const MaxDocument = 1 << 20
 const MaxHosts = 100
 
-// Host 的 JSON 是预览契约，凭据不会序列化；不把原文交给模型，也不在错误中回显原文。
+// Host 的 JSON 是预览契约，凭据不会序列化；结构化导入与 AI 导入共用校验，不在错误中回显原文。
 type Host struct {
 	Hostname string `json:"hostname"`
 	Address  string `json:"address"`

@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use super::{
-    ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, ProcessRegistry, process_event,
+    ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, ProcessRegistry, emit_process,
 };
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
@@ -35,7 +35,11 @@ pub async fn run(agent_id: String, tx: EventSink) {
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
 
         let current: HashSet<sysinfo::Pid> = sys.processes().keys().copied().collect();
-        let (appeared, gone) = diff(&known, &current);
+        let (mut appeared, gone) = diff(&known, &current);
+        // 同一轮里父子都是新进程时先处理父：子进程才找得到父 GUID，也才能参与周期折叠。
+        // 按「在本轮新进程里有几层祖先」排序，不依赖 pid 大小（pid 会回绕）
+        let fresh: HashSet<sysinfo::Pid> = appeared.iter().copied().collect();
+        appeared.sort_by_key(|pid| depth(&sys, &fresh, *pid));
         for pid in appeared {
             let Some(proc) = sys.processes().get(&pid) else {
                 continue;
@@ -48,7 +52,7 @@ pub async fn run(agent_id: String, tx: EventSink) {
                 .collect::<Vec<_>>()
                 .join(" ");
             let exe = proc.exe().map(|p| p.to_string_lossy().into_owned());
-            let event = process_event(
+            let events = emit_process(
                 &agent_id,
                 &mut registry,
                 ACTIVITY_LAUNCH,
@@ -63,16 +67,16 @@ pub async fn run(agent_id: String, tx: EventSink) {
                 },
             );
 
-            if let Some(event) = event
-                && !tx.send(event)
-            {
-                return; // 上报端已断开，本采集任务随之退出
+            for event in events {
+                if !tx.send(event) {
+                    return; // 上报端已断开，本采集任务随之退出
+                }
             }
         }
 
         // 消失的 pid 即进程退出。进程已退场，名字与路径从启动时的登记补上
         for pid in gone {
-            let event = process_event(
+            let events = emit_process(
                 &agent_id,
                 &mut registry,
                 ACTIVITY_TERMINATE,
@@ -81,14 +85,28 @@ pub async fn run(agent_id: String, tx: EventSink) {
                     ..Default::default()
                 },
             );
-            if let Some(event) = event
-                && !tx.send(event)
-            {
-                return;
+            for event in events {
+                if !tx.send(event) {
+                    return;
+                }
             }
         }
         known = current;
     }
+}
+
+/// pid 往上有几层祖先也在本轮新进程里（封顶防环）
+fn depth(sys: &System, fresh: &HashSet<sysinfo::Pid>, pid: sysinfo::Pid) -> usize {
+    let mut n = 0;
+    let mut cur = sys.processes().get(&pid).and_then(|p| p.parent());
+    while let Some(p) = cur
+        && fresh.contains(&p)
+        && n < 64
+    {
+        n += 1;
+        cur = sys.processes().get(&p).and_then(|q| q.parent());
+    }
+    n
 }
 
 /// 进程表 diff：本轮新增与消失的 pid。纯函数，方便单测。
@@ -104,6 +122,7 @@ fn diff(
 
 #[cfg(test)]
 mod tests {
+    use super::super::process_event;
     use super::*;
 
     /// diff 同时识别新增与消失：消失的 pid 就是退出事件的来源。

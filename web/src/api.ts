@@ -450,8 +450,11 @@ export interface EventExplanation {
   related: { id: string; why: string }[]
 }
 export const fetchRelatedEvents = (id: string) => get<RelatedGroup[]>(`/api/events/${id}/related`)
-export const explainEvent = async (id: string, lang: string): Promise<EventExplanation> =>
-  (await send('POST', `/api/events/${id}/explain?lang=${lang}`)).json()
+// 后台 AI 任务：发起后立即返回，结果在服务端，前端轮询；换页、刷新都能接着看
+export interface AIJob<T> { id?: string; status: 'none' | 'running' | 'done' | 'failed'; result?: T; error?: string; createdAt?: string; finishedAt?: string }
+export const fetchExplain = (id: string, lang: string) => get<AIJob<EventExplanation>>(`/api/events/${id}/explain?lang=${lang}`)
+export const startExplain = async (id: string, lang: string, refresh = false): Promise<AIJob<EventExplanation>> =>
+  (await send('POST', `/api/events/${id}/explain?lang=${lang}${refresh ? '&refresh=1' : ''}`)).json()
 
 export const searchEvents = (params: {
   assetId?: string
@@ -764,8 +767,8 @@ export const createAgentSession = async (body: {
   subjects?: string[]
 }): Promise<AgentSession> => (await send('POST', '/api/agent-sessions', body)).json()
 
-export const fetchSessionMessages = (id: string) =>
-  get<SessionMessage[]>(`/api/agent-sessions/${id}/messages`)
+export const fetchSessionMessages = (id: string, afterSeq = 0) =>
+  get<SessionMessage[]>(`/api/agent-sessions/${id}/messages${afterSeq ? `?afterSeq=${afterSeq}` : ''}`)
 
 // 发消息只是让后台开跑：会话切到 running 就返回，运行不随页面走；进度靠轮询会话与消息
 export const startSessionMessage = (id: string, prompt: string) =>
@@ -846,9 +849,15 @@ export interface TaskRow {
   model: string
   targetGroup: string
   prompt: string
+  // 按当前周期算的下一次运行时间；停用时为空
+  nextRun: string | null
 }
 
 export interface TaskRunRow {
+  reportId: string | null
+  reportTitle: string | null
+  // 这一轮做了多少步（工具调用次数）
+  steps: number
   id: string
   taskId: string
   groupId: string
@@ -876,6 +885,7 @@ export interface AgentConfig {
   collectPersist?: boolean
   collectNetwork?: boolean
   collectInventory?: boolean
+  collapsePeriodic?: boolean
 }
 
 export const fetchAgentConfig = (assetId: string) => get<AgentConfig>(`/api/assets/${assetId}/config`)
@@ -886,17 +896,20 @@ export interface ImportedHost {
   hostname: string; address: string; os: string; port: number; username: string
   kind: 'none' | 'password' | 'private_key'; hostKey: string
 }
-export interface HostImportPreview { digest: string; hosts: ImportedHost[] }
+export interface ReviewedHost extends ImportedHost { credentialToken?: string; images?: number[]; lines: number[]; needsReview: boolean; issues: string[]; reviewId?: string }
+export interface HostImportPreview { hosts: ReviewedHost[] }
 export interface HostCredential extends ImportedHost { id: string; assetId: string }
-export const fetchHostImportStatus = () => get<{ credentialStorage: boolean; sshEnrollment: boolean }>('/api/host-import/status')
+export const fetchHostImportStatus = () => get<{ credentialStorage: boolean; sshEnrollment: boolean; aiParsing: boolean }>('/api/host-import/status')
 export const fetchHostCredentials = (groupId: string) => get<HostCredential[]>(`/api/host-import/credentials?groupId=${encodeURIComponent(groupId)}`)
-export async function previewHostImport(groupId: string, document: string): Promise<HostImportPreview> {
-  const r = await post('/api/host-import/preview', { groupId, document })
+export async function startHostImport(groupId: string, document: string, images: HostDocumentImage[] = []): Promise<AIJob<HostImportPreview>> {
+  const r = await post('/api/host-import/analyze', { groupId, document, images })
   if (!r.ok) await fail(r)
   return r.json()
 }
-export async function commitHostImport(groupId: string, document: string, digest: string): Promise<{ assetIds: string[] }> {
-  const r = await post('/api/host-import/commit', { groupId, document, digest })
+export const fetchHostImportJob = (groupId: string) => get<AIJob<HostImportPreview>>(`/api/host-import/analyze?groupId=${encodeURIComponent(groupId)}`)
+export const discardHostImportJob = (groupId: string) => send('DELETE', `/api/host-import/analyze?groupId=${encodeURIComponent(groupId)}`)
+export async function commitHostImport(groupId: string, hosts: ReviewedHost[]): Promise<{ assetIds: string[] }> {
+  const r = await post('/api/host-import/confirm', { groupId, hosts, confirmed: true })
   if (!r.ok) await fail(r)
   return r.json()
 }
@@ -1027,3 +1040,13 @@ export interface LocalIdentityCandidate extends LocalAccount {
   observedAt: string
 }
 export const fetchLocalIdentityCandidates = (eventId: string) => get<{ items: LocalIdentityCandidate[]; truncated: boolean }>(`/api/identity-observations/${encodeURIComponent(eventId)}/local-accounts`)
+export interface HostDocumentImage { name: string; dataUrl: string }
+export async function extractHostDocument(groupId: string, file: File): Promise<{ document: string; images: HostDocumentImage[] | null }> {
+  const body = new FormData()
+  body.append('groupId', groupId)
+  body.append('file', file)
+  const r = await fetch('/api/host-import/extract', { method: 'POST', body })
+  check(r)
+  if (!r.ok) await fail(r)
+  return await r.json()
+}

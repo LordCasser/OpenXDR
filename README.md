@@ -10,7 +10,7 @@
 **纳管即运维，纳管即安全。** 主机装上 agent、划进组，就自动获得持续的采集、检测、
 每日巡检与可对话的 AI 助手；人负责拍板，不再在告警列表里翻找。
 
-**一万条告警进，三个真事件出。**
+**噪音止步于此，留下的都值得一看。**
 
 ## 能做什么
 
@@ -57,7 +57,26 @@
 
 详见 [架构文档](docs/architecture.md)。
 
-## 快速开始
+## 安装
+
+一台装了 Docker 的 Linux 服务器，一行命令：
+
+```bash
+curl -fsSL https://github.com/yaklang/OpenXDR/releases/latest/download/install.sh | sudo sh -s -- <控制台域名或 IP>
+```
+
+脚本生成口令与密钥、签发 mTLS 证书、配好 HTTPS（解析到公网的域名自动申请 Let's Encrypt，内网地址用自建 CA），
+拉起后打印控制台地址与 admin 口令。登录后在「系统设置 → AI 模型」接上任意 OpenAI 兼容端点，
+再到「资产 → 添加主机」复制安装命令到被监控主机上执行即可。再执行一遍就是升级。
+
+**或者交给你的 AI agent**（Claude Code、Codex、Cursor 等，在目标服务器上运行），把这句话发给它：
+
+```text
+请在这台服务器上安装 OpenXDR，严格按照 https://github.com/yaklang/OpenXDR/blob/master/docs/install.md 操作：
+先检查环境并问我控制台用哪个域名或 IP，再执行安装，最后把控制台地址、admin 口令，以及被纳管主机信任 CA 的命令告诉我。
+```
+
+详细步骤、核对、升级备份与常见问题见 [安装](docs/install.md)。从源码构建开发：
 
 ```bash
 docker compose up -d
@@ -65,19 +84,11 @@ docker compose up -d
 docker compose logs server | grep admin   # 首次启动生成的 admin 密码
 ```
 
-接入模型（任意 OpenAI 兼容端点）后开启 AI 研判与 AI 助手：
-
-```bash
-AI_BASE_URL=http://<推理服务>/v1 AI_MODEL=<模型名> PI_MODEL=<模型名> docker compose up -d
-```
-
-然后在「资产 → 添加主机」复制安装命令到被监控主机上执行。接入主机需要 HTTPS 控制台与 mTLS，
-完整步骤、采集方式、mTLS、情报、抑制、响应处置与全部配置项见 [部署与使用手册](docs/deployment.md)。
-
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
+| [安装](docs/install.md) | 一行安装、核对、升级备份、常见问题，也是给 AI agent 的安装说明 |
 | [部署与使用手册](docs/deployment.md) | 启动、接入主机、日志与情报、抑制与处置、mTLS、配置项全表 |
 | [高可用部署](deploy/ha/README.md) | Patroni + 三节点 JetStream + Keepalived VIP，滚动发布 |
 | [资产图谱与攻击面](docs/asset-map.md) | 设备清单、依赖边、区域划分、风险分与 AI 标注 |

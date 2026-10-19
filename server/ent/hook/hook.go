@@ -8,6 +8,18 @@ import (
 	"openxdr/server/ent"
 )
 
+// The AIJobFunc type is an adapter to allow the use of ordinary
+// function as AIJob mutator.
+type AIJobFunc func(context.Context, *ent.AIJobMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AIJobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AIJobMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AIJobMutation", m)
+}
+
 // The AIUsageFunc type is an adapter to allow the use of ordinary
 // function as AIUsage mutator.
 type AIUsageFunc func(context.Context, *ent.AIUsageMutation) (ent.Value, error)

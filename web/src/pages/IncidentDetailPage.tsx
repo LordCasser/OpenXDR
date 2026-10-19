@@ -15,6 +15,7 @@ import { LoadError } from '../components/LoadError'
 import { Page, useWideTable } from '../components/Page'
 import { ResponsePanel } from '../components/ResponsePanel'
 import { ResolveModal } from '../components/ResolveModal'
+import { agreesWithAI, verdictStatus } from '../components/verdict'
 import { SuppressModal } from '../components/SuppressModal'
 import { VerdictCard } from '../components/VerdictCard'
 import { IncidentStatusTag, SeverityTag, fmtTime, errText } from '../components/format'
@@ -149,7 +150,10 @@ export function IncidentDetailPage() {
           {wide ? (
             <>
               <Button icon={<DownloadOutlined />} onClick={exportReport}>{t('exportReport')}</Button>
-              {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('close')}</Button>}
+              {canAct && !done && verdictStatus(inc.aiVerdict) && (
+                <Button type="primary" ghost onClick={() => changeStatus(verdictStatus(inc.aiVerdict)!, '')}>{t('adoptVerdict')}</Button>
+              )}
+              {canAct && !done && <Button onClick={() => setResolving('closed')}>{t('markTrue')}</Button>}
               {canAct && !done && <Button danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>}
               {canAct && done && <Button onClick={() => changeStatus('open')}>{t('reopen')}</Button>}
             </>
@@ -157,7 +161,7 @@ export function IncidentDetailPage() {
             <Dropdown trigger={['click']} menu={{
               items: [
                 { key: 'export', icon: <DownloadOutlined />, label: t('exportReport') },
-                ...(canAct && !done ? [{ key: 'closed', label: t('close') }, { key: 'false_positive', label: t('markFp'), danger: true }] : []),
+                ...(canAct && !done ? [{ key: 'closed', label: t('markTrue') }, { key: 'false_positive', label: t('markFp'), danger: true }] : []),
                 ...(canAct && done ? [{ key: 'open', label: t('reopen') }] : []),
               ],
               onClick: ({ key }) => {
@@ -237,7 +241,7 @@ export function IncidentDetailPage() {
             {queue.total > 1 && queue.index >= 0 && <QueueCard items={queue.items} index={queue.index} />}
             <Card title={t('basicInfo')}>
               <Descriptions column={1} size="small">
-                <Descriptions.Item label="ID"><Typography.Text className="mono" copyable style={{ fontSize: 12 }}>{inc.id}</Typography.Text></Descriptions.Item>
+                <Descriptions.Item label="ID"><Typography.Text className="mono" copyable ellipsis style={{ maxWidth: 220 }}>{inc.id}</Typography.Text></Descriptions.Item>
                 <Descriptions.Item label={t('thStatus')}><IncidentStatusTag value={inc.status} /></Descriptions.Item>
                 <Descriptions.Item label={t('thSeverity')}><SeverityTag value={inc.severity} /></Descriptions.Item>
                 <Descriptions.Item label={t('thCreatedAt')}>{fmtTime(inc.createdAt)}</Descriptions.Item>
@@ -257,6 +261,8 @@ export function IncidentDetailPage() {
         title={t(resolving === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')}
         hint={t('resolveHint')}
         initialNote={adopting ? inc.closureProposal?.note : undefined}
+        optional={agreesWithAI(inc.aiVerdict, resolving)}
+        contradicts={!!verdictStatus(inc.aiVerdict) && !agreesWithAI(inc.aiVerdict, resolving)}
         onCancel={() => { setResolving(null); setAdopting(false) }}
         onSubmit={async note => { if (!await changeStatus(resolving!, note)) throw new Error() }}
       />

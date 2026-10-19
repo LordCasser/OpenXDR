@@ -1,0 +1,96 @@
+# OpenXDR 单机部署（install.sh 生成 .env、证书与 Caddyfile 后拉起）。
+# 对外只开三个口：80 / 443 是 Caddy（控制台 HTTPS，域名模式下自动申请证书），8081 是 agent / sensor 的 mTLS gRPC。
+# 升级：改 .env 里的 OPENXDR_VERSION 后 docker compose pull && docker compose up -d，或重新跑 install.sh。
+name: openxdr
+
+services:
+  nats:
+    image: nats:2.11-alpine
+    command: ["--config", "/etc/nats/openxdr.conf"]
+    restart: unless-stopped
+    volumes:
+      - natsdata:/data
+      - ./nats.conf:/etc/nats/openxdr.conf:ro
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: openxdr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?缺少 POSTGRES_PASSWORD，先运行 install.sh}
+      POSTGRES_DB: openxdr
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openxdr"]
+      interval: 5s
+      retries: 20
+
+  server:
+    # 镜像自带默认规则、预设任务与 agent 安装包；升级镜像，在线 agent 跟着自动升级
+    image: ghcr.io/yaklang/openxdr-server:${OPENXDR_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://openxdr:${POSTGRES_PASSWORD}@postgres:5432/openxdr?sslmode=disable
+      NATS_URL: nats://nats:4222
+      QUEUE_REPLICAS: 1
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # 文档导入的凭据与控制台保存的模型密钥都用它加密；丢了就解不开，和数据库一起备份
+      HOST_CREDENTIAL_KEY: ${HOST_CREDENTIAL_KEY:?缺少 HOST_CREDENTIAL_KEY，先运行 install.sh}
+      # 采集端 mTLS 与主机证书在线签发
+      TLS_CA_FILE: /certs/ca.crt
+      TLS_CERT_FILE: /certs/server.crt
+      TLS_KEY_FILE: /certs/server.key
+      TLS_CA_KEY_FILE: /certs/ca.key
+      # 控制台「添加主机」给出的安装命令用这两个地址
+      ENROLL_PUBLIC_URL: https://${OPENXDR_HOST}
+      ENROLL_GRPC_URL: https://${OPENXDR_HOST}:8081
+      WEBHOOK_LINK_BASE: https://${OPENXDR_HOST}
+      # 请求经 Caddy → web → server 两跳，都在下面这个固定网段里
+      TRUSTED_PROXIES: 172.31.250.0/24
+      # 模型端点、模型名与密钥也可以装好后在控制台「系统设置 → AI 模型」里填
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      PI_MODEL: ${PI_MODEL:-}
+      RESPONSE_ENABLED: ${RESPONSE_ENABLED:-false}
+      RETENTION_DAYS: ${RETENTION_DAYS:-30}
+    volumes:
+      - ./certs:/certs:ro
+    ports:
+      - "8081:8081"
+
+  web:
+    image: ghcr.io/yaklang/openxdr-web:${OPENXDR_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      - server
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddydata:/data
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+
+volumes:
+  pgdata:
+  natsdata:
+  caddydata:

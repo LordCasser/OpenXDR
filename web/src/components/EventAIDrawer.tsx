@@ -2,11 +2,11 @@ import {
   AimOutlined, ApartmentOutlined, BranchesOutlined, CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, ExclamationCircleFilled,
   FieldTimeOutlined, NodeIndexOutlined, QuestionCircleFilled, ReloadOutlined, RobotOutlined, ShareAltOutlined, StarFilled, SwapOutlined,
 } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Drawer, Empty, Flex, Grid, Skeleton, Space, Switch, Tag, Typography, theme } from 'antd'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { explainEvent, fetchAssets, fetchRelatedEvents, type EventExplanation, type EventRow, type Relation } from '../api'
+import { fetchAssets, fetchExplain, fetchRelatedEvents, startExplain, type AIJob, type EventExplanation, type EventRow, type Relation } from '../api'
 import { useSession } from '../app/session'
 import { useI18n, type MsgKey } from '../i18n'
 import { EventKind } from './EventKind'
@@ -64,7 +64,8 @@ function EventLine({ e, why, showHost, onAsk }: { e: EventRow; why?: string; sho
 }
 
 // 问 AI：先给结论（是什么、要不要紧、为什么），再列 AI 挑出的相关日志，最后是全部候选。
-// 关联靠查库，打开就有；解读要调模型，analyst 以上才能发起，结果按日志缓存，关了再开不重复调用
+// 关联靠查库，打开就有；解读在服务端后台跑（analyst 以上才能发起），这里只轮询结果：
+// 关掉抽屉、换页、刷新都不打断，回来接着看；已有结果不重复调用模型
 export function EventAIDrawer({ event, onClose, onAsk }: { event: EventRow | null; onClose: () => void; onAsk: (e: EventRow) => void }) {
   const { t, locale } = useI18n()
   const { canWrite } = useSession()
@@ -72,10 +73,30 @@ export function EventAIDrawer({ event, onClose, onAsk }: { event: EventRow | nul
   const wide = !!Grid.useBreakpoint().md
   const [onlyPicked, setOnlyPicked] = useState(false)
   const related = useQuery({ queryKey: ['event-related', event?.id], queryFn: () => fetchRelatedEvents(event!.id), enabled: !!event })
+  const client = useQueryClient()
+  const explainKey = ['event-explain', event?.id, locale]
   const explain = useQuery({
-    queryKey: ['event-explain', event?.id, locale], queryFn: () => explainEvent(event!.id, locale),
-    enabled: !!event && canWrite, staleTime: Infinity, retry: false,
+    queryKey: explainKey, queryFn: () => fetchExplain(event!.id, locale), enabled: !!event,
+    refetchInterval: q => (q.state.data?.status === 'running' ? 2000 : false),
   })
+  const start = useMutation({
+    mutationFn: (refresh: boolean) => startExplain(event!.id, locale, refresh),
+    onSuccess: (job: AIJob<EventExplanation>) => client.setQueryData(explainKey, job),
+  })
+  // 还没解读过就自动发起一次（每条日志每种语言一次）；服务端对同一条日志只会有一个在跑。
+  // 抽屉在不同日志间复用，换日志时清掉上一条的发起错误
+  const status = explain.data?.status
+  const autoStarted = useRef('')
+  const { mutate, reset } = start
+  useEffect(() => { reset() }, [event?.id, reset])
+  useEffect(() => {
+    const k = `${event?.id}:${locale}`
+    if (canWrite && status === 'none' && autoStarted.current !== k) {
+      autoStarted.current = k
+      mutate(false)
+    }
+  }, [canWrite, status, event?.id, locale, mutate])
+  const x = status === 'done' ? explain.data?.result : undefined
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, enabled: !!event })
   const canChat = useCanChat()
   const handoff = useHandoff()
@@ -83,13 +104,13 @@ export function EventAIDrawer({ event, onClose, onAsk }: { event: EventRow | nul
 
   const groups = related.data ?? []
   const all = groups.flatMap(g => g.events)
-  const why = new Map((explain.data?.related ?? []).map(p => [p.id, p.why]))
-  const picked = (explain.data?.related ?? []).map(p => all.find(e => e.id === p.id)).filter((e): e is EventRow => !!e)
+  const why = new Map((x?.related ?? []).map(p => [p.id, p.why]))
+  const picked = (x?.related ?? []).map(p => all.find(e => e.id === p.id)).filter((e): e is EventRow => !!e)
   const groupId = assets.data?.find(a => a.id === event.assetId)?.groupId
   const host = assets.data?.find(a => a.id === event.assetId)?.hostname ?? '-'
   const summary = eventSummary(event.classUid, event.raw, t) || event.connTuple || '-'
   const deep = () => groupId && handoff.start(groupId, [], t('eventDeepTitle', { host }),
-    t('eventDeepPrompt', { host, id: event.id, ts: fmtTime(event.ts), summary, verdict: explain.data ? `${explain.data.title}：${explain.data.summary}` : '-' }))
+    t('eventDeepPrompt', { host, id: event.id, ts: fmtTime(event.ts), summary, verdict: x ? `${x.title}：${x.summary}` : '-' }))
   const line = (e: EventRow) => <EventLine key={e.id} e={e} why={why.get(e.id)} showHost={e.assetId !== event.assetId} onAsk={onAsk} />
 
   return (
@@ -119,32 +140,34 @@ export function EventAIDrawer({ event, onClose, onAsk }: { event: EventRow | nul
         <section>
           <Flex justify="space-between" align="center" style={{ marginBottom: 8 }}>
             <Typography.Text strong><RobotOutlined /> {t('aiReading')}</Typography.Text>
-            {explain.data && <Button size="small" type="text" icon={<ReloadOutlined />} loading={explain.isFetching} onClick={() => explain.refetch()}>{t('reexplain')}</Button>}
+            {x && canWrite && <Button size="small" type="text" icon={<ReloadOutlined />} loading={start.isPending} onClick={() => start.mutate(true)}>{t('reexplain')}</Button>}
           </Flex>
-          {!canWrite ? <Alert type="info" showIcon title={t('explainNeedsAnalyst')} />
-            : explain.isPending ? (
-              <div className="ai-reading">
-                <Typography.Text type="secondary">{t('aiReadingNow', { n: all.length })}</Typography.Text>
-                <Skeleton active paragraph={{ rows: 3 }} title={false} style={{ marginTop: 8 }} />
-              </div>
-            ) : explain.isError ? (
-              <Alert type="warning" showIcon title={errText(explain.error, t)} action={<Button size="small" onClick={() => explain.refetch()}>{t('retry')}</Button>} />
-            ) : (
-              <div className={`ai-verdict ai-verdict-${explain.data.verdict}`}>
-                <Space size={8} align="start">
-                  <Verdict v={explain.data.verdict} />
-                  <Typography.Text strong style={{ fontSize: 15 }}>{explain.data.title}</Typography.Text>
-                </Space>
-                <Typography.Paragraph style={{ margin: '10px 0 0' }}>{explain.data.summary}</Typography.Paragraph>
-                {explain.data.points.length > 0 && <ul className="ai-points">{explain.data.points.map(p => <li key={p}>{p}</li>)}</ul>}
-                {explain.data.next.length > 0 && (
-                  <>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('nextSteps')}</Typography.Text>
-                    <ol className="action-list" style={{ marginTop: 6 }}>{explain.data.next.map(n => <li key={n}>{n}</li>)}</ol>
-                  </>
-                )}
-              </div>
-            )}
+          {explain.isError ? <Alert type="warning" showIcon title={errText(explain.error, t)} action={<Button size="small" onClick={() => explain.refetch()}>{t('retry')}</Button>} />
+            : start.isError ? <Alert type="warning" showIcon title={errText(start.error, t)} action={<Button size="small" onClick={() => start.mutate(true)}>{t('retry')}</Button>} />
+              : status === 'failed' ? <Alert type="warning" showIcon title={explain.data?.error || t('explainFailed')} action={canWrite && <Button size="small" onClick={() => start.mutate(true)}>{t('retry')}</Button>} />
+                : x ? (
+                  <div className={`ai-verdict ai-verdict-${x.verdict}`}>
+                    <Space size={8} align="start">
+                      <Verdict v={x.verdict} />
+                      <Typography.Text strong style={{ fontSize: 15 }}>{x.title}</Typography.Text>
+                    </Space>
+                    <Typography.Paragraph style={{ margin: '10px 0 0' }}>{x.summary}</Typography.Paragraph>
+                    {x.points.length > 0 && <ul className="ai-points">{x.points.map(p => <li key={p}>{p}</li>)}</ul>}
+                    {x.next.length > 0 && (
+                      <>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('nextSteps')}</Typography.Text>
+                        <ol className="action-list" style={{ marginTop: 6 }}>{x.next.map(n => <li key={n}>{n}</li>)}</ol>
+                      </>
+                    )}
+                  </div>
+                ) : status === 'none' && !canWrite ? <Alert type="info" showIcon title={t('explainNeedsAnalyst')} />
+                  : (
+                    <div className="ai-reading">
+                      <Typography.Text type="secondary">{t('aiReadingNow', { n: all.length })}</Typography.Text>
+                      <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: 2 }}>{t('aiBackgroundHint')}</Typography.Text>
+                      <Skeleton active paragraph={{ rows: 3 }} title={false} style={{ marginTop: 8 }} />
+                    </div>
+                  )}
         </section>
 
         {/* AI 挑出的相关日志 */}

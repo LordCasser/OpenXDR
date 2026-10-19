@@ -115,8 +115,10 @@ export function EventsPage() {
           dataSource={data?.items ?? []}
           pagination={{ pageSize: 50, hideOnSinglePage: true }}
           // 点整行展开；展开后可以顺着这条往外翻：只看这台主机，或看同主机前后 5 分钟的全部日志
+          // 窄屏省掉展开列与问 AI 列，把宽度留给摘要；点整行展开后两者都在
           expandable={{
             expandRowByClick: true,
+            showExpandColumn: wideTable,
             expandedRowRender: r => {
               // 进程 GUID 出现在它自己的启停、子进程、连接与 DNS 事件里：按它全文检索就是这个进程的全部活动
               const guid: string | undefined = (r.raw as { process?: { uid?: string } } | null)?.process?.uid
@@ -159,7 +161,7 @@ export function EventsPage() {
                   <span className="ev-summary">
                     {!wideTable && <EventKind classUid={r.classUid} compact />}
                     {act && <span className={`ev-act ev-act-${act.tone}`}>{act.label}</span>}
-                    <Typography.Text className="mono" copyable={{ text, onCopy: e => e?.stopPropagation() }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ flex: 1, minWidth: 0 }}>
+                    <Typography.Text className="mono ev-copy" copyable={wideTable && { text, onCopy: e => e?.stopPropagation() }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ flex: 1, minWidth: 0 }}>
                       {text}
                     </Typography.Text>
                   </span>
@@ -168,7 +170,7 @@ export function EventsPage() {
             },
             { responsive: WIDE_ONLY, title: t('thUser'), dataIndex: 'username', width: 110, render: v => v || '-' },
             {
-              title: '', key: 'ask', width: 44,
+              responsive: WIDE_ONLY, title: '', key: 'ask', width: 44,
               render: (_, r) => (
                 <Tooltip title={t('askAI')}>
                   <Button type="text" size="small" className="row-actions" aria-label={t('askAI')} icon={<RobotOutlined />}

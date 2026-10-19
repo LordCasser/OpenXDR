@@ -8,6 +8,37 @@ import (
 )
 
 var (
+	// AiJobsColumns holds the columns for the "ai_jobs" table.
+	AiJobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "kind", Type: field.TypeString},
+		{Name: "subject", Type: field.TypeString},
+		{Name: "owner", Type: field.TypeString},
+		{Name: "variant", Type: field.TypeString, Default: ""},
+		{Name: "status", Type: field.TypeString, Default: "running"},
+		{Name: "result", Type: field.TypeJSON, Nullable: true},
+		{Name: "error", Type: field.TypeString, Default: ""},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AiJobsTable holds the schema information for the "ai_jobs" table.
+	AiJobsTable = &schema.Table{
+		Name:       "ai_jobs",
+		Columns:    AiJobsColumns,
+		PrimaryKey: []*schema.Column{AiJobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "aijob_kind_subject_variant_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AiJobsColumns[2], AiJobsColumns[3], AiJobsColumns[5], AiJobsColumns[1]},
+			},
+			{
+				Name:    "aijob_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AiJobsColumns[1]},
+			},
+		},
+	}
 	// AiUsagesColumns holds the columns for the "ai_usages" table.
 	AiUsagesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -540,6 +571,7 @@ var (
 		{Name: "resolution", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "resolved_by", Type: field.TypeString, Nullable: true},
 		{Name: "resolved_at", Type: field.TypeTime, Nullable: true},
+		{Name: "resolution_source", Type: field.TypeString, Nullable: true},
 		{Name: "closure_proposal", Type: field.TypeJSON, Nullable: true},
 	}
 	// IncidentsTable holds the schema information for the "incidents" table.
@@ -825,6 +857,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AiJobsTable,
 		AiUsagesTable,
 		AgentSessionsTable,
 		AlertsTable,

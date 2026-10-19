@@ -33,6 +33,8 @@ const (
 	FieldResolvedBy = "resolved_by"
 	// FieldResolvedAt holds the string denoting the resolved_at field in the database.
 	FieldResolvedAt = "resolved_at"
+	// FieldResolutionSource holds the string denoting the resolution_source field in the database.
+	FieldResolutionSource = "resolution_source"
 	// FieldClosureProposal holds the string denoting the closure_proposal field in the database.
 	FieldClosureProposal = "closure_proposal"
 	// EdgeAlerts holds the string denoting the alerts edge name in mutations.
@@ -60,6 +62,7 @@ var Columns = []string{
 	FieldResolution,
 	FieldResolvedBy,
 	FieldResolvedAt,
+	FieldResolutionSource,
 	FieldClosureProposal,
 }
 
@@ -123,6 +126,11 @@ func ByResolvedBy(opts ...sql.OrderTermOption) OrderOption {
 // ByResolvedAt orders the results by the resolved_at field.
 func ByResolvedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldResolvedAt, opts...).ToFunc()
+}
+
+// ByResolutionSource orders the results by the resolution_source field.
+func ByResolutionSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldResolutionSource, opts...).ToFunc()
 }
 
 // ByAlertsCount orders the results by alerts count.

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"openxdr/server/ent/agentsession"
+	"openxdr/server/ent/aijob"
 	"openxdr/server/ent/aiusage"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/approval"
@@ -42,6 +43,28 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	aijobFields := schema.AIJob{}.Fields()
+	_ = aijobFields
+	// aijobDescCreatedAt is the schema descriptor for created_at field.
+	aijobDescCreatedAt := aijobFields[1].Descriptor()
+	// aijob.DefaultCreatedAt holds the default value on creation for the created_at field.
+	aijob.DefaultCreatedAt = aijobDescCreatedAt.Default.(func() time.Time)
+	// aijobDescVariant is the schema descriptor for variant field.
+	aijobDescVariant := aijobFields[5].Descriptor()
+	// aijob.DefaultVariant holds the default value on creation for the variant field.
+	aijob.DefaultVariant = aijobDescVariant.Default.(string)
+	// aijobDescStatus is the schema descriptor for status field.
+	aijobDescStatus := aijobFields[6].Descriptor()
+	// aijob.DefaultStatus holds the default value on creation for the status field.
+	aijob.DefaultStatus = aijobDescStatus.Default.(string)
+	// aijobDescError is the schema descriptor for error field.
+	aijobDescError := aijobFields[8].Descriptor()
+	// aijob.DefaultError holds the default value on creation for the error field.
+	aijob.DefaultError = aijobDescError.Default.(string)
+	// aijobDescID is the schema descriptor for id field.
+	aijobDescID := aijobFields[0].Descriptor()
+	// aijob.DefaultID holds the default value on creation for the id field.
+	aijob.DefaultID = aijobDescID.Default.(func() uuid.UUID)
 	aiusageFields := schema.AIUsage{}.Fields()
 	_ = aiusageFields
 	// aiusageDescTs is the schema descriptor for ts field.

@@ -15,23 +15,23 @@ const STAGES = [
 
 const COPY = {
   "zh-CN": {
-    kicker: "纳管即安全",
+    kicker: "安全",
     title: (
       <>
-        一万条告警进来，
+        噪音，止步于此。
         <br />
-        <span className="text-neutral-500">三个真事件出去。</span>
+        <span className="text-neutral-500">留下的，都值得一看。</span>
       </>
     ),
-    body: "主机一上线，进程、文件、登录、外连就开始流进来。往下滚，看它们一道道闸门被筛掉——留下来的，才值得你看。",
+    body: "进程、文件、登录、外连，主机一上线就源源不断。\n往下滚，看它们一层层被筛掉。",
     demo: "示意数据",
     stages: [
-      ["原始事件", "agent、流量探针与 syslog 一天的量"],
-      ["规则与情报命中", "Sigma 规则 + IP / 域名 / 哈希情报碰撞"],
-      ["去重", "同一主机同一规则的重复告警只留一条并计数"],
-      ["误报抑制", "分析师掐掉的噪声源，可撤销、有有效期"],
-      ["关联成事件", "按主机、进程血缘、用户把告警串成攻击故事"],
-      ["AI 研判后需要你看", "带工具查证后定性；低危良性 7 天后自动结案"],
+      ["全部遥测", "agent、流量探针与 syslog，一天的量"],
+      ["命中规则与情报", "Sigma 规则，加上 IP、域名、哈希情报"],
+      ["合并重复", "同一主机、同一规则，只留一条"],
+      ["滤掉已知误报", "你掐掉的噪声，可撤销，会过期"],
+      ["串成事件", "按主机、进程血缘和用户，连成一个故事"],
+      ["值得你看的", "AI 查证后定性，低危良性 7 天后自动结案"],
     ],
     incidents: [
       {
@@ -43,27 +43,27 @@ const COPY = {
       { host: "db-01", title: "新增 sudo 账户 tmpadmin", verdict: "可疑 · 需复核" },
       { host: "gw-01", title: "首次出现的进程监听 4444 端口", verdict: "可疑 · 需复核" },
     ],
-    closed: "其余 24 个：AI 判良性、低危，到期自动结案并留审计",
-    scroll: "继续往下滚",
+    closed: "其余 24 件，AI 判为低危良性，到期自动结案，全程留痕。",
+    scroll: "继续滚动",
   },
   en: {
-    kicker: "Onboarded means secured",
+    kicker: "Secure",
     title: (
       <>
-        Ten thousand alerts in,
+        Noise stops here.
         <br />
-        <span className="text-neutral-500">three real incidents out.</span>
+        <span className="text-neutral-500">What's left is worth your time.</span>
       </>
     ),
-    body: "The moment a host is online, processes, files, logons and connections start flowing in. Keep scrolling and watch them filtered gate by gate — what survives is what deserves your attention.",
+    body: "Processes, files, logons, connections. Once a host is online, they never stop.\nScroll, and watch them filtered away, layer by layer.",
     demo: "Illustrative",
     stages: [
-      ["Raw events", "a day from agents, the network sensor and syslog"],
-      ["Rule & intel hits", "Sigma rules + IP / domain / hash intel matching"],
-      ["Dedup", "repeats of the same rule on the same host collapse into one"],
-      ["Suppression", "noise sources analysts muted — revocable, with expiry"],
-      ["Correlated incidents", "alerts stitched by host, process lineage and user"],
-      ["Need you after AI triage", "investigated with tools; low-risk benign ones auto-close in 7 days"],
+      ["All telemetry", "a day from agents, sensors and syslog"],
+      ["Rule & intel hits", "Sigma rules, plus IP, domain and hash intel"],
+      ["Duplicates merged", "same host, same rule, one alert"],
+      ["Known noise muted", "what you've silenced — revocable, and it expires"],
+      ["Stitched into incidents", "by host, process lineage and user"],
+      ["Worth your time", "verified by AI; low-risk benign ones close in 7 days"],
     ],
     incidents: [
       {
@@ -75,7 +75,7 @@ const COPY = {
       { host: "db-01", title: "New sudo account tmpadmin", verdict: "Suspicious · review" },
       { host: "gw-01", title: "First-seen process listening on 4444", verdict: "Suspicious · review" },
     ],
-    closed: "The other 24: benign and low-risk per AI, auto-closed later with an audit trail",
+    closed: "The other 24: low-risk and benign. Closed on schedule, every step on record.",
     scroll: "Keep scrolling",
   },
 };
@@ -103,7 +103,8 @@ export function Funnel() {
 
   return (
     <section id="secure" className="relative scroll-mt-20">
-      <div className="mx-auto max-w-[1400px] px-4 pt-28 sm:px-6 lg:px-8">
+      {/* 窄屏标题放在吸顶区之前；宽屏放进吸顶区左栏，免得标题和漏斗之间空出一整屏 */}
+      <div className="mx-auto max-w-[1400px] px-4 pt-28 sm:px-6 lg:hidden lg:px-8">
         <ChapterHead index="02" kicker={t.kicker} title={t.title} body={t.body} tone="rose" />
       </div>
       {/* 滚动驱动：外层撑出滚动距离，内层吸顶，按滚动进度推进闸门 */}
@@ -111,7 +112,10 @@ export function Funnel() {
       <div className="sticky top-0 flex h-screen items-center overflow-hidden px-4 sm:px-6 lg:px-8">
         <div className="mx-auto grid w-full max-w-[1400px] gap-6 lg:grid-cols-2 lg:items-center lg:gap-10">
           <div>
-            <p className="mb-4 font-mono text-xs uppercase tracking-[0.22em] text-rose-300">02 · {t.kicker}</p>
+            <p className="mb-4 font-mono text-xs uppercase tracking-[0.22em] text-rose-300 lg:hidden">02 · {t.kicker}</p>
+            <div className="mb-10 hidden lg:block">
+              <ChapterHead index="02" kicker={t.kicker} title={t.title} body={t.body} tone="rose" />
+            </div>
             <div className="relative">
               {/* 左侧进度线随滚动填满 */}
               <div className="absolute bottom-2 left-0 top-2 w-px bg-white/10" />

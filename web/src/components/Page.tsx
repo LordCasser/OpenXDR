@@ -24,7 +24,7 @@ export function Page({ title, subtitle, extra, crumb, children }: {
     ...(crumb ? [{ title: crumb }] : []),
   ]
   return (
-    <div className="page">
+    <div className={crumb ? 'page page-detail' : 'page'}>
       <Breadcrumb items={items} className="page-crumb" />
       <Flex justify="space-between" align="flex-start" gap={16} wrap className="page-head">
         <div>

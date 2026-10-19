@@ -30,9 +30,10 @@ export default function Footer12() {
             {
               title: "平台",
               links: [
-                { label: "纳管", href: "#onboard" },
+                { label: "接入", href: "#onboard" },
                 { label: "安全", href: "#secure" },
                 { label: "运维", href: "#operate" },
+                { label: "资产", href: "#surface" },
                 { label: "开始", href: "#start" },
               ],
             },
@@ -74,6 +75,7 @@ export default function Footer12() {
                 { label: "Onboard", href: "#onboard" },
                 { label: "Secure", href: "#secure" },
                 { label: "Operate", href: "#operate" },
+                { label: "Assets", href: "#surface" },
                 { label: "Start", href: "#start" },
               ],
             },

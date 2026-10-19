@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Col, Empty, Input, Popconfirm, Result, Row, Space, Spin, Table, Tabs, Tag, Typography } from 'antd'
 import { useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { createPolicy, deletePolicy, fetchApprovals, fetchAssets, fetchPolicies, type Approval, type CommandPolicy } from '../api'
+import { createPolicy, deletePolicy, fetchApprovals, fetchPolicies, type Approval, type CommandPolicy } from '../api'
 import { useSession } from '../app/session'
 import { HostLink } from '../components/HostLink'
 import { ApprovalActions } from '../components/ApprovalActions'
@@ -53,7 +53,7 @@ function PolicyCard({ groupId, origin, rows }: { groupId: string; origin: 'ai' |
         rowKey="id"
         pagination={false}
         dataSource={rows.filter(p => p.origin === origin)}
-        locale={{ emptyText: t('policyEmpty') }}
+        locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('policyEmpty')} /> }}
         columns={[
           { dataIndex: 'pattern', render: v => <code className="cmd-cell">{v}</code> },
           {
@@ -86,7 +86,6 @@ export function ApprovalsPage() {
     refetchInterval: 3_000,
   })
   const policies = useQuery({ queryKey: ['policies', group?.id], queryFn: () => fetchPolicies(group!.id), enabled: !!group && isGroupAdmin })
-  const { data: hosts = {} } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, select: as => Object.fromEntries(as.map(a => [a.id, a.hostname])) })
 
   if (!group) return <Empty style={{ marginTop: 120 }} description={t('noGroupsHint')} />
   if (!isGroupAdmin) return <Result status="403" title="403" subTitle={t('groupAdminOnly', { name: group.name })} />
@@ -105,7 +104,7 @@ export function ApprovalsPage() {
           {
             title: t('actions'), width: 150,
             render: (_: unknown, a: Approval) => (
-              <ApprovalActions approval={a} host={hosts[a.asset_id] ?? a.asset_id} onDecided={() => { void approvals.refetch() }} />
+              <ApprovalActions approval={a} onDecided={() => { void approvals.refetch() }} />
             ),
           },
         ]

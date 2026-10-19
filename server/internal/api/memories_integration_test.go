@@ -109,3 +109,57 @@ func TestClosureProposalLifecycle(t *testing.T) {
 		t.Fatalf("忽略后建议应清掉、状态不变: %+v", inc)
 	}
 }
+
+// 结论与 AI 研判一致时可以不写理由（说明取研判摘要、记为 ai_verdict）；相反或没研判时必须写；
+// 原样采纳 AI 结案建议记为 ai_proposal。这两种都不当人工案例
+func TestCloseWithoutNote(t *testing.T) {
+	ctx, client := testdb.New(t)
+	g := client.Group.Create().SetName("A").SaveX(ctx)
+	host := client.Asset.Create().SetHostname("pve1").SetGroupID(g.ID).SaveX(ctx)
+	mk := func(verdict string) uuid.UUID {
+		c := client.Incident.Create().SetGraph(json.RawMessage(`{}`)).SetStatus("triaged")
+		if verdict != "" {
+			c.SetAiVerdict(json.RawMessage(`{"verdict":"` + verdict + `","confidence":80,"summary":"Termix 面板 SSH 健康检查"}`))
+		}
+		inc := c.SaveX(ctx)
+		client.Alert.Create().SetTs(time.Now()).SetRuleID("r").SetSeverity(3).SetAssetID(host.ID).SetIncidentID(inc.ID).SaveX(ctx)
+		return inc.ID
+	}
+	h := Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
+	ts := httptest.NewServer(asAdmin(h))
+	t.Cleanup(ts.Close)
+	status := func(id uuid.UUID, body string) int {
+		resp, err := http.Post(ts.URL+"/api/incidents/"+id.String()+"/status", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	benign := mk("benign")
+	if code := status(benign, `{"status":"closed"}`); code != http.StatusBadRequest {
+		t.Errorf("AI 判良性却按属实关、不写理由应 400，得到 %d", code)
+	}
+	if code := status(benign, `{"status":"false_positive"}`); code != http.StatusNoContent {
+		t.Fatalf("与研判一致可以不写理由，得到 %d", code)
+	}
+	if inc := client.Incident.GetX(ctx, benign); inc.ResolutionSource == nil || *inc.ResolutionSource != "ai_verdict" ||
+		inc.Resolution == nil || !strings.Contains(*inc.Resolution, "Termix 面板 SSH 健康检查") {
+		t.Errorf("说明应取研判摘要并标来源: %+v", inc)
+	}
+	if code := status(mk(""), `{"status":"false_positive"}`); code != http.StatusBadRequest {
+		t.Errorf("没有研判时不写理由应 400，得到 %d", code)
+	}
+	proposed := mk("benign")
+	client.Incident.UpdateOneID(proposed).SetClosureProposal(&schema.ClosureProposal{Status: "false_positive", Note: "AI 写的结案说明", SessionID: uuid.New(), At: time.Now()}).ExecX(ctx)
+	if code := status(proposed, `{"status":"false_positive","note":"AI 写的结案说明"}`); code != http.StatusNoContent {
+		t.Fatalf("采纳建议应 204，得到 %d", code)
+	}
+	if inc := client.Incident.GetX(ctx, proposed); inc.ResolutionSource == nil || *inc.ResolutionSource != "ai_proposal" {
+		t.Errorf("原样采纳 AI 建议应记为 ai_proposal: %+v", inc.ResolutionSource)
+	}
+	human := mk("benign")
+	if code := status(human, `{"status":"false_positive","note":"我看过了，是运维脚本"}`); code != http.StatusNoContent || client.Incident.GetX(ctx, human).ResolutionSource != nil {
+		t.Errorf("人自己写的理由不标来源")
+	}
+}

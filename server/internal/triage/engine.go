@@ -261,6 +261,8 @@ func (e *Engine) appendCaseHistory(ctx context.Context, sb *strings.Builder, inc
 			incident.StatusIn("closed", "false_positive"),
 			// 系统自动结案只是复述 AI 自己的结论，不能当人工案例喂回来自我强化
 			incident.Or(incident.ResolvedByIsNil(), incident.ResolvedByNEQ(review.ClosedBy)),
+			// 采纳 AI 研判或 AI 结案建议的结案同理：说明是 AI 写的，不是人的判断
+			incident.ResolutionSourceIsNil(),
 			incident.HasAlertsWith(alert.Or(related...), alert.TsGTE(time.Now().AddDate(0, 0, -90))),
 		).
 		Order(ent.Desc(incident.FieldCreatedAt)).

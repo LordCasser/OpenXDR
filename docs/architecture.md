@@ -12,7 +12,7 @@
 |---|---|---|---|
 | agent | Rust | 不监听（主动连出） | 端点采集（Linux/Windows）+ 响应执行 |
 | sensor | Rust | 不监听（主动连出） | 全流量会话元数据（仅 Linux） |
-| server | Go 1.25 + Ent | `:8080` REST/健康/指标、`:8081` gRPC、syslog UDP+TCP（可选） | 可横向扩展的 gateway + worker；接入、检测、关联、研判、响应 |
+| server | Go 1.26 + Ent | `:8080` REST/健康/指标、`:8081` gRPC、syslog UDP+TCP（可选） | 可横向扩展的 gateway + worker；接入、检测、关联、研判、响应 |
 | web | React 19 + Vite | nginx `:5173→80` | 管理控制台 |
 | NATS JetStream | — | `:4222`，监控 `:8222` | 持久事件队列、按资产分片、故障重投、跨节点指令路由 |
 | PostgreSQL | — | `:5432` | 事实存储、持久去重状态、后台任务租约 |

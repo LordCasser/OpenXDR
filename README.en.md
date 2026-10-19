@@ -11,7 +11,7 @@ An open-source XDR platform: EDR + SIEM + network traffic analysis, with AI-driv
 and it immediately gets continuous collection, detection, daily inspection and an AI assistant you can talk to.
 People make the calls instead of digging through alert lists.
 
-**Ten thousand alerts in, three real incidents out.**
+**Noise stops here. What's left is worth your time.**
 
 > Detailed documentation under `docs/` is currently written in Chinese.
 
@@ -66,7 +66,28 @@ People make the calls instead of digging through alert lists.
    PostgreSQL ←→ Web console (React)
 ```
 
-## Quick start
+## Install
+
+On a Linux server with Docker, one command:
+
+```bash
+curl -fsSL https://github.com/yaklang/OpenXDR/releases/latest/download/install.sh | sudo sh -s -- <console-domain-or-ip>
+```
+
+The script generates passwords and keys, issues mTLS certificates and sets up HTTPS (a Let's Encrypt certificate for
+domains that resolve to a public IP, a private CA for internal addresses), then starts everything and prints the console
+URL and admin password. Log in, connect any OpenAI-compatible endpoint under "Settings → AI models", then copy the install
+command from "Assets → Add host" onto the hosts you want to monitor. Running it again upgrades.
+
+**Or let your AI agent do it** (Claude Code, Codex, Cursor, … running on the target server) — send it this:
+
+```text
+Install OpenXDR on this server, following https://github.com/yaklang/OpenXDR/blob/master/docs/install.md exactly:
+check the environment, ask me which domain or IP the console should use, run the installer, then tell me the console URL,
+the admin password and the commands managed hosts need to trust the CA.
+```
+
+See [Install](docs/install.md) (Chinese) for verification, upgrades, backups and troubleshooting. To build from source for development:
 
 ```bash
 docker compose up -d
@@ -74,20 +95,11 @@ docker compose up -d
 docker compose logs server | grep admin   # admin password generated on first start
 ```
 
-Connect any OpenAI-compatible endpoint to enable AI triage and the AI assistant:
-
-```bash
-AI_BASE_URL=http://<inference>/v1 AI_MODEL=<model> PI_MODEL=<model> docker compose up -d
-```
-
-Then copy the install command from "Assets → Add host" and run it on the monitored host. Onboarding requires
-an HTTPS console and mTLS; see the [deployment guide](docs/deployment.md) for the full steps,
-collection modes, mTLS, intel, suppression, response actions and every configuration variable.
-
 ## Documentation
 
 | Document | Content |
 |---|---|
+| [Install](docs/install.md) | One-line install, verification, upgrades and backups; also the install guide for AI agents (Chinese) |
 | [Deployment guide](docs/deployment.md) | Startup, onboarding, logs and intel, suppression and response, mTLS, configuration |
 | [High availability](deploy/ha/README.md) | Patroni + 3-node JetStream + Keepalived VIP, rolling release |
 | [Asset map and attack surface](docs/asset-map.md) | Inventory, dependencies, zones, risk scores and AI annotation |

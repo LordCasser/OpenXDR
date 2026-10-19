@@ -12,6 +12,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// AIJob is the client for interacting with the AIJob builders.
+	AIJob *AIJobClient
 	// AIUsage is the client for interacting with the AIUsage builders.
 	AIUsage *AIUsageClient
 	// AgentSession is the client for interacting with the AgentSession builders.
@@ -201,6 +203,7 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.AIJob = NewAIJobClient(tx.config)
 	tx.AIUsage = NewAIUsageClient(tx.config)
 	tx.AgentSession = NewAgentSessionClient(tx.config)
 	tx.Alert = NewAlertClient(tx.config)
@@ -239,7 +242,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: AIUsage.QueryXXX(), the query will be executed
+// applies a query, for example: AIJob.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

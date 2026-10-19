@@ -43,7 +43,7 @@ export function LoginPage() {
         <Space orientation="vertical" size={14} style={{ marginTop: 36 }}>
           {POINTS.map(k => (
             <Space key={k} size={10} align="start">
-              <CheckCircleFilled style={{ color: '#91caff', marginTop: 4 }} />
+              <CheckCircleFilled style={{ color: '#2997ff', marginTop: 4 }} />
               <span className="login-hero-point">{t(k)}</span>
             </Space>
           ))}
@@ -52,7 +52,7 @@ export function LoginPage() {
       <div className="login-panel" style={{ background: token.colorBgContainer }}>
         <div className="login-form">
           <div className="login-mobile-brand"><Logo size={36} /><span className="brand-name">OpenXDR</span></div>
-          <Typography.Title level={3} style={{ marginBottom: 4 }}>{t('signInTitle')}</Typography.Title>
+          <Typography.Title level={2} style={{ marginBottom: 6, fontWeight: 700, letterSpacing: '-.022em' }}>{t('signInTitle')}</Typography.Title>
           <Typography.Text type="secondary">{t('signInHint')}</Typography.Text>
           <Form disabled={busy} layout="vertical" size="large" onFinish={submit} requiredMark={false} style={{ marginTop: 32 }}>
             <Form.Item label={t('username')} name="username" rules={[{ required: true, message: t('usernameRequired') }]}>

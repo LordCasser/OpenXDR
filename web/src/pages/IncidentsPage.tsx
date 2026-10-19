@@ -12,6 +12,7 @@ import { useRowLink } from '../components/rowLink'
 import { useFlash } from '../components/useFlash'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
+import { agreesWithAI, verdictStatus } from '../components/verdict'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
 import { FilterCard, Page, STICKY_HEADER, WIDE_ONLY, useWideTable } from '../components/Page'
 import { useI18n, type MsgKey } from '../i18n'
@@ -69,6 +70,23 @@ export function IncidentsPage() {
     setParams({ ...(s !== 'review' && { status: s }), ...((next.page ?? 1) > 1 && { page: String(next.page) }) })
   }
 
+  // 按 AI 研判结案：每条按自己的研判结论关（良性 → 误报，恶意或可疑 → 属实），不写理由、不弹窗；没研判的不动
+  const adoptable = picked.filter(r => verdictStatus(r.aiVerdict))
+  const [adopting, setAdopting] = useState(false)
+  const adoptVerdicts = async () => {
+    setAdopting(true)
+    const results = await Promise.allSettled(adoptable.map(r => setIncidentStatus(r.id, verdictStatus(r.aiVerdict)!, '')))
+    setAdopting(false)
+    const failed = adoptable.filter((_, i) => results[i].status === 'rejected').map(r => r.id)
+    client.invalidateQueries({ queryKey: ['incidents'] })
+    if (failed.length < results.length) message.success(t('batchDone', { n: results.length - failed.length }))
+    setSelected(failed)
+    if (failed.length) {
+      const reason = (results.find(r => r.status === 'rejected') as PromiseRejectedResult).reason
+      message.error(t('batchFailed', { n: failed.length, err: errText(reason, t) }))
+    }
+  }
+
   // 逐条走单个接口：组内权限与审计照旧。失败的留在勾选里、弹窗不关，备注不丢
   const batch = async (next: string, note: string) => {
     if (!selected.length) {
@@ -103,7 +121,10 @@ export function IncidentsPage() {
                   <Button size="small" type="primary" icon={<RobotOutlined />} loading={handoff.busy}
                     disabled={!sameGroup || picked.length > 10 || !canChat(pickedGroup)} onClick={() => handTo(picked)}>{t('handoffToAI')}</Button>
                 </Tooltip>
-                <Button size="small" onClick={() => setResolving('closed')}>{t('close')}</Button>
+                {adoptable.length > 0 && (
+                  <Button size="small" type="primary" ghost loading={adopting} onClick={adoptVerdicts}>{t('adoptVerdicts', { n: adoptable.length })}</Button>
+                )}
+                <Button size="small" onClick={() => setResolving('closed')}>{t('markTrue')}</Button>
                 <Button size="small" danger onClick={() => setResolving('false_positive')}>{t('markFp')}</Button>
               </>
             )}
@@ -170,7 +191,7 @@ export function IncidentsPage() {
                 render: (_: unknown, r: IncidentSummary) => actable(r) && (
                   <Space size={0} className="row-actions">
                     {canChat(r.groupId) && <Button type="link" size="small" icon={<RobotOutlined />} onClick={() => handTo([r])}>AI</Button>}
-                    <Button type="link" size="small" onClick={() => { setSelected([r.id]); setResolving('closed') }}>{t('close')}</Button>
+                    <Button type="link" size="small" onClick={() => { setSelected([r.id]); setResolving('closed') }}>{t('markTrue')}</Button>
                     <Button type="link" size="small" danger onClick={() => { setSelected([r.id]); setResolving('false_positive') }}>{t('markFpShort')}</Button>
                   </Space>
                 ),
@@ -183,6 +204,8 @@ export function IncidentsPage() {
         open={!!resolving}
         title={`${t(resolving === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')} · ${t('batchSelected', { n: selected.length })}`}
         hint={t('resolveHint')}
+        optional={picked.length > 0 && picked.every(r => agreesWithAI(r.aiVerdict, resolving))}
+        contradicts={picked.some(r => verdictStatus(r.aiVerdict) && !agreesWithAI(r.aiVerdict, resolving))}
         onCancel={() => setResolving(null)}
         onSubmit={note => batch(resolving!, note)}
       />

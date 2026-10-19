@@ -191,6 +191,26 @@ func (_u *IncidentUpdate) ClearResolvedAt() *IncidentUpdate {
 	return _u
 }
 
+// SetResolutionSource sets the "resolution_source" field.
+func (_u *IncidentUpdate) SetResolutionSource(v string) *IncidentUpdate {
+	_u.mutation.SetResolutionSource(v)
+	return _u
+}
+
+// SetNillableResolutionSource sets the "resolution_source" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableResolutionSource(v *string) *IncidentUpdate {
+	if v != nil {
+		_u.SetResolutionSource(*v)
+	}
+	return _u
+}
+
+// ClearResolutionSource clears the value of the "resolution_source" field.
+func (_u *IncidentUpdate) ClearResolutionSource() *IncidentUpdate {
+	_u.mutation.ClearResolutionSource()
+	return _u
+}
+
 // SetClosureProposal sets the "closure_proposal" field.
 func (_u *IncidentUpdate) SetClosureProposal(v *schema.ClosureProposal) *IncidentUpdate {
 	_u.mutation.SetClosureProposal(v)
@@ -334,6 +354,12 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ResolvedAtCleared() {
 		_spec.ClearField(incident.FieldResolvedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ResolutionSource(); ok {
+		_spec.SetField(incident.FieldResolutionSource, field.TypeString, value)
+	}
+	if _u.mutation.ResolutionSourceCleared() {
+		_spec.ClearField(incident.FieldResolutionSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.ClosureProposal(); ok {
 		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)
@@ -564,6 +590,26 @@ func (_u *IncidentUpdateOne) ClearResolvedAt() *IncidentUpdateOne {
 	return _u
 }
 
+// SetResolutionSource sets the "resolution_source" field.
+func (_u *IncidentUpdateOne) SetResolutionSource(v string) *IncidentUpdateOne {
+	_u.mutation.SetResolutionSource(v)
+	return _u
+}
+
+// SetNillableResolutionSource sets the "resolution_source" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableResolutionSource(v *string) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetResolutionSource(*v)
+	}
+	return _u
+}
+
+// ClearResolutionSource clears the value of the "resolution_source" field.
+func (_u *IncidentUpdateOne) ClearResolutionSource() *IncidentUpdateOne {
+	_u.mutation.ClearResolutionSource()
+	return _u
+}
+
 // SetClosureProposal sets the "closure_proposal" field.
 func (_u *IncidentUpdateOne) SetClosureProposal(v *schema.ClosureProposal) *IncidentUpdateOne {
 	_u.mutation.SetClosureProposal(v)
@@ -737,6 +783,12 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if _u.mutation.ResolvedAtCleared() {
 		_spec.ClearField(incident.FieldResolvedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ResolutionSource(); ok {
+		_spec.SetField(incident.FieldResolutionSource, field.TypeString, value)
+	}
+	if _u.mutation.ResolutionSourceCleared() {
+		_spec.ClearField(incident.FieldResolutionSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.ClosureProposal(); ok {
 		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)

@@ -3,6 +3,7 @@ import { App, Button, Card, Popconfirm, Space, Table, Tag, Tooltip } from 'antd'
 import { Link } from 'react-router'
 import { deleteSuppression, fetchAssets, fetchSuppressions, reviewSuppression, type Suppression } from '../api'
 import { useSession } from '../app/session'
+import { EmptyHint } from '../components/Ago'
 import { HostLink } from '../components/HostLink'
 import { Page } from '../components/Page'
 import { fmtTime, errText } from '../components/format'
@@ -52,37 +53,36 @@ export function SuppressionsPage() {
           loading={isPending}
           dataSource={rows}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
-          locale={{ emptyText: t('noSuppressions') }}
+          scroll={{ x: 1580 }}
+          locale={{ emptyText: <EmptyHint title={t('noSuppressions')} hint={t('noSuppressionsHint')} /> }}
           columns={[
-            { title: t('thRule'), dataIndex: 'ruleTitle', render: (v, s) => <Tooltip title={s.ruleId}>{v ?? s.ruleId}</Tooltip> },
+            { title: t('thRule'), dataIndex: 'ruleTitle', width: 220, ellipsis: true, render: (v, s) => <Tooltip title={s.ruleId}>{v ?? s.ruleId}</Tooltip> },
             {
-              title: t('thStatus'), dataIndex: 'status', width: 110,
+              title: t('thStatus'), dataIndex: 'status', width: 90,
               render: (v: Suppression['status']) => <Tag color={v === 'proposed' ? 'gold' : v === 'rejected' ? 'default' : 'green'}>{t(v === 'proposed' ? 'supProposed' : v === 'rejected' ? 'supRejected' : 'supActive')}</Tag>,
             },
             { title: t('thScope'), dataIndex: 'assetId', width: 130, render: v => (v ? <HostLink id={v} /> : <Tag color="warning">{t('allHosts')}</Tag>) },
             {
-              title: t('supConditions'), dataIndex: 'conditions', width: 260,
+              title: t('supConditions'), dataIndex: 'conditions', width: 240,
               render: (v: Suppression['conditions']) => (v?.length
                 ? v.map(c => <div key={c.field + c.op + c.value} className="mono" style={{ fontSize: 12 }}>{c.field} {t(OP[c.op])} {c.value}</div>)
                 : <Tag color="warning">{t('supWholeRule')}</Tag>),
             },
             { title: t('reason'), dataIndex: 'reason', ellipsis: true, render: v => v ?? '-' },
-            { title: t('thMatched'), dataIndex: 'matchedCount', width: 100, align: 'right', sorter: (a, b) => a.matchedCount - b.matchedCount },
-            { title: t('thLastMatched'), dataIndex: 'lastMatchedAt', width: 170, render: fmtTime },
-            { title: t('thExpires'), dataIndex: 'expiresAt', width: 170, render: v => (v ? fmtTime(v) : t('longTerm')) },
+            { title: t('thMatched'), dataIndex: 'matchedCount', width: 110, align: 'right', sorter: (a, b) => a.matchedCount - b.matchedCount },
+            { title: t('thLastMatched'), dataIndex: 'lastMatchedAt', width: 160, render: fmtTime },
+            { title: t('thExpires'), dataIndex: 'expiresAt', width: 160, render: v => (v ? fmtTime(v) : t('longTerm')) },
             {
               title: t('thCreatedBy'), dataIndex: 'createdBy', width: 120,
               render: (v: string, s) => (s.sessionId ? <Space size={4}><Tag color="purple" variant="filled">AI</Tag><Link to={`/chat/${s.sessionId}`}>{t('openSession')}</Link></Space> : v),
             },
             ...(canWrite
               ? [{
-                  title: t('actions'), width: 150,
+                  title: t('actions'), width: 130,
                   render: (_: unknown, s: Suppression) => (
                     <Space size={0}>
                       {s.status === 'proposed' && canReview(s) && <>
-                        <Popconfirm title={t('supApproveConfirm')} onConfirm={() => review(s.id, 'approve')}>
-                          <Button type="link" size="small">{t('supApprove')}</Button>
-                        </Popconfirm>
+                        <Button type="link" size="small" onClick={() => review(s.id, 'approve')}>{t('supApprove')}</Button>
                         <Button type="link" size="small" onClick={() => review(s.id, 'reject')}>{t('supReject')}</Button>
                       </>}
                       {s.status !== 'proposed' && (

@@ -7,6 +7,9 @@ use std::time::SystemTime;
 
 use uuid::Uuid;
 
+use super::periodic::Periodic;
+use crate::pb::AgentEvent;
+
 /// 进程所在的容器或虚拟机（Linux 按 cgroup 识别），事件里原样写成 container 对象
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Container {
@@ -37,6 +40,10 @@ const MAX_ENTRIES: usize = 1 << 16;
 pub struct ProcessRegistry {
     guids: HashMap<u32, Entry>,
     seq: u64,
+    /// 周期行为折叠的状态（见 periodic）
+    pub periodic: Periodic,
+    /// 被折叠进程后来有了要上报的动静时，压着的启动事件移到这里，由下一次发事件的采集路径带出去
+    outbox: Vec<AgentEvent>,
 }
 
 struct Entry {
@@ -49,6 +56,10 @@ struct Entry {
     started: Option<SystemTime>,
     container: Option<Arc<Container>>,
     command: Option<Arc<str>>,
+    /// 父进程 pid：补发被折叠的祖先时沿它往上走
+    ppid: Option<u32>,
+    /// 被折叠、还没上报的启动事件
+    held: Option<AgentEvent>,
 }
 
 /// 注册表里记得的进程身份，退出事件靠它说清是谁退出了。
@@ -85,6 +96,8 @@ impl ProcessRegistry {
                 started: None,
                 container: None,
                 command: None,
+                ppid,
+                held: None,
             },
         );
 
@@ -147,6 +160,43 @@ impl ProcessRegistry {
     /// 早于 agent 启动的长驻服务，它们之后的网络连接就挂不回进程树了
     pub fn forget(&mut self, pid: u32) {
         self.guids.remove(&pid);
+    }
+
+    /// 压下一条被折叠的启动事件：它的退出也不再单独上报，除非之前被补发了
+    pub fn hold(&mut self, pid: u32, event: AgentEvent) {
+        if let Some(e) = self.guids.get_mut(&pid) {
+            e.held = Some(event);
+        }
+    }
+
+    /// 这个进程的启动是否被折叠且还没补发
+    pub fn is_held(&self, pid: u32) -> bool {
+        self.guids.get(&pid).is_some_and(|e| e.held.is_some())
+    }
+
+    /// 进程有了要上报的动静（不是周期行为的子进程、网络连接、DNS 查询）：把它和被折叠的祖先
+    /// 压着的启动事件移进待发，祖先在前。血缘按 GUID 串，晚到不影响，事件保留原本的启动时间
+    pub fn reveal(&mut self, pid: u32) {
+        let mut chain = Vec::new();
+        let mut next = Some(pid);
+        // 祖先链有限，深度封顶防止 pid 复用造成的环
+        while let Some(p) = next.take()
+            && chain.len() < 64
+        {
+            let Some(e) = self.guids.get_mut(&p) else {
+                break;
+            };
+            let Some(event) = e.held.take() else { break };
+            chain.push(event);
+            next = e.ppid;
+        }
+        chain.reverse();
+        self.outbox.append(&mut chain);
+    }
+
+    /// 取走待发的补发事件
+    pub fn take_outbox(&mut self) -> Vec<AgentEvent> {
+        std::mem::take(&mut self.outbox)
     }
 
     /// 查 pid 当前登记的身份。查不到说明既没见过它启动、也不在启动快照里。

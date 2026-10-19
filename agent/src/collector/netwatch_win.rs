@@ -71,13 +71,19 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
                 return;
             }
             // 进程没注册过（早于 agent 启动）就现场登记，保证事件一定挂得上 GUID
-            let (guid, name, exe) = {
+            // 连接归到被折叠的进程上：压着的启动事件（连同被折叠的祖先）先补发
+            let (guid, name, exe, revealed) = {
                 let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
-                match reg.known(pid) {
+                reg.reveal(pid);
+                let (guid, name, exe) = match reg.known(pid) {
                     Some(k) => (k.guid, Some(k.name), k.exe),
                     None => (reg.register(pid, None).0, None, None),
-                }
+                };
+                (guid, name, exe, reg.take_outbox())
             };
+            for event in revealed {
+                sink.send(event);
+            }
             sink.send(netwatch::conn_event(
                 &agent_id,
                 &ConnInfo {

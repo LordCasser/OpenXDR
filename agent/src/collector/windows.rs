@@ -5,8 +5,8 @@
 //! 进程退得太快时补不到细节，事件本身不丢。需要管理员权限；失败回落轮询。
 
 use super::{
-    ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, ProcessRegistry, poll,
-    process_event,
+    ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, ProcessRegistry, emit_process,
+    poll,
 };
 use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
@@ -45,7 +45,7 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
                 let ppid: Option<u32> = parser.try_parse("ParentProcessID").ok();
                 // 事件里没有命令行和用户名，现场从进程句柄补
                 let (cmd_line, username) = inspect::describe(pid);
-                let event = process_event(
+                let events = emit_process(
                     &cb_agent_id,
                     &mut reg,
                     ACTIVITY_LAUNCH,
@@ -59,13 +59,13 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
                         ..Default::default()
                     },
                 );
-                if let Some(event) = event {
+                for event in events {
                     cb_tx.send(event);
                 }
             } else {
                 // Stop：进程已退出，句柄多半开不到，命令行和用户名留空；
                 // GUID 走注册表复用启动时的映射
-                if let Some(event) = process_event(
+                for event in emit_process(
                     &cb_agent_id,
                     &mut reg,
                     ACTIVITY_TERMINATE,

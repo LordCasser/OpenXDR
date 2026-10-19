@@ -15,21 +15,22 @@ type Decision = "approve" | "reject";
 
 const COPY = {
   "zh-CN": {
-    kicker: "纳管即运维",
+    kicker: "运维",
     title: (
       <>
-        说一句话，
+        你说一句，
         <br />
-        <span className="text-neutral-500">它去主机上动手。</span>
+        <span className="text-neutral-500">它就去做。</span>
       </>
     ),
-    body: "AI 助手能在组内主机上执行命令、按组只读查库、登记待办、交报告。危险的那一步，停下来等你。",
+    body: "执行命令、查数据、记待办、写报告，都在组内主机上完成。\n到了危险的一步，它会停下来，等你。",
     points: [
-      "名单外的命令直接执行，不用每条都点批准",
-      "命中高风险名单的命令阻塞等组管理员批准，同时推送通知。它不是被拒绝，所以 AI 也没有理由绕路",
-      "对话在服务端后台运行，切页、关浏览器都不中断。事件与待办可多选「交给 AI」接着处理",
+      "寻常命令，直接执行，不用每条都点批准",
+      "高风险命令先暂停，再通知管理员。不是拒绝，所以它不必绕路",
+      "对话在服务端运行。关掉浏览器，它也不会停",
     ],
-    hint: "试试点「拒绝」，看它怎么收场。",
+    hint: "试试「拒绝」，看它如何收场。",
+    empty: "按下发送，看它巡检生产组。",
     console: "AI 助手 · 生产组",
     demo: "演示",
     send: "巡检一下生产组：磁盘、异常服务、可疑账户，能修的直接修。",
@@ -64,21 +65,22 @@ const COPY = {
     ],
   },
   en: {
-    kicker: "Onboarded means operated",
+    kicker: "Operate",
     title: (
       <>
-        Say it once,
+        You ask.
         <br />
-        <span className="text-neutral-500">it does the work on the hosts.</span>
+        <span className="text-neutral-500">It gets it done.</span>
       </>
     ),
-    body: "The AI assistant runs commands on the group's hosts, queries data through a read-only view, tracks findings and files reports. At the dangerous step, it stops and waits for you.",
+    body: "Run commands, query data, track findings, write reports — all on the group's hosts.\nAt the risky step, it stops and waits for you.",
     points: [
-      "Commands outside the list run directly — no clicking approve on every line",
-      "Commands on the high-risk list block until a group admin approves, with a notification. They aren't denied, so the AI has no reason to look for a way around",
-      "Conversations run in the background on the server. Switch pages or close the browser — nothing stops. Multi-select incidents and findings and hand them to the AI",
+      "Routine commands just run. No approving every line",
+      "High-risk commands pause and notify an admin. Not denied, so there's nothing to work around",
+      "Conversations run on the server. Close the browser; the work goes on",
     ],
-    hint: "Try clicking “Reject” and see how it wraps up.",
+    hint: "Try “Reject” and see how it wraps up.",
+    empty: "Press send and watch it check the prod group.",
     console: "AI assistant · prod",
     demo: "Demo",
     send: "Inspect the prod group: disks, failing services, suspicious accounts. Fix what you can.",
@@ -162,6 +164,12 @@ export function Assistant() {
         <div>
           <Console title={t.console} badge={<DemoBadge label={t.demo} />}>
             <div ref={list} className="h-[480px] space-y-3 overflow-y-auto p-5" aria-live="polite">
+              {step < 0 && (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-neutral-500">
+                  <Bot className="h-8 w-8 text-sky-300/70" />
+                  {t.empty}
+                </div>
+              )}
               {shown.map((item, i) => (
                 <motion.div
                   key={`${i}-${item.kind}`}

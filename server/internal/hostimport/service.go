@@ -14,11 +14,14 @@ import (
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/hostcredential"
+	"openxdr/server/internal/triage"
 )
 
 type Service struct {
-	DB    *ent.Client
-	Vault *Vault
+	LLM       *triage.LLM
+	VisionLLM *triage.LLM
+	DB        *ent.Client
+	Vault     *Vault
 }
 
 func binding(c *ent.HostCredential) string {

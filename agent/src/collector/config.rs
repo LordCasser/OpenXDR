@@ -18,6 +18,8 @@ pub struct Config {
     pub collect_network: bool,
     /// 资产清单：监听端口与属主进程、云环境
     pub collect_inventory: bool,
+    /// 周期行为折叠：同一父进程反复执行同一条命令时改为按窗口汇总（见 periodic）
+    pub collapse_periodic: bool,
 }
 
 impl Default for Config {
@@ -29,6 +31,7 @@ impl Default for Config {
             collect_persist: true,
             collect_network: true,
             collect_inventory: true,
+            collapse_periodic: true,
         }
     }
 }
@@ -73,6 +76,12 @@ mod tests {
         let c = Config::parse(r#"{"collectInventory": false}"#);
         assert!(!c.collect_inventory, "显式关掉的要生效");
         assert!(c.collect_network, "没提到的保持默认开启");
+    }
+
+    #[test]
+    fn collapse_switch() {
+        assert!(Config::parse("").collapse_periodic, "默认开启");
+        assert!(!Config::parse(r#"{"collapsePeriodic": false}"#).collapse_periodic);
     }
 
     #[test]

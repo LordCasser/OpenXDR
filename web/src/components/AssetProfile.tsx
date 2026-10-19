@@ -1,7 +1,7 @@
 import { EditOutlined, LockOutlined, ReloadOutlined, UnlockOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  App, Alert, Button, Descriptions, Empty, Form, Input, Modal, Rate, Select, Skeleton, Space, Table, Tag, Tooltip, Typography, theme,
+  App, Alert, Button, Descriptions, Empty, Flex, Form, Input, Modal, Rate, Select, Skeleton, Space, Table, Tag, Tooltip, Typography, theme,
 } from 'antd'
 import { useState } from 'react'
 import {
@@ -169,16 +169,17 @@ export function AssetProfileView({ assetId, hostname, groupId, canEdit, isGroupA
 
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-      <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
-        {annotation}
+      {/* 说明文字可以折行，按钮固定在右侧，卡片窄时不被挤到下一行 */}
+      <Flex justify="space-between" align="start" gap={8}>
+        <div style={{ minWidth: 0 }}>{annotation}</div>
         {canEdit && (
-          <Space size={4}>
+          <Space size={4} style={{ flex: 'none' }}>
             <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(true)}>{t('editProfile')}</Button>
             {p.aiEnabled && <Button size="small" icon={<ReloadOutlined />} loading={busy} disabled={!!p.annotateRequestedAt}
               onClick={() => run(() => requestAnnotate(assetId), t('annotateQueued'))}>{t('reannotate')}</Button>}
           </Space>
         )}
-      </Space>
+      </Flex>
 
       <Descriptions column={1} size="small" styles={{ label: { width: compact ? 88 : 110 } }}>
         <Descriptions.Item label={t('role')}>{p.role ? <Typography.Text strong>{p.role}</Typography.Text> : '-'}<Locked locked={locked('role')} /></Descriptions.Item>

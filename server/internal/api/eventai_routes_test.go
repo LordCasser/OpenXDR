@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 按 main 的挂法：问 AI 的两个精确路径不能把 /api/events 本身吞掉（子树模式会把它重定向走）
+// 按 main 的挂法：问 AI 的几个精确路径不能把 /api/events 本身吞掉（子树模式会把它重定向走）
 func TestEventAIPathsKeepEventSearch(t *testing.T) {
 	routes := http.NewServeMux()
 	routes.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Header().Set("X-Via", "main") }))
@@ -18,6 +18,7 @@ func TestEventAIPathsKeepEventSearch(t *testing.T) {
 		"GET /api/events?q=x": "main",
 		"GET /api/events/0190d7b0-0000-7000-8000-000000000000/related":  "ai",
 		"POST /api/events/0190d7b0-0000-7000-8000-000000000000/explain": "ai",
+		"GET /api/events/0190d7b0-0000-7000-8000-000000000000/explain":  "ai",
 	} {
 		var method, url string
 		for i := range path {

@@ -4,7 +4,7 @@
 
 ## 开发环境
 
-- server：Go 1.25，PostgreSQL（`docker compose up -d postgres`）
+- server：Go 1.26，PostgreSQL（`docker compose up -d postgres`）
 - agent / sensor：Rust stable；内核特性（`ebpf` / `xdp`）需 nightly 与 bpf-linker
 - web：Node.js，`npm ci`
 

@@ -30,6 +30,9 @@ func (Incident) Fields() []ent.Field {
 		field.Text("resolution").Optional().Nillable(),
 		field.String("resolved_by").Optional().Nillable(),
 		field.Time("resolved_at").Optional().Nillable(),
+		// 结案说明从哪来：空为人工写的；ai_verdict 人没写理由、采纳了 AI 研判；ai_proposal 原样采纳了 AI 结案建议。
+		// 后两种不是人的独立判断，不作为人工案例回喂研判
+		field.String("resolution_source").Optional().Nillable(),
 		// AI 的结案建议：人在事件页一键采纳（结案仍记在人名下、照常作为人工案例回喂研判）或忽略。
 		// 任何状态变更都会清掉它
 		field.JSON("closure_proposal", &ClosureProposal{}).Optional(),

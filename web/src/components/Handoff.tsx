@@ -83,7 +83,7 @@ export function SubjectsBar({ subjects, groupId }: { subjects: string[]; groupId
           <IncidentStatusTag value={i.status} />
           {canAct && !done && (
             <Space size={0}>
-              <Button type="link" size="small" onClick={() => setResolving({ kind: 'incident', id: i.id, next: 'closed', title })}>{t('close')}</Button>
+              <Button type="link" size="small" onClick={() => setResolving({ kind: 'incident', id: i.id, next: 'closed', title })}>{t('markTrue')}</Button>
               <Button type="link" size="small" danger onClick={() => setResolving({ kind: 'incident', id: i.id, next: 'false_positive', title })}>{t('markFpShort')}</Button>
             </Space>
           )}

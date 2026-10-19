@@ -21,7 +21,12 @@ func TestAPITasks(t *testing.T) {
 	client.Task.Create().SetID("daily").SetName("巡检").SetSchedule("0 2 * * *").SetPrompt("x").SaveX(ctx)
 	gA := client.Group.Create().SetName("A").SaveX(ctx)
 	gB := client.Group.Create().SetName("B").SaveX(ctx)
-	client.TaskRun.Create().SetTaskID("daily").SetGroupID(gA.ID).SaveX(ctx)
+	sess := client.AgentSession.Create().SetKind("task").SetGroupID(gA.ID).SetInitiator("system").SetModel("m").SetStatus("idle").SaveX(ctx)
+	for i, role := range []string{"assistant", "toolResult", "toolResult", "assistant"} {
+		client.SessionMessage.Create().SetSessionID(sess.ID).SetSeq(i + 1).SetRole(role).SetContent(json.RawMessage(`{}`)).SaveX(ctx)
+	}
+	client.Report.Create().SetSessionID(sess.ID).SetGroupID(gA.ID).SetTitle("每日巡检报告").SetMarkdown("m").SaveX(ctx)
+	client.TaskRun.Create().SetTaskID("daily").SetGroupID(gA.ID).SetSessionID(sess.ID).SaveX(ctx)
 	client.TaskRun.Create().SetTaskID("daily").SetGroupID(gB.ID).SaveX(ctx)
 	alice := client.User.Create().SetUsername("alice").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
 	client.GroupMember.Create().SetGroupID(gA.ID).SetUserID(alice.ID).SetRole("viewer").SaveX(ctx)
@@ -98,5 +103,18 @@ func TestAPITasks(t *testing.T) {
 	}
 	if len(runs) != 1 || runs[0].GroupID != gA.ID {
 		t.Errorf("运行记录应只见 A 组：%+v", runs)
+	}
+	if r := runs[0]; r.Steps != 2 || r.ReportTitle == nil || *r.ReportTitle != "每日巡检报告" {
+		t.Errorf("运行记录应带步数与报告：%+v", r)
+	}
+	_, body = get(t, viewer, "/api/tasks")
+	var listed []taskRow
+	if err := json.Unmarshal(body, &listed); err != nil || len(listed) == 0 {
+		t.Fatalf("任务列表：%s", body)
+	}
+	for _, task := range listed {
+		if task.NextRun == nil || task.NextRun.Before(time.Now()) {
+			t.Errorf("启用的任务应带下一次运行时间：%+v", task)
+		}
 	}
 }
