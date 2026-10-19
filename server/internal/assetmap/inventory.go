@@ -46,11 +46,12 @@ type Cloud struct {
 
 var providers = []string{"aws", "azure", "gcp", "aliyun", "tencent"}
 
-// inventory 从 5001 事件体解出监听端口与云环境。agent 数据不可信：
+// inventory 从 5001 事件体解出监听端口、云环境与系统显示名。agent 数据不可信：
 // 字段逐个校验，坏条目丢弃，云信息缺关键字段就当不在云上。
-func inventory(raw json.RawMessage) ([]Listener, *Cloud) {
+func inventory(raw json.RawMessage) ([]Listener, *Cloud, string) {
 	var body struct {
 		Device struct {
+			OS        string `json:"os"`
 			Listening []struct {
 				Proto   string `json:"proto"`
 				Addr    string `json:"addr"`
@@ -72,7 +73,7 @@ func inventory(raw json.RawMessage) ([]Listener, *Cloud) {
 		} `json:"device"`
 	}
 	if json.Unmarshal(raw, &body) != nil {
-		return nil, nil
+		return nil, nil, ""
 	}
 	type key struct {
 		proto, addr string
@@ -110,7 +111,8 @@ func inventory(raw json.RawMessage) ([]Listener, *Cloud) {
 			cloud.PublicIP = ip.String()
 		}
 	}
-	return out, cloud
+	// 系统显示名（发行版+版本）原样清洗；旧 agent 不带该键返回空串，物化时不覆盖已有值
+	return out, cloud, clean(body.Device.OS, 128)
 }
 
 // clean 去掉不可打印字符并截断，模型和页面都会看到这些字符串

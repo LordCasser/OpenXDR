@@ -196,6 +196,7 @@ var (
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "hostname", Type: field.TypeString},
 		{Name: "os", Type: field.TypeString, Nullable: true},
+		{Name: "os_display", Type: field.TypeString, Nullable: true},
 		{Name: "ip_addrs", Type: field.TypeJSON, Nullable: true},
 		{Name: "agent_id", Type: field.TypeUUID, Unique: true, Nullable: true},
 		{Name: "first_seen", Type: field.TypeTime},

@@ -5,9 +5,9 @@ import { useCopy } from "@/i18n";
 import { ChapterHead, Console, DemoBadge, EASE } from "./chapter";
 
 const HOSTS = [
-  { name: "web-01", ip: "10.0.1.11", os: "Ubuntu 24.04", user: "root" },
-  { name: "db-01", ip: "10.0.1.21", os: "Rocky Linux 9", user: "ops" },
-  { name: "gw-01", ip: "10.0.1.31", os: "Debian 12", user: "root" },
+  { name: "web-01", ip: "10.0.1.11", os: "ubuntu 24.04", user: "root" },
+  { name: "db-01", ip: "10.0.1.21", os: "rocky linux 9", user: "ops" },
+  { name: "gw-01", ip: "10.0.1.31", os: "debian 12", user: "root" },
 ];
 
 // 整段演示由一个时钟推进，各阶段都从 tick 推出来：-1 未开始。
@@ -40,7 +40,7 @@ const COPY = {
     console: "资产 · 从文档导入",
     demo: "演示",
     drop: "把运维文档拖到这里",
-    dropFormats: "Markdown 表格、YAML、JSON 都行",
+    dropFormats: "Markdown 表格、YAML、JSON 都行；os 列认发行版名，agent 上线后以实测为准",
     release: "松手开始导入",
     parsing: "识别主机与凭据…",
     realFile: (name: string) => `收到「${name}」——演示不读取文件内容，下面是示例数据`,
@@ -75,7 +75,7 @@ const COPY = {
     console: "Assets · Import from document",
     demo: "Demo",
     drop: "Drop your ops document here",
-    dropFormats: "Markdown tables, YAML or JSON",
+    dropFormats: "Markdown tables, YAML or JSON; the os column takes distro names, verified by the agent once online",
     release: "Release to import",
     parsing: "Finding hosts and credentials…",
     realFile: (name: string) => `Got "${name}" — the demo doesn't read files, sample data below`,
@@ -96,9 +96,9 @@ const COPY = {
 
 const docLines = (heading: string) => [
   `## ${heading}`,
-  "| hostname | address | user | password |",
-  "|---|---|---|---|",
-  ...HOSTS.map((h) => `| ${h.name} | ${h.ip} | ${h.user} | ••••••••• |`),
+  "| hostname | address | os | user | password |",
+  "|---|---|---|---|---|",
+  ...HOSTS.map((h) => `| ${h.name} | ${h.ip} | ${h.os} | ${h.user} | ••••••••• |`),
 ];
 
 export function Onboard() {

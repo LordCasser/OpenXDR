@@ -113,11 +113,11 @@ func init() {
 	assetFields := schema.Asset{}.Fields()
 	_ = assetFields
 	// assetDescFirstSeen is the schema descriptor for first_seen field.
-	assetDescFirstSeen := assetFields[5].Descriptor()
+	assetDescFirstSeen := assetFields[6].Descriptor()
 	// asset.DefaultFirstSeen holds the default value on creation for the first_seen field.
 	asset.DefaultFirstSeen = assetDescFirstSeen.Default.(func() time.Time)
 	// assetDescLastSeen is the schema descriptor for last_seen field.
-	assetDescLastSeen := assetFields[6].Descriptor()
+	assetDescLastSeen := assetFields[7].Descriptor()
 	// asset.DefaultLastSeen holds the default value on creation for the last_seen field.
 	asset.DefaultLastSeen = assetDescLastSeen.Default.(func() time.Time)
 	// assetDescID is the schema descriptor for id field.

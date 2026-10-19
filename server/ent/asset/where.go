@@ -66,6 +66,11 @@ func Os(v string) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldOs, v))
 }
 
+// OsDisplay applies equality check predicate on the "os_display" field. It's identical to OsDisplayEQ.
+func OsDisplay(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldOsDisplay, v))
+}
+
 // AgentID applies equality check predicate on the "agent_id" field. It's identical to AgentIDEQ.
 func AgentID(v uuid.UUID) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldAgentID, v))
@@ -279,6 +284,81 @@ func OsEqualFold(v string) predicate.Asset {
 // OsContainsFold applies the ContainsFold predicate on the "os" field.
 func OsContainsFold(v string) predicate.Asset {
 	return predicate.Asset(sql.FieldContainsFold(FieldOs, v))
+}
+
+// OsDisplayEQ applies the EQ predicate on the "os_display" field.
+func OsDisplayEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldOsDisplay, v))
+}
+
+// OsDisplayNEQ applies the NEQ predicate on the "os_display" field.
+func OsDisplayNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldOsDisplay, v))
+}
+
+// OsDisplayIn applies the In predicate on the "os_display" field.
+func OsDisplayIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldOsDisplay, vs...))
+}
+
+// OsDisplayNotIn applies the NotIn predicate on the "os_display" field.
+func OsDisplayNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldOsDisplay, vs...))
+}
+
+// OsDisplayGT applies the GT predicate on the "os_display" field.
+func OsDisplayGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldOsDisplay, v))
+}
+
+// OsDisplayGTE applies the GTE predicate on the "os_display" field.
+func OsDisplayGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldOsDisplay, v))
+}
+
+// OsDisplayLT applies the LT predicate on the "os_display" field.
+func OsDisplayLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldOsDisplay, v))
+}
+
+// OsDisplayLTE applies the LTE predicate on the "os_display" field.
+func OsDisplayLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldOsDisplay, v))
+}
+
+// OsDisplayContains applies the Contains predicate on the "os_display" field.
+func OsDisplayContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldOsDisplay, v))
+}
+
+// OsDisplayHasPrefix applies the HasPrefix predicate on the "os_display" field.
+func OsDisplayHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldOsDisplay, v))
+}
+
+// OsDisplayHasSuffix applies the HasSuffix predicate on the "os_display" field.
+func OsDisplayHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldOsDisplay, v))
+}
+
+// OsDisplayIsNil applies the IsNil predicate on the "os_display" field.
+func OsDisplayIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldOsDisplay))
+}
+
+// OsDisplayNotNil applies the NotNil predicate on the "os_display" field.
+func OsDisplayNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldOsDisplay))
+}
+
+// OsDisplayEqualFold applies the EqualFold predicate on the "os_display" field.
+func OsDisplayEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldOsDisplay, v))
+}
+
+// OsDisplayContainsFold applies the ContainsFold predicate on the "os_display" field.
+func OsDisplayContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldOsDisplay, v))
 }
 
 // IPAddrsIsNil applies the IsNil predicate on the "ip_addrs" field.

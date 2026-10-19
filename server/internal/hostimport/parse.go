@@ -25,16 +25,67 @@ type Host struct {
 	Hostname string `json:"hostname"`
 	Address  string `json:"address"`
 	OS       string `json:"os"`
-	Port     int    `json:"port"`
-	Username string `json:"username"`
-	Kind     string `json:"kind"`
-	HostKey  string `json:"hostKey"`
-	Secret   Secret `json:"-"`
+	// 发行版与版本的显示名（如 "Ubuntu 24.04 LTS"、"银河麒麟 V10"、"Windows Server 2022"）。
+	// 文档只写了 family 时为空；agent 上线后由设备清单（5001）的实测值覆盖
+	OSDisplay string `json:"osDisplay,omitempty"`
+	Port      int    `json:"port"`
+	Username  string `json:"username"`
+	Kind      string `json:"kind"`
+	HostKey   string `json:"hostKey"`
+	Secret    Secret `json:"-"`
 }
 
 var markdownFence = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})(.*)$")
 
 var hostnamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,252}$`)
+
+// 常见 Linux 发行版名（含国产），命中即按 linux family 处理；比较不区分
+// 大小写，且只看第一个词——"Ubuntu 24.04 LTS" 看 ubuntu。中文写法不带空格
+// 分隔，另走前缀匹配
+var linuxDistributions = map[string]bool{
+	"ubuntu": true, "debian": true, "centos": true, "rocky": true, "rhel": true,
+	"redhat": true, "alma": true, "almalinux": true, "alpine": true, "amazon": true,
+	"arch": true, "fedora": true, "opensuse": true, "suse": true, "sles": true,
+	"openeuler": true, "euler": true, "oracle": true, "kylin": true, "neokylin": true,
+	"uos": true, "deepin": true, "turbolinux": true, "gentoo": true, "nixos": true,
+}
+
+// 中文发行版名按前缀匹配（写法上不带空格分隔，取不到"第一个词"）。
+// 与上面 map 里的 kylin 不重复：map 管 "Kylin V10" 这类英文写法，这里管 "麒麟 V10"
+var linuxDistributionsZh = []string{"银河麒麟", "麒麟", "统信"}
+
+// normalizeOS 把 os 列归一成 family（linux / windows）与显示名。
+// 空值默认 linux、不带显示名（agent 上线后补实测值）；family 本名不算显示名；
+// 认不出的写法报错，宁拒不猜——下游 SSH 入口选择、Sigma 过滤、升级选包都吃 family。
+func normalizeOS(raw string) (family, display string, err error) {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return "linux", "", nil
+	}
+	lower := strings.ToLower(v)
+	if lower == "linux" || lower == "unix" {
+		return "linux", "", nil
+	}
+	if lower == "windows" || lower == "win" || lower == "视窗" {
+		return "windows", "", nil
+	}
+	first := lower
+	if i := strings.IndexAny(lower, " \t"); i >= 0 {
+		first = lower[:i]
+	}
+	if strings.HasPrefix(first, "win") {
+		return "windows", v, nil
+	}
+	if linuxDistributions[first] {
+		return "linux", v, nil
+	}
+	for _, zh := range linuxDistributionsZh {
+		if strings.HasPrefix(lower, zh) {
+			return "linux", v, nil
+		}
+	}
+	return "", "", fmt.Errorf("不支持的操作系统 %q：请写 linux / windows 或发行版名（如 ubuntu、麒麟、统信）", v)
+}
 
 func Digest(document string) string {
 	sum := sha256.Sum256([]byte(document))
@@ -227,7 +278,7 @@ func fieldName(s string) string {
 }
 
 func normalize(row map[string]string) (Host, error) {
-	h := Host{Hostname: strings.TrimSpace(row["hostname"]), Address: strings.TrimSpace(row["address"]), OS: strings.ToLower(strings.TrimSpace(row["os"])), Port: 22, Username: strings.TrimSpace(row["username"]), HostKey: strings.TrimSpace(row["host_key"]), Secret: Secret{Password: row["password"], PrivateKey: row["private_key"], Passphrase: row["passphrase"]}}
+	h := Host{Hostname: strings.TrimSpace(row["hostname"]), Address: strings.TrimSpace(row["address"]), Port: 22, Username: strings.TrimSpace(row["username"]), HostKey: strings.TrimSpace(row["host_key"]), Secret: Secret{Password: row["password"], PrivateKey: row["private_key"], Passphrase: row["passphrase"]}}
 	if h.Hostname == "" {
 		h.Hostname = h.Address
 	}
@@ -237,12 +288,11 @@ func normalize(row map[string]string) (Host, error) {
 	if net.ParseIP(h.Address) == nil && !hostnamePattern.MatchString(h.Address) {
 		return h, errors.New("地址须为 IP 或主机名，不能带 URL、路径或命令")
 	}
-	if h.OS == "" {
-		h.OS = "linux"
+	family, display, err := normalizeOS(row["os"])
+	if err != nil {
+		return h, err
 	}
-	if h.OS != "linux" && h.OS != "windows" {
-		return h, errors.New("os 只支持 linux 或 windows")
-	}
+	h.OS, h.OSDisplay = family, display
 	if row["port"] != "" {
 		port, err := strconv.Atoi(row["port"])
 		if err != nil || port < 1 || port > 65535 {

@@ -162,7 +162,7 @@ export function AssetDetailPage() {
     <Page
       crumb={asset.hostname}
       title={<Space><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')} />{asset.hostname}<HostStateBadge asset={asset} /></Space>}
-      subtitle={[asset.os, asset.ipAddrs?.join(', '), group?.name ?? t('ungrouped')].filter(Boolean).join(' · ')}
+      subtitle={[asset.osDisplay ?? asset.os, asset.ipAddrs?.join(', '), group?.name ?? t('ungrouped')].filter(Boolean).join(' · ')}
       extra={canChat && asset.groupId && <Button type="primary" icon={<RobotOutlined />} loading={starting} onClick={investigate}>{t('investigateHost')}</Button>}
     >
       {verifying?.assetId === asset.id && <CommandVerificationDrawer key={`${verifying.id}:${asset.groupId}`} command={verifying} canEdit={canAct} onClose={() => setVerifying(null)} />}
@@ -270,7 +270,7 @@ export function AssetDetailPage() {
           </Card>
           <Card title={t('hostInfo')}>
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="OS">{asset.os ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="OS">{asset.osDisplay ?? asset.os ?? '-'}</Descriptions.Item>
               <Descriptions.Item label={t('thIP')}>{asset.ipAddrs?.join(', ') ?? '-'}</Descriptions.Item>
               <Descriptions.Item label={t('group')}>{group?.name ?? <Tag>{t('ungrouped')}</Tag>}</Descriptions.Item>
               <Descriptions.Item label={t('thSource')}>{asset.agentId ? 'agent' : t('sourceLog')}</Descriptions.Item>

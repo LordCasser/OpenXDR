@@ -192,6 +192,8 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 变化时重扫。只看得到 agent 所在网络命名空间。云环境由 `cloud.rs` 在进程启动时探测一次
 （手写最小 HTTP 客户端，连接 300ms、读写 1s 超时）：AWS 要求实例 ID 格式正确且拿得到
 region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实例 ID 前缀，拿不准就不报。
+系统显示名由 `osinfo.rs` 按进程识别一次：Linux 读 os-release 的 `PRETTY_NAME`（麒麟、
+统信等国产发行版同规范，解析是纯函数、CI 可测），Windows 读注册表；拿不到就不带该键。
 产出 class 5001，见 [事件模型](events.md#5001-设备清单)。
 
 ## Windows 采集路径

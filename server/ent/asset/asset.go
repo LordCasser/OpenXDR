@@ -19,6 +19,8 @@ const (
 	FieldHostname = "hostname"
 	// FieldOs holds the string denoting the os field in the database.
 	FieldOs = "os"
+	// FieldOsDisplay holds the string denoting the os_display field in the database.
+	FieldOsDisplay = "os_display"
 	// FieldIPAddrs holds the string denoting the ip_addrs field in the database.
 	FieldIPAddrs = "ip_addrs"
 	// FieldAgentID holds the string denoting the agent_id field in the database.
@@ -103,6 +105,7 @@ var Columns = []string{
 	FieldID,
 	FieldHostname,
 	FieldOs,
+	FieldOsDisplay,
 	FieldIPAddrs,
 	FieldAgentID,
 	FieldFirstSeen,
@@ -164,6 +167,11 @@ func ByHostname(opts ...sql.OrderTermOption) OrderOption {
 // ByOs orders the results by the os field.
 func ByOs(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOs, opts...).ToFunc()
+}
+
+// ByOsDisplay orders the results by the os_display field.
+func ByOsDisplay(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOsDisplay, opts...).ToFunc()
 }
 
 // ByAgentID orders the results by the agent_id field.

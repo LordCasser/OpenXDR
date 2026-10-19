@@ -23,6 +23,8 @@ type Asset struct {
 	Hostname string `json:"hostname,omitempty"`
 	// Os holds the value of the "os" field.
 	Os *string `json:"os,omitempty"`
+	// OsDisplay holds the value of the "os_display" field.
+	OsDisplay *string `json:"os_display,omitempty"`
 	// IPAddrs holds the value of the "ip_addrs" field.
 	IPAddrs []string `json:"ip_addrs,omitempty"`
 	// AgentID holds the value of the "agent_id" field.
@@ -128,7 +130,7 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case asset.FieldCriticality:
 			values[i] = new(sql.NullInt64)
-		case asset.FieldHostname, asset.FieldOs, asset.FieldAgentVersion, asset.FieldRole, asset.FieldSummary, asset.FieldAnnotationReason, asset.FieldAnnotatedFacts:
+		case asset.FieldHostname, asset.FieldOs, asset.FieldOsDisplay, asset.FieldAgentVersion, asset.FieldRole, asset.FieldSummary, asset.FieldAnnotationReason, asset.FieldAnnotatedFacts:
 			values[i] = new(sql.NullString)
 		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince, asset.FieldInventoryAt, asset.FieldAnnotatedAt, asset.FieldAnnotateRequestedAt:
 			values[i] = new(sql.NullTime)
@@ -167,6 +169,13 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Os = new(string)
 				*_m.Os = value.String
+			}
+		case asset.FieldOsDisplay:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field os_display", values[i])
+			} else if value.Valid {
+				_m.OsDisplay = new(string)
+				*_m.OsDisplay = value.String
 			}
 		case asset.FieldIPAddrs:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -399,6 +408,11 @@ func (_m *Asset) String() string {
 	builder.WriteString(", ")
 	if v := _m.Os; v != nil {
 		builder.WriteString("os=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.OsDisplay; v != nil {
+		builder.WriteString("os_display=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

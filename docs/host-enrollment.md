@@ -65,6 +65,12 @@ hosts:
 密码与私钥二选一；可不提供凭据，只导入资产。含竖线、多行的密码或私钥使用 YAML，
 不要塞进 Markdown 表格。私钥会在导入时验证格式和解密口令。
 
+`os` 支持写 family（`linux` / `windows`）或发行版名——`ubuntu 24.04`、`rocky linux 9`、
+`kylin v10`、`麒麟`、`统信 UOS`、`Windows Server 2022` 都认，归一后资产上只存 family
+（供 Sigma 求值过滤与升级选包），发行版与版本存进 `os_display` 展示；agent 上线后由
+设备清单读到的实测值（`/etc/os-release` 的 `PRETTY_NAME`、Windows 注册表）覆盖声明的值。
+省略 `os` 时默认 `linux`；认不出的写法（如 `macos`）该行报错，宁拒不猜。
+
 主机名省略时使用地址，但远程纳管要求其与目标 `hostname` 一致；IPv6 地址请显式填写
 合法主机名。已有同组资产且尚无凭据时可补充凭据，保留已有资产字段。已有凭据、跨组或未分组资产冲突时整批拒绝，不覆盖已有身份、不跨组挪用资产、不部分提交。
 

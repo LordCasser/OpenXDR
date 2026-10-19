@@ -17,6 +17,7 @@
 |---|---|---|
 | 监听端口与属主进程 | agent 设备清单（class 5001） | Linux 读 `/proc/net/{tcp,tcp6,udp,udp6}`，Windows 读 IP Helper 监听表；每 60 秒比对，变化或满 6 小时才上报 |
 | 云环境 | agent 设备清单（class 5001） | 启动时探测一次 AWS / Azure / GCP / 阿里云 / 腾讯云元数据服务；拿不准就不报 |
+| 系统显示名（发行版+版本） | agent 设备清单（class 5001） | Linux 读 os-release 的 `PRETTY_NAME`，Windows 读注册表；物化到资产 `os_display`，覆盖文档导入时声明的值 |
 | 依赖边 | 网络事件（class 4001） | agent 出站连接（Linux 需 eBPF 构建，Windows 走 ETW）与 sensor 会话 |
 | 见过的程序 | UEBA 基线 | 只给 AI 标注做参考 |
 
