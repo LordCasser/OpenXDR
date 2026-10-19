@@ -26,6 +26,8 @@ type Watcher struct {
 	Notify      Notify
 	SilentAfter time.Duration
 	Interval    time.Duration
+	// DropAlert 一轮（一分钟）内丢弃这么多事件就算采集异常，0 不看丢事件
+	DropAlert int
 }
 
 func (w *Watcher) Run(ctx context.Context) {
@@ -39,6 +41,9 @@ func (w *Watcher) Run(ctx context.Context) {
 	for {
 		if err := w.sweep(ctx, time.Now()); err != nil {
 			slog.Error("失联巡视失败", "err", err)
+		}
+		if err := w.sweepHealth(ctx, time.Now()); err != nil {
+			slog.Error("采集健康巡视失败", "err", err)
 		}
 		select {
 		case <-ctx.Done():

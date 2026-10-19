@@ -264,6 +264,7 @@ func main() {
 		DB: client, Notify: webhook.Send,
 		SilentAfter: silentAfter,
 		Interval:    time.Minute,
+		DropAlert:   getenvInt("COLLECTOR_DROP_ALERT", 1000),
 	}
 	go cluster.RunLeader(ctx, db, "liveness", watcher.Run)
 

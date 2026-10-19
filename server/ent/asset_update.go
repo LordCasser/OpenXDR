@@ -230,6 +230,73 @@ func (_u *AssetUpdate) ClearSilentSince() *AssetUpdate {
 	return _u
 }
 
+// SetHealthProblem sets the "health_problem" field.
+func (_u *AssetUpdate) SetHealthProblem(v string) *AssetUpdate {
+	_u.mutation.SetHealthProblem(v)
+	return _u
+}
+
+// SetNillableHealthProblem sets the "health_problem" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableHealthProblem(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetHealthProblem(*v)
+	}
+	return _u
+}
+
+// ClearHealthProblem clears the value of the "health_problem" field.
+func (_u *AssetUpdate) ClearHealthProblem() *AssetUpdate {
+	_u.mutation.ClearHealthProblem()
+	return _u
+}
+
+// SetHealthDropped sets the "health_dropped" field.
+func (_u *AssetUpdate) SetHealthDropped(v int64) *AssetUpdate {
+	_u.mutation.ResetHealthDropped()
+	_u.mutation.SetHealthDropped(v)
+	return _u
+}
+
+// SetNillableHealthDropped sets the "health_dropped" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableHealthDropped(v *int64) *AssetUpdate {
+	if v != nil {
+		_u.SetHealthDropped(*v)
+	}
+	return _u
+}
+
+// AddHealthDropped adds value to the "health_dropped" field.
+func (_u *AssetUpdate) AddHealthDropped(v int64) *AssetUpdate {
+	_u.mutation.AddHealthDropped(v)
+	return _u
+}
+
+// ClearHealthDropped clears the value of the "health_dropped" field.
+func (_u *AssetUpdate) ClearHealthDropped() *AssetUpdate {
+	_u.mutation.ClearHealthDropped()
+	return _u
+}
+
+// SetHealthDroppedAt sets the "health_dropped_at" field.
+func (_u *AssetUpdate) SetHealthDroppedAt(v time.Time) *AssetUpdate {
+	_u.mutation.SetHealthDroppedAt(v)
+	return _u
+}
+
+// SetNillableHealthDroppedAt sets the "health_dropped_at" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableHealthDroppedAt(v *time.Time) *AssetUpdate {
+	if v != nil {
+		_u.SetHealthDroppedAt(*v)
+	}
+	return _u
+}
+
+// ClearHealthDroppedAt clears the value of the "health_dropped_at" field.
+func (_u *AssetUpdate) ClearHealthDroppedAt() *AssetUpdate {
+	_u.mutation.ClearHealthDroppedAt()
+	return _u
+}
+
 // SetListening sets the "listening" field.
 func (_u *AssetUpdate) SetListening(v json.RawMessage) *AssetUpdate {
 	_u.mutation.SetListening(v)
@@ -778,6 +845,27 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.SilentSinceCleared() {
 		_spec.ClearField(asset.FieldSilentSince, field.TypeTime)
 	}
+	if value, ok := _u.mutation.HealthProblem(); ok {
+		_spec.SetField(asset.FieldHealthProblem, field.TypeString, value)
+	}
+	if _u.mutation.HealthProblemCleared() {
+		_spec.ClearField(asset.FieldHealthProblem, field.TypeString)
+	}
+	if value, ok := _u.mutation.HealthDropped(); ok {
+		_spec.SetField(asset.FieldHealthDropped, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedHealthDropped(); ok {
+		_spec.AddField(asset.FieldHealthDropped, field.TypeInt64, value)
+	}
+	if _u.mutation.HealthDroppedCleared() {
+		_spec.ClearField(asset.FieldHealthDropped, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.HealthDroppedAt(); ok {
+		_spec.SetField(asset.FieldHealthDroppedAt, field.TypeTime, value)
+	}
+	if _u.mutation.HealthDroppedAtCleared() {
+		_spec.ClearField(asset.FieldHealthDroppedAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Listening(); ok {
 		_spec.SetField(asset.FieldListening, field.TypeJSON, value)
 	}
@@ -1261,6 +1349,73 @@ func (_u *AssetUpdateOne) SetNillableSilentSince(v *time.Time) *AssetUpdateOne {
 // ClearSilentSince clears the value of the "silent_since" field.
 func (_u *AssetUpdateOne) ClearSilentSince() *AssetUpdateOne {
 	_u.mutation.ClearSilentSince()
+	return _u
+}
+
+// SetHealthProblem sets the "health_problem" field.
+func (_u *AssetUpdateOne) SetHealthProblem(v string) *AssetUpdateOne {
+	_u.mutation.SetHealthProblem(v)
+	return _u
+}
+
+// SetNillableHealthProblem sets the "health_problem" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableHealthProblem(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetHealthProblem(*v)
+	}
+	return _u
+}
+
+// ClearHealthProblem clears the value of the "health_problem" field.
+func (_u *AssetUpdateOne) ClearHealthProblem() *AssetUpdateOne {
+	_u.mutation.ClearHealthProblem()
+	return _u
+}
+
+// SetHealthDropped sets the "health_dropped" field.
+func (_u *AssetUpdateOne) SetHealthDropped(v int64) *AssetUpdateOne {
+	_u.mutation.ResetHealthDropped()
+	_u.mutation.SetHealthDropped(v)
+	return _u
+}
+
+// SetNillableHealthDropped sets the "health_dropped" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableHealthDropped(v *int64) *AssetUpdateOne {
+	if v != nil {
+		_u.SetHealthDropped(*v)
+	}
+	return _u
+}
+
+// AddHealthDropped adds value to the "health_dropped" field.
+func (_u *AssetUpdateOne) AddHealthDropped(v int64) *AssetUpdateOne {
+	_u.mutation.AddHealthDropped(v)
+	return _u
+}
+
+// ClearHealthDropped clears the value of the "health_dropped" field.
+func (_u *AssetUpdateOne) ClearHealthDropped() *AssetUpdateOne {
+	_u.mutation.ClearHealthDropped()
+	return _u
+}
+
+// SetHealthDroppedAt sets the "health_dropped_at" field.
+func (_u *AssetUpdateOne) SetHealthDroppedAt(v time.Time) *AssetUpdateOne {
+	_u.mutation.SetHealthDroppedAt(v)
+	return _u
+}
+
+// SetNillableHealthDroppedAt sets the "health_dropped_at" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableHealthDroppedAt(v *time.Time) *AssetUpdateOne {
+	if v != nil {
+		_u.SetHealthDroppedAt(*v)
+	}
+	return _u
+}
+
+// ClearHealthDroppedAt clears the value of the "health_dropped_at" field.
+func (_u *AssetUpdateOne) ClearHealthDroppedAt() *AssetUpdateOne {
+	_u.mutation.ClearHealthDroppedAt()
 	return _u
 }
 
@@ -1841,6 +1996,27 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.SilentSinceCleared() {
 		_spec.ClearField(asset.FieldSilentSince, field.TypeTime)
+	}
+	if value, ok := _u.mutation.HealthProblem(); ok {
+		_spec.SetField(asset.FieldHealthProblem, field.TypeString, value)
+	}
+	if _u.mutation.HealthProblemCleared() {
+		_spec.ClearField(asset.FieldHealthProblem, field.TypeString)
+	}
+	if value, ok := _u.mutation.HealthDropped(); ok {
+		_spec.SetField(asset.FieldHealthDropped, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedHealthDropped(); ok {
+		_spec.AddField(asset.FieldHealthDropped, field.TypeInt64, value)
+	}
+	if _u.mutation.HealthDroppedCleared() {
+		_spec.ClearField(asset.FieldHealthDropped, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.HealthDroppedAt(); ok {
+		_spec.SetField(asset.FieldHealthDroppedAt, field.TypeTime, value)
+	}
+	if _u.mutation.HealthDroppedAtCleared() {
+		_spec.ClearField(asset.FieldHealthDroppedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Listening(); ok {
 		_spec.SetField(asset.FieldListening, field.TypeJSON, value)

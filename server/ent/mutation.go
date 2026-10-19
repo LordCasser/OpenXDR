@@ -4766,6 +4766,10 @@ type AssetMutation struct {
 	group_id               *uuid.UUID
 	agent_version          *string
 	silent_since           *time.Time
+	health_problem         *string
+	health_dropped         *int64
+	addhealth_dropped      *int64
+	health_dropped_at      *time.Time
 	listening              *json.RawMessage
 	appendlistening        json.RawMessage
 	cloud                  *json.RawMessage
@@ -5455,6 +5459,174 @@ func (m *AssetMutation) SilentSinceCleared() bool {
 func (m *AssetMutation) ResetSilentSince() {
 	m.silent_since = nil
 	delete(m.clearedFields, asset.FieldSilentSince)
+}
+
+// SetHealthProblem sets the "health_problem" field.
+func (m *AssetMutation) SetHealthProblem(s string) {
+	m.health_problem = &s
+}
+
+// HealthProblem returns the value of the "health_problem" field in the mutation.
+func (m *AssetMutation) HealthProblem() (r string, exists bool) {
+	v := m.health_problem
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHealthProblem returns the old "health_problem" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldHealthProblem(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHealthProblem is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHealthProblem requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHealthProblem: %w", err)
+	}
+	return oldValue.HealthProblem, nil
+}
+
+// ClearHealthProblem clears the value of the "health_problem" field.
+func (m *AssetMutation) ClearHealthProblem() {
+	m.health_problem = nil
+	m.clearedFields[asset.FieldHealthProblem] = struct{}{}
+}
+
+// HealthProblemCleared returns if the "health_problem" field was cleared in this mutation.
+func (m *AssetMutation) HealthProblemCleared() bool {
+	_, ok := m.clearedFields[asset.FieldHealthProblem]
+	return ok
+}
+
+// ResetHealthProblem resets all changes to the "health_problem" field.
+func (m *AssetMutation) ResetHealthProblem() {
+	m.health_problem = nil
+	delete(m.clearedFields, asset.FieldHealthProblem)
+}
+
+// SetHealthDropped sets the "health_dropped" field.
+func (m *AssetMutation) SetHealthDropped(i int64) {
+	m.health_dropped = &i
+	m.addhealth_dropped = nil
+}
+
+// HealthDropped returns the value of the "health_dropped" field in the mutation.
+func (m *AssetMutation) HealthDropped() (r int64, exists bool) {
+	v := m.health_dropped
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHealthDropped returns the old "health_dropped" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldHealthDropped(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHealthDropped is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHealthDropped requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHealthDropped: %w", err)
+	}
+	return oldValue.HealthDropped, nil
+}
+
+// AddHealthDropped adds i to the "health_dropped" field.
+func (m *AssetMutation) AddHealthDropped(i int64) {
+	if m.addhealth_dropped != nil {
+		*m.addhealth_dropped += i
+	} else {
+		m.addhealth_dropped = &i
+	}
+}
+
+// AddedHealthDropped returns the value that was added to the "health_dropped" field in this mutation.
+func (m *AssetMutation) AddedHealthDropped() (r int64, exists bool) {
+	v := m.addhealth_dropped
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearHealthDropped clears the value of the "health_dropped" field.
+func (m *AssetMutation) ClearHealthDropped() {
+	m.health_dropped = nil
+	m.addhealth_dropped = nil
+	m.clearedFields[asset.FieldHealthDropped] = struct{}{}
+}
+
+// HealthDroppedCleared returns if the "health_dropped" field was cleared in this mutation.
+func (m *AssetMutation) HealthDroppedCleared() bool {
+	_, ok := m.clearedFields[asset.FieldHealthDropped]
+	return ok
+}
+
+// ResetHealthDropped resets all changes to the "health_dropped" field.
+func (m *AssetMutation) ResetHealthDropped() {
+	m.health_dropped = nil
+	m.addhealth_dropped = nil
+	delete(m.clearedFields, asset.FieldHealthDropped)
+}
+
+// SetHealthDroppedAt sets the "health_dropped_at" field.
+func (m *AssetMutation) SetHealthDroppedAt(t time.Time) {
+	m.health_dropped_at = &t
+}
+
+// HealthDroppedAt returns the value of the "health_dropped_at" field in the mutation.
+func (m *AssetMutation) HealthDroppedAt() (r time.Time, exists bool) {
+	v := m.health_dropped_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHealthDroppedAt returns the old "health_dropped_at" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldHealthDroppedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHealthDroppedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHealthDroppedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHealthDroppedAt: %w", err)
+	}
+	return oldValue.HealthDroppedAt, nil
+}
+
+// ClearHealthDroppedAt clears the value of the "health_dropped_at" field.
+func (m *AssetMutation) ClearHealthDroppedAt() {
+	m.health_dropped_at = nil
+	m.clearedFields[asset.FieldHealthDroppedAt] = struct{}{}
+}
+
+// HealthDroppedAtCleared returns if the "health_dropped_at" field was cleared in this mutation.
+func (m *AssetMutation) HealthDroppedAtCleared() bool {
+	_, ok := m.clearedFields[asset.FieldHealthDroppedAt]
+	return ok
+}
+
+// ResetHealthDroppedAt resets all changes to the "health_dropped_at" field.
+func (m *AssetMutation) ResetHealthDroppedAt() {
+	m.health_dropped_at = nil
+	delete(m.clearedFields, asset.FieldHealthDroppedAt)
 }
 
 // SetListening sets the "listening" field.
@@ -6603,7 +6775,7 @@ func (m *AssetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 31)
 	if m.hostname != nil {
 		fields = append(fields, asset.FieldHostname)
 	}
@@ -6636,6 +6808,15 @@ func (m *AssetMutation) Fields() []string {
 	}
 	if m.silent_since != nil {
 		fields = append(fields, asset.FieldSilentSince)
+	}
+	if m.health_problem != nil {
+		fields = append(fields, asset.FieldHealthProblem)
+	}
+	if m.health_dropped != nil {
+		fields = append(fields, asset.FieldHealthDropped)
+	}
+	if m.health_dropped_at != nil {
+		fields = append(fields, asset.FieldHealthDroppedAt)
 	}
 	if m.listening != nil {
 		fields = append(fields, asset.FieldListening)
@@ -6718,6 +6899,12 @@ func (m *AssetMutation) Field(name string) (ent.Value, bool) {
 		return m.AgentVersion()
 	case asset.FieldSilentSince:
 		return m.SilentSince()
+	case asset.FieldHealthProblem:
+		return m.HealthProblem()
+	case asset.FieldHealthDropped:
+		return m.HealthDropped()
+	case asset.FieldHealthDroppedAt:
+		return m.HealthDroppedAt()
 	case asset.FieldListening:
 		return m.Listening()
 	case asset.FieldCloud:
@@ -6783,6 +6970,12 @@ func (m *AssetMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldAgentVersion(ctx)
 	case asset.FieldSilentSince:
 		return m.OldSilentSince(ctx)
+	case asset.FieldHealthProblem:
+		return m.OldHealthProblem(ctx)
+	case asset.FieldHealthDropped:
+		return m.OldHealthDropped(ctx)
+	case asset.FieldHealthDroppedAt:
+		return m.OldHealthDroppedAt(ctx)
 	case asset.FieldListening:
 		return m.OldListening(ctx)
 	case asset.FieldCloud:
@@ -6902,6 +7095,27 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSilentSince(v)
+		return nil
+	case asset.FieldHealthProblem:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHealthProblem(v)
+		return nil
+	case asset.FieldHealthDropped:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHealthDropped(v)
+		return nil
+	case asset.FieldHealthDroppedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHealthDroppedAt(v)
 		return nil
 	case asset.FieldListening:
 		v, ok := value.(json.RawMessage)
@@ -7030,6 +7244,9 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *AssetMutation) AddedFields() []string {
 	var fields []string
+	if m.addhealth_dropped != nil {
+		fields = append(fields, asset.FieldHealthDropped)
+	}
 	if m.addcriticality != nil {
 		fields = append(fields, asset.FieldCriticality)
 	}
@@ -7041,6 +7258,8 @@ func (m *AssetMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *AssetMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case asset.FieldHealthDropped:
+		return m.AddedHealthDropped()
 	case asset.FieldCriticality:
 		return m.AddedCriticality()
 	}
@@ -7052,6 +7271,13 @@ func (m *AssetMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *AssetMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case asset.FieldHealthDropped:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHealthDropped(v)
+		return nil
 	case asset.FieldCriticality:
 		v, ok := value.(int)
 		if !ok {
@@ -7090,6 +7316,15 @@ func (m *AssetMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(asset.FieldSilentSince) {
 		fields = append(fields, asset.FieldSilentSince)
+	}
+	if m.FieldCleared(asset.FieldHealthProblem) {
+		fields = append(fields, asset.FieldHealthProblem)
+	}
+	if m.FieldCleared(asset.FieldHealthDropped) {
+		fields = append(fields, asset.FieldHealthDropped)
+	}
+	if m.FieldCleared(asset.FieldHealthDroppedAt) {
+		fields = append(fields, asset.FieldHealthDroppedAt)
 	}
 	if m.FieldCleared(asset.FieldListening) {
 		fields = append(fields, asset.FieldListening)
@@ -7179,6 +7414,15 @@ func (m *AssetMutation) ClearField(name string) error {
 		return nil
 	case asset.FieldSilentSince:
 		m.ClearSilentSince()
+		return nil
+	case asset.FieldHealthProblem:
+		m.ClearHealthProblem()
+		return nil
+	case asset.FieldHealthDropped:
+		m.ClearHealthDropped()
+		return nil
+	case asset.FieldHealthDroppedAt:
+		m.ClearHealthDroppedAt()
 		return nil
 	case asset.FieldListening:
 		m.ClearListening()
@@ -7271,6 +7515,15 @@ func (m *AssetMutation) ResetField(name string) error {
 		return nil
 	case asset.FieldSilentSince:
 		m.ResetSilentSince()
+		return nil
+	case asset.FieldHealthProblem:
+		m.ResetHealthProblem()
+		return nil
+	case asset.FieldHealthDropped:
+		m.ResetHealthDropped()
+		return nil
+	case asset.FieldHealthDroppedAt:
+		m.ResetHealthDroppedAt()
 		return nil
 	case asset.FieldListening:
 		m.ResetListening()

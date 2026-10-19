@@ -41,6 +41,12 @@ type Asset struct {
 	AgentVersion *string `json:"agent_version,omitempty"`
 	// SilentSince holds the value of the "silent_since" field.
 	SilentSince *time.Time `json:"silent_since,omitempty"`
+	// HealthProblem holds the value of the "health_problem" field.
+	HealthProblem *string `json:"health_problem,omitempty"`
+	// HealthDropped holds the value of the "health_dropped" field.
+	HealthDropped *int64 `json:"health_dropped,omitempty"`
+	// HealthDroppedAt holds the value of the "health_dropped_at" field.
+	HealthDroppedAt *time.Time `json:"health_dropped_at,omitempty"`
 	// Listening holds the value of the "listening" field.
 	Listening json.RawMessage `json:"listening,omitempty"`
 	// Cloud holds the value of the "cloud" field.
@@ -130,11 +136,11 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case asset.FieldIPAddrs, asset.FieldCollectorHealth, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldSoftware, asset.FieldServiceNotes, asset.FieldEgressNotes, asset.FieldRelationNotes, asset.FieldLockedFields:
 			values[i] = new([]byte)
-		case asset.FieldCriticality:
+		case asset.FieldHealthDropped, asset.FieldCriticality:
 			values[i] = new(sql.NullInt64)
-		case asset.FieldHostname, asset.FieldOs, asset.FieldAgentVersion, asset.FieldRole, asset.FieldSummary, asset.FieldAnnotationReason, asset.FieldAnnotatedFacts:
+		case asset.FieldHostname, asset.FieldOs, asset.FieldAgentVersion, asset.FieldHealthProblem, asset.FieldRole, asset.FieldSummary, asset.FieldAnnotationReason, asset.FieldAnnotatedFacts:
 			values[i] = new(sql.NullString)
-		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince, asset.FieldInventoryAt, asset.FieldSoftwareAt, asset.FieldAnnotatedAt, asset.FieldAnnotateRequestedAt:
+		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince, asset.FieldHealthDroppedAt, asset.FieldInventoryAt, asset.FieldSoftwareAt, asset.FieldAnnotatedAt, asset.FieldAnnotateRequestedAt:
 			values[i] = new(sql.NullTime)
 		case asset.FieldID:
 			values[i] = new(uuid.UUID)
@@ -235,6 +241,27 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SilentSince = new(time.Time)
 				*_m.SilentSince = value.Time
+			}
+		case asset.FieldHealthProblem:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field health_problem", values[i])
+			} else if value.Valid {
+				_m.HealthProblem = new(string)
+				*_m.HealthProblem = value.String
+			}
+		case asset.FieldHealthDropped:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field health_dropped", values[i])
+			} else if value.Valid {
+				_m.HealthDropped = new(int64)
+				*_m.HealthDropped = value.Int64
+			}
+		case asset.FieldHealthDroppedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field health_dropped_at", values[i])
+			} else if value.Valid {
+				_m.HealthDroppedAt = new(time.Time)
+				*_m.HealthDroppedAt = value.Time
 			}
 		case asset.FieldListening:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -453,6 +480,21 @@ func (_m *Asset) String() string {
 	builder.WriteString(", ")
 	if v := _m.SilentSince; v != nil {
 		builder.WriteString("silent_since=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.HealthProblem; v != nil {
+		builder.WriteString("health_problem=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.HealthDropped; v != nil {
+		builder.WriteString("health_dropped=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.HealthDroppedAt; v != nil {
+		builder.WriteString("health_dropped_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

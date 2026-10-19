@@ -36,6 +36,11 @@ func (Asset) Fields() []ent.Field {
 		field.String("agent_version").Optional().Nillable(),
 		// 失联起始时刻：已发过失联通知，恢复后清空。避免同一次失联反复通知
 		field.Time("silent_since").Optional().Nillable(),
+		// 采集健康通知：已通知过的问题签名（降级的采集器、缓存写不进、丢事件），变了才再通知，恢复后清空
+		field.String("health_problem").Optional().Nillable(),
+		// 上一轮看到的丢弃累计数与最后一次超过阈值的时刻：丢事件是一阵一阵的，超阈值后持续一小时才算恢复
+		field.Int64("health_dropped").Optional().Nillable(),
+		field.Time("health_dropped_at").Optional().Nillable(),
 
 		// 设备清单：agent 上报的监听端口与云环境（OCSF 5001），由 assetmap 物化。原样是 agent 的 JSON，读时校验
 		field.JSON("listening", json.RawMessage{}).Optional(),
