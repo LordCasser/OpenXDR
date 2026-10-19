@@ -7,10 +7,11 @@ import { acceptAgreement, createGroup, fetchAssets, finishOnboarding, type Setup
 import { useSession } from '../app/session'
 import { AddHostModal } from '../components/AddHostModal'
 import { AIModelSettings } from '../components/AISettings'
-import { errText } from '../components/format'
+import { errText, fmtTime } from '../components/format'
 import { NotifySettingsCard } from '../pages/SettingsPage'
 import { useI18n } from '../i18n'
 import BlackHole from './BlackHole'
+import { BrandMark } from './BrandMark'
 import { AGREEMENT, COMPANIES, COPY, type Copy } from './copy'
 import './welcome.css'
 
@@ -38,25 +39,31 @@ const DARK = {
   token: { colorPrimary: '#f5f5f5', colorTextLightSolid: '#0a0a0a', colorBgContainer: 'rgba(255,255,255,0.04)', colorBgElevated: '#171717', borderRadius: 10 },
 }
 
-// 首次安装的全屏欢迎：出品 → 欢迎 → 用户协议 → 四步引导。升级上来的实例只补同意协议
-export function WelcomeFlow({ setup }: { setup: SetupState }) {
+// 首次安装的全屏欢迎：出品 → 欢迎 → 用户协议 → 四步引导。升级上来的实例只补同意协议。
+// 传了 onExit 是重看模式：片头、欢迎、只读协议，看完回控制台，不改任何状态
+export function WelcomeFlow({ setup, onExit }: { setup: SetupState; onExit?: () => void }) {
   const { locale } = useI18n()
   const c = COPY[locale]
   const reduce = useReducedMotion()
-  const [phase, setPhase] = useState<Phase>(setup.accepted ? 'wizard' : 'present')
+  const [phase, setPhase] = useState<Phase>(setup.accepted && !onExit ? 'wizard' : 'present')
+  // 片头亮出标志时黑洞从全黑里透出来
+  const [revealed, setRevealed] = useState(false)
   const toHero = useCallback(() => setPhase(p => (p === 'present' ? 'hero' : p)), [])
+  const reveal = useCallback(() => setRevealed(true), [])
+  const dim = phase === 'present' ? (revealed ? 0.72 : 1) : phase === 'hero' ? 0 : 0.55
 
   return (
     <ConfigProvider theme={DARK}>
     <div className="wl-root">
-      <Backdrop dim={phase === 'present' ? 1 : phase === 'hero' ? 0 : 0.55} speed={reduce ? 0 : 0.72} />
+      <Backdrop dim={dim} speed={reduce ? 0 : 0.72} />
       <AnimatePresence mode="wait">
-        {phase === 'present' && <Present key="present" c={c} onDone={toHero} fast={!!reduce} />}
-        {phase === 'hero' && <Hero key="hero" c={c} onStart={() => setPhase('agreement')} />}
-        {phase === 'agreement' && <Agreement key="agreement" c={c} setup={setup} onAccepted={() => setPhase('wizard')} />}
+        {phase === 'present' && <Present key="present" c={c} onReveal={reveal} onDone={toHero} fast={!!reduce} />}
+        {phase === 'hero' && <Hero key="hero" c={c} cta={onExit ? c.replayAgreement : c.start} onStart={() => setPhase('agreement')} />}
+        {phase === 'agreement' && <Agreement key="agreement" c={c} setup={setup} onAccepted={() => setPhase('wizard')} onExit={onExit} />}
         {phase === 'wizard' && <Wizard key="wizard" c={c} />}
       </AnimatePresence>
       {phase !== 'present' && <Rights c={c} />}
+      {onExit && phase !== 'agreement' && <button type="button" className="wl-close" onClick={onExit}>{c.backConsole}</button>}
     </div>
     </ConfigProvider>
   )
@@ -83,45 +90,74 @@ class GLBoundary extends Component<{ children: ReactNode }, { failed: boolean }>
   render() { return this.state.failed ? <div className="wl-fallback" /> : this.props.children }
 }
 
-// 片头：「OpenXDR 开发组 presents」，再亮出名字。点哪都能跳过
-function Present({ c, onDone, fast }: { c: Copy; onDone: () => void; fast: boolean }) {
+// 片头：「OpenXDR 开发组 presents」逐字浮现 → 盾牌描边、X 划过、菱形弹出 → 字标扫光。点哪都能跳过
+const PRESENT_MS = 6400
+const REVEAL_MS = 2900
+
+function Present({ c, onReveal, onDone, fast }: { c: Copy; onReveal: () => void; onDone: () => void; fast: boolean }) {
   useEffect(() => {
-    const timer = setTimeout(onDone, fast ? 600 : 4600)
-    return () => clearTimeout(timer)
-  }, [onDone, fast])
+    const reveal = setTimeout(onReveal, fast ? 0 : REVEAL_MS)
+    const done = setTimeout(onDone, fast ? 900 : PRESENT_MS)
+    return () => { clearTimeout(reveal); clearTimeout(done) }
+  }, [onReveal, onDone, fast])
+  const glyphs = Array.from(c.team)
   return (
-    <motion.div className="wl-present" onClick={onDone} exit={{ opacity: 0, transition: { duration: 0.8 } }}>
-      <motion.div className="wl-present-team" initial={{ opacity: 0, letterSpacing: '0.6em' }} animate={{ opacity: [0, 1, 1, 0], letterSpacing: '0.32em' }}
-        transition={{ duration: 2.4, times: [0, 0.3, 0.75, 1], ease: 'easeOut' }}>
-        {c.team}
-        <motion.span className="wl-present-presents" initial={{ opacity: 0 }} animate={{ opacity: [0, 0, 1, 0] }} transition={{ duration: 2.4, times: [0, 0.35, 0.6, 1] }}>
-          {c.presents}
-        </motion.span>
-      </motion.div>
-      <motion.div className="wl-present-name" initial={{ opacity: 0, scale: 0.92, filter: 'blur(16px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-        transition={{ delay: 2.5, duration: 1.4, ease: EASE }}>
-        Open<span>XDR</span>
+    <motion.div className="wl-present" onClick={onDone} exit={{ opacity: 0, scale: 1.04, filter: 'blur(6px)', transition: { duration: 0.8, ease: EASE } }}>
+      {!fast && (
+        <motion.div className="wl-present-team" animate={{ opacity: [1, 1, 0], y: [0, 0, -18], filter: ['blur(0px)', 'blur(0px)', 'blur(8px)'] }}
+          transition={{ duration: 2.8, times: [0, 0.82, 1], ease: 'easeIn' }}>
+          <div className="wl-present-glyphs" aria-label={c.team}>
+            {glyphs.map((g, i) => (
+              <motion.span key={i} aria-hidden initial={{ opacity: 0, y: 14, filter: 'blur(12px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                transition={{ delay: 0.4 + i * 0.055, duration: 0.9, ease: EASE }}>{g === ' ' ? '\u00a0' : g}</motion.span>
+            ))}
+          </div>
+          <motion.i className="wl-present-line" initial={{ scaleX: 0, opacity: 0 }} animate={{ scaleX: 1, opacity: [0, 1, 0.6] }}
+            transition={{ delay: 0.9, duration: 1.3, ease: EASE }} />
+          <motion.span className="wl-present-presents" initial={{ opacity: 0, letterSpacing: '0.8em' }} animate={{ opacity: 1, letterSpacing: '0.42em' }}
+            transition={{ delay: 1.4, duration: 1.1, ease: EASE }}>{c.presents}</motion.span>
+        </motion.div>
+      )}
+      <motion.div className="wl-present-brand" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: fast ? 0 : 2.85, duration: 0.3 }}>
+        <div className="wl-present-mark">
+          <motion.i className="wl-present-ring" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: [0.5, 2.6], opacity: [0, 0.55, 0] }}
+            transition={{ delay: fast ? 0 : 4.8, duration: 1.6, ease: 'easeOut' }} />
+          <BrandMark size={128} animate={!fast} delay={2.9} />
+        </div>
+        <div className="wl-present-word" aria-label="OpenXDR">
+          {Array.from('OpenXDR').map((g, i) => (
+            <motion.span key={i} aria-hidden className={i >= 4 ? 'is-accent' : undefined} initial={fast ? false : { opacity: 0, y: 22, filter: 'blur(14px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={{ delay: 4.1 + i * 0.06, duration: 0.9, ease: EASE }}>{g}</motion.span>
+          ))}
+          {/* 扫光：同一行字叠一层，背景裁成文字形状，只移动背景，光只落在笔画上 */}
+          {!fast && <motion.span className="wl-present-shine" aria-hidden initial={{ backgroundPositionX: '120%', opacity: 1 }} animate={{ backgroundPositionX: '-20%', opacity: [1, 1, 0] }}
+            transition={{ delay: 5.0, duration: 1.2, ease: [0.4, 0, 0.2, 1], opacity: { delay: 5.0, duration: 1.2, times: [0, 0.85, 1] } }}>OpenXDR</motion.span>}
+        </div>
+        <motion.p className="wl-present-tagline" initial={fast ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 5.2, duration: 0.8, ease: EASE }}>
+          {c.tagline}
+        </motion.p>
       </motion.div>
       <motion.div className="wl-present-skip" initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} transition={{ delay: 1 }}>{c.skipIntro}</motion.div>
     </motion.div>
   )
 }
 
-function Hero({ c, onStart }: { c: Copy; onStart: () => void }) {
+function Hero({ c, cta, onStart }: { c: Copy; cta: string; onStart: () => void }) {
   return (
     <motion.section className="wl-hero" variants={container} initial="hidden" animate="show" exit={{ opacity: 0, x: -40, filter: 'blur(8px)', transition: { duration: 0.45 } }}>
+      <motion.div variants={item} className="wl-brand"><BrandMark size={34} animate={false} /><span>Open<b>XDR</b></span></motion.div>
       <motion.div variants={item} className="wl-badge"><span className="wl-ping"><i /><b /></span>{c.badge}</motion.div>
       <motion.h1 variants={headline} className="wl-headline">{c.headline}<br /><span>{c.headlineAccent}</span></motion.h1>
       <motion.p variants={item} className="wl-desc">{c.description}</motion.p>
       <motion.div variants={item}>
-        <button type="button" className="wl-cta" onClick={onStart} autoFocus>{c.start}<ArrowRightOutlined /></button>
+        <button type="button" className="wl-cta" onClick={onStart} autoFocus>{cta}<ArrowRightOutlined /></button>
       </motion.div>
       <motion.div variants={item} className="wl-pillars">{c.pillars.map(p => <span key={p}>{p}</span>)}</motion.div>
     </motion.section>
   )
 }
 
-function Agreement({ c, setup, onAccepted }: { c: Copy; setup: SetupState; onAccepted: () => void }) {
+function Agreement({ c, setup, onAccepted, onExit }: { c: Copy; setup: SetupState; onAccepted: () => void; onExit?: () => void }) {
   const { locale } = useI18n()
   const { message } = App.useApp()
   const client = useQueryClient()
@@ -144,13 +180,22 @@ function Agreement({ c, setup, onAccepted }: { c: Copy; setup: SetupState; onAcc
       <div className="wl-terms" tabIndex={0}>
         {AGREEMENT[locale].map(([title, body]) => <section key={title}><h3>{title}</h3><p>{body}</p></section>)}
       </div>
-      <footer>
-        <Checkbox checked={checked} onChange={e => setChecked(e.target.checked)}>{c.agreementCheck}</Checkbox>
-        <Space wrap>
-          <Button type="text" onClick={() => signOut()}>{c.decline}</Button>
-          <Button type="primary" size="large" disabled={!checked} loading={accept.isPending} onClick={() => accept.mutate()}>{c.agree}</Button>
-        </Space>
-      </footer>
+      {onExit ? (
+        <footer>
+          <Typography.Text type="secondary">
+            {setup.accepted && setup.acceptedAt ? c.acceptedInfo.replace('{user}', setup.acceptedBy).replace('{time}', fmtTime(setup.acceptedAt)) : c.notAccepted}
+          </Typography.Text>
+          <Button type="primary" size="large" onClick={onExit}>{c.backConsole}</Button>
+        </footer>
+      ) : (
+        <footer>
+          <Checkbox checked={checked} onChange={e => setChecked(e.target.checked)}>{c.agreementCheck}</Checkbox>
+          <Space wrap>
+            <Button type="text" onClick={() => signOut()}>{c.decline}</Button>
+            <Button type="primary" size="large" disabled={!checked} loading={accept.isPending} onClick={() => accept.mutate()}>{c.agree}</Button>
+          </Space>
+        </footer>
+      )}
     </motion.section>
   )
 }

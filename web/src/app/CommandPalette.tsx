@@ -1,5 +1,5 @@
 import {
-  AlertOutlined, CloudServerOutlined, CompassOutlined, MessageOutlined, MoonOutlined, SearchOutlined, SunOutlined, SwapOutlined, TranslationOutlined,
+  AlertOutlined, CloudServerOutlined, CompassOutlined, MessageOutlined, PlayCircleOutlined, MoonOutlined, SearchOutlined, SunOutlined, SwapOutlined, TranslationOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Input, Modal, Typography, theme } from 'antd'
@@ -65,6 +65,7 @@ export function CommandPalette({ open, onClose, onHelp }: { open: boolean; onClo
         { key: 'theme', words: 'theme dark light 主题 暗色 亮色', icon: dark ? <SunOutlined /> : <MoonOutlined />, label: dark ? t('lightMode') : t('darkMode'), run: toggle },
         { key: 'language', words: 'language 语言', icon: <TranslationOutlined />, label: locale === 'zh' ? 'English' : '中文', run: () => setLocale(locale === 'zh' ? 'en' : 'zh') },
         { key: 'tour', words: 'tour guide 导览 教程 引导', icon: <CompassOutlined />, label: t('tourStart'), run: tour.start },
+        { key: 'welcome', words: 'welcome intro agreement 欢迎 片头 用户协议', icon: <PlayCircleOutlined />, label: t('welcomeReplay'), run: () => navigate('/welcome') },
         { key: 'shortcuts', words: 'shortcuts keyboard 快捷键 键盘', icon: <span className="menu-kbd">?</span>, label: t('shortcutsTitle'), extra: <kbd>?</kbd>, run: onHelp },
       ].filter(a => match(a.label, 'words' in a ? a.words : '')).map(a => ({ ...a, section: 'paletteSectionActions' as MsgKey })),
     ]

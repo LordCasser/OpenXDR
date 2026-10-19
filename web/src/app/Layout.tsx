@@ -1,5 +1,5 @@
 import {
-  BellOutlined, CheckCircleOutlined, CheckOutlined, CompassOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SunOutlined, TeamOutlined,
+  BellOutlined, CheckCircleOutlined, CheckOutlined, CompassOutlined, LogoutOutlined, PlayCircleOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SearchOutlined, SunOutlined, TeamOutlined,
   TranslationOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -90,6 +90,7 @@ function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void })
   const { me, signOut } = useSession()
   const { token } = theme.useToken()
   const { message } = App.useApp()
+  const navigate = useNavigate()
   const tour = useTour()
   const [notify, setNotify] = useState(notifyOn)
   const toggleNotify = async () => {
@@ -118,6 +119,7 @@ function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void })
           ...(notifySupported ? [{ key: 'notify', icon: <BellOutlined />, label: t(notify ? 'desktopNotifyOff' : 'desktopNotifyOn') }] : []),
           { type: 'divider' },
           { key: 'tour', icon: <CompassOutlined />, label: t('tourStart') },
+          { key: 'welcome', icon: <PlayCircleOutlined />, label: t('welcomeReplay') },
           { key: 'shortcuts', icon: <span className="menu-kbd">?</span>, label: t('shortcutsTitle') },
           { type: 'divider' },
           { key: 'logout', icon: <LogoutOutlined />, label: t('logout') },
@@ -127,6 +129,7 @@ function UserMenu({ compact, onHelp }: { compact: boolean; onHelp: () => void })
           else if (key === 'language') setLocale(locale === 'zh' ? 'en' : 'zh')
           else if (key === 'notify') void toggleNotify()
           else if (key === 'tour') tour.start()
+          else if (key === 'welcome') navigate('/welcome')
           else if (key === 'shortcuts') onHelp()
           else if (key === 'logout') void signOut().catch(error => message.error(errText(error, t)))
         },

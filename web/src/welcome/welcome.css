@@ -52,32 +52,92 @@
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  font-size: 15px;
+}
+.wl-present-glyphs {
+  display: flex;
+  font-size: 22px;
   font-weight: 500;
+  letter-spacing: 0.34em;
   text-transform: uppercase;
-  color: #d4d4d4;
+  color: #e5e5e5;
+  text-shadow: 0 0 24px rgba(165, 180, 252, 0.35);
+}
+.wl-present-glyphs span { display: inline-block; }
+.wl-present-line {
+  display: block;
+  width: 260px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(199, 220, 255, 0.9), transparent);
+  box-shadow: 0 0 12px rgba(120, 160, 255, 0.6);
 }
 .wl-present-presents {
-  font-size: 12px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
   font-style: italic;
-  letter-spacing: 0.4em;
   text-transform: lowercase;
-  color: #737373;
+  color: #8a8a8a;
 }
-.wl-present-name {
-  font-size: clamp(56px, 11vw, 148px);
-  font-weight: 500;
-  letter-spacing: -0.05em;
+.wl-present-brand { display: flex; flex-direction: column; align-items: center; }
+.wl-present-mark { position: relative; display: grid; place-items: center; }
+.wl-present-mark .wl-mark { filter: drop-shadow(0 0 28px rgba(79, 140, 255, 0.55)); }
+.wl-present-ring {
+  position: absolute;
+  width: 128px;
+  height: 128px;
+  border: 1px solid rgba(165, 200, 255, 0.7);
+  border-radius: 50%;
+  box-shadow: 0 0 40px rgba(79, 140, 255, 0.5), inset 0 0 30px rgba(79, 140, 255, 0.35);
+}
+.wl-present-word {
+  position: relative;
+  margin-top: 30px;
+  padding: 0 0.08em 0.06em;
+  font-size: clamp(52px, 8vw, 104px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
   line-height: 1;
-  background: linear-gradient(180deg, #fff 30%, #8a8a8a);
+  color: #f5f5f5;
+}
+.wl-present-word span { display: inline-block; }
+.wl-present-word .is-accent {
+  background: linear-gradient(120deg, #c7dcff 0%, #5b9dff 55%, #6ee7b7 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-.wl-present-name span { background: linear-gradient(120deg, #a5b4fc, #6ee7b7); -webkit-background-clip: text; background-clip: text; }
+.wl-present-shine {
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  background: linear-gradient(100deg, transparent 40%, rgba(255, 255, 255, 0.95) 50%, transparent 60%) no-repeat;
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  pointer-events: none;
+}
+.wl-present-tagline { margin: 18px 0 0; font-size: 15px; letter-spacing: 0.08em; color: #a3a3a3; }
 .wl-present-skip { position: absolute; bottom: 40px; font-size: 12px; letter-spacing: 0.12em; color: #a3a3a3; }
 
 /* 欢迎首屏 */
+.wl-brand { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 28px; font-size: 22px; font-weight: 600; letter-spacing: -0.03em; color: #f5f5f5; }
+.wl-brand b { font-weight: 600; background: linear-gradient(120deg, #c7dcff, #5b9dff 55%, #6ee7b7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wl-brand .wl-mark { filter: drop-shadow(0 0 14px rgba(79, 140, 255, 0.45)); }
+.wl-close {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 2;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  color: #d4d4d4;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wl-close:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
 .wl-hero {
   position: relative;
   width: 100%;

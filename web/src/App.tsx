@@ -81,6 +81,7 @@ const router = createBrowserRouter([
       { path: 'groups', ...page(() => import('./pages/GroupsPage'), 'GroupsPage', true) },
       { path: 'audit', ...page(() => import('./pages/AuditPage'), 'AuditPage', true) },
       { path: 'settings', ...page(() => import('./pages/SettingsPage'), 'SettingsPage', true) },
+      { path: 'welcome', ...page(() => import('./welcome/WelcomeReplay'), 'WelcomeReplay') },
       { path: '*', element: <NotFound /> },
     ],
   },

@@ -1085,6 +1085,7 @@ const zh = {
   surfaceEmpty: '还没有可展示的暴露面',
   // 新手导览
   tourStart: '新手导览',
+  welcomeReplay: '重看欢迎页',
   tourWelcomeTitle: '欢迎使用 OpenXDR',
   tourWelcomeDesc: '花一分钟，认识控制台。之后随时可以从账号菜单或命令面板重看。',
   tourGroupTitle: '先选资产组',
@@ -2291,6 +2292,7 @@ const en = {
   noPaths: 'No access observed yet',
   surfaceEmpty: 'No exposures to show yet',
   tourStart: 'Product tour',
+  welcomeReplay: 'Replay welcome',
   tourWelcomeTitle: 'Welcome to OpenXDR',
   tourWelcomeDesc: 'Take a minute to get to know the console. Replay it anytime from the account menu or the command palette.',
   tourGroupTitle: 'Pick a group first',
