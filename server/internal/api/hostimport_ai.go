@@ -142,11 +142,15 @@ func hostImportAI(mux *http.ServeMux, s *hostimport.Service) {
 			return
 		}
 		actor, group := k.Owner, k.Subject
-		j, err := aijob.Start(r.Context(), s.DB, k, func(ctx context.Context) (any, error) {
+		j, started, err := aijob.Start(r.Context(), s.DB, k, func(ctx context.Context) (any, error) {
 			return s.AnalyzeDocument(ctx, doc, actor, group)
 		}, func() { <-slots })
 		if err != nil {
 			http.Error(w, err.Error(), 500)
+			return
+		}
+		if !started {
+			http.Error(w, "这个组已有一份文档在解析，等它完成后再提交", 409)
 			return
 		}
 		writeJSON(w, aijob.ViewOf(j))

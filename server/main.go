@@ -26,6 +26,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/aiconf"
+	"openxdr/server/internal/aijob"
 	"openxdr/server/internal/api"
 	"openxdr/server/internal/assetmap"
 	"openxdr/server/internal/auth"
@@ -82,6 +83,9 @@ func main() {
 			return err
 		}
 		if err := response.EnsureVerificationSchema(ctx, db); err != nil {
+			return err
+		}
+		if err := aijob.EnsureSchema(ctx, db); err != nil {
 			return err
 		}
 		return ingest.EnsureSchema(ctx, db)

@@ -19,6 +19,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/aijob"
 	"openxdr/server/internal/temporal"
 )
 
@@ -42,6 +43,9 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 	}
 	if err := temporal.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("时序处理状态初始化失败: %v", err)
+	}
+	if err := aijob.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("AI 任务索引失败: %v", err)
 	}
 	truncate(ctx, t, client)
 	return ctx, client

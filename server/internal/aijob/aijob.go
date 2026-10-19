@@ -5,7 +5,9 @@ package aijob
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -21,6 +23,8 @@ const (
 	// running 超过这个时间还没写回，只可能是跑它的进程没了（发版重启）
 	staleAfter = runTimeout + time.Minute
 )
+
+const interrupted = "服务重启打断了这次调用，请重新发起"
 
 // 各类结果保留多久：导入结果里有封存的凭据令牌，用完即走
 var keep = map[string]time.Duration{"explain": 7 * 24 * time.Hour, "host_import": time.Hour}
@@ -45,7 +49,7 @@ func ViewOf(j *ent.AIJob) View {
 	}
 	v := View{ID: j.ID, Status: j.Status, Result: j.Result, Error: j.Error, CreatedAt: &j.CreatedAt, FinishedAt: j.FinishedAt}
 	if j.Status == "running" && time.Since(j.CreatedAt) > staleAfter {
-		v.Status, v.Error = "failed", "服务重启打断了这次调用，请重新发起"
+		v.Status, v.Error = "failed", interrupted
 	}
 	return v
 }
@@ -65,15 +69,47 @@ func Latest(ctx context.Context, db *ent.Client, k Key) (*ent.AIJob, error) {
 // Running 这个对象是否已有一次在跑（没卡死的）
 func Running(j *ent.AIJob) bool { return j != nil && ViewOf(j).Status == "running" }
 
-// Start 落一行 running，后台跑 fn，结果按 JSON 存。release 在跑完后调用（释放并发名额），可为 nil
-func Start(ctx context.Context, db *ent.Client, k Key, fn func(context.Context) (any, error), release func()) (*ent.AIJob, error) {
-	prune(ctx, db)
-	j, err := db.AIJob.Create().SetKind(k.Kind).SetSubject(k.Subject).SetVariant(k.Variant).SetOwner(k.Owner).Save(ctx)
-	if err != nil {
-		if release != nil {
+// EnsureSchema 同一对象同时只允许一个 running：部分唯一索引兜住多节点、多标签页同时发起。
+// 建索引前把卡死的与重复的 running 记成失败，免得旧数据让索引建不起来
+func EnsureSchema(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, `
+UPDATE ai_jobs j SET status = 'failed', error = $1, finished_at = now()
+ WHERE status = 'running' AND (created_at < now() - make_interval(secs => $2) OR EXISTS (
+   SELECT 1 FROM ai_jobs k WHERE k.status = 'running' AND k.kind = j.kind AND k.subject = j.subject
+      AND k.variant = j.variant AND k.owner = j.owner AND (k.created_at, k.id) > (j.created_at, j.id)))`,
+		interrupted, staleAfter.Seconds()); err != nil {
+		return err
+	}
+	_, err := db.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS ai_jobs_one_running
+  ON ai_jobs (kind, subject, variant, owner) WHERE status = 'running'`)
+	return err
+}
+
+// Start 落一行 running，后台跑 fn，结果按 JSON 存。release 在跑完后调用（释放并发名额），可为 nil。
+// 这个对象已有一次在跑时不再发起，返回在跑的那次，started 为 false
+func Start(ctx context.Context, db *ent.Client, k Key, fn func(context.Context) (any, error), release func()) (j *ent.AIJob, started bool, err error) {
+	defer func() {
+		if !started && release != nil {
 			release()
 		}
-		return nil, err
+	}()
+	prune(ctx, db)
+	// 跑它的进程没了的 running 让位，否则唯一索引会一直挡住重新发起
+	if _, err := db.AIJob.Update().Where(entjob.KindEQ(k.Kind), entjob.SubjectEQ(k.Subject), entjob.VariantEQ(k.Variant), entjob.OwnerEQ(k.Owner),
+		entjob.StatusEQ("running"), entjob.CreatedAtLT(time.Now().Add(-staleAfter))).
+		SetStatus("failed").SetError(interrupted).SetFinishedAt(time.Now()).Save(ctx); err != nil {
+		return nil, false, err
+	}
+	j, err = db.AIJob.Create().SetKind(k.Kind).SetSubject(k.Subject).SetVariant(k.Variant).SetOwner(k.Owner).Save(ctx)
+	if ent.IsConstraintError(err) {
+		j, err = Latest(ctx, db, k)
+		if err == nil && j == nil {
+			err = errors.New("任务状态冲突，请重试")
+		}
+		return j, false, err
+	}
+	if err != nil {
+		return nil, false, err
 	}
 	go func() {
 		if release != nil {
@@ -101,7 +137,7 @@ func Start(ctx context.Context, db *ent.Client, k Key, fn func(context.Context) 
 			slog.Error("AI 任务结果写回失败", "kind", k.Kind, "job", j.ID, "err", sErr)
 		}
 	}()
-	return j, nil
+	return j, true, nil
 }
 
 // Discard 删掉某人对某对象的任务（导入确认后，结果里的凭据令牌不再需要）

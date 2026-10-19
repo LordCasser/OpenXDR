@@ -159,15 +159,15 @@ if [ "$TLS" = internal ]; then
 cat <<EOF
 控制台用的是自建 CA。浏览器首次访问会提示不受信任；被纳管的主机必须先信任这张 CA，才能执行控制台给出的安装命令：
 
+  # 下面的命令先核对指纹，对得上才装进信任库；对不上会报错停下，说明下载被人篡改了
   # Debian / Ubuntu
-  curl -fsSL http://$HOST/openxdr-ca.crt -o /usr/local/share/ca-certificates/openxdr.crt && sha256sum /usr/local/share/ca-certificates/openxdr.crt && update-ca-certificates
+  curl -fsSL http://$HOST/openxdr-ca.crt -o /tmp/openxdr-ca.crt && echo "$FP  /tmp/openxdr-ca.crt" | sha256sum -c && cp /tmp/openxdr-ca.crt /usr/local/share/ca-certificates/openxdr.crt && update-ca-certificates
   # RHEL / CentOS / Rocky
-  curl -fsSL http://$HOST/openxdr-ca.crt -o /etc/pki/ca-trust/source/anchors/openxdr.crt && sha256sum /etc/pki/ca-trust/source/anchors/openxdr.crt && update-ca-trust
+  curl -fsSL http://$HOST/openxdr-ca.crt -o /tmp/openxdr-ca.crt && echo "$FP  /tmp/openxdr-ca.crt" | sha256sum -c && cp /tmp/openxdr-ca.crt /etc/pki/ca-trust/source/anchors/openxdr.crt && update-ca-trust
   # Windows（管理员 PowerShell）
-  iwr http://$HOST/openxdr-ca.crt -OutFile openxdr-ca.crt; (Get-FileHash openxdr-ca.crt).Hash; certutil -addstore Root openxdr-ca.crt
+  iwr http://$HOST/openxdr-ca.crt -OutFile openxdr-ca.crt; if ((Get-FileHash openxdr-ca.crt).Hash -eq '$FP') { certutil -addstore Root openxdr-ca.crt } else { throw '指纹不一致，已停止' }
 
-  核对指纹（SHA256）：$FP
-  不一致就停下：说明下载被人篡改了。
+  CA 指纹（SHA256）：$FP
 
 EOF
 fi
