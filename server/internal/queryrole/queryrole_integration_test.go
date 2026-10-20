@@ -6,12 +6,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/eventpart"
 	"openxdr/server/internal/identity"
 	"openxdr/server/internal/testdb"
 )
@@ -220,5 +222,53 @@ func TestDropDryRunAfterViewRebuild(t *testing.T) {
 	var n int
 	if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM commands`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("删列后组视图应照常可查：%d %v", n, err)
+	}
+}
+
+// events 是分区表时组视图定义不变：带 ts 范围的查询穿过 security_barrier 视图仍能裁剪分区
+// （时间比较运算符是 leakproof 的，条件可以下推），alert_events 按事件主键回查照常可用。
+func TestGroupViewsPrunePartitions(t *testing.T) {
+	ctx, client := testdb.New(t)
+	dsn := os.Getenv("INTEGRATION_DATABASE_URL")
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := identity.EnsureSchema(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	g := client.Group.Create().SetName("g").SaveX(ctx)
+	a := client.Asset.Create().SetHostname("g1").SetGroupID(g.ID).SaveX(ctx)
+	today := eventpart.Today()
+	for i := range 3 {
+		e := client.Event.Create().SetTs(today.AddDate(0, 0, i).Add(time.Hour)).SetClassUID(1007).SetSource("agent").SetAssetID(a.ID).
+			SetRaw(json.RawMessage(`{}`)).SaveX(ctx)
+		client.Alert.Create().SetTs(e.Ts).SetRuleID("r").SetSeverity(3).SetAssetID(a.ID).SetEventID(e.ID).SaveX(ctx)
+	}
+	p := &Provisioner{DB: db, Client: client, BaseDSN: dsn}
+	t.Cleanup(func() { p.Drop(ctx, g.ID) })
+	if err := p.Ensure(ctx, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	ro, err := sql.Open("pgx", p.URL(ctx, g.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ro.Close() })
+	from, to := today.AddDate(0, 0, 1), today.AddDate(0, 0, 2)
+	var plan string
+	if err := ro.QueryRowContext(ctx, `EXPLAIN (FORMAT JSON) SELECT count(*) FROM events WHERE ts >= $1 AND ts < $2`, from, to).Scan(&plan); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan, eventpart.DailyName(from)) || strings.Contains(plan, eventpart.DailyName(today)) || strings.Contains(plan, eventpart.DefaultName) {
+		t.Fatalf("组视图上带 ts 范围的查询应只扫 %s：%s", eventpart.DailyName(from), plan)
+	}
+	var n int
+	if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM events WHERE ts >= $1 AND ts < $2`, from, to).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("按天计数应为 1：%d %v", n, err)
+	}
+	if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM alert_events`).Scan(&n); err != nil || n != 3 {
+		t.Fatalf("alert_events 应带出 3 条告警事件：%d %v", n, err)
 	}
 }

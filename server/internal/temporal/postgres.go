@@ -14,11 +14,12 @@ import (
 
 // EnsureSchema 创建可重启恢复的候选及命中证据。资产换组会清除候选，
 // 即使先换到 B 再换回 A、期间没有事件，也不会复用旧 A 的序列状态。
+// 事件列不建外键（分区表无法被单列引用），级联与证据保护见 eventpart。
 func EnsureSchema(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS temporal_rule_snapshots (
  revision text PRIMARY KEY, document jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS temporal_candidates (
- revision text NOT NULL, event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ revision text NOT NULL, event_id uuid NOT NULL,
  asset_id uuid NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
  group_id uuid NOT NULL, ts timestamptz NOT NULL, rules jsonb NOT NULL,
  PRIMARY KEY(revision,event_id));
@@ -27,7 +28,7 @@ ALTER TABLE temporal_candidates ADD COLUMN IF NOT EXISTS account text;
 CREATE INDEX IF NOT EXISTS temporal_candidates_ts ON temporal_candidates(ts);
 CREATE INDEX IF NOT EXISTS temporal_candidates_account ON temporal_candidates(revision,group_id,account,ts) WHERE account IS NOT NULL;
 CREATE TABLE IF NOT EXISTS temporal_evaluation_gaps (
- revision text NOT NULL, event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ revision text NOT NULL, event_id uuid NOT NULL,
  asset_id uuid NOT NULL REFERENCES assets(id) ON DELETE CASCADE, group_id uuid NOT NULL,
  reason text NOT NULL, candidate_count_lower_bound integer NOT NULL,
  window_from timestamptz NOT NULL, window_to timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
@@ -36,7 +37,7 @@ CREATE INDEX IF NOT EXISTS temporal_evaluation_gaps_scope ON temporal_evaluation
 CREATE INDEX IF NOT EXISTS temporal_evaluation_gaps_asset ON temporal_evaluation_gaps(asset_id,created_at DESC,revision DESC,event_id DESC);
 CREATE TABLE IF NOT EXISTS temporal_detections (
  revision text NOT NULL, rule_id text NOT NULL,
- anchor_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ anchor_id uuid NOT NULL,
  group_id uuid NOT NULL, entity text NOT NULL, evidence jsonb NOT NULL,
  PRIMARY KEY(revision,rule_id,anchor_id));
 DO $$ BEGIN
@@ -49,7 +50,7 @@ CREATE INDEX IF NOT EXISTS temporal_evaluation_gaps_event ON temporal_evaluation
 CREATE INDEX IF NOT EXISTS temporal_detections_anchor ON temporal_detections(anchor_id);
 CREATE TABLE IF NOT EXISTS temporal_evidence (
  revision text NOT NULL, rule_id text NOT NULL, anchor_id uuid NOT NULL,
- event_id uuid NOT NULL REFERENCES events(id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED,
+ event_id uuid NOT NULL,
  PRIMARY KEY(revision,rule_id,anchor_id,event_id),
  FOREIGN KEY(revision,rule_id,anchor_id) REFERENCES temporal_detections(revision,rule_id,anchor_id) ON DELETE CASCADE);
 CREATE INDEX IF NOT EXISTS temporal_evidence_event ON temporal_evidence(event_id);

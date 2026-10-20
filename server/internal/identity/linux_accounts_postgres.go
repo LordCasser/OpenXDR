@@ -11,7 +11,7 @@ import (
 
 func ensureLocalAccountsSchema(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS identity_local_snapshots (
- event_id uuid PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+ event_id uuid PRIMARY KEY,
  asset_id uuid NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
  group_id uuid, state text NOT NULL CHECK(state IN ('observed','unavailable','invalid')),
  source text NOT NULL CHECK(source='etc-passwd'));

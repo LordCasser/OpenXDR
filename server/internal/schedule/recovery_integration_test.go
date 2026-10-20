@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"openxdr/server/internal/eventpart"
 	"openxdr/server/internal/testdb"
 )
 
@@ -56,7 +57,7 @@ func TestTaskCreatedAtMigratesExistingRows(t *testing.T) {
 	if _, err := raw.ExecContext(ctx, "ALTER TABLE tasks DROP COLUMN created_at"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Schema.Create(ctx); err != nil {
+	if err := db.Schema.Create(ctx, eventpart.SchemaOption); err != nil {
 		t.Fatal(err)
 	}
 	if db.Task.GetX(ctx, "legacy").CreatedAt.IsZero() {

@@ -3,6 +3,9 @@
 // 策略：只删没有被告警或时序证据引用的事件。被引用的事件是 incident 的证据，
 // 跟着 incident 的生命周期走，不能因为到期就抹掉。
 // 存储膨胀的主体本来就是无人问津的原始遥测，删掉它们即可。
+//
+// events 是分区表时，过期的日分区整体退役（证据并进月归档分区，其余随分区删除），
+// 逐行删除只剩归档与默认分区里的少量行（迟到事件、异常时间戳、引用已解除的证据）。
 package janitor
 
 import (
@@ -16,6 +19,7 @@ import (
 	"openxdr/server/ent/decoyobservation"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/session"
+	"openxdr/server/internal/eventpart"
 	"openxdr/server/internal/temporal"
 )
 
@@ -40,6 +44,13 @@ func (j *Janitor) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if j.Retention > 0 && j.SQL != nil {
+				if n, dropped, err := eventpart.Retire(ctx, j.SQL, retireCutoff(time.Now(), j.Retention)); err != nil {
+					slog.Error("退役过期事件分区失败", "err", err)
+				} else if n > 0 {
+					slog.Info("退役过期事件分区", "partitions", n, "dropped", dropped)
+				}
+			}
 			if j.Retention > 0 {
 				deleted, err := j.sweep(ctx)
 				if err != nil {
@@ -74,8 +85,26 @@ func (j *Janitor) Run(ctx context.Context) {
 	}
 }
 
+// retireGuard 是时序证据可能引用的最老事件年龄：最大窗口 24 小时加迟到余量，再留一小时处理耗时。
+// 退役分区不经外键或触发器兜底，必须只退役不会再被新证据引用的日子。
+const retireGuard = 24*time.Hour + temporal.LateGrace + time.Hour
+
+func retireCutoff(now time.Time, retention time.Duration) time.Time {
+	return now.Add(-max(retention, retireGuard))
+}
+
 func (j *Janitor) sweep(ctx context.Context) (int, error) {
 	cutoff := time.Now().Add(-j.Retention)
+	// 分区表上逐行删除只碰最老日分区之前（归档与默认分区），日分区留给整体退役，免得删出一片死元组
+	if j.SQL != nil {
+		oldest, ok, err := eventpart.OldestDaily(ctx, j.SQL)
+		if err != nil {
+			return 0, err
+		}
+		if ok && oldest.Before(cutoff) {
+			cutoff = oldest
+		}
+	}
 	total := 0
 	for {
 		ids, err := j.DB.Event.Query().
@@ -85,7 +114,7 @@ func (j *Janitor) sweep(ctx context.Context) (int, error) {
 		if err != nil || len(ids) == 0 {
 			return total, err
 		}
-		n, err := j.DB.Event.Delete().Where(event.IDIn(ids...)).Exec(ctx)
+		n, err := j.DB.Event.Delete().Where(event.IDIn(ids...), event.TsLT(cutoff)).Exec(ctx)
 		total += n
 		if err != nil {
 			return total, err
@@ -103,7 +132,7 @@ func (j *Janitor) sweep(ctx context.Context) (int, error) {
 	}
 }
 
-// 时序前序事件不一定直接挂告警，仍属于告警证据。数据库外键负责并发删除的最终保护。
+// 时序前序事件不一定直接挂告警，仍属于告警证据。并发删除的最终保护：老表靠外键，分区表靠 openxdr_events_release 触发器。
 func withoutTemporalEvidence(selector *sql.Selector) {
 	detections := sql.Table("temporal_detections")
 	selector.Where(sql.NotExists(sql.Select(detections.C("anchor_id")).From(detections).

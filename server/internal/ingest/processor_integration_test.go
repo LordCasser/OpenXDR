@@ -18,6 +18,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/eventpart"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
@@ -35,13 +36,17 @@ func testProcessor(t *testing.T) (*Processor, *ent.Client, *sql.DB) {
 	}
 	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, db)))
 	ctx := context.Background()
-	if err := client.Schema.Create(ctx); err != nil {
+	if err := eventpart.Migrate(ctx, client, db); err != nil {
 		t.Fatal(err)
 	}
 	if err := EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	_, _ = db.Exec(`TRUNCATE alert_dedup_state, alerts, events, assets CASCADE`)
+	// 派生表不再有指向 events 的外键，TRUNCATE events CASCADE 带不走它们，要点名清
+	if _, err := db.Exec(`TRUNCATE alert_dedup_state, alerts, events, assets, temporal_matches, temporal_candidates,
+ temporal_evaluation_gaps, temporal_detections, identity_observations, identity_local_snapshots CASCADE`); err != nil {
+		t.Fatal(err)
+	}
 	rules := sigma.LoadDir(t.TempDir())
 	return &Processor{DB: db, Rules: rules, Suppress: suppress.New(client, 0), Intel: intel.New(client, 0), DedupWindow: time.Hour}, client, db
 }

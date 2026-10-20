@@ -37,6 +37,7 @@ import (
 	"openxdr/server/internal/correlate"
 	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
+	"openxdr/server/internal/eventpart"
 	"openxdr/server/internal/grpcsvc"
 	"openxdr/server/internal/hostimport"
 	"openxdr/server/internal/identity"
@@ -161,7 +162,7 @@ func openStore(ctx context.Context, dsn string) (*sql.DB, *ent.Client) {
 
 // migrateSchema 建表与各模块的库结构迁移，调用方须持有 schema 锁。
 func migrateSchema(ctx context.Context, db *sql.DB, client *ent.Client) error {
-	if err := client.Schema.Create(ctx); err != nil {
+	if err := eventpart.Migrate(ctx, client, db); err != nil {
 		return err
 	}
 	ensureSearchIndex(ctx, db)
@@ -258,6 +259,9 @@ func startAnalytics(ctx context.Context, db *sql.DB, client *ent.Client, rules s
 		Interval:  time.Duration(getenvInt("RETENTION_INTERVAL_MINUTES", 60)) * time.Minute,
 	}
 	go cluster.RunLeader(ctx, db, "janitor", janitorEngine.Run)
+	// 事件日分区预建与保留期退役无关：RETENTION_DAYS=0 也要按天建分区
+	partitions := &eventpart.Maintainer{DB: db, Interval: time.Hour}
+	go cluster.RunLeader(ctx, db, "event-partitions", partitions.Run)
 	// 低危良性事件放久了自动按误报结案；0 关闭。Run 返回会被租约循环立刻重拉，关闭时干脆不启动
 	if days := getenvInt("AUTO_CLOSE_BENIGN_DAYS", 7); days > 0 {
 		autoClose := &janitor.AutoClose{DB: client, Days: days, Interval: time.Hour}

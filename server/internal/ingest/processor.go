@@ -35,6 +35,7 @@ type Processor struct {
 
 // EnsureSchema 创建事务处理状态。temporal_matches 是已消费命中的持久记录，
 // 不能在事件仍保留时清空，否则迟到回看可能重复生成告警。
+// 指向事件的列都不建外键：分区表的唯一约束必须含 ts，删除级联由 eventpart 的触发器与分区退役负责。
 func EnsureSchema(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS alert_dedup_state (
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS alert_dedup_state (
 CREATE INDEX IF NOT EXISTS alert_dedup_last_ts ON alert_dedup_state(last_ts);
 CREATE TABLE IF NOT EXISTS temporal_matches (
  rule_id text NOT NULL,
- event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ event_id uuid NOT NULL,
  PRIMARY KEY(rule_id,event_id)
 );
 CREATE INDEX IF NOT EXISTS temporal_matches_event ON temporal_matches(event_id);`)
@@ -102,10 +103,11 @@ func (p *Processor) Process(ctx context.Context, e Envelope) (err error) {
 			return err
 		}
 	}
+	// 不写冲突列：分区表主键是 (id, ts)，老表是 id。稳定 ID 由含时间戳的来源字段算出，同一 id 必是同一 ts，两者等价
 	result, err := tx.ExecContext(ctx, `INSERT INTO events
   (id, ts, class_uid, source, asset_id, process_guid, parent_process_guid, username, conn_tuple, raw)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-ON CONFLICT (id) DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
+ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 		nullUUID(e.AssetID), nullUUID(e.ProcessGUID), nullUUID(e.ParentProcessGUID),
 		nullString(e.Username), nullString(e.ConnTuple), string(e.Raw))
 	if err != nil {

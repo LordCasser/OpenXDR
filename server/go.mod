@@ -3,6 +3,7 @@ module openxdr/server
 go 1.26.0
 
 require (
+	ariga.io/atlas v0.36.2-0.20250730182955-2c6300d0a3e1
 	entgo.io/ent v0.14.6
 	github.com/go-asn1-ber/asn1-ber v1.5.8
 	github.com/go-ldap/ldap/v3 v3.4.14
@@ -13,13 +14,13 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/yuin/goldmark v1.8.6
 	golang.org/x/crypto v0.57.0
+	golang.org/x/sys v0.48.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	ariga.io/atlas v0.36.2-0.20250730182955-2c6300d0a3e1 // indirect
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
@@ -48,7 +49,6 @@ require (
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 )

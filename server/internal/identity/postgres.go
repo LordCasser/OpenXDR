@@ -9,9 +9,10 @@ import (
 	"openxdr/server/internal/identity/directory"
 )
 
+// EnsureSchema 建身份观察表；event_id 不建外键（分区表无法被单列引用），随事件删除的级联见 eventpart。
 func EnsureSchema(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS identity_observations (
- event_id uuid PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+ event_id uuid PRIMARY KEY,
  asset_id uuid NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
  group_id uuid, account_key text, account_sid text, account_name text, account_domain text,
  logon_id text, success boolean, state text NOT NULL, detail text NOT NULL DEFAULT '');

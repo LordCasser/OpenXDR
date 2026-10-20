@@ -20,6 +20,7 @@ import (
 
 	"openxdr/server/ent"
 	"openxdr/server/internal/aijob"
+	"openxdr/server/internal/eventpart"
 	"openxdr/server/internal/temporal"
 )
 
@@ -38,7 +39,7 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 	t.Cleanup(func() { client.Close() })
 
 	ctx := context.Background()
-	if err := client.Schema.Create(ctx); err != nil {
+	if err := eventpart.Migrate(ctx, client, db); err != nil {
 		t.Fatalf("schema 迁移失败: %v", err)
 	}
 	if err := aijob.EnsureSchema(ctx, db); err != nil {
