@@ -68,8 +68,14 @@ EOF
 | asset_links | src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen（本组主机发起的连接聚合） |
 | ip_infos | ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at（本组主机连过的公网地址） |
 | reports | id, created_at, title, level(ok/attention/urgent), markdown, summary（本组历史报告，可与上一轮对比；定时任务的标题就是任务名） |
+| identities | id, kind(directory/host), name, anchor_account_id, created_at（每个目录账号一个身份；没有目录锚点的主机账号各自是主机内身份） |
+| identity_accounts | id, kind(directory/windows/linux), asset_id, name, domain, sid, uid, directory_account_id, first_seen, last_seen, identity_id, link_basis, link_confidence, link_source, linked_at（账号与当前所属身份） |
+| identity_links | id, identity_id, account_id, basis(directory_anchor/ad_sid/host_local/manual), confidence(authoritative/strong/local/manual), evidence(jsonb), source, created_at, revoked_at, revoked_by, revoke_reason（链接与撤销历史） |
+| identity_linux_logins | event_id, ts, asset_id, account_name, success, source_address, state(matched/no_account/no_snapshot/snapshot_unavailable), snapshot_event_id, snapshot_ts, uid, account_id（Linux 登录关联到登录时有效的本地账号清单） |
 
 - **events 查询必须带 ts 范围**，表很大，尽量再带 asset_id。
+- **身份只按强证据合并**：目录账号是锚点，Windows SID 等于 AD objectSid 才自动链接，其余由人工确认（basis=manual）。
+  不同主机上的同名账号默认是不同身份，不要按名字自行合并下结论；Linux 登录 state 不是 matched 的不能当作某个账号的登录。
 - **要告警对应的原始事件就查 alert_events**（按 incident_id / rule_id / alert_id 过滤）。不要自己 `alerts JOIN events`，
   也不要 `events WHERE id IN (SELECT event_id ...)`：这两种写法都会扫全表、超时。已知单个事件 id 时直接 `WHERE id = '...'` 也可以。
 - 报「查询超过 5 秒被取消」是范围太大，不是语法错：收窄 ts、加 asset_id 或换 alert_events，不要反复改写同一条查询。

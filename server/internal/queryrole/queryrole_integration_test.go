@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/identity"
 	"openxdr/server/internal/testdb"
 )
 
@@ -45,6 +46,29 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 		client.Report.Create().SetSessionID(uuid.New()).SetGroupID(x.group).SetTitle("r").SetMarkdown("m").SaveX(ctx)
 	}
 	client.Suppression.Create().SetRuleID("global").SaveX(ctx) // 全局抑制谁的视图里都不该有
+	// 身份图：两组各一份本地账号清单与一条登录，由后台过程登记账号、建出身份与链接并关联登录
+	if err := identity.EnsureSchema(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range []*ent.Asset{a1, b1} {
+		inventory := client.Event.Create().SetTs(now.Add(-time.Minute)).SetClassUID(5001).SetSource("agent").SetAssetID(x.ID).SetRaw(json.RawMessage(`{}`)).SaveX(ctx)
+		login := client.Event.Create().SetTs(now).SetClassUID(3002).SetSource("agent").SetAssetID(x.ID).SetRaw(json.RawMessage(`{}`)).SaveX(ctx)
+		for _, stmt := range []struct {
+			sql  string
+			args []any
+		}{
+			{`INSERT INTO identity_local_snapshots(event_id,asset_id,group_id,state,source,ts) VALUES($1,$2,$3,'observed','etc-passwd',$4)`, []any{inventory.ID, x.ID, *x.GroupID, inventory.Ts}},
+			{`INSERT INTO identity_local_accounts(event_id,name,uid,gid,shell) VALUES($1,'alice',1000,1000,'/bin/sh')`, []any{inventory.ID}},
+			{`INSERT INTO identity_observations(event_id,asset_id,group_id,account_name,success,state) VALUES($1,$2,$3,'alice',true,'missing_uid')`, []any{login.ID, x.ID, *x.GroupID}},
+		} {
+			if _, err := db.ExecContext(ctx, stmt.sql, stmt.args...); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := identity.SyncGraph(ctx, db); err != nil {
+		t.Fatal(err)
+	}
 	// 告警连同事件：各组一条；再造一条挂在 a1 上、却指向 b1 事件的告警，事件不属于同一主机就不能带出来
 	events := map[uuid.UUID]*ent.Event{}
 	for _, x := range []*ent.Asset{a1, b1} {
@@ -99,6 +123,16 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 			t.Errorf("%s 只应看到本组的数据：得到 %q，%v", view, got, err)
 		}
 	}
+	var linked int
+	if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM identity_accounts a JOIN identities i ON i.id = a.identity_id
+  JOIN identity_links l ON l.account_id = a.id JOIN identity_linux_logins g ON g.account_id = a.id WHERE a.asset_id = $1`, a1.ID).Scan(&linked); err != nil || linked != 1 {
+		t.Errorf("身份视图应能串起本组账号、身份、链接与登录：%d %v", linked, err)
+	}
+	for _, view := range []string{"identity_accounts", "identities", "identity_links", "identity_linux_logins"} {
+		if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM `+view).Scan(&n); err != nil || n != 1 {
+			t.Errorf("%s 只应看到本组的数据：%d %v", view, n, err)
+		}
+	}
 	var proc string
 	if err := ro.QueryRowContext(ctx, `SELECT count(*), min(raw->'process'->>'name') FROM alert_events`).Scan(&n, &proc); err != nil || n != 1 || proc != "a1" {
 		t.Errorf("alert_events 只应带出本组主机自己的事件：%d 条 %q，%v", n, proc, err)
@@ -137,6 +171,9 @@ func TestDropDryRunAfterViewRebuild(t *testing.T) {
 
 	g := client.Group.Create().SetName("g").SaveX(ctx)
 	a := client.Asset.Create().SetHostname("g1").SetGroupID(g.ID).SaveX(ctx)
+	if err := identity.EnsureSchema(ctx, db); err != nil {
+		t.Fatal(err)
+	}
 	p := &Provisioner{DB: db, Client: client, BaseDSN: dsn}
 	t.Cleanup(func() { p.Drop(ctx, g.ID) })
 	if err := p.Ensure(ctx, g.ID); err != nil {

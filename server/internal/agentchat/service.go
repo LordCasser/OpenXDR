@@ -584,7 +584,13 @@ const queryDescription = "通过当前组专属只读数据库身份查询授权
 	"events(id, ts, class_uid, source, asset_id, username, conn_tuple, raw)；" +
 	"alert_events(alert_id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id, event_id, event_ts, class_uid, username, conn_tuple, raw)：告警连同触发它的事件，" +
 	"要告警对应的事件就查它，不要自己 JOIN events（会超时）；" +
-	"commands(id, created_at, asset_id, cmd, status, exit_code, stdout)。" +
+	"commands(id, created_at, asset_id, cmd, status, exit_code, stdout)；" +
+	"identities(id, kind：directory 目录身份 / host 主机内身份, name, anchor_account_id, created_at)；" +
+	"identity_accounts(id, kind：directory / windows / linux, asset_id, name, domain, sid, uid, directory_account_id, first_seen, last_seen, " +
+	"identity_id, link_basis, link_confidence, link_source, linked_at)：账号与当前所属身份；" +
+	"identity_links(id, identity_id, account_id, basis：directory_anchor / ad_sid / host_local / manual, confidence, evidence, source, created_at, revoked_at, revoked_by, revoke_reason)：链接与撤销历史；" +
+	"identity_linux_logins(event_id, ts, asset_id, account_name, success, source_address, state：matched / no_account / no_snapshot / snapshot_unavailable, snapshot_event_id, snapshot_ts, uid, account_id)。" +
+	"身份只按强证据合并（目录账号为锚点、Windows SID 等于 AD objectSid、人工确认），同名账号不等于同一人，不要自行按名字合并。" +
 	"rule_id 的规则名见系统提示数据里的 rule_titles，不要去 JSON 字段里找；incidents.title 只是首条告警的标题，不等于规则名。" +
 	"alerts.command_id 不为空的是平台下发的指令（包括你自己执行的命令）触发的，来源已知，统计威胁时排除（AND a.command_id IS NULL）。" +
 	"按主机拆告警可直接用：SELECT h.hostname, a.rule_id, a.severity, sum(a.count) AS hits FROM alerts a " +
