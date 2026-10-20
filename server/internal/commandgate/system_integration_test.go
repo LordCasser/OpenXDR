@@ -70,3 +70,48 @@ func TestSystemIdentity(t *testing.T) {
 	}
 	assertNoCommand(t, f)
 }
+
+// 定时任务被名单误伤的只读命令自动批准并照常留痕；系统不明的主机、会改东西的命令仍然等人审批。
+func TestSystemAutoApprovesReadOnly(t *testing.T) {
+	f := setup(t)
+	task := f.db.AgentSession.Create().SetKind("task").SetGroupID(f.req.GroupID).SetInitiator(SystemActor).SetModel("m").SaveX(f.ctx)
+	sys := f.req
+	sys.System, sys.SessionID, sys.ApprovalTimeout = true, &task.ID, 80*time.Millisecond
+
+	// 主机系统不明：只读也不知道按哪种 shell 解释，照常等审批
+	if _, err := f.gate.Issue(f.ctx, sys); err == nil || !strings.Contains(err.Error(), "等待组管理员批准") {
+		t.Fatalf("系统不明的主机应等审批，得到 %v", err)
+	}
+	assertNoCommand(t, f)
+
+	f.db.Asset.UpdateOneID(sys.Command.AssetID).SetOs("linux").ExecX(f.ctx)
+	cmd, err := f.gate.Issue(f.ctx, sys)
+	if err != nil {
+		t.Fatalf("只读命令应自动批准：%v", err)
+	}
+	<-f.ch
+	auto := f.db.Approval.Query().Where(approval.StatusEQ(approval.StatusConsumed)).OnlyX(f.ctx)
+	if auto.DecidedBy == nil || *auto.DecidedBy != SystemActor || auto.Cmd != *sys.Command.Cmd || cmd.IssuedBy != SystemActor {
+		t.Errorf("自动批准的记录不符：%+v", auto)
+	}
+	if n := f.db.AuditLog.Query().Where(auditlog.ActionEQ("approval_auto"), auditlog.TargetEQ(auto.ID.String())).CountX(f.ctx); n != 1 {
+		t.Errorf("自动批准应写审计 1 条，得到 %d", n)
+	}
+
+	// 同样命中名单、但会改东西：不自动批准
+	destructive := "whoami; rm -rf /tmp/x"
+	sys.Command.Cmd = &destructive
+	if _, err := f.gate.Issue(f.ctx, sys); err == nil || !strings.Contains(err.Error(), "等待组管理员批准") {
+		t.Fatalf("非只读命令应等审批，得到 %v", err)
+	}
+	// 对话里的只读命令不走自动批准：有人在场，按原来的审批流程
+	chat := f.db.AgentSession.Create().SetKind("chat").SetGroupID(f.req.GroupID).SetInitiator("analyst").SetModel("m").SaveX(f.ctx)
+	human := f.req
+	human.SessionID, human.ApprovalTimeout = &chat.ID, 80*time.Millisecond
+	if _, err := f.gate.Issue(f.ctx, human); err == nil || !strings.Contains(err.Error(), "等待组管理员批准") {
+		t.Fatalf("对话里的命令应照常等审批，得到 %v", err)
+	}
+	if n := f.db.Approval.Query().Where(approval.StatusEQ(approval.StatusConsumed)).CountX(f.ctx); n != 1 {
+		t.Errorf("只应自动批准 1 次，得到 %d", n)
+	}
+}
