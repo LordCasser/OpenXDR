@@ -132,7 +132,7 @@ export function AssetsPage() {
               render: (_, a) => <HostStateBadge asset={a} />,
             },
             { title: t('thHostname'), dataIndex: 'hostname', sorter: (a, b) => a.hostname.localeCompare(b.hostname), render: (v, a) => <Link to={`/assets/${a.id}`}>{v}</Link> },
-            { responsive: WIDE_ONLY, title: 'OS', dataIndex: 'os', width: 100, render: v => v ?? '-' },
+            { responsive: WIDE_ONLY, title: 'OS', dataIndex: 'os', width: 140, render: (_: unknown, a: Asset) => a.osDisplay ?? a.os ?? '-' },
             { responsive: WIDE_ONLY, title: t('thIP'), dataIndex: 'ipAddrs', render: v => v?.length ? <Typography.Text copyable={{ text: v.join(', ') }}>{v.join(', ')}</Typography.Text> : '-' },
             {
               responsive: WIDE_ONLY, title: t('group'), dataIndex: 'groupId', width: 200,

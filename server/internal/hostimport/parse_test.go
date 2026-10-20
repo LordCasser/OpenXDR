@@ -196,3 +196,60 @@ func TestMarkdownInlineCodeIsNotFence(t *testing.T) {
 		t.Fatalf("info string 含反引号的行不是围栏，数量 %d，错误 %v", len(hosts), err)
 	}
 }
+
+func TestNormalizeOSFamilyAndDisplay(t *testing.T) {
+	cases := []struct {
+		in              string
+		family, display string
+	}{
+		{"", "linux", ""},
+		{"  ", "linux", ""},
+		{"linux", "linux", ""},
+		{"LINUX", "linux", ""},
+		{" unix ", "linux", ""},
+		{"windows", "windows", ""},
+		{"Win", "windows", ""},
+		{"Windows Server 2022", "windows", "Windows Server 2022"},
+		{"win11", "windows", "win11"},
+		{"ubuntu", "linux", "ubuntu"},
+		{"Ubuntu 24.04 LTS", "linux", "Ubuntu 24.04 LTS"},
+		{"Rocky Linux 9", "linux", "Rocky Linux 9"},
+		{"麒麟 V10 SP3", "linux", "麒麟 V10 SP3"},
+		{"银河麒麟V10", "linux", "银河麒麟V10"},
+		{"统信UOS 20", "linux", "统信UOS 20"},
+		{"UOS", "linux", "UOS"},
+		{"openEuler 24.03", "linux", "openEuler 24.03"},
+	}
+	for _, c := range cases {
+		family, display, err := normalizeOS(c.in)
+		if err != nil || family != c.family || display != c.display {
+			t.Fatalf("normalizeOS(%q) = %q, %q, %v；期望 %q, %q", c.in, family, display, err, c.family, c.display)
+		}
+	}
+	for _, bad := range []string{"macos", "Android 14", "freebsd", "路由器"} {
+		if _, _, err := normalizeOS(bad); err == nil {
+			t.Fatalf("认不出的系统写法应报错：%q", bad)
+		}
+	}
+}
+
+func TestParseKeepsDistroDisplayOnOSColumn(t *testing.T) {
+	doc := "# 主机\n\n| 主机名 | 地址 | 系统 | 用户名 | 密码 |\n|---|---|---|---|---|\n| ky-01 | 192.0.2.31 | 麒麟 V10 | root | pw |\n| uos-01 | 192.0.2.32 | 统信UOS 20 | ops | pw |\n| db-01 | 192.0.2.33 | Rocky Linux 9 | root | pw |\n"
+	hosts, err := Parse(doc)
+	if err != nil || len(hosts) != 3 {
+		t.Fatalf("三行主机应全部解析：数量 %d，错误 %v", len(hosts), err)
+	}
+	want := [][2]string{
+		{"linux", "麒麟 V10"},
+		{"linux", "统信UOS 20"},
+		{"linux", "Rocky Linux 9"},
+	}
+	for i, h := range hosts {
+		if h.OS != want[i][0] || h.OSDisplay != want[i][1] {
+			t.Fatalf("第 %d 台系统归一错误：os=%q osDisplay=%q，期望 %v", i+1, h.OS, h.OSDisplay, want[i])
+		}
+	}
+	if _, err := Parse("| 主机名 | 地址 | 系统 |\n|---|---|---|\n| mac-01 | 192.0.2.9 | macOS 14 |\n"); err == nil {
+		t.Fatal("认不出的系统写法应整行报错，宁拒不猜")
+	}
+}

@@ -24,18 +24,28 @@ func TestInventoryValidatesAgentData(t *testing.T) {
  {"proto":"tcp","addr":"127.0.0.1","port":70000}
 ],
 "cloud":{"provider":"aliyun","instance_id":"i-bp1","region":"cn-hangzhou","public_ip":"47.1.2.3"}}}`)
-	l, c := inventory(raw)
+	l, c, os := inventory(raw)
 	if len(l) != 2 || l[0].Proto != "tcp" || l[0].Process != "sshd" || l[0].Path != "/usr/sbin/sshd" || l[1].Proto != "udp" {
 		t.Fatalf("坏条目应丢弃、重复只留第一条: %+v", l)
 	}
 	if c == nil || c.Provider != "aliyun" || c.PublicIP != "47.1.2.3" {
 		t.Fatalf("云信息解析错误: %+v", c)
 	}
-	if _, c := inventory(json.RawMessage(`{"device":{"cloud":{"provider":"evilcloud","instance_id":"x"}}}`)); c != nil {
+	if os != "" {
+		t.Fatalf("不带 os 键应返回空串: %q", os)
+	}
+	if _, c, _ := inventory(json.RawMessage(`{"device":{"cloud":{"provider":"evilcloud","instance_id":"x"}}}`)); c != nil {
 		t.Fatal("未知云厂商不能当作在云上")
 	}
-	if _, c := inventory(json.RawMessage(`{"device":{"cloud":{"provider":"aws","instance_id":""}}}`)); c != nil {
+	if _, c, _ := inventory(json.RawMessage(`{"device":{"cloud":{"provider":"aws","instance_id":""}}}`)); c != nil {
 		t.Fatal("缺实例 ID 不能当作在云上")
+	}
+	// 系统显示名随 5001 上报：原样清洗保留，供物化覆盖导入时的声明值
+	if _, _, os := inventory(json.RawMessage(`{"device":{"os":"Kylin Linux Advanced Server V10 (Sword)"}}`)); os != "Kylin Linux Advanced Server V10 (Sword)" {
+		t.Fatalf("系统显示名应原样保留: %q", os)
+	}
+	if _, _, os := inventory(json.RawMessage(`{"device":{"os":"  UnionTech OS Server 20E \n"}}`)); os != "UnionTech OS Server 20E" {
+		t.Fatalf("系统显示名应清洗首尾空白: %q", os)
 	}
 }
 

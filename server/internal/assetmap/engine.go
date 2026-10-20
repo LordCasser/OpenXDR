@@ -129,6 +129,7 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		ts        time.Time
 		listening []Listener
 		cloud     *Cloud
+		os        string
 	}
 	inventories := map[uuid.UUID]snapshot{}
 	type softwareSnap struct {
@@ -145,8 +146,8 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		}
 		if ev.ClassUID == ClassInventory {
 			if ev.AssetID != nil {
-				l, c := inventory(ev.Raw)
-				inventories[*ev.AssetID] = snapshot{ev.Ts, l, c}
+				l, c, os := inventory(ev.Raw)
+				inventories[*ev.AssetID] = snapshot{ev.Ts, l, c, os}
 			}
 			continue
 		}
@@ -223,9 +224,11 @@ WHERE id=$1 AND (software_at IS NULL OR software_at < $3)`, id, string(sw), s.ts
 			b, _ := json.Marshal(s.cloud)
 			cloud = string(b)
 		}
-		// 只接受比已物化的更新的快照，乱序到达的旧快照不回滚状态
-		if _, err := tx.ExecContext(ctx, `UPDATE assets SET listening=$2::jsonb, cloud=$3::jsonb, inventory_at=$4
-WHERE id=$1 AND (inventory_at IS NULL OR inventory_at < $4)`, id, string(listening), cloud, s.ts); err != nil {
+		// 只接受比已物化的更新的快照，乱序到达的旧快照不回滚状态。
+		// os_display 只在事件带系统显示名时覆盖：旧 agent 没有该字段，保留导入时声明的值
+		if _, err := tx.ExecContext(ctx, `UPDATE assets SET listening=$2::jsonb, cloud=$3::jsonb, inventory_at=$4,
+os_display=COALESCE(NULLIF($5::text, ''), os_display)
+WHERE id=$1 AND (inventory_at IS NULL OR inventory_at < $4)`, id, string(listening), cloud, s.ts, s.os); err != nil {
 			return 0, err
 		}
 	}

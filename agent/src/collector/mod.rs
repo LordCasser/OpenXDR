@@ -31,7 +31,7 @@ mod container;
 #[cfg(target_os = "linux")]
 mod dnswatch;
 
-// 资产清单（监听端口 + 云环境）：共用部分与云探测跨平台，监听表按平台取
+// 资产清单（监听端口 + 云环境 + 系统显示名）：共用部分与云探测跨平台，监听表按平台取
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod cloud;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -40,6 +40,8 @@ mod inventory;
 mod inventory_linux;
 #[cfg(target_os = "windows")]
 mod inventory_win;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod osinfo;
 
 #[cfg(target_os = "linux")]
 mod fswatch;

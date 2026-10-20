@@ -45,6 +45,20 @@ func (_c *AssetCreate) SetNillableOs(v *string) *AssetCreate {
 	return _c
 }
 
+// SetOsDisplay sets the "os_display" field.
+func (_c *AssetCreate) SetOsDisplay(v string) *AssetCreate {
+	_c.mutation.SetOsDisplay(v)
+	return _c
+}
+
+// SetNillableOsDisplay sets the "os_display" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableOsDisplay(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetOsDisplay(*v)
+	}
+	return _c
+}
+
 // SetIPAddrs sets the "ip_addrs" field.
 func (_c *AssetCreate) SetIPAddrs(v []string) *AssetCreate {
 	_c.mutation.SetIPAddrs(v)
@@ -532,6 +546,10 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Os(); ok {
 		_spec.SetField(asset.FieldOs, field.TypeString, value)
 		_node.Os = &value
+	}
+	if value, ok := _c.mutation.OsDisplay(); ok {
+		_spec.SetField(asset.FieldOsDisplay, field.TypeString, value)
+		_node.OsDisplay = &value
 	}
 	if value, ok := _c.mutation.IPAddrs(); ok {
 		_spec.SetField(asset.FieldIPAddrs, field.TypeJSON, value)

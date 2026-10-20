@@ -4760,6 +4760,7 @@ type AssetMutation struct {
 	id                     *uuid.UUID
 	hostname               *string
 	os                     *string
+	os_display             *string
 	ip_addrs               *[]string
 	appendip_addrs         []string
 	agent_id               *uuid.UUID
@@ -5002,6 +5003,55 @@ func (m *AssetMutation) OsCleared() bool {
 func (m *AssetMutation) ResetOs() {
 	m.os = nil
 	delete(m.clearedFields, asset.FieldOs)
+}
+
+// SetOsDisplay sets the "os_display" field.
+func (m *AssetMutation) SetOsDisplay(s string) {
+	m.os_display = &s
+}
+
+// OsDisplay returns the value of the "os_display" field in the mutation.
+func (m *AssetMutation) OsDisplay() (r string, exists bool) {
+	v := m.os_display
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOsDisplay returns the old "os_display" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldOsDisplay(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOsDisplay is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOsDisplay requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOsDisplay: %w", err)
+	}
+	return oldValue.OsDisplay, nil
+}
+
+// ClearOsDisplay clears the value of the "os_display" field.
+func (m *AssetMutation) ClearOsDisplay() {
+	m.os_display = nil
+	m.clearedFields[asset.FieldOsDisplay] = struct{}{}
+}
+
+// OsDisplayCleared returns if the "os_display" field was cleared in this mutation.
+func (m *AssetMutation) OsDisplayCleared() bool {
+	_, ok := m.clearedFields[asset.FieldOsDisplay]
+	return ok
+}
+
+// ResetOsDisplay resets all changes to the "os_display" field.
+func (m *AssetMutation) ResetOsDisplay() {
+	m.os_display = nil
+	delete(m.clearedFields, asset.FieldOsDisplay)
 }
 
 // SetIPAddrs sets the "ip_addrs" field.
@@ -6781,12 +6831,15 @@ func (m *AssetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetMutation) Fields() []string {
-	fields := make([]string, 0, 31)
+	fields := make([]string, 0, 32)
 	if m.hostname != nil {
 		fields = append(fields, asset.FieldHostname)
 	}
 	if m.os != nil {
 		fields = append(fields, asset.FieldOs)
+	}
+	if m.os_display != nil {
+		fields = append(fields, asset.FieldOsDisplay)
 	}
 	if m.ip_addrs != nil {
 		fields = append(fields, asset.FieldIPAddrs)
@@ -6887,6 +6940,8 @@ func (m *AssetMutation) Field(name string) (ent.Value, bool) {
 		return m.Hostname()
 	case asset.FieldOs:
 		return m.Os()
+	case asset.FieldOsDisplay:
+		return m.OsDisplay()
 	case asset.FieldIPAddrs:
 		return m.IPAddrs()
 	case asset.FieldAgentID:
@@ -6958,6 +7013,8 @@ func (m *AssetMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldHostname(ctx)
 	case asset.FieldOs:
 		return m.OldOs(ctx)
+	case asset.FieldOsDisplay:
+		return m.OldOsDisplay(ctx)
 	case asset.FieldIPAddrs:
 		return m.OldIPAddrs(ctx)
 	case asset.FieldAgentID:
@@ -7038,6 +7095,13 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOs(v)
+		return nil
+	case asset.FieldOsDisplay:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOsDisplay(v)
 		return nil
 	case asset.FieldIPAddrs:
 		v, ok := value.([]string)
@@ -7302,6 +7366,9 @@ func (m *AssetMutation) ClearedFields() []string {
 	if m.FieldCleared(asset.FieldOs) {
 		fields = append(fields, asset.FieldOs)
 	}
+	if m.FieldCleared(asset.FieldOsDisplay) {
+		fields = append(fields, asset.FieldOsDisplay)
+	}
 	if m.FieldCleared(asset.FieldIPAddrs) {
 		fields = append(fields, asset.FieldIPAddrs)
 	}
@@ -7400,6 +7467,9 @@ func (m *AssetMutation) ClearField(name string) error {
 	case asset.FieldOs:
 		m.ClearOs()
 		return nil
+	case asset.FieldOsDisplay:
+		m.ClearOsDisplay()
+		return nil
 	case asset.FieldIPAddrs:
 		m.ClearIPAddrs()
 		return nil
@@ -7494,6 +7564,9 @@ func (m *AssetMutation) ResetField(name string) error {
 		return nil
 	case asset.FieldOs:
 		m.ResetOs()
+		return nil
+	case asset.FieldOsDisplay:
+		m.ResetOsDisplay()
 		return nil
 	case asset.FieldIPAddrs:
 		m.ResetIPAddrs()

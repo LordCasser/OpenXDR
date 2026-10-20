@@ -68,6 +68,26 @@ func (_u *AssetUpdate) ClearOs() *AssetUpdate {
 	return _u
 }
 
+// SetOsDisplay sets the "os_display" field.
+func (_u *AssetUpdate) SetOsDisplay(v string) *AssetUpdate {
+	_u.mutation.SetOsDisplay(v)
+	return _u
+}
+
+// SetNillableOsDisplay sets the "os_display" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableOsDisplay(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetOsDisplay(*v)
+	}
+	return _u
+}
+
+// ClearOsDisplay clears the value of the "os_display" field.
+func (_u *AssetUpdate) ClearOsDisplay() *AssetUpdate {
+	_u.mutation.ClearOsDisplay()
+	return _u
+}
+
 // SetIPAddrs sets the "ip_addrs" field.
 func (_u *AssetUpdate) SetIPAddrs(v []string) *AssetUpdate {
 	_u.mutation.SetIPAddrs(v)
@@ -782,6 +802,12 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.OsCleared() {
 		_spec.ClearField(asset.FieldOs, field.TypeString)
 	}
+	if value, ok := _u.mutation.OsDisplay(); ok {
+		_spec.SetField(asset.FieldOsDisplay, field.TypeString, value)
+	}
+	if _u.mutation.OsDisplayCleared() {
+		_spec.ClearField(asset.FieldOsDisplay, field.TypeString)
+	}
 	if value, ok := _u.mutation.IPAddrs(); ok {
 		_spec.SetField(asset.FieldIPAddrs, field.TypeJSON, value)
 	}
@@ -1187,6 +1213,26 @@ func (_u *AssetUpdateOne) SetNillableOs(v *string) *AssetUpdateOne {
 // ClearOs clears the value of the "os" field.
 func (_u *AssetUpdateOne) ClearOs() *AssetUpdateOne {
 	_u.mutation.ClearOs()
+	return _u
+}
+
+// SetOsDisplay sets the "os_display" field.
+func (_u *AssetUpdateOne) SetOsDisplay(v string) *AssetUpdateOne {
+	_u.mutation.SetOsDisplay(v)
+	return _u
+}
+
+// SetNillableOsDisplay sets the "os_display" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableOsDisplay(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetOsDisplay(*v)
+	}
+	return _u
+}
+
+// ClearOsDisplay clears the value of the "os_display" field.
+func (_u *AssetUpdateOne) ClearOsDisplay() *AssetUpdateOne {
+	_u.mutation.ClearOsDisplay()
 	return _u
 }
 
@@ -1933,6 +1979,12 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.OsCleared() {
 		_spec.ClearField(asset.FieldOs, field.TypeString)
+	}
+	if value, ok := _u.mutation.OsDisplay(); ok {
+		_spec.SetField(asset.FieldOsDisplay, field.TypeString, value)
+	}
+	if _u.mutation.OsDisplayCleared() {
+		_spec.ClearField(asset.FieldOsDisplay, field.TypeString)
 	}
 	if value, ok := _u.mutation.IPAddrs(); ok {
 		_spec.SetField(asset.FieldIPAddrs, field.TypeJSON, value)

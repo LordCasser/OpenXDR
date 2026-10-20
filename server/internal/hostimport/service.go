@@ -45,6 +45,9 @@ func (s *Service) Import(ctx context.Context, groupID uuid.UUID, hosts []Host) (
 		a, err := tx.Asset.Query().Where(asset.HostnameEQ(h.Hostname)).Only(ctx)
 		if ent.IsNotFound(err) {
 			create := tx.Asset.Create().SetHostname(h.Hostname).SetOs(h.OS).SetGroupID(groupID).SetLastSeen(time.Unix(0, 0))
+			if h.OSDisplay != "" {
+				create = create.SetOsDisplay(h.OSDisplay)
+			}
 			if net.ParseIP(h.Address) != nil {
 				create.SetIPAddrs([]string{h.Address})
 			}
@@ -56,7 +59,11 @@ func (s *Service) Import(ctx context.Context, groupID uuid.UUID, hosts []Host) (
 			return nil, err
 		}
 		if a.Os == nil || *a.Os == "" {
-			a, err = tx.Asset.UpdateOne(a).SetOs(h.OS).Save(ctx)
+			update := tx.Asset.UpdateOne(a).SetOs(h.OS)
+			if h.OSDisplay != "" {
+				update = update.SetOsDisplay(h.OSDisplay)
+			}
+			a, err = update.Save(ctx)
 			if err != nil {
 				return nil, err
 			}

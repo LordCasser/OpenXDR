@@ -298,6 +298,8 @@ export interface Asset {
   id: string
   hostname: string
   os: string | null
+  // 发行版与版本的显示名（如 Ubuntu 24.04.1 LTS、银河麒麟 V10）；agent 上线后为实测值
+  osDisplay: string | null
   ipAddrs: string[] | null
   agentId: string | null
   firstSeen: string
@@ -1065,7 +1067,7 @@ export const saveAgentConfig = async (assetId: string, cfg: AgentConfig): Promis
   (await send('PUT', `/api/assets/${assetId}/config`, cfg)).json()
 
 export interface ImportedHost {
-  hostname: string; address: string; os: string; port: number; username: string
+  hostname: string; address: string; os: string; osDisplay?: string; port: number; username: string
   kind: 'none' | 'password' | 'private_key'; hostKey: string
 }
 export interface ReviewedHost extends ImportedHost { credentialToken?: string; images?: number[]; lines: number[]; needsReview: boolean; issues: string[]; reviewId?: string }

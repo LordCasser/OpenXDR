@@ -252,6 +252,7 @@ agent inventory（`collector/inventory.rs`）：启动时报一次全量，之�
 {
   "activity_id": 2,
   "device": {
+    "os": "Ubuntu 24.04.1 LTS",
     "listening": [
       { "proto": "tcp", "addr": "0.0.0.0", "port": 22, "process": { "pid": 812, "name": "sshd", "file": { "path": "/usr/sbin/sshd" } } },
       { "proto": "udp", "addr": "::", "port": 53 }
@@ -261,8 +262,11 @@ agent inventory（`collector/inventory.rs`）：启动时报一次全量，之�
 }
 ```
 
-属主进程拿不到时整个 `process` 省略；不在云上时省略 `cloud`。`listening` 按 (proto, addr, port)
-去重排序，最多 512 条。
+属主进程拿不到时整个 `process` 省略；不在云上时省略 `cloud`；识别不到系统时省略 `os`
+（Linux 读 os-release 的 `PRETTY_NAME`，麒麟、统信同规范；Windows 读注册表
+ProductName / DisplayVersion / build，如 `"Windows Server 2022 Standard (build 20348)"`）。
+`listening` 按 (proto, addr, port) 去重排序，最多 512 条。`os` 由 assetmap 物化到资产的
+`os_display`，覆盖文档导入时声明的值；注册请求仍只报 linux / windows family。
 
 ## 201002 注册表值活动
 

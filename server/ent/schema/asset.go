@@ -22,6 +22,10 @@ func (Asset) Fields() []ent.Field {
 		field.UUID("id", uuid.UUID{}).Default(newV7),
 		field.String("hostname"),
 		field.String("os").Optional().Nillable(),
+		// 发行版与版本的显示名，如 "Ubuntu 24.04.1 LTS"、"Kylin V10 SP1"、"Windows Server 2022"。
+		// 文档导入时来自文档 os 列（声明的值），agent 设备清单（5001 的 device.os）到达后以实测值覆盖；
+		// os 字段本身仍只存 linux / windows family，供 Sigma 求值过滤与升级选包使用
+		field.String("os_display").Optional().Nillable(),
 		field.Strings("ip_addrs").Optional(),
 		field.UUID("agent_id", uuid.UUID{}).Optional().Nillable().Unique(),
 		field.Time("first_seen").Default(time.Now),

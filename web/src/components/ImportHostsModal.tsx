@@ -101,7 +101,7 @@ export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: ()
       width: field === 'hostKey' ? 220 : 170,
       render: (_: unknown, h: ReviewedHost) => <Input aria-label={field} value={h[field]} disabled={busy} onChange={e => edit(h.reviewId, { [field]: e.target.value })} />,
     })),
-    { title: 'OS', width: 130, render: (_: unknown, h: ReviewedHost) => <Select aria-label="OS" value={h.os || undefined} placeholder={t('hostChooseOS')} disabled={busy} style={{ width: 110 }} options={[{ value: 'linux', label: 'Linux' }, { value: 'windows', label: 'Windows' }]} onChange={os => edit(h.reviewId, { os })} /> },
+    { title: 'OS', width: 130, render: (_: unknown, h: ReviewedHost) => <Space orientation="vertical" size={0}><Select aria-label="OS" value={h.os || undefined} placeholder={t('hostChooseOS')} disabled={busy} style={{ width: 110 }} options={[{ value: 'linux', label: 'Linux' }, { value: 'windows', label: 'Windows' }]} onChange={os => edit(h.reviewId, { os })} />{h.osDisplay && h.osDisplay.toLowerCase() !== h.os.toLowerCase() ? <Typography.Text type="secondary" style={{ fontSize: 12 }}>{h.osDisplay}</Typography.Text> : null}</Space> },
     { title: t('hostPort'), width: 110, render: (_: unknown, h: ReviewedHost) => <InputNumber aria-label={t('hostPort')} min={1} max={65535} precision={0} value={h.port} disabled={busy} onChange={port => edit(h.reviewId, { port: port ?? 0 })} /> },
     { title: t('hostCredential'), width: 160, render: (_: unknown, h: ReviewedHost) => <Space orientation="vertical"><Tag>{t(h.credentialToken ? 'hostCredentialDetected' : 'hostNoCredential')}</Tag>{h.credentialToken && <Button size="small" disabled={busy} onClick={() => edit(h.reviewId, { credentialToken: undefined, kind: 'none' })}>{t('hostDiscardCredential')}</Button>}</Space> },
     { title: t('hostReviewEvidence'), width: 260, render: (_: unknown, h: ReviewedHost) => <Space orientation="vertical"><Button type="link" size="small" disabled={!h.lines?.length} onClick={() => showSource(h.lines)}>{t('hostSourceLines', { lines: h.lines?.join(', ') || '—' })}</Button>{h.images?.map(n => <Button key={n} type="link" size="small" onClick={() => { setImageIndex(n - 1); setImageOpen(true) }}>{t('hostSourceImage', { n })}</Button>)}{h.issues?.map((issue, i) => <Typography.Text type="warning" key={i}>{issue}</Typography.Text>)}</Space> },
@@ -110,7 +110,7 @@ export function ImportHostsModal({ open, onClose }: { open: boolean; onClose: ()
   const columns = [
     { title: t('thHostname'), dataIndex: 'hostname' },
     { title: t('hostAddress'), render: (_: unknown, h: ImportedHost) => `${h.address}:${h.port}` },
-    { title: 'OS', dataIndex: 'os' },
+    { title: 'OS', width: 140, render: (_: unknown, h: ImportedHost) => h.osDisplay || h.os },
     { title: t('hostUsername'), dataIndex: 'username' },
     { title: t('hostCredential'), render: (_: unknown, h: ImportedHost) => <Tag>{t(h.kind === 'none' ? 'hostNoCredential' : h.kind === 'password' ? 'hostPasswordStored' : 'hostKeyStored')}</Tag> },
   ]

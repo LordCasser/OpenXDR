@@ -1,13 +1,14 @@
-//! 资产清单：本机监听端口（附属主进程）与云环境，供 server 画资产地图与攻击面。
+//! 资产清单：本机监听端口（附属主进程）、云环境与操作系统显示名，供 server
+//! 画资产地图与攻击面。
 //!
 //! 平台相关的只有"拿到监听套接字表"这一步（Linux /proc/net/*，Windows
 //! IP Helper），其余——条目模型、去重排序截断、变化判定、事件组装——都在
 //! 本模块，Linux CI 上就能测到。
 //!
 //! 产出 OCSF Device Inventory Info（class_uid=5001），activity_id=2。
-//! 启动时探测一次云环境（进程内缓存）并报一次全量；之后每 60s 轮询，
-//! 监听集合（协议、地址、端口、进程名）有变化才报，另外最长 6 小时无条件
-//! 补报一次，server 侧视图漏了也能自愈。
+//! 启动时探测一次云环境与系统显示名（进程内缓存）并报一次全量；之后每 60s
+//! 轮询，监听集合（协议、地址、端口、进程名）有变化才报，另外最长 6 小时
+//! 无条件补报一次，server 侧视图漏了也能自愈。
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -20,6 +21,7 @@ use crate::pb::AgentEvent;
 
 use super::EventSink;
 use super::cloud::{self, Cloud};
+use super::osinfo;
 
 /// OCSF Device Inventory Info
 const CLASS_DEVICE_INVENTORY: u32 = 5001;
@@ -80,9 +82,11 @@ where
 }
 
 fn run(agent_id: &str, sink: &EventSink, mut scan: impl FnMut() -> std::io::Result<Vec<Listener>>) {
-    // 断线重连会重新拉起采集，云环境探测按进程只做一次
+    // 断线重连会重新拉起采集，云环境探测与系统识别都按进程只做一次
     static CLOUD: OnceLock<Option<Cloud>> = OnceLock::new();
     let cloud = CLOUD.get_or_init(cloud::detect).as_ref();
+    static OS: OnceLock<Option<String>> = OnceLock::new();
+    let os = OS.get_or_init(osinfo::display);
 
     let mut last: Option<(Fingerprint, Instant)> = None;
     #[cfg(target_os = "linux")]
@@ -136,7 +140,7 @@ fn run(agent_id: &str, sink: &EventSink, mut scan: impl FnMut() -> std::io::Resu
             (value, changed)
         };
         if due {
-            let event = inventory_event(agent_id, &listeners, cloud, package_of);
+            let event = inventory_event(agent_id, &listeners, cloud, os.as_deref(), package_of);
             #[cfg(target_os = "linux")]
             let event = with_local_accounts(event, accounts.as_deref());
             if !sink.send(event) {
@@ -243,11 +247,17 @@ fn inventory_event(
     agent_id: &str,
     listeners: &[Listener],
     cloud: Option<&Cloud>,
+    os: Option<&str>,
     package: fn(&str) -> Option<String>,
 ) -> AgentEvent {
     let mut device = json!({ "listening": listeners.iter().map(|l| listener_json(l, package)).collect::<Vec<_>>() });
     if let Some(c) = cloud {
         device["cloud"] = cloud_json(c);
+    }
+    // 系统显示名（发行版+版本）：注册只报 family，这里才是带版本的实测值。
+    // 拿不到就不带这个键，server 侧保留导入时声明的值
+    if let Some(os) = os {
+        device["os"] = json!(os);
     }
     let raw = json!({ "activity_id": ACTIVITY_COLLECT, "device": device });
     AgentEvent {
@@ -273,12 +283,12 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn account_inventory_distinguishes_empty_from_unavailable() {
-        let empty = with_local_accounts(inventory_event("a", &[], None, |_| None), Some(&[]));
+        let empty = with_local_accounts(inventory_event("a", &[], None, None, |_| None), Some(&[]));
         let value: Value = serde_json::from_str(&empty.raw_json).unwrap();
         assert_eq!(value["device"]["local_accounts"]["items"], json!([]));
         assert_eq!(value["device"]["local_accounts"]["state"], "observed");
         assert_eq!(value["device"]["listening"], json!([]));
-        let missing = with_local_accounts(inventory_event("a", &[], None, |_| None), None);
+        let missing = with_local_accounts(inventory_event("a", &[], None, None, |_| None), None);
         let value: Value = serde_json::from_str(&missing.raw_json).unwrap();
         assert_eq!(value["device"]["local_accounts"]["state"], "unavailable");
         assert!(value["device"]["local_accounts"].get("items").is_none());
@@ -371,7 +381,7 @@ mod tests {
             region: Some("cn-hangzhou".into()),
             public_ip: Some("47.1.2.3".parse().unwrap()),
         };
-        let evt = inventory_event("agent-1", &listeners, Some(&cloud), |_| None);
+        let evt = inventory_event("agent-1", &listeners, Some(&cloud), None, |_| None);
         assert_eq!(evt.class_uid, 5001);
         assert!(evt.process_guid.is_empty() && evt.conn_tuple.is_empty());
         let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
@@ -400,16 +410,28 @@ mod tests {
             public_ip: None,
         };
         let v: Value =
-            serde_json::from_str(&inventory_event("a", &[], Some(&bare), |_| None).raw_json)
+            serde_json::from_str(&inventory_event("a", &[], Some(&bare), None, |_| None).raw_json)
                 .unwrap();
         assert_eq!(
             v["device"]["cloud"],
             json!({"provider": "aws", "instance_id": "i-0123456789abcdef0"})
         );
         let v: Value =
-            serde_json::from_str(&inventory_event("a", &[], None, |_| None).raw_json).unwrap();
+            serde_json::from_str(&inventory_event("a", &[], None, None, |_| None).raw_json)
+                .unwrap();
         assert!(v["device"].get("cloud").is_none(), "非云主机不带 cloud 键");
+        assert!(v["device"].get("os").is_none(), "识别不到系统时不带 os 键");
         assert_eq!(v["device"]["listening"], json!([]));
+    }
+
+    #[test]
+    fn event_carries_os_display() {
+        let v: Value = serde_json::from_str(
+            &inventory_event("a", &[], None, Some("Ubuntu 24.04.1 LTS"), |_| None).raw_json,
+        )
+        .unwrap();
+        assert_eq!(v["device"]["os"], json!("Ubuntu 24.04.1 LTS"));
+        assert!(v["device"].get("cloud").is_none());
     }
 
     #[test]
@@ -417,7 +439,7 @@ mod tests {
         let listeners = vec![l(Proto::Tcp, "0.0.0.0", 22, Some("sshd"))];
         let mut with_path = listeners.clone();
         with_path[0].owner.as_mut().unwrap().path = Some("/usr/sbin/sshd".into());
-        let evt = inventory_event("a", &with_path, None, |p| {
+        let evt = inventory_event("a", &with_path, None, None, |p| {
             (p == "/usr/sbin/sshd").then(|| "openssh-server".into())
         });
         let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
@@ -425,7 +447,7 @@ mod tests {
             v["device"]["listening"][0]["process"]["file"]["package"],
             "openssh-server"
         );
-        let none = inventory_event("a", &listeners, None, |_| Some("x".into()));
+        let none = inventory_event("a", &listeners, None, None, |_| Some("x".into()));
         let v: Value = serde_json::from_str(&none.raw_json).unwrap();
         assert!(
             v["device"]["listening"][0]["process"].get("file").is_none(),
