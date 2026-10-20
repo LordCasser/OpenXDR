@@ -154,3 +154,6 @@ privately as described in [SECURITY.md](SECURITY.md).
 ## License
 
 [Apache License 2.0](LICENSE)
+
+Third-party data: `rules/sigmahq/` contains SigmaHQ community rules (DRL 1.1, see its README); the offline IP
+ownership database bundled in release images is [DB-IP Lite](https://db-ip.com) (IP Geolocation by DB-IP, CC BY 4.0).

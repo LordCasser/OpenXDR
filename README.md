@@ -139,3 +139,6 @@ tool calling 能力，模型越弱越容易在长上下文里跑偏——平台�
 ## 许可证
 
 [Apache License 2.0](LICENSE)
+
+第三方数据：`rules/sigmahq/` 为 SigmaHQ 社区规则（DRL 1.1，见其 README）；发版镜像自带的离线 IP 归属库为
+[DB-IP Lite](https://db-ip.com)（IP Geolocation by DB-IP，CC BY 4.0），见 [资产图谱](docs/asset-map.md#离线归属库)。

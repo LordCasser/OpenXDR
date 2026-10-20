@@ -108,6 +108,10 @@ agent 跑在容器里时看到的是容器自己的监听。
 不在依赖边里，只按外联挑永远轮不到；再按连接量从多到少补最近一周连过的地址。只读查询视图 `ip_infos` 同样对组开放
 本组外联与本组告警里出现的地址。
 
+- **离线归属库**：本地 mmdb 查 AS 号、AS 组织名与国家，**不向任何外部服务发送地址**，每轮最多 1000 个，
+  写在 `ip_infos` 的 `ipdb_asn` / `ipdb_org` / `ipdb_country` / `ipdb_at`，与 VirusTotal 的同类字段分开存、各自到期重查。
+  私网、保留与 CGNAT 地址不查。库目录 `IPDB_DIR`（镜像默认 `/opt/openxdr/ipdb`），缺库时这几个字段留空，
+  启动日志说明一次；库文件替换后一分钟内自动重新加载，不用重启。数据源与更新方法见下文「离线归属库」
 - **反向解析（PTR）**：默认开启，每分钟最多 20 个，`IPINFO_PTR=false` 关闭。查无记录记为空；超时、DNS 服务出错这类临时失败
   不落库，30 分钟后重试（退避只在内存里，换节点从头来）
 - **VirusTotal**：配置 `VT_API_KEY` 才查，取归属（AS）、国家、判恶意/可疑的引擎数与历史解析域名；
@@ -115,6 +119,8 @@ agent 跑在容器里时看到的是容器自己的监听。
   **配置后资产连过的、告警里出现的公网 IP 会发给 VirusTotal**
 
 图谱「互联网」节点与资产画像按地址列出外联明细（端口、进程、连接量、最近活动、反查域名、归属、VT 判定与用途）。
+归属（组织名、AS 号、国家）VirusTotal 有的用它的，没有的用离线库补；用到离线库数据时明细下方带 DB-IP 署名链接。
+AI 研判上下文同样附上告警里出现的公网地址的缓存背景，离线库与 VirusTotal 分开写，不一致时模型能看出来。
 用途有两个来源：资产标注时 AI 据上述事实给出的推断，以及上机调查的结论（Pi 的 `egress` 工具写回，来源 investigation，
 优先显示，不覆盖人工结论）。认不出的地址在明细里可以一键交给 AI 上机调查。
 
@@ -137,6 +143,39 @@ VirusTotal 判恶意的引擎数达到 `VT_ALERT_MIN_ENGINES`（默认 3，控�
 图谱与攻击面照常可用。
 
 AI 助手的对话上下文里，组内资产清单也带上了角色、重要程度、区域和暴露级别。
+
+### 离线归属库
+
+数据源选 [DB-IP Lite](https://db-ip.com/db/lite.php)（IP to ASN Lite + IP to Country Lite，mmdb 格式）：
+
+- **许可**：[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)，可随产品再分发、可商用，条件是署名。
+  控制台展示了离线库数据的地方带「IP Geolocation by DB-IP」链接到 https://db-ip.com；库目录里的 `NOTICE`
+  （更新命令写入）随文件一起分发。自行转载查询结果（报告、导出）时同样要保留署名
+- **没选的**：MaxMind GeoLite2 需要账号并接受 EULA，不能随产品分发（同结构的 `GeoLite2-ASN` / `GeoLite2-Country`
+  由用户自己下载、改成下面的文件名放进目录也能用，许可由使用者负责）；iptoasn.com（PDDL）的国家是 AS 注册地而非
+  地址所在地，且只有「最新」一个版本，二者都不如 DB-IP Lite 合适
+- **国家的含义**：`ipdb_country` 是地理定位得到的 ISO 3166 两位代码，任播、云厂商地址可能和 AS 注册地不一致；
+  归属只说明是谁的网络，不说明善恶
+
+目录里放两个文件：`dbip-asn-lite.mmdb` 与 `dbip-country-lite.mmdb`，各约 10MB，各自可缺。打开时核对 metadata 的库类型，
+两份放反不会加载。
+
+**分发方式**：发版的 server 镜像自带一份（release.yml 在构建前用更新命令下载当月库、校验后经 `--build-context ipdb=` 注入，
+哈希记在发版日志和镜像里的 `SHA256SUMS`；下载或校验失败发版直接失败）。DB-IP 每月更新、只保留最近两个月且不发布校验和，
+固定版本加 SHA256 的写法过一两个月就会因为原文件下架而构建失败，所以不在 Dockerfile 里下载：本地与离线环境的 `docker build`
+不联网取库，得到的镜像库目录为空，server 照常运行，只是归属字段留空，启动日志会说明。
+
+**更新**：镜像里带 `openxdr-ipdb` 命令（源码 `server/cmd/ipdb`）。它只下载公开的整库文件、不发送任何要查的地址；
+两份都下完并通过结构校验、库类型核对与探测地址检查才原子替换，失败不动原有文件。不给 `-month` 取当月，月初未发布退回上月。
+
+```bash
+# 镜像内目录归 root，不能原地更新：挂一个可写目录并指向它
+#   volumes: ["./ipdb:/ipdb"]   environment: { IPDB_DIR: /ipdb }
+docker compose run --rm --no-deps --entrypoint openxdr-ipdb server -dir /ipdb
+# 离线环境：在能联网的机器上 go run ./cmd/ipdb -dir <目录>，再把两个 .mmdb 拷过去（先拷成临时名再 mv，不要原地覆盖）
+```
+
+server 每轮检查文件的修改时间与大小，变了就重新打开，一分钟内生效；已有记录按 `IPINFO_TTL_DAYS` 到期后用新库重查。
 
 ## 接口
 
@@ -164,6 +203,7 @@ AI 助手的对话上下文里，组内资产清单也带上了角色、重要�
 |---|---|---|---|
 | server 环境变量 | `ASSET_ANNOTATE_REFRESH_HOURS` | `24` | 定时重新标注周期，0 只在变化时标注 |
 | server 环境变量 | `AI_MODEL` 等 | — | 与旧 triage 共用模型配置 |
+| server 环境变量 | `IPDB_DIR` | 空（镜像内 `/opt/openxdr/ipdb`） | 离线 IP 归属库目录，见上文「离线归属库」 |
 | 主机采集配置 | `collectInventory` | `true` | 关掉后该主机不上报监听端口与云环境 |
 
 ## 已知限制
