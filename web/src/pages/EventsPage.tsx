@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { fetchAssets, searchEvents, type EventRow } from '../api'
 import { Refreshed } from '../components/Ago'
+import { AutomationTag } from '../components/AutomationTag'
 import { EventFacts } from '../components/EventFacts'
 import { HostLink } from '../components/HostLink'
 import { LoadError } from '../components/LoadError'
@@ -161,6 +162,7 @@ export function EventsPage() {
                   <span className="ev-summary">
                     {!wideTable && <EventKind classUid={r.classUid} compact />}
                     {act && <span className={`ev-act ev-act-${act.tone}`}>{act.label}</span>}
+                    <AutomationTag value={r.automation} />
                     <Typography.Text className="mono ev-copy" copyable={wideTable && { text, onCopy: e => e?.stopPropagation() }} ellipsis={{ tooltip: { title: text, placement: 'topLeft' } }} style={{ flex: 1, minWidth: 0 }}>
                       {text}
                     </Typography.Text>

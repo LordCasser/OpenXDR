@@ -1,5 +1,5 @@
 import {
-  AimOutlined, AlertOutlined, AuditOutlined, BulbOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined, DashboardOutlined, DeploymentUnitOutlined, FileSearchOutlined, FileTextOutlined, IdcardOutlined, RobotOutlined, SafetyOutlined, SearchOutlined, SettingOutlined, StopOutlined, TeamOutlined, ToolOutlined, UserOutlined,
+  AimOutlined, AlertOutlined, AuditOutlined, BulbOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined, DashboardOutlined, DeploymentUnitOutlined, FileSearchOutlined, FileTextOutlined, IdcardOutlined, RobotOutlined, SafetyCertificateOutlined, SafetyOutlined, SearchOutlined, SettingOutlined, StopOutlined, TeamOutlined, ToolOutlined, UserOutlined,
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import type { MsgKey } from '../i18n'
@@ -57,6 +57,7 @@ export const NAV: (NavItem | NavGroup)[] = [
     items: [
       { path: '/rules', key: 'navRules', icon: <FileSearchOutlined />, hotkey: 'd' },
       { path: '/suppressions', key: 'navSuppressions', icon: <StopOutlined /> },
+      { path: '/trusted-sources', key: 'navTrustedSources', icon: <SafetyCertificateOutlined /> },
       { path: '/intel', key: 'navIntel', icon: <SafetyOutlined /> },
     ],
   },

@@ -65,6 +65,15 @@ export interface AlertRow {
   event: unknown
   // 合成检测（心跳等）的依据
   detail?: string
+  // 来自登记的可信自动化来源（进得了 incident 的只有高危例外）
+  automation?: AutomationRef
+}
+
+// 告警或事件标注的可信自动化来源；watch 为高危例外（仍进研判）
+export interface AutomationRef {
+  id: string
+  name: string
+  watch: boolean
 }
 
 export interface IncidentDetail extends Omit<IncidentSummary, 'alertCount'> {
@@ -581,6 +590,51 @@ export const fetchAssetIdentityAccounts = (assetId: string, hours: number) =>
 
 export const fetchSuppressions = () => get<Suppression[]>('/api/suppressions')
 
+// 可信自动化来源：组管理员按 SSH 登录身份（公钥指纹 / 来源网段 / 用户）登记，命中的告警不进事件与研判
+export interface TrustedSource {
+  id: string
+  createdAt: string
+  groupId: string
+  name: string
+  reason: string | null
+  createdBy: string
+  expiresAt: string
+  keyFingerprint: string | null
+  sourceCidr: string | null
+  loginUser: string | null
+  matchedCount: number
+  lastMatchedAt: string | null
+  revokedAt: string | null
+  revokedBy: string | null
+}
+
+// 组内近 7 天 agent 核对过出处的 SSH 登录，登记时从这里挑
+export interface TrustedCandidate {
+  user: string
+  srcIp: string
+  keyType: string | null
+  keyFingerprint: string | null
+  logins: number
+  hosts: number
+  lastSeen: string
+  trustedSourceIds: string[]
+}
+
+export const fetchTrustedSources = (groupId: string) => get<TrustedSource[]>(`/api/trusted-sources?groupId=${encodeURIComponent(groupId)}`)
+export const fetchTrustedCandidates = (groupId: string) => get<TrustedCandidate[]>(`/api/trusted-sources/candidates?groupId=${encodeURIComponent(groupId)}`)
+export async function createTrustedSource(body: {
+  groupId: string
+  name: string
+  reason?: string
+  keyFingerprint?: string
+  sourceCidr?: string
+  loginUser?: string
+  expiresInDays: number
+}): Promise<TrustedSource> {
+  return (await send('POST', '/api/trusted-sources', body)).json()
+}
+export const revokeTrustedSource = async (id: string) => { await send('POST', `/api/trusted-sources/${encodeURIComponent(id)}/revoke`) }
+
 export async function createSuppression(body: {
   ruleId: string
   assetId?: string | null
@@ -624,6 +678,8 @@ export interface EventRow {
   username: string | null
   connTuple: string | null
   raw: unknown
+  // 这条事件的告警来自登记的可信自动化来源
+  automation?: AutomationRef
 }
 
 // 问 AI：related 是查库得出的确定关联（父进程链、同一进程、子进程、同一连接、同一远端、前后同主机）；
