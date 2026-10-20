@@ -9,9 +9,11 @@
 
 use std::io;
 use std::os::fd::RawFd;
+use std::sync::{Arc, Mutex};
 
 use super::{
-    ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, emit_process, username_of,
+    ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, ProcessRegistry, emit_process,
+    username_of,
 };
 
 const NETLINK_CONNECTOR: libc::c_int = 11;
@@ -62,13 +64,17 @@ pub fn spawn(agent_id: String, tx: EventSink) -> io::Result<()> {
     let sock = Socket::open()?;
     sock.subscribe()?;
     tx.capability("process", "netlink", "active");
-    std::thread::spawn(move || pump(sock, agent_id, tx));
+    // 内核只报 pid，血缘靠本地注册表维护，先用 /proc 快照打底；自检进程要持锁登记，注册表共享
+    let registry = Arc::new(Mutex::new(super::seeded_registry()));
+    let probe = registry.clone();
+    super::liveness::spawn(tx.clone(), &super::liveness::PROCESS, move || {
+        super::liveness::probe_process(&probe)
+    });
+    std::thread::spawn(move || pump(sock, agent_id, tx, registry));
     Ok(())
 }
 
-fn pump(sock: Socket, agent_id: String, tx: EventSink) {
-    // 内核只报 pid，血缘靠本地注册表维护，先用 /proc 快照打底
-    let mut registry = super::seeded_registry();
+fn pump(sock: Socket, agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessRegistry>>) {
     let mut buf = vec![0u8; 8192];
 
     while !tx.is_closed() {
@@ -82,6 +88,7 @@ fn pump(sock: Socket, agent_id: String, tx: EventSink) {
         };
         for event in parse_events(&buf[..n]) {
             let Some(d) = describe(&event) else { continue };
+            let mut registry = registry.lock().unwrap_or_else(|e| e.into_inner());
             let events = emit_process(
                 &agent_id,
                 &mut registry,
@@ -96,6 +103,7 @@ fn pump(sock: Socket, agent_id: String, tx: EventSink) {
                     exit_code: d.exit_code,
                 },
             );
+            drop(registry);
             for event in events {
                 if !tx.send(event) {
                     return; // 上报端已断开

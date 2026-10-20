@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use uuid::Uuid;
 
@@ -44,7 +44,12 @@ pub struct ProcessRegistry {
     pub periodic: Periodic,
     /// 被折叠进程后来有了要上报的动静时，压着的启动事件移到这里，由下一次发事件的采集路径带出去
     outbox: Vec<AgentEvent>,
+    /// agent 自己拉起的自检进程（见 liveness）及其后代：pid → 登记时刻。只证明采集通道活着，不上报
+    canaries: HashMap<u32, Instant>,
 }
+
+/// 自检进程登记的有效期：启动与退出事件早该到了，过期的登记不再认，pid 复用也不会把别人的进程藏掉
+const CANARY_TTL: Duration = Duration::from_secs(30);
 
 struct Entry {
     guid: Uuid,
@@ -192,6 +197,31 @@ impl ProcessRegistry {
         }
         chain.reverse();
         self.outbox.append(&mut chain);
+    }
+
+    /// 登记一个自检进程。调用方须在拉起它的同时持有注册表锁，采集回调拿到锁时登记已经在了
+    pub fn add_canary(&mut self, pid: u32) {
+        let now = Instant::now();
+        self.canaries
+            .retain(|_, at| now.duration_since(*at) < CANARY_TTL);
+        self.canaries.insert(pid, now);
+    }
+
+    /// 这条进程事件是不是自检进程的（是就不上报）。启动事件认登记过的 pid（父进程须是 agent 自己）
+    /// 和它的后代；退出事件顺手撤掉登记
+    pub fn is_canary(&mut self, activity_launch: bool, pid: u32, ppid: Option<u32>) -> bool {
+        let fresh = |at: &Instant| at.elapsed() < CANARY_TTL;
+        if !activity_launch {
+            return self.canaries.remove(&pid).is_some_and(|at| fresh(&at));
+        }
+        if self.canaries.get(&pid).is_some_and(fresh) {
+            return ppid.is_none_or(|p| p == std::process::id());
+        }
+        if ppid.is_some_and(|p| self.canaries.get(&p).is_some_and(fresh)) {
+            self.canaries.insert(pid, Instant::now());
+            return true;
+        }
+        false
     }
 
     /// 取走待发的补发事件

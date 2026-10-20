@@ -150,6 +150,10 @@ async fn run_ebpf(
     // exec 事件按 CPU 分发到多个任务，进程血缘是全局的，注册表要共享。
     // exec 频率远低于包速率，这把锁的争用可以忽略。
     let registry = std::sync::Arc::new(std::sync::Mutex::new(seeded_registry()));
+    let probe = registry.clone();
+    super::liveness::spawn(tx.clone(), &super::liveness::PROCESS, move || {
+        super::liveness::probe_process(&probe)
+    });
 
     for cpu in online_cpus().map_err(|(_, e)| e)? {
         let mut buf = events.open(cpu, None)?;
@@ -219,6 +223,11 @@ async fn run_ebpf(
         match spawn_conn_readers(&mut bpf, &agent_id, &tx, &registry, &owners, &mut readers).await {
             Ok(udp) => {
                 tx.capability("network", "ebpf", if udp { "active" } else { "degraded" });
+                super::liveness::spawn(
+                    tx.clone(),
+                    &super::liveness::NETWORK,
+                    super::liveness::probe_network,
+                );
                 let udp = if udp { "、UDP 出站" } else { "" };
                 eprintln!("网络采集: eBPF（TCP 出站与入站{udp}，60s 采样）");
                 dnswatch::spawn(
@@ -334,6 +343,8 @@ async fn spawn_conn_readers(
 }
 
 fn to_conn_event(agent_id: &str, state: &ConnState, ev: &ConnEvent) -> Option<AgentEvent> {
+    // 活性按原始事件记：回环自检连接与被采样、过滤掉的连接都算
+    super::liveness::pulse(super::liveness::Channel::Network);
     let local = ip_of(ev.family, &ev.saddr);
     let remote = ip_of(ev.family, &ev.daddr);
     // DNS 查询不单独成网络事件（dnswatch 会报完整的问答），只记下源端口归哪个进程；

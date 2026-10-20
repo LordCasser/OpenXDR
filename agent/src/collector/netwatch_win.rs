@@ -23,7 +23,7 @@ use ferrisetw::schema_locator::SchemaLocator;
 use ferrisetw::trace::{UserTrace, stop_trace_by_name};
 
 use super::netwatch::{self, ConnInfo, ConnSampler};
-use super::{EventSink, ProcessRegistry};
+use super::{EventSink, ProcessRegistry, liveness};
 
 // ETW 会话用固定名字：agent 被强杀或升级退出时会话不随进程消失，启动时先停掉同名旧会话；
 // 用随机名每次重启都漏一个，系统总共 64 个会话名额迟早占满，之后采集就起不来
@@ -49,6 +49,8 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
             if record.event_id() != EVENT_TCP_CONNECT {
                 return;
             }
+            // 活性按原始事件记：回环自检连接与被采样、过滤掉的连接都算
+            liveness::pulse(liveness::Channel::Network);
             let Ok(schema) = locator.event_schema(record) else {
                 return;
             };
@@ -118,6 +120,11 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
         Ok(_trace) => {
             health_sink.capability("network", "etw-tcp-out", "degraded");
             eprintln!("网络采集: ETW Kernel-Network TcpConnect（TCP 出站，60s 采样）");
+            liveness::spawn(
+                health_sink.clone(),
+                &liveness::NETWORK,
+                liveness::probe_network,
+            );
             // trace 句柄保活；agent 退出即进程结束，无需额外清理
             while !health_sink.is_closed() {
                 std::thread::sleep(std::time::Duration::from_millis(250));

@@ -105,10 +105,20 @@ const FA_FILE_MARK_MASK: u64 =
 /// dirs 为空时用内置的敏感目录清单（含 /home 各用户 .ssh）；非空表示按下发配置覆盖。
 /// 优先 fanotify（带进程上下文），不可用时干净回落 inotify 递归监控。
 pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<usize> {
-    let targets: Vec<String> = if dirs.is_empty() {
+    let mut targets: Vec<String> = if dirs.is_empty() {
         default_targets()
     } else {
         dirs.to_vec()
+    };
+    // 自检目录随监控目标一起挂上，活性检测改写其中的文件确认通道活着（事件按路径认出、不上报）
+    let canary = super::liveness::canary_dir();
+    targets.extend(canary.map(str::to_string));
+    let watch = |sink: &EventSink| {
+        if let Some(dir) = canary {
+            super::liveness::spawn(sink.clone(), &super::liveness::FILES, move || {
+                super::liveness::probe_files(dir)
+            });
+        }
     };
     match fa_setup(&targets) {
         Ok((st, n)) => {
@@ -118,6 +128,7 @@ pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<u
                 "fanotify",
                 if n > 0 { "active" } else { "degraded" },
             );
+            watch(&sink);
             std::thread::spawn(move || {
                 fa_run(st, &agent_id, &sink);
                 sink.capability("files", "fanotify", "unavailable");
@@ -130,6 +141,7 @@ pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<u
                 .inspect_err(|_| sink.capability("files", "inotify", "unavailable"))?;
             let n = watched.len();
             sink.capability("files", "inotify", "degraded");
+            watch(&sink);
             std::thread::spawn(move || {
                 ino_run(fd, watched, targets, &agent_id, &sink);
                 sink.capability("files", "inotify", "unavailable");
@@ -388,6 +400,9 @@ fn ino_run(
             };
             // 单文件 watch：事件落在本体上，inotify 不给子项名，路径即目标
             if entry.is_file {
+                if super::liveness::files_pulse(&entry.path) {
+                    continue;
+                }
                 if !sink.send(file_event(agent_id, &entry.path, ino_activity(ev.mask))) {
                     // SAFETY: 同上：关闭独占的 fd 后立即 return。
                     unsafe { libc::close(fd) };
@@ -412,6 +427,9 @@ fn ino_run(
                         return;
                     }
                 }
+                continue;
+            }
+            if super::liveness::files_pulse(&path) {
                 continue;
             }
             if !sink.send(file_event(agent_id, &path, ino_activity(ev.mask))) {
@@ -829,6 +847,9 @@ fn fa_run(mut st: FaState, agent_id: &str, sink: &EventSink) {
                     fa_close(st);
                     return;
                 }
+            }
+            if super::liveness::files_pulse(&path) {
+                continue;
             }
             let activity = fa_activity(ev.mask);
             // pid <= 0 是内核侧事件，没有可回填的肇事者

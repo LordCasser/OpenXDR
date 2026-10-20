@@ -68,6 +68,18 @@ pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<u
     if n == 0 {
         return Err(io::Error::new(io::ErrorKind::NotFound, "没有可监控的目录"));
     }
+    // 自检目录单独一个监控句柄，活性检测改写其中的文件确认通道活着（事件按路径认出、不上报）。
+    // 一个敏感目录都没盯上就不挂
+    if let Some(dir) = super::liveness::canary_dir()
+        && let Some(handle) = open_dir(dir)
+    {
+        let (a, s) = (agent_id.clone(), sink.clone());
+        let handle = handle as usize;
+        std::thread::spawn(move || watch_loop(handle as HANDLE, dir, &a, &s));
+        super::liveness::spawn(sink.clone(), &super::liveness::FILES, move || {
+            super::liveness::probe_files(dir)
+        });
+    }
     Ok(n)
 }
 
@@ -141,6 +153,9 @@ fn watch_loop(handle: HANDLE, dir: &str, agent_id: &str, sink: &EventSink) {
                 continue;
             };
             let path = format!("{}\\{}", dir.trim_end_matches('\\'), name);
+            if super::liveness::files_pulse(&path) {
+                continue;
+            }
             if !sink.send(file_event(agent_id, &path, activity)) {
                 return;
             }

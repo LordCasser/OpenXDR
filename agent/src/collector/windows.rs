@@ -26,6 +26,7 @@ const SESSION: &str = "OpenXDR-Process";
 pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessRegistry>>) {
     let cb_agent_id = agent_id.clone();
     let cb_tx = tx.clone();
+    let probe = registry.clone();
     // ETW 回调是 Fn，注册表（与网络采集共享）经 Arc 移进回调加锁使用
 
     let provider = Provider::by_guid(KERNEL_PROCESS_GUID)
@@ -94,6 +95,10 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
     {
         Ok(_trace) => {
             tx.capability("process", "etw", "active");
+            // 会话起得来不等于有事件：实机见过 ETW 会话在、事件全无，靠活性检测兜住
+            super::liveness::spawn(tx.clone(), &super::liveness::PROCESS, move || {
+                super::liveness::probe_process(&probe)
+            });
             // trace 句柄保活；channel 关闭即 agent 退出，无需额外清理
             tx.closed().await
         }

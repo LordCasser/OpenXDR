@@ -13,6 +13,7 @@ use crate::pb::AgentEvent;
 
 mod config;
 mod hash;
+mod liveness;
 mod periodic;
 mod poll;
 mod registry;
@@ -266,6 +267,11 @@ impl EventSink {
     pub fn capability(&self, name: &str, path: &str, state: &str) {
         self.health.capability(self.generation, name, path, state);
     }
+    /// 活性检测的结论（见 liveness）：Some 为静默原因，None 为恢复
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    pub fn silence(&self, name: &str, reason: Option<&str>) {
+        self.health.silence(self.generation, name, reason);
+    }
 
     /// 返回 false 表示上报侧已关闭，采集任务应当退出。
     pub fn send(&self, mut event: AgentEvent) -> bool {
@@ -468,6 +474,11 @@ fn emit_process(
         ..info
     };
     let (pid, ppid) = (info.pid, info.ppid);
+    // 活性按原始事件记，周期折叠掉的也算；自检进程只证明通道活着，到此为止
+    liveness::pulse(liveness::Channel::Process);
+    if registry.is_canary(activity == ACTIVITY_LAUNCH, pid, ppid) {
+        return Vec::new();
+    }
     let now = std::time::Instant::now();
     let mut own = None;
     if activity == ACTIVITY_TERMINATE && registry.is_held(pid) {
@@ -968,6 +979,58 @@ mod tests {
         assert_eq!(exit(&mut reg, 200).len(), 1);
         assert!(launch(&mut reg, 202, 10, "sh -c ebtables-save").is_empty());
         assert!(exit(&mut reg, 202).is_empty());
+    }
+
+    /// 自检进程（agent 自己拉起、登记过 pid）与它的后代启动退出都不外发；登记的 pid 父进程不是 agent
+    /// 时照常上报，别人复用了这个 pid 也藏不掉
+    #[test]
+    fn canary_process_is_never_sent() {
+        let me = std::process::id();
+        let mut reg = ProcessRegistry::default();
+        reg.add_canary(700);
+        let launch = |reg: &mut ProcessRegistry, pid: u32, ppid: u32| {
+            emit_process(
+                "a",
+                reg,
+                ACTIVITY_LAUNCH,
+                ProcessInfo {
+                    pid,
+                    name: "true",
+                    exe: Some("/bin/true"),
+                    ppid: Some(ppid),
+                    ..Default::default()
+                },
+            )
+        };
+        let exit = |reg: &mut ProcessRegistry, pid: u32| {
+            emit_process(
+                "a",
+                reg,
+                ACTIVITY_TERMINATE,
+                ProcessInfo {
+                    pid,
+                    ..Default::default()
+                },
+            )
+        };
+        assert!(launch(&mut reg, 700, me).is_empty(), "自检进程不外发");
+        assert!(
+            launch(&mut reg, 701, 700).is_empty(),
+            "自检进程的后代不外发"
+        );
+        assert!(exit(&mut reg, 701).is_empty());
+        assert!(exit(&mut reg, 700).is_empty());
+        assert!(reg.known(700).is_none(), "自检进程不进注册表");
+        // 登记已随退出撤掉：同一 pid 再起的进程照常上报
+        assert_eq!(launch(&mut reg, 700, me).len(), 1);
+
+        let mut reg = ProcessRegistry::default();
+        reg.add_canary(800);
+        assert_eq!(
+            launch(&mut reg, 800, 1).len(),
+            1,
+            "父进程不是 agent 的不算自检"
+        );
     }
 
     /// 平台指令进程树从不折叠：server 要逐条核对指令归属
