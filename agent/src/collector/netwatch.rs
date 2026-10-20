@@ -68,14 +68,25 @@ pub struct ConnInfo {
 
 /// 组装一条连接事件。conn_tuple 与 sensor 同一格式（发起方在前），
 /// 横向移动关联（ConnTupleContains）对两路数据一视同仁。
+///
+/// 源地址未指定（0.0.0.0 / ::，未 connect 的 UDP 套接字且查不到出口地址）表示「不知道」，
+/// 不是一台主机：不写 src_endpoint.ip，conn_tuple 的源地址留空（`udp::41641>1.2.3.4:41641`）
 pub fn conn_event(agent_id: &str, info: &ConnInfo) -> AgentEvent {
     let direction = if info.inbound { "inbound" } else { "outbound" };
+    let src = if info.src.is_unspecified() {
+        String::new()
+    } else {
+        info.src.to_string()
+    };
     let mut raw = serde_json::json!({
         "activity_id": 1, // OCSF: Open
         "connection_info": { "direction": direction, "protocol_name": info.proto },
-        "src_endpoint": { "ip": info.src.to_string(), "port": info.sport },
+        "src_endpoint": { "port": info.sport },
         "dst_endpoint": { "ip": info.dst.to_string(), "port": info.dport },
     });
+    if !src.is_empty() {
+        raw["src_endpoint"]["ip"] = src.as_str().into();
+    }
     // 入站找不到服务进程时 pid 为 0：不写进程，不编一个出来
     if info.pid != 0 {
         raw["process"] =
@@ -109,7 +120,7 @@ pub fn conn_event(agent_id: &str, info: &ConnInfo) -> AgentEvent {
         username: String::new(),
         conn_tuple: format!(
             "{}:{}:{}>{}:{}",
-            info.proto, info.src, info.sport, info.dst, info.dport
+            info.proto, src, info.sport, info.dst, info.dport
         ),
         raw_json: raw.to_string(),
         dropped_events: 0,
@@ -209,6 +220,31 @@ mod tests {
         };
         let v: Value = serde_json::from_str(&conn_event("agent-1", &orphan).raw_json).unwrap();
         assert!(v.get("process").is_none(), "找不到服务进程时不写 process");
+    }
+
+    /// 未指定的源地址不当真实地址报：省略 src_endpoint.ip，conn_tuple 源地址留空
+    #[test]
+    fn conn_event_unspecified_source() {
+        for (src, dst, tuple) in [
+            ("0.0.0.0", "110.42.47.158", "udp::41641>110.42.47.158:41641"),
+            ("::", "2001:db8::9", "udp::41641>2001:db8::9:41641"),
+        ] {
+            let info = ConnInfo {
+                proto: "udp",
+                inbound: false,
+                sport: 41641,
+                dport: 41641,
+                src: src.parse().unwrap(),
+                dst: dst.parse().unwrap(),
+                ..info_inbound()
+            };
+            let evt = conn_event("agent-1", &info);
+            assert_eq!(evt.conn_tuple, tuple);
+            let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
+            assert!(v["src_endpoint"].get("ip").is_none(), "{src}");
+            assert_eq!(v["src_endpoint"]["port"], 41641);
+            assert_eq!(v["dst_endpoint"]["ip"], dst);
+        }
     }
 
     fn info_inbound() -> ConnInfo {

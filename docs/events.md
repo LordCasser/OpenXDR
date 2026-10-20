@@ -153,6 +153,9 @@ Linux 另有 TCP 入站与 UDP 出站：
 - `direction`：`outbound` 时 src 是本机、进程是发起方；`inbound` 时 src 是对端、dst 是本机服务，
   进程是监听该端口的服务进程（按监听表查，查不到省略）
 - `protocol_name`：`tcp` / `udp`，与 `conn_tuple` 前缀一致；UDP 的源端口可能是 0（首个数据报才绑定端口）
+- UDP 出站的源地址：未连接套接字按路由查出口地址；查不到时**省略** `src_endpoint.ip`，`conn_tuple` 源地址留空
+  （`udp::41641>110.42.47.158:41641`），不报 0.0.0.0 / ::——未指定地址不是一台主机。
+  旧版 agent 会照报未指定地址，server 侧资产图谱两种都按上报资产自己的地址处理
 - `dst_endpoint.hostname`：目的地址最近被本机解析过时的域名（agent 自己看到的 DNS 应答），没见过就省略；
   参与域名情报碰撞
 - `container`：同 1007
@@ -189,7 +192,7 @@ Linux 另有 TCP 入站与 UDP 出站：
 - sensor 上报前把 src 摆正为客户端方向（`sensor/src/report.rs:19-49`）
 - sensor 无进程信息；资产归属按**源 IP** 反查 asset（`sensor.go:67-98`）
 - `conn_tuple` 格式统一为 `tcp:src:sport>dst:dport`，agent 与 sensor 同格式，
-  横向移动关联直接复用
+  横向移动关联直接复用；源地址未知时留空（只有 agent 的 UDP 出站会出现），目的端总是有的
 
 ## 4003 DNS 活动
 

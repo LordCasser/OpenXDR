@@ -157,7 +157,11 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 - **UDP 出站**：kprobe `udp_sendmsg` / `udpv6_sendmsg`，目标优先取 `msg_name`（未连接套接字的 sendto），
   否则取套接字上 connect 的对端；内核里按 (进程, 目标) 60 秒采样（LRU 8192），源端口 53 的回包直接丢弃。
   用户态再丢掉从本机 UDP 服务端口发出的回包（NTP、syslog、corosync 之类），以及组播、广播。
-  目的端口 53 的发送不成网络事件，只记「源端口 → 进程」给 DNS 采集归属（见下节）
+  目的端口 53 的发送不成网络事件，只记「源端口 → 进程」给 DNS 采集归属（见下节）。
+  未连接套接字在 `udp_sendmsg` 时源地址还是未指定（0.0.0.0 / ::，发包时才按路由选）：发起进程与 agent
+  在同一网络命名空间时，用户态对目标做一次 UDP connect（只查路由、不发包）取内核选的本端地址；
+  不在同一命名空间（容器自己的网络）或进程已退出就查不到，事件省略 `src_endpoint.ip`、`conn_tuple` 源地址留空。
+  不看发起套接字的 SO_MARK / 绑定网卡，策略路由下可能选到本机另一个地址，但总是本机自己的
 - 用户侧丢 loopback；按 (对端IP, 端口) 60 秒去重，出站 / 入站 / UDP 各一张表，表满 4096 清过期
 - 带 pid → 进程 GUID 与容器，网络事件直接挂进血缘；`connection_info.direction` 区分 inbound / outbound，
   `conn_tuple` 与 sensor 同格式（发起方在前，`tcp:` / `udp:` 前缀），横向移动关联与网络规则零改动复用

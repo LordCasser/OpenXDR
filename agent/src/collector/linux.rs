@@ -5,7 +5,7 @@
 //! 失败按 netlink proc connector → 轮询逐级回落，不跳档。网络与退出码各自独立降级。
 
 use std::collections::HashMap;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -388,6 +388,13 @@ fn to_conn_event(agent_id: &str, state: &ConnState, ev: &ConnEvent) -> Option<Ag
             {
                 return None;
             }
+            // 未 connect 的套接字（sendto）在内核里源地址还是未指定，发包时才按路由选；
+            // 能照同样的路由查到出口地址就用，查不到保持未指定，组装时省略、不当真实地址报
+            let local = local
+                .is_unspecified()
+                .then(|| egress_source(ev.pid, remote))
+                .flatten()
+                .unwrap_or(local);
             let info = conn_info(state, ev.pid, "udp", local, ev.sport, remote, ev.dport);
             Some(netwatch::conn_event(agent_id, &info))
         }
@@ -451,6 +458,26 @@ fn conn_info(
         hostname: dnswatch::hostname_of(dst),
         command: known.as_ref().and_then(|k| k.command.clone()),
     }
+}
+
+/// 发往 remote 的包会用的源地址：在 agent 自己的网络命名空间里对 remote 做一次 UDP connect
+/// （只查路由、不发包），取内核选出的本端地址。发起进程不在同一网络命名空间（容器自己的网络）时
+/// 查出来的是宿主机的地址，不如不填；进程已退出也一样。不看发起套接字的 SO_MARK / 绑定网卡，
+/// 策略路由下可能选到本机另一个地址——总归是本机自己的地址，不会把连接安到别的主机头上
+fn egress_source(pid: u32, remote: IpAddr) -> Option<IpAddr> {
+    let netns = |who: &str| std::fs::read_link(format!("/proc/{who}/ns/net")).ok();
+    if pid == 0 || netns(&pid.to_string())? != netns("self")? {
+        return None;
+    }
+    let any: IpAddr = if remote.is_ipv4() {
+        Ipv4Addr::UNSPECIFIED.into()
+    } else {
+        Ipv6Addr::UNSPECIFIED.into()
+    };
+    let sock = std::net::UdpSocket::bind((any, 0)).ok()?;
+    sock.connect((remote, 9)).ok()?;
+    let ip = sock.local_addr().ok()?.ip().to_canonical();
+    (!ip.is_unspecified()).then_some(ip)
 }
 
 /// 地址是不是宿主机自己网络命名空间里的地址（含回环）。地址会变（DHCP、新网卡），每分钟刷新
@@ -907,6 +934,29 @@ mod tests {
             to_conn_event("agent-1", &state, &ev).is_none(),
             "窗口内同一目标只报一次"
         );
+    }
+
+    /// sendto 的 UDP 套接字源地址未指定：同一网络命名空间里按路由查出口地址，
+    /// 查不到（进程不存在）就留空，不报 0.0.0.0
+    #[test]
+    fn udp_out_unspecified_source() {
+        let state = conn_state();
+        let mut ev = conn(CONN_UDP_OUT, [0, 0, 0, 0], 41641, [127, 0, 0, 2], 41641);
+        ev.pid = std::process::id();
+        assert_eq!(
+            egress_source(ev.pid, IpAddr::from([127, 0, 0, 2])),
+            Some(IpAddr::from([127, 0, 0, 1])),
+            "同一网络命名空间按路由取出口地址"
+        );
+        assert_eq!(egress_source(0, IpAddr::from([127, 0, 0, 2])), None);
+
+        // 不存在的进程查不到命名空间：保持未指定，事件里省略源地址
+        ev.pid = u32::MAX;
+        ev.daddr[..4].copy_from_slice(&[203, 0, 113, 9]);
+        let out = to_conn_event("agent-1", &state, &ev).expect("UDP 出站应上报");
+        assert_eq!(out.conn_tuple, "udp::41641>203.0.113.9:41641");
+        let v: Value = serde_json::from_str(&out.raw_json).unwrap();
+        assert!(v["src_endpoint"].get("ip").is_none());
     }
 
     #[test]
