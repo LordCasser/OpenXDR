@@ -39,13 +39,16 @@ func tokenRow(t *ent.EnrollToken) enrollTokenRow {
 func EnrollTokens(db *ent.Client, svc *enroll.Service, dists enroll.Dists) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/enroll-tokens/status", func(w http.ResponseWriter, r *http.Request) {
-		platforms := dists.Agent.Available()
-		reason := svc.Disabled()
+		platforms, sensors := dists.Agent.Available(), dists.Sensor.Available()
+		reason, sensorReason := svc.Disabled(), svc.Disabled()
 		if reason == "" && len(platforms) == 0 {
 			reason = "server 未提供 agent 安装包（AGENT_DIST_DIR 未配置或为空）"
 		}
+		if sensorReason == "" && len(sensors) == 0 {
+			sensorReason = "server 未提供 sensor 安装包（AGENT_DIST_DIR 里没有 openxdr-sensor-linux-*）"
+		}
 		writeJSON(w, map[string]any{"enabled": reason == "", "reason": reason, "platforms": platforms,
-			"sensorPlatforms": dists.Sensor.Available()})
+			"sensorEnabled": sensorReason == "", "sensorReason": sensorReason, "sensorPlatforms": sensors})
 	})
 	mux.HandleFunc("GET /api/enroll-tokens", func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.URL.Query().Get("groupId"))
