@@ -40,6 +40,8 @@ const (
 	FieldReviewedBy = "reviewed_by"
 	// FieldReviewedAt holds the string denoting the reviewed_at field in the database.
 	FieldReviewedAt = "reviewed_at"
+	// FieldEvidence holds the string denoting the evidence field in the database.
+	FieldEvidence = "evidence"
 	// Table holds the table name of the suppression in the database.
 	Table = "suppressions"
 )
@@ -60,6 +62,7 @@ var Columns = []string{
 	FieldSessionID,
 	FieldReviewedBy,
 	FieldReviewedAt,
+	FieldEvidence,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

@@ -266,6 +266,18 @@ func (_u *SuppressionUpdate) ClearReviewedAt() *SuppressionUpdate {
 	return _u
 }
 
+// SetEvidence sets the "evidence" field.
+func (_u *SuppressionUpdate) SetEvidence(v *schema.SuppressEvidence) *SuppressionUpdate {
+	_u.mutation.SetEvidence(v)
+	return _u
+}
+
+// ClearEvidence clears the value of the "evidence" field.
+func (_u *SuppressionUpdate) ClearEvidence() *SuppressionUpdate {
+	_u.mutation.ClearEvidence()
+	return _u
+}
+
 // Mutation returns the SuppressionMutation object of the builder.
 func (_u *SuppressionUpdate) Mutation() *SuppressionMutation {
 	return _u.mutation
@@ -377,6 +389,12 @@ func (_u *SuppressionUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.ReviewedAtCleared() {
 		_spec.ClearField(suppression.FieldReviewedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Evidence(); ok {
+		_spec.SetField(suppression.FieldEvidence, field.TypeJSON, value)
+	}
+	if _u.mutation.EvidenceCleared() {
+		_spec.ClearField(suppression.FieldEvidence, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -633,6 +651,18 @@ func (_u *SuppressionUpdateOne) ClearReviewedAt() *SuppressionUpdateOne {
 	return _u
 }
 
+// SetEvidence sets the "evidence" field.
+func (_u *SuppressionUpdateOne) SetEvidence(v *schema.SuppressEvidence) *SuppressionUpdateOne {
+	_u.mutation.SetEvidence(v)
+	return _u
+}
+
+// ClearEvidence clears the value of the "evidence" field.
+func (_u *SuppressionUpdateOne) ClearEvidence() *SuppressionUpdateOne {
+	_u.mutation.ClearEvidence()
+	return _u
+}
+
 // Mutation returns the SuppressionMutation object of the builder.
 func (_u *SuppressionUpdateOne) Mutation() *SuppressionMutation {
 	return _u.mutation
@@ -774,6 +804,12 @@ func (_u *SuppressionUpdateOne) sqlSave(ctx context.Context) (_node *Suppression
 	}
 	if _u.mutation.ReviewedAtCleared() {
 		_spec.ClearField(suppression.FieldReviewedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Evidence(); ok {
+		_spec.SetField(suppression.FieldEvidence, field.TypeJSON, value)
+	}
+	if _u.mutation.EvidenceCleared() {
+		_spec.ClearField(suppression.FieldEvidence, field.TypeJSON)
 	}
 	_node = &Suppression{config: _u.config}
 	_spec.Assign = _node.assignValues

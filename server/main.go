@@ -38,6 +38,7 @@ import (
 	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/eventpart"
+	"openxdr/server/internal/fpstats"
 	"openxdr/server/internal/grpcsvc"
 	"openxdr/server/internal/hostimport"
 	"openxdr/server/internal/identity"
@@ -268,6 +269,17 @@ func startAnalytics(ctx context.Context, db *sql.DB, client *ent.Client, rules s
 	if days := getenvInt("AUTO_CLOSE_BENIGN_DAYS", 7); days > 0 {
 		autoClose := &janitor.AutoClose{DB: client, Days: days, Interval: time.Hour}
 		go cluster.RunLeader(ctx, db, "auto-close-benign", autoClose.Run)
+	}
+	// 同一规则在同一主机上被人反复判误报，生成待组管理员批准的抑制草案；0 关闭
+	if minCount := getenvInt("FP_SUPPRESS_MIN_COUNT", 5); minCount > 0 {
+		stats := &fpstats.Stats{
+			DB: client, MinCount: minCount, MinRatio: getenvInt("FP_SUPPRESS_MIN_RATIO", 90),
+			Window:   time.Duration(getenvInt("FP_SUPPRESS_WINDOW_DAYS", 30)) * 24 * time.Hour,
+			Days:     min(max(getenvInt("FP_SUPPRESS_DAYS", 30), 1), 90),
+			Cooldown: time.Duration(getenvInt("FP_SUPPRESS_COOLDOWN_DAYS", 30)) * 24 * time.Hour,
+			Interval: time.Duration(max(getenvInt("FP_SUPPRESS_INTERVAL_HOURS", 6), 1)) * time.Hour,
+		}
+		go cluster.RunLeader(ctx, db, "fp-stats", stats.Run)
 	}
 }
 

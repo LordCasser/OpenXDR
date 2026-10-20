@@ -25516,6 +25516,7 @@ type SuppressionMutation struct {
 	session_id       *uuid.UUID
 	reviewed_by      *string
 	reviewed_at      *time.Time
+	evidence         **schema.SuppressEvidence
 	clearedFields    map[string]struct{}
 	done             bool
 	oldValue         func(context.Context) (*Suppression, error)
@@ -26234,6 +26235,55 @@ func (m *SuppressionMutation) ResetReviewedAt() {
 	delete(m.clearedFields, suppression.FieldReviewedAt)
 }
 
+// SetEvidence sets the "evidence" field.
+func (m *SuppressionMutation) SetEvidence(se *schema.SuppressEvidence) {
+	m.evidence = &se
+}
+
+// Evidence returns the value of the "evidence" field in the mutation.
+func (m *SuppressionMutation) Evidence() (r *schema.SuppressEvidence, exists bool) {
+	v := m.evidence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEvidence returns the old "evidence" field's value of the Suppression entity.
+// If the Suppression object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SuppressionMutation) OldEvidence(ctx context.Context) (v *schema.SuppressEvidence, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEvidence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEvidence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEvidence: %w", err)
+	}
+	return oldValue.Evidence, nil
+}
+
+// ClearEvidence clears the value of the "evidence" field.
+func (m *SuppressionMutation) ClearEvidence() {
+	m.evidence = nil
+	m.clearedFields[suppression.FieldEvidence] = struct{}{}
+}
+
+// EvidenceCleared returns if the "evidence" field was cleared in this mutation.
+func (m *SuppressionMutation) EvidenceCleared() bool {
+	_, ok := m.clearedFields[suppression.FieldEvidence]
+	return ok
+}
+
+// ResetEvidence resets all changes to the "evidence" field.
+func (m *SuppressionMutation) ResetEvidence() {
+	m.evidence = nil
+	delete(m.clearedFields, suppression.FieldEvidence)
+}
+
 // Where appends a list predicates to the SuppressionMutation builder.
 func (m *SuppressionMutation) Where(ps ...predicate.Suppression) {
 	m.predicates = append(m.predicates, ps...)
@@ -26268,7 +26318,7 @@ func (m *SuppressionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SuppressionMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.created_at != nil {
 		fields = append(fields, suppression.FieldCreatedAt)
 	}
@@ -26308,6 +26358,9 @@ func (m *SuppressionMutation) Fields() []string {
 	if m.reviewed_at != nil {
 		fields = append(fields, suppression.FieldReviewedAt)
 	}
+	if m.evidence != nil {
+		fields = append(fields, suppression.FieldEvidence)
+	}
 	return fields
 }
 
@@ -26342,6 +26395,8 @@ func (m *SuppressionMutation) Field(name string) (ent.Value, bool) {
 		return m.ReviewedBy()
 	case suppression.FieldReviewedAt:
 		return m.ReviewedAt()
+	case suppression.FieldEvidence:
+		return m.Evidence()
 	}
 	return nil, false
 }
@@ -26377,6 +26432,8 @@ func (m *SuppressionMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldReviewedBy(ctx)
 	case suppression.FieldReviewedAt:
 		return m.OldReviewedAt(ctx)
+	case suppression.FieldEvidence:
+		return m.OldEvidence(ctx)
 	}
 	return nil, fmt.Errorf("unknown Suppression field %s", name)
 }
@@ -26477,6 +26534,13 @@ func (m *SuppressionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetReviewedAt(v)
 		return nil
+	case suppression.FieldEvidence:
+		v, ok := value.(*schema.SuppressEvidence)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEvidence(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Suppression field %s", name)
 }
@@ -26546,6 +26610,9 @@ func (m *SuppressionMutation) ClearedFields() []string {
 	if m.FieldCleared(suppression.FieldReviewedAt) {
 		fields = append(fields, suppression.FieldReviewedAt)
 	}
+	if m.FieldCleared(suppression.FieldEvidence) {
+		fields = append(fields, suppression.FieldEvidence)
+	}
 	return fields
 }
 
@@ -26583,6 +26650,9 @@ func (m *SuppressionMutation) ClearField(name string) error {
 		return nil
 	case suppression.FieldReviewedAt:
 		m.ClearReviewedAt()
+		return nil
+	case suppression.FieldEvidence:
+		m.ClearEvidence()
 		return nil
 	}
 	return fmt.Errorf("unknown Suppression nullable field %s", name)
@@ -26630,6 +26700,9 @@ func (m *SuppressionMutation) ResetField(name string) error {
 		return nil
 	case suppression.FieldReviewedAt:
 		m.ResetReviewedAt()
+		return nil
+	case suppression.FieldEvidence:
+		m.ResetEvidence()
 		return nil
 	}
 	return fmt.Errorf("unknown Suppression field %s", name)

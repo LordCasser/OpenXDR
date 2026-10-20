@@ -188,6 +188,12 @@ func (_c *SuppressionCreate) SetNillableReviewedAt(v *time.Time) *SuppressionCre
 	return _c
 }
 
+// SetEvidence sets the "evidence" field.
+func (_c *SuppressionCreate) SetEvidence(v *schema.SuppressEvidence) *SuppressionCreate {
+	_c.mutation.SetEvidence(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *SuppressionCreate) SetID(v uuid.UUID) *SuppressionCreate {
 	_c.mutation.SetID(v)
@@ -362,6 +368,10 @@ func (_c *SuppressionCreate) createSpec() (*Suppression, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ReviewedAt(); ok {
 		_spec.SetField(suppression.FieldReviewedAt, field.TypeTime, value)
 		_node.ReviewedAt = &value
+	}
+	if value, ok := _c.mutation.Evidence(); ok {
+		_spec.SetField(suppression.FieldEvidence, field.TypeJSON, value)
+		_node.Evidence = value
 	}
 	return _node, _spec
 }

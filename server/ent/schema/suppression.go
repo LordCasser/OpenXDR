@@ -40,7 +40,36 @@ func (Suppression) Fields() []ent.Field {
 		field.UUID("session_id", uuid.UUID{}).Optional().Nillable(),
 		field.String("reviewed_by").Optional().Nillable(),
 		field.Time("reviewed_at").Optional().Nillable(),
+		// 误报统计生成的草案带上依据：哪些事件、谁判的、比例。人工与 AI 提议为空
+		field.JSON("evidence", &SuppressEvidence{}).Optional(),
 	}
+}
+
+// SuppressEvidence 误报统计草案的依据
+type SuppressEvidence struct {
+	// rule 整条规则（实体分散，没法按实体收窄）/ entity 按实体收窄
+	Scope      string `json:"scope"`
+	WindowDays int    `json:"windowDays"`
+	// 计入的人工误报结论数、属实结论数、仍未结案数；误报率 = 误报 / 三者之和
+	FalsePositives int `json:"falsePositives"`
+	TruePositives  int `json:"truePositives"`
+	Pending        int `json:"pending"`
+	RatioPercent   int `json:"ratioPercent"`
+	// 不计入的：原样采纳 AI 结案建议的误报、系统自动结案的误报
+	AIProposals int `json:"aiProposals"`
+	AutoClosed  int `json:"autoClosed"`
+	// 计入的误报事件，最多 20 个
+	Incidents []EvidenceIncident `json:"incidents"`
+}
+
+// EvidenceIncident 一个被人判为误报的事件
+type EvidenceIncident struct {
+	ID         uuid.UUID `json:"id"`
+	Title      string    `json:"title,omitempty"`
+	ResolvedBy string    `json:"resolvedBy"`
+	ResolvedAt time.Time `json:"resolvedAt"`
+	// 空为人工写的结论；ai_verdict 人选了误报、采纳 AI 研判的说明
+	Source string `json:"source,omitempty"`
 }
 
 // SuppressCondition 一条字段条件：事件体的 dot path 取值与 value 比较，不区分大小写

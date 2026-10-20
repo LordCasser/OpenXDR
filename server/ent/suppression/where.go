@@ -800,6 +800,16 @@ func ReviewedAtNotNil() predicate.Suppression {
 	return predicate.Suppression(sql.FieldNotNull(FieldReviewedAt))
 }
 
+// EvidenceIsNil applies the IsNil predicate on the "evidence" field.
+func EvidenceIsNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldIsNull(FieldEvidence))
+}
+
+// EvidenceNotNil applies the NotNil predicate on the "evidence" field.
+func EvidenceNotNil() predicate.Suppression {
+	return predicate.Suppression(sql.FieldNotNull(FieldEvidence))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Suppression) predicate.Suppression {
 	return predicate.Suppression(sql.AndPredicates(predicates...))

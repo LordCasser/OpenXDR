@@ -1,0 +1,436 @@
+// Package fpstats 误报统计 → 抑制草案：把人反复下的「误报」结论回喂到规则层。
+//
+// 同一条规则在同一台主机上被人判误报够多次、误报率够高、期间没有一次判属实，
+// 就生成一条待批准的抑制草案，挂进组管理员的审批流程。草案从不直接生效。
+//
+// 只算人的结论：系统自动结案只是复述 AI 的良性判断；原样采纳 AI 结案建议的，
+// 结论和理由都出自 AI，计进来就成了「AI 提议结案 → AI 统计 → AI 提议抑制」的自我强化。
+// 两者单独计数写进依据，不进分子也不进分母。人选了误报、说明沿用 AI 研判的（ai_verdict）照常计入：
+// 结论是人下的，接口只在和 AI 研判一致时才允许不写理由。
+package fpstats
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"slices"
+	"sort"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
+
+	"openxdr/server/ent"
+	"openxdr/server/ent/alert"
+	"openxdr/server/ent/schema"
+	"openxdr/server/ent/suppression"
+	"openxdr/server/internal/audit"
+	"openxdr/server/internal/review"
+	"openxdr/server/internal/suppress"
+)
+
+// CreatedBy 误报统计草案的 created_by，控制台据此标来源
+const CreatedBy = "fp-stats"
+
+// entityFields 按实体收窄时依次尝试的字段：先看规则作用的对象（域名、对端、文件、注册表、模块），
+// 最后才是发起的进程映像——同一个进程往往干很多事，按进程压比按对象压宽
+var entityFields = []string{
+	"query.hostname",
+	"dst_endpoint.ip",
+	"file.path",
+	"reg_key.path",
+	"module.file.path",
+	"process.file.path",
+	"src_endpoint.ip",
+}
+
+// imageField 按对象收窄后，如果这些命中都出自同一个进程映像，再加一条进程条件
+const imageField = "process.file.path"
+
+// maxDraftsPerKey 同一（规则、主机）一轮最多出几条按实体的草案，免得一次把审批页刷屏
+const maxDraftsPerKey = 5
+
+// maxEvidence 依据里最多列多少个事件
+const maxEvidence = 20
+
+type Stats struct {
+	DB *ent.Client
+	// 统计窗口：这段时间内有告警的事件
+	Window time.Duration
+	// 计入的人工误报至少几次；0 关闭
+	MinCount int
+	// 误报率下限（百分比）：误报 / (误报 + 属实 + 未结案)
+	MinRatio int
+	// 草案建议的有效期（天），批准时从批准那一刻起算
+	Days int
+	// 被拒绝的同范围草案多久内不再生成
+	Cooldown time.Duration
+	Interval time.Duration
+}
+
+// Run 拿到租约先扫一次再按周期扫
+func (s *Stats) Run(ctx context.Context) {
+	ticker := time.NewTicker(s.Interval)
+	defer ticker.Stop()
+	for {
+		if n, err := s.Sweep(ctx, time.Now()); err != nil {
+			slog.Error("误报统计失败", "err", err)
+		} else if n > 0 {
+			slog.Info("误报统计生成抑制草案", "drafts", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+type key struct {
+	rule  string
+	asset uuid.UUID
+}
+
+// kind 一个事件对统计的意义
+type kind int
+
+const (
+	ignored    kind = iota
+	fp              // 计入的人工误报
+	tp              // 属实，不论谁判的
+	pending         // 还没结案
+	aiProposal      // 原样采纳 AI 结案建议的误报，不计入
+	autoClosed      // 系统自动结案，不计入
+)
+
+func classify(inc *ent.Incident) kind {
+	switch inc.Status {
+	case "closed":
+		return tp
+	case "open", "triaged":
+		return pending
+	case "false_positive":
+	default:
+		return ignored
+	}
+	switch {
+	// 早期结案没记结案人，分不清是不是人判的，不算
+	case inc.ResolvedBy == nil:
+		return ignored
+	case *inc.ResolvedBy == review.ClosedBy:
+		return autoClosed
+	case inc.ResolutionSource != nil && *inc.ResolutionSource == "ai_proposal":
+		return aiProposal
+	}
+	return fp
+}
+
+// tally 一组事件的结论计数，每个事件只算一次
+type tally struct {
+	counts map[kind]int
+	fps    []*ent.Incident
+	seen   map[uuid.UUID]bool
+}
+
+func (t *tally) add(inc *ent.Incident, k kind) {
+	if t.seen == nil {
+		t.seen, t.counts = map[uuid.UUID]bool{}, map[kind]int{}
+	}
+	if t.seen[inc.ID] {
+		return
+	}
+	t.seen[inc.ID] = true
+	t.counts[k]++
+	if k == fp {
+		t.fps = append(t.fps, inc)
+	}
+}
+
+func (t *tally) ratio() int {
+	total := t.counts[fp] + t.counts[tp] + t.counts[pending]
+	if total == 0 {
+		return 0
+	}
+	return t.counts[fp] * 100 / total
+}
+
+func (s *Stats) qualifies(t *tally) bool {
+	return t.counts[fp] >= s.MinCount && t.counts[tp] == 0 && t.ratio() >= s.MinRatio
+}
+
+type draft struct {
+	key   key
+	conds []suppress.Condition
+	t     *tally
+}
+
+// Sweep 统计一轮并写入草案，返回新生成的条数。多节点由租约保证单活
+func (s *Stats) Sweep(ctx context.Context, now time.Time) (int, error) {
+	if s.MinCount <= 0 {
+		return 0, nil
+	}
+	since := now.Add(-s.Window)
+	inWindow := alert.Or(alert.TsGTE(since), alert.LastTsGTE(since))
+	// 先不带事件体按（规则、主机）粗算，只有人工误报够数的才去读事件体按实体细算
+	alerts, err := s.DB.Alert.Query().
+		Where(inWindow, alert.CommandIDIsNil(), alert.AssetIDNotNil(), alert.IncidentIDNotNil()).
+		WithIncident().All(ctx)
+	if err != nil {
+		return 0, err
+	}
+	byKey := map[key]*tally{}
+	for _, a := range alerts {
+		if a.Edges.Incident == nil {
+			continue
+		}
+		k := key{a.RuleID, *a.AssetID}
+		if byKey[k] == nil {
+			byKey[k] = &tally{}
+		}
+		byKey[k].add(a.Edges.Incident, classify(a.Edges.Incident))
+	}
+	keys := make([]key, 0, len(byKey))
+	for k, t := range byKey {
+		if t.counts[fp] >= s.MinCount {
+			keys = append(keys, k)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].rule < keys[j].rule || keys[i].rule == keys[j].rule && keys[i].asset.String() < keys[j].asset.String()
+	})
+	created := 0
+	for _, k := range keys {
+		hits, err := s.DB.Alert.Query().
+			Where(inWindow, alert.CommandIDIsNil(), alert.RuleIDEQ(k.rule), alert.AssetIDEQ(k.asset), alert.IncidentIDNotNil()).
+			WithIncident().WithEvent().All(ctx)
+		if err != nil {
+			return created, err
+		}
+		for _, d := range s.drafts(k, byKey[k], hits) {
+			ok, err := s.propose(ctx, d, now)
+			if err != nil {
+				return created, err
+			}
+			if ok {
+				created++
+			}
+		}
+	}
+	return created, nil
+}
+
+// hit 一条告警的事件体与所属事件
+type hit struct {
+	inc *ent.Incident
+	raw map[string]any // nil 表示事件体已过保留期或读不出
+}
+
+// drafts 先按实体找能收窄的值；实体维度分散（没有哪个值单独够数）时才考虑整条规则
+func (s *Stats) drafts(k key, whole *tally, alerts []*ent.Alert) []draft {
+	hits := make([]hit, 0, len(alerts))
+	for _, a := range alerts {
+		if a.Edges.Incident == nil {
+			continue
+		}
+		h := hit{inc: a.Edges.Incident}
+		if a.Edges.Event != nil && json.Unmarshal(a.Edges.Event.Raw, &h.raw) != nil {
+			h.raw = nil
+		}
+		hits = append(hits, h)
+	}
+	concentrated := false
+	for _, field := range entityFields {
+		values := entityTallies(hits, field)
+		var out []draft
+		for _, v := range values {
+			if v.t.counts[fp] >= s.MinCount {
+				concentrated = true
+			}
+			if s.qualifies(v.t) && utf8.RuneCountInString(v.value) <= 500 {
+				conds := []suppress.Condition{{Field: field, Op: "equals", Value: v.value}}
+				if image, ok := sameImage(hits, field, v.value); ok && field != imageField {
+					conds = append(conds, suppress.Condition{Field: imageField, Op: "equals", Value: image})
+				}
+				out = append(out, draft{key: k, conds: conds, t: v.t})
+			}
+		}
+		if len(out) > 0 {
+			return out[:min(len(out), maxDraftsPerKey)]
+		}
+	}
+	if concentrated || !s.qualifies(whole) {
+		return nil
+	}
+	return []draft{{key: k, t: whole}}
+}
+
+type valueTally struct {
+	value string
+	t     *tally
+}
+
+// entityTallies 某字段每个取值的结论计数，按误报数从多到少。
+// 事件体读不到的命中不知道是哪个值：属实与未结案的从严算进每个值，误报的不算
+func entityTallies(hits []hit, field string) []valueTally {
+	byValue := map[string]*valueTally{}
+	var unknown []*ent.Incident
+	for _, h := range hits {
+		if h.raw == nil {
+			unknown = append(unknown, h.inc)
+			continue
+		}
+		v, ok := suppress.Lookup(h.raw, field)
+		if !ok || strings.TrimSpace(v) == "" {
+			continue
+		}
+		lower := strings.ToLower(v)
+		if byValue[lower] == nil {
+			byValue[lower] = &valueTally{value: v, t: &tally{}}
+		}
+		byValue[lower].t.add(h.inc, classify(h.inc))
+	}
+	out := make([]valueTally, 0, len(byValue))
+	for _, v := range byValue {
+		for _, inc := range unknown {
+			if k := classify(inc); k == tp || k == pending {
+				v.t.add(inc, k)
+			}
+		}
+		out = append(out, *v)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i].t.counts[fp], out[j].t.counts[fp]
+		return a > b || a == b && out[i].value < out[j].value
+	})
+	return out
+}
+
+// sameImage 取值为 value 的命中是否都出自同一个进程映像
+func sameImage(hits []hit, field, value string) (string, bool) {
+	image := ""
+	for _, h := range hits {
+		if h.raw == nil {
+			continue
+		}
+		if v, ok := suppress.Lookup(h.raw, field); !ok || !strings.EqualFold(v, value) {
+			continue
+		}
+		p, ok := suppress.Lookup(h.raw, imageField)
+		if !ok || p == "" || image != "" && !strings.EqualFold(p, image) {
+			return "", false
+		}
+		image = p
+	}
+	return image, image != ""
+}
+
+// propose 没有覆盖同范围的生效抑制、待批草案或冷却中的拒绝时写一条草案
+func (s *Stats) propose(ctx context.Context, d draft, now time.Time) (bool, error) {
+	existing, err := s.DB.Suppression.Query().
+		Where(suppression.RuleIDEQ(d.key.rule), suppression.Or(suppression.AssetIDEQ(d.key.asset), suppression.AssetIDIsNil())).
+		All(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, e := range existing {
+		if covered(e, d.conds, now, s.Cooldown) {
+			return false, nil
+		}
+	}
+	ev := evidence(d, s.Window)
+	p, err := s.DB.Suppression.Create().
+		SetRuleID(d.key.rule).SetAssetID(d.key.asset).SetStatus("proposed").SetCreatedBy(CreatedBy).
+		SetReason(reason(d, ev, s.Days)).SetConditions(d.conds).SetEvidence(ev).
+		SetExpiresAt(now.AddDate(0, 0, s.Days)).SetCreatedAt(now).Save(ctx)
+	if err != nil {
+		return false, err
+	}
+	audit.System(ctx, s.DB, "suppression_proposed", p.ID.String(),
+		fmt.Sprintf("误报统计 %s 主机 %s：%d 次人工误报，误报率 %d%%", d.key.rule, d.key.asset, ev.FalsePositives, ev.RatioPercent))
+	return true, nil
+}
+
+// covered 已有的抑制是否让这条草案多余：
+// 生效且范围不比草案窄（条件是草案的子集）的已经压住了；待批的与草案互相包含就是同一件事；
+// 冷却期内被拒的，范围不比它窄的草案不再提——拒了窄的，宽的更不该提，更窄的可以再问
+func covered(e *ent.Suppression, conds []suppress.Condition, now time.Time, cooldown time.Duration) bool {
+	switch e.Status {
+	case "active":
+		return (e.ExpiresAt == nil || e.ExpiresAt.After(now)) && subset(e.Conditions, conds)
+	case "proposed":
+		return subset(e.Conditions, conds) || subset(conds, e.Conditions)
+	case "rejected":
+		return e.ReviewedAt != nil && now.Sub(*e.ReviewedAt) < cooldown && subset(conds, e.Conditions)
+	}
+	return false
+}
+
+// subset a 的每条条件都在 b 里（字段、op 相同，值不区分大小写）
+func subset(a, b []suppress.Condition) bool {
+	for _, c := range a {
+		if !slices.ContainsFunc(b, func(o suppress.Condition) bool {
+			return o.Field == c.Field && o.Op == c.Op && strings.EqualFold(o.Value, c.Value)
+		}) {
+			return false
+		}
+	}
+	return true
+}
+
+func evidence(d draft, window time.Duration) *schema.SuppressEvidence {
+	scope := "entity"
+	if len(d.conds) == 0 {
+		scope = "rule"
+	}
+	fps := slices.Clone(d.t.fps)
+	sort.Slice(fps, func(i, j int) bool { return resolvedAt(fps[i]).After(resolvedAt(fps[j])) })
+	incidents := make([]schema.EvidenceIncident, 0, min(len(fps), maxEvidence))
+	for _, inc := range fps[:min(len(fps), maxEvidence)] {
+		e := schema.EvidenceIncident{ID: inc.ID, ResolvedBy: *inc.ResolvedBy, ResolvedAt: resolvedAt(inc)}
+		if inc.Title != nil {
+			e.Title = *inc.Title
+		}
+		if inc.ResolutionSource != nil {
+			e.Source = *inc.ResolutionSource
+		}
+		incidents = append(incidents, e)
+	}
+	return &schema.SuppressEvidence{
+		Scope: scope, WindowDays: int(window / (24 * time.Hour)),
+		FalsePositives: d.t.counts[fp], TruePositives: d.t.counts[tp], Pending: d.t.counts[pending],
+		RatioPercent: d.t.ratio(), AIProposals: d.t.counts[aiProposal], AutoClosed: d.t.counts[autoClosed],
+		Incidents: incidents,
+	}
+}
+
+func resolvedAt(inc *ent.Incident) time.Time {
+	if inc.ResolvedAt != nil {
+		return *inc.ResolvedAt
+	}
+	return time.Time{}
+}
+
+func reason(d draft, ev *schema.SuppressEvidence, days int) string {
+	var who []string
+	for _, inc := range d.t.fps {
+		if !slices.Contains(who, *inc.ResolvedBy) {
+			who = append(who, *inc.ResolvedBy)
+		}
+	}
+	scope := "【整条规则】实体分散、没有哪个域名/地址/路径/进程单独够数，无法按实体收窄。这台主机上的这条规则"
+	if len(d.conds) > 0 {
+		parts := make([]string, len(d.conds))
+		for i, c := range d.conds {
+			parts[i] = c.Field + " = " + c.Value
+		}
+		scope = "这台主机上 " + strings.Join(parts, " 且 ") + " 的命中"
+	}
+	r := fmt.Sprintf("误报统计：%s近 %d 天有 %d 个事件被人判为误报（%s），误报率 %d%%（未结案 %d 个），期间没有判属实",
+		scope, ev.WindowDays, ev.FalsePositives, strings.Join(who, "、"), ev.RatioPercent, ev.Pending)
+	if ev.AIProposals+ev.AutoClosed > 0 {
+		r += fmt.Sprintf("；另有采纳 AI 结案建议 %d 个、系统自动结案 %d 个未计入", ev.AIProposals, ev.AutoClosed)
+	}
+	return r + fmt.Sprintf("。建议有效期 %d 天，到期自动失效。", days)
+}

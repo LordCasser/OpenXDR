@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/schema"
 	entsuppression "openxdr/server/ent/suppression"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
@@ -33,6 +34,8 @@ type suppressionRow struct {
 	ReviewedAt *time.Time `json:"reviewedAt"`
 	// Conditions 字段条件（AND），空表示整条规则
 	Conditions []suppress.Condition `json:"conditions"`
+	// Evidence 误报统计草案的依据（createdBy = fp-stats），其余为空
+	Evidence *schema.SuppressEvidence `json:"evidence"`
 }
 
 func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, rules sigma.Catalog) {
@@ -61,7 +64,7 @@ func mapSuppressions(api *http.ServeMux, db *ent.Client, store *suppress.Store, 
 				Reason: s.Reason, CreatedBy: s.CreatedBy, ExpiresAt: s.ExpiresAt,
 				MatchedCount: s.MatchedCount, LastMatchedAt: s.LastMatchedAt,
 				Status: s.Status, SessionID: s.SessionID, ReviewedBy: s.ReviewedBy, ReviewedAt: s.ReviewedAt,
-				Conditions: s.Conditions,
+				Conditions: s.Conditions, Evidence: s.Evidence,
 			}
 			// 列一串 UUID 没法用，带上规则标题
 			if title := rules.TitleOf(s.RuleID); title != "" {

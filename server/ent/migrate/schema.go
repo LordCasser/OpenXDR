@@ -894,6 +894,7 @@ var (
 		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "reviewed_by", Type: field.TypeString, Nullable: true},
 		{Name: "reviewed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "evidence", Type: field.TypeJSON, Nullable: true},
 	}
 	// SuppressionsTable holds the schema information for the "suppressions" table.
 	SuppressionsTable = &schema.Table{

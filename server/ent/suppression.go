@@ -45,7 +45,9 @@ type Suppression struct {
 	// ReviewedBy holds the value of the "reviewed_by" field.
 	ReviewedBy *string `json:"reviewed_by,omitempty"`
 	// ReviewedAt holds the value of the "reviewed_at" field.
-	ReviewedAt   *time.Time `json:"reviewed_at,omitempty"`
+	ReviewedAt *time.Time `json:"reviewed_at,omitempty"`
+	// Evidence holds the value of the "evidence" field.
+	Evidence     *schema.SuppressEvidence `json:"evidence,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -56,7 +58,7 @@ func (*Suppression) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case suppression.FieldAssetID, suppression.FieldSessionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case suppression.FieldConditions:
+		case suppression.FieldConditions, suppression.FieldEvidence:
 			values[i] = new([]byte)
 		case suppression.FieldMatchedCount:
 			values[i] = new(sql.NullInt64)
@@ -174,6 +176,14 @@ func (_m *Suppression) assignValues(columns []string, values []any) error {
 				_m.ReviewedAt = new(time.Time)
 				*_m.ReviewedAt = value.Time
 			}
+		case suppression.FieldEvidence:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field evidence", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Evidence); err != nil {
+					return fmt.Errorf("unmarshal field evidence: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -262,6 +272,9 @@ func (_m *Suppression) String() string {
 		builder.WriteString("reviewed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("evidence=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Evidence))
 	builder.WriteByte(')')
 	return builder.String()
 }
