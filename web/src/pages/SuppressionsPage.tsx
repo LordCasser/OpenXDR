@@ -5,7 +5,7 @@ import { deleteSuppression, fetchAssets, fetchSuppressions, reviewSuppression, t
 import { useSession } from '../app/session'
 import { EmptyHint } from '../components/Ago'
 import { HostLink } from '../components/HostLink'
-import { Page } from '../components/Page'
+import { Page, useWideTable } from '../components/Page'
 import { fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 import { LoadError } from '../components/LoadError'
@@ -15,6 +15,7 @@ const OP: Record<string, MsgKey> = { equals: 'supOpEquals', contains: 'supOpCont
 // 抑制规则：最怕被遗忘——列出压掉的次数，让长期无人过问的抑制显形
 export function SuppressionsPage() {
   const { t } = useI18n()
+  const wideTable = useWideTable()
   const { message } = App.useApp()
   const client = useQueryClient()
   const { canWrite, isAdmin, groups } = useSession()
@@ -81,6 +82,8 @@ export function SuppressionsPage() {
             ...(canWrite
               ? [{
                   title: t('actions'), width: 130,
+                  // 表格要横向滚动才看得全：宽屏把操作列钉在右侧，批准 / 拒绝不用先拖滚动条；窄屏钉住会盖掉一半表格
+                  fixed: wideTable ? 'right' as const : undefined,
                   render: (_: unknown, s: Suppression) => (
                     <Space size={0}>
                       {s.status === 'proposed' && canReview(s) && <>

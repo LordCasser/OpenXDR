@@ -40,6 +40,8 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 .filter-bar { padding: 12px 16px; border-bottom: 1px solid var(--ant-color-border-secondary); }
 /* 表头小一号、中等字重、灰色：让数据本身成为主角 */
 .ant-table-wrapper .ant-table-thead > tr > th { font-size: 12px; font-weight: 500; }
+/* 表头底色是透明的：钉住的列横向滚动时要盖住底下滚过去的表头文字 */
+.ant-table-wrapper .ant-table-thead > tr > th.ant-table-cell-fix { background: var(--ant-color-bg-container); }
 .ant-statistic-content, .funnel-value, .action-count { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 /* 细滚动条 */
 * { scrollbar-width: thin; scrollbar-color: var(--ant-color-fill) transparent; }
