@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>OpenXDR</title>
+  <path d="M32 3 58 13v19c0 14-11 24-26 30C17 56 6 46 6 32V13L32 3Z" fill="#1668dc"/>
+  <path d="m19 19 26 26m0-26L19 45" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+  <path d="m32 25 7 7-7 7-7-7 7-7Z" fill="#91caff" stroke="#1668dc" stroke-width="3"/>
+</svg>

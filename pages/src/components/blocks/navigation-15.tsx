@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/logo";
 import {
   AnimatePresence,
   motion,
@@ -113,9 +114,7 @@ export default function Navigation15() {
             href="#"
             className={`flex items-center gap-2.5 rounded-sm text-lg font-semibold tracking-tight text-neutral-950 dark:text-white ${focusRing}`}
           >
-            <span className="grid h-7 w-7 place-items-center rounded-lg border border-emerald-300/30 bg-emerald-300/10 text-[10px] font-bold text-emerald-200">
-              OX
-            </span>
+            <Logo />
             OpenXDR
           </a>
 
@@ -213,9 +212,7 @@ export default function Navigation15() {
               >
                 <div className="flex items-center justify-between border-b border-neutral-200 pb-5 dark:border-neutral-800">
                   <span className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-neutral-950 dark:text-white">
-                    <span className="grid h-7 w-7 place-items-center rounded-lg border border-emerald-300/30 bg-emerald-300/10 text-[10px] font-bold text-emerald-200">
-                      OX
-                    </span>
+                    <Logo />
                     OpenXDR
                   </span>
                   <button

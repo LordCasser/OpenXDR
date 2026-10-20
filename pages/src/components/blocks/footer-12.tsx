@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion, type Variants } from "motion/react";
+import { Logo } from "@/components/logo";
 import { Github } from "lucide-react";
 import { useLocale } from "@/i18n";
 
@@ -121,7 +122,10 @@ export default function Footer12() {
           className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-4 lg:grid-cols-[1.35fr_1fr_1fr_1fr_1fr]"
         >
           <div className="col-span-2 sm:col-span-4 lg:col-span-1">
-            <p className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-white">OpenXDR</p>
+            <p className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-neutral-900 dark:text-white">
+              <Logo />
+              OpenXDR
+            </p>
             <p className="mt-3 max-w-[28ch] text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
               {copy.summary}
             </p>
