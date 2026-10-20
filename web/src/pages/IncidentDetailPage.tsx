@@ -17,6 +17,7 @@ import { ResponsePanel } from '../components/ResponsePanel'
 import { ResolveModal } from '../components/ResolveModal'
 import { agreesWithAI, verdictStatus } from '../components/verdict'
 import { SuppressModal } from '../components/SuppressModal'
+import { TemporalRuleAtAlert } from '../components/TemporalRuleAtAlert'
 import { VerdictCard } from '../components/VerdictCard'
 import { IncidentStatusTag, SeverityTag, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
@@ -208,12 +209,15 @@ export function IncidentDetailPage() {
                 rowKey="id"
                 dataSource={inc.alerts}
                 pagination={{ pageSize: 20, hideOnSinglePage: true }}
-                expandable={{ expandedRowRender: a => a.event ? (
+                expandable={{ expandedRowRender: a => <>
+                  <TemporalRuleAtAlert alertId={a.id} ruleId={a.ruleId} />
+                  {a.event ? (
                   <>
-                    <Typography.Text copyable={{ text: JSON.stringify(a.event, null, 2) }} type="secondary" style={{ fontSize: 12 }}>{t('rawEvent')}</Typography.Text>
+                    <Typography.Text copyable={{ text: JSON.stringify(a.event, null, 2) }} type="secondary" style={{ fontSize: 12, display: 'block' }}>{t('rawEvent')}</Typography.Text>
                     <pre className="json-block">{JSON.stringify(a.event, null, 2)}</pre>
                   </>
-                ) : t('noRawEvent') }}
+                  ) : t('noRawEvent')}
+                </> }}
                 columns={[
                   { title: t('thFirst'), dataIndex: 'ts', render: fmtTime, width: 170 },
                   { title: t('thLast'), dataIndex: 'lastTs', render: fmtTime, width: 170 },

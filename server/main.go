@@ -567,6 +567,8 @@ func newImportLLM(conf func() aiconf.Config, model string) *triage.LLM {
 // registerSQLRoutes 直接查库的接口：时序缺口、指令核验与身份观测。
 func registerSQLRoutes(routes *http.ServeMux, db *sql.DB) {
 	routes.Handle("/api/temporal-gaps", api.TemporalGaps(db))
+	routes.Handle("/api/temporal-rule-snapshots", api.TemporalRuleSnapshots(db))
+	routes.Handle("/api/temporal-rule-snapshots/", api.TemporalRuleSnapshots(db))
 	verifications := api.CommandVerifications(db)
 	routes.Handle("/api/commands/{id}/verifications", verifications)
 	routes.Handle("/api/commands/{id}/verifications/{verificationId}", verifications)

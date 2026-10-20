@@ -329,6 +329,27 @@ export function fetchTemporalGaps(assetId: string, hours: number) {
   return get<{ items: TemporalGap[]; truncated: boolean }>(`/api/temporal-gaps?${params}`)
 }
 
+// 告警命中时所用的时序规则版本：单事件告警或旧版本告警返回空列表
+export interface TemporalRuleVersion { revision: string; createdAt: string; temporalRules: string[] }
+export const fetchAlertTemporalRevisions = (alertId: string) =>
+  get<{ items: TemporalRuleVersion[] }>(`/api/temporal-rule-snapshots?${new URLSearchParams({ alertId })}`)
+
+export interface ArchivedTemporalRule {
+  id: string
+  title: string
+  author?: string
+  kind: 'event_count' | 'sequence'
+  groupBy: 'asset' | 'account'
+  severity: number
+  windowSeconds: number
+  threshold?: number
+  references: string[]
+  source: string
+  base: Record<string, string>
+}
+export const fetchArchivedTemporalRule = (revision: string, rule: string) =>
+  get<{ revision: string; createdAt: string; rules: ArchivedTemporalRule[] }>(`/api/temporal-rule-snapshots/${encodeURIComponent(revision)}?${new URLSearchParams({ rule })}`)
+
 export interface DirectorySource {
   id: string
   groupId: string
