@@ -127,8 +127,10 @@ function PeerList({ items, notes }: { items: Peer[]; notes: Record<string, strin
 }
 
 // 资产画像：AI 标注 + 采集到的事实。组 analyst 能改标注，组 admin 能指派区域
-export function AssetProfileView({ assetId, hostname, groupId, canEdit, isGroupAdmin, compact }: {
+export function AssetProfileView({ assetId, hostname, groupId, canEdit, isGroupAdmin, compact, noAgent }: {
   assetId: string; hostname: string; groupId?: string | null; canEdit: boolean; isGroupAdmin: boolean; compact?: boolean
+  // 只有流量探针、没装 agent 的主机：监听端口要 agent 才采得到，别提示「升级 agent」
+  noAgent?: boolean
 }) {
   const { t } = useI18n()
   const { message } = App.useApp()
@@ -207,7 +209,7 @@ export function AssetProfileView({ assetId, hostname, groupId, canEdit, isGroupA
 
       <div>
         <Typography.Text strong>{t('listeningPorts')}</Typography.Text>
-        {!p.inventoryAt ? <Alert type="info" showIcon style={{ marginTop: 8 }} title={t('noInventory')} /> : (() => {
+        {!p.inventoryAt ? <Alert type="info" showIcon style={{ marginTop: 8 }} title={t(noAgent ? 'noInventoryNoAgent' : 'noInventory')} /> : (() => {
           const ports = mergePorts(p.listening ?? [])
           const local = ports.filter(x => x.addrs.every(loopback))
           const table = (rows: Port[]) => (

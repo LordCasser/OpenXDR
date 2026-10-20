@@ -36,7 +36,7 @@ jobs:
         # 默认构建没有 Linux 网络采集，分发包必须是 eBPF 构建；拿不到 eBPF 时它自己退到 netlink / 轮询
         run: |
           cargo build --release --locked --features ebpf --target x86_64-unknown-linux-musl
-          strings target/x86_64-unknown-linux-musl/release/openxdr-agent | grep -q inet_sock_set_state
+          strings target/x86_64-unknown-linux-musl/release/openxdr-agent | grep -c inet_sock_set_state
       - name: agent（Windows）
         working-directory: agent
         run: cargo build --release --locked --target x86_64-pc-windows-gnu
