@@ -82,10 +82,13 @@ export function errText(e: unknown, t: (k: MsgKey) => string): string {
 // 主机状态：文档导入尚未纳管 / 已发失联通知 / 5 分钟内有心跳 / 心跳过期，三处页面共用一个口径
 const STALE_MS = 5 * 60_000
 export type HostState = 'imported' | 'silent' | 'online' | 'stale'
+// 最近心跳：有 agent 看 agent；只有流量探针的主机看探针心跳
+export const hostSeen = (a: Asset) => (!a.agentId && a.sensorSeen) || a.lastSeen
+
 export function hostState(a: Asset): HostState {
-  if (!a.agentId && Date.parse(a.lastSeen) === 0) return 'imported'
+  if (!a.agentId && !a.sensorSeen && Date.parse(a.lastSeen) === 0) return 'imported'
   if (a.silentSince) return 'silent'
-  return Date.now() - Date.parse(a.lastSeen) < STALE_MS ? 'online' : 'stale'
+  return Date.now() - Date.parse(hostSeen(a)) < STALE_MS ? 'online' : 'stale'
 }
 
 const HOST_STATE: Record<HostState, { key: MsgKey; status: 'default' | 'error' | 'success' | 'warning' }> = {

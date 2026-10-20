@@ -47,3 +47,34 @@ export function CollectorHealth({ asset }: { asset: Asset }) {
     </Space>
   </Card>
 }
+
+// 同机流量探针的抓包状态：与采集状态同一口径（组件状态 + 接收时刻），另列网卡、后端、丢包与速率
+export function SensorHealth({ asset }: { asset: Asset }) {
+  const { t } = useI18n()
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(timer) }, [])
+  const health = asset.sensorHealth
+  if (!asset.sensorSeen && !health) return null
+  const title = <Space>{t('sensorTitle')}{asset.sensorVersion && <Typography.Text type="secondary">{asset.sensorVersion}</Typography.Text>}</Space>
+  if (!health) return <Card title={title} size="small"><Typography.Text type="secondary">{t('collectorNoReport')}</Typography.Text></Card>
+  const received = Date.parse(health.receivedAt)
+  const stale = !Number.isFinite(received) || now - received > 90000 || received > now + 300000
+  const capture = health.capabilities?.capture
+  const state = states[capture?.state ?? 'unknown'] ?? states.unknown
+  return <Card title={title} size="small">
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      {stale && <Alert type="warning" showIcon title={t('collectorStale')} />}
+      <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }} items={[
+        { key: 'state', label: t('collectorState'), children: <Tag color={stale ? undefined : state.color}>{t(state.label)}</Tag> },
+        { key: 'path', label: t('sensorCapture'), children: <Typography.Text className="mono">{capture?.path || `${health.backend}:${health.iface}`}</Typography.Text> },
+        { key: 'workers', label: t('sensorWorkers'), children: <Typography.Text type={health.workersAlive < health.workers ? 'danger' : undefined}>{health.workersAlive} / {health.workers}</Typography.Text> },
+        { key: 'received', label: t('collectorReceived'), children: fmtTime(health.receivedAt) },
+        { key: 'packets', label: t('sensorPacketRate'), children: health.packetRate.toLocaleString() },
+        { key: 'flows', label: t('sensorFlowRate'), children: health.flowRate.toLocaleString() },
+        { key: 'kernel', label: t('sensorKernelDrops'), children: <Typography.Text type={health.kernelDrops ? 'danger' : undefined}>{health.kernelDrops.toLocaleString()}</Typography.Text> },
+        { key: 'queue', label: t('sensorQueueDrops'), children: <Typography.Text type={health.queueDrops ? 'danger' : undefined}>{health.queueDrops.toLocaleString()}</Typography.Text> },
+      ]} />
+      <Typography.Text type="secondary">{t('sensorEvidenceHint')}</Typography.Text>
+    </Space>
+  </Card>
+}

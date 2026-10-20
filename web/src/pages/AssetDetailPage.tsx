@@ -19,7 +19,7 @@ import { CommandVerificationDrawer } from '../components/CommandVerificationDraw
 import { LocalAccounts } from '../components/LocalAccounts'
 import { IdentityObservations } from '../components/IdentityObservations'
 import { TemporalGaps } from '../components/TemporalGaps'
-import { CollectorHealth } from '../components/CollectorHealth'
+import { CollectorHealth, SensorHealth } from '../components/CollectorHealth'
 import { AssetProfileView } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
 import { Page, WIDE_ONLY, useWideTable } from '../components/Page'
@@ -182,7 +182,8 @@ export function AssetDetailPage() {
           <Stat label={t('thLastSeen')} value={<span style={{ fontSize: 17 }}>{asset.agentId ? fmtTime(asset.lastSeen).slice(5) : '—'}</span>} />
         </Col>
 
-        <Col span={24}><CollectorHealth asset={asset} /></Col>
+        {(asset.agentId || !asset.sensorSeen) && <Col span={24}><CollectorHealth asset={asset} /></Col>}
+        {asset.sensorSeen && <Col span={24}><SensorHealth asset={asset} /></Col>}
         <Col xs={24} xl={17}>
           <Card styles={{ body: { paddingTop: 4 } }}>
             <Tabs

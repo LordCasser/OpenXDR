@@ -339,6 +339,14 @@ export interface CollectorHealthSnapshot {
   receipts?: { pending: number; incomplete: number }
   capabilities: Record<string, CollectorCapability>
 }
+export interface SensorHealthSnapshot {
+  bootId: string; sequence: number; reportedUnixMs: number; receivedAt: string
+  iface: string; backend: 'afpacket' | 'afxdp'; workers: number; workersAlive: number
+  packets: number; flows: number; kernelDrops: number; queueDrops: number
+  // 每秒包数、每分钟会话数，按上一次快照以来的增量算
+  packetRate: number; flowRate: number
+  capabilities: Record<string, CollectorCapability>
+}
 export interface Asset {
   id: string
   hostname: string
@@ -354,6 +362,10 @@ export interface Asset {
   silentSince: string | null
   agentVersion: string | null
   collectorHealth?: CollectorHealthSnapshot | null
+  // 同机流量探针：版本、最近心跳与抓包状态，没有探针时为空
+  sensorVersion?: string | null
+  sensorSeen?: string | null
+  sensorHealth?: SensorHealthSnapshot | null
 }
 
 export const fetchAssets = () => get<Asset[]>('/api/assets')
@@ -890,10 +902,17 @@ export interface EnrollStatus {
   enabled: boolean
   reason: string
   platforms: string[]
+  // 流量探针：只看 sensor 安装包，与 agent 分开判断
+  sensorEnabled?: boolean
+  sensorReason?: string
+  sensorPlatforms?: string[] | null
 }
+// agent 令牌接端点 agent；sensor 令牌接流量探针，只有平台管理员能签
+export type EnrollKind = 'agent' | 'sensor'
 export interface EnrollToken {
   id: string
   groupId: string
+  kind?: EnrollKind
   createdBy: string
   createdAt: string
   expiresAt: string
@@ -903,8 +922,8 @@ export interface EnrollToken {
 }
 export const fetchEnrollStatus = () => get<EnrollStatus>('/api/enroll-tokens/status')
 export const fetchEnrollTokens = (groupId: string) => get<EnrollToken[]>(`/api/enroll-tokens?groupId=${groupId}`)
-export const createEnrollToken = async (groupId: string, days: number): Promise<EnrollToken> =>
-  (await send('POST', '/api/enroll-tokens', { groupId, days })).json()
+export const createEnrollToken = async (groupId: string, days: number, kind: EnrollKind = 'agent'): Promise<EnrollToken> =>
+  (await send('POST', '/api/enroll-tokens', { groupId, days, kind })).json()
 export const revokeEnrollToken = (id: string) => send('DELETE', `/api/enroll-tokens/${id}`)
 
 export const assignAsset = (groupId: string, assetId: string) =>

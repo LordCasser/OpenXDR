@@ -10,7 +10,7 @@ import { useCanChat, useHandoff } from '../components/Handoff'
 import { ImportHostsModal } from '../components/ImportHostsModal'
 import { LoadError } from '../components/LoadError'
 import { AddHostModal } from '../components/AddHostModal'
-import { errText, HostStateBadge, hostState } from '../components/format'
+import { errText, HostStateBadge, hostSeen, hostState } from '../components/format'
 import { FilterCard, Page, STICKY_HEADER, WIDE_ONLY, useWideTable } from '../components/Page'
 import { useRowLink } from '../components/rowLink'
 import { useI18n } from '../i18n'
@@ -140,8 +140,8 @@ export function AssetsPage() {
                 ? <Select size="small" style={{ width: 170 }} value={v ?? UNGROUPED} options={groupOptions} onChange={g => move(a, g)} />
                 : groups.find(g => g.id === v)?.name ?? <Tag>{t('ungrouped')}</Tag>,
             },
-            { responsive: WIDE_ONLY, title: t('thSource'), dataIndex: 'agentId', width: 90, render: (v, a) => <Tag>{v ? 'agent' : t(imported(a) ? 'hostImportedSource' : 'sourceLog')}</Tag> },
-            { title: t('thLastSeen'), dataIndex: 'lastSeen', width: 180, render: (v, a) => imported(a) ? '—' : <Ago iso={v} />, sorter: (a, b) => a.lastSeen.localeCompare(b.lastSeen) },
+            { responsive: WIDE_ONLY, title: t('thSource'), dataIndex: 'agentId', width: 90, render: (v, a) => v || a.sensorSeen ? <>{v && <Tag>agent</Tag>}{a.sensorSeen && <Tag>sensor</Tag>}</> : <Tag>{t(imported(a) ? 'hostImportedSource' : 'sourceLog')}</Tag> },
+            { title: t('thLastSeen'), dataIndex: 'lastSeen', width: 180, render: (_, a) => imported(a) ? '—' : <Ago iso={hostSeen(a)} />, sorter: (a, b) => hostSeen(a).localeCompare(hostSeen(b)) },
           ]}
         />}
       </FilterCard>
