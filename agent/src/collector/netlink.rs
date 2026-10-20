@@ -11,6 +11,7 @@ use std::io;
 use std::os::fd::RawFd;
 use std::sync::{Arc, Mutex};
 
+use super::liveness::{Stop, Worker};
 use super::{
     ACTIVITY_LAUNCH, ACTIVITY_TERMINATE, EventSink, ProcessInfo, ProcessRegistry, emit_process,
     username_of,
@@ -61,23 +62,46 @@ pub fn spawn(agent_id: String, tx: EventSink) -> io::Result<()> {
             "当前不在初始 pid 命名空间（容器或 WSL2），proc connector 的 pid 无法对应到本地进程",
         ));
     }
-    let sock = Socket::open()?;
-    sock.subscribe()?;
-    tx.capability("process", "netlink", "active");
-    // 内核只报 pid，血缘靠本地注册表维护，先用 /proc 快照打底；自检进程要持锁登记，注册表共享
+    // 内核只报 pid，血缘靠本地注册表维护，先用 /proc 快照打底；自检进程要持锁登记，注册表共享。
+    // 注册表在订阅之外持有：静默重建只换套接字，已登记的进程 GUID 不丢，退出事件照样配得上启动
     let registry = Arc::new(Mutex::new(super::seeded_registry()));
+    let worker = start(&agent_id, &tx, &registry)?;
     let probe = registry.clone();
-    super::liveness::spawn(tx.clone(), &super::liveness::PROCESS, move || {
-        super::liveness::probe_process(&probe)
-    });
-    std::thread::spawn(move || pump(sock, agent_id, tx, registry));
+    super::liveness::spawn(
+        tx.clone(),
+        &super::liveness::PROCESS,
+        move || super::liveness::probe_process(&probe),
+        worker,
+        move || start(&agent_id, &tx, &registry).map_err(|e| e.to_string()),
+    );
     Ok(())
 }
 
-fn pump(sock: Socket, agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessRegistry>>) {
+/// 开一个新套接字重新订阅，收事件的线程跑到叫停或这一轮采集结束
+fn start(
+    agent_id: &str,
+    tx: &EventSink,
+    registry: &Arc<Mutex<ProcessRegistry>>,
+) -> io::Result<Worker> {
+    let sock = Socket::open()?;
+    sock.subscribe()?;
+    tx.capability("process", "netlink", "active");
+    let (agent_id, tx, registry) = (agent_id.to_string(), tx.clone(), registry.clone());
+    Ok(Worker::spawn(move |stop| {
+        pump(sock, agent_id, tx, registry, stop)
+    }))
+}
+
+fn pump(
+    sock: Socket,
+    agent_id: String,
+    tx: EventSink,
+    registry: Arc<Mutex<ProcessRegistry>>,
+    stop: &Stop,
+) {
     let mut buf = vec![0u8; 8192];
 
-    while !tx.is_closed() {
+    while !tx.is_closed() && !stop.requested() {
         let n = match sock.recv(&mut buf) {
             Ok(n) => n,
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => continue,

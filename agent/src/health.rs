@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capability {
     pub path: String,
@@ -15,14 +15,36 @@ pub struct Capability {
     /// 降级原因（目前只有活性检测会给）：通道开着却持续收不到事件
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    /// 本轮静默里已自动重建几次仍未恢复，只跟着 reason 出现
+    #[serde(skip_serializing_if = "is_zero")]
+    pub rebuilds: u32,
+    /// 本轮采集以来静默后靠自动重建恢复的次数
+    #[serde(skip_serializing_if = "is_zero")]
+    pub recoveries: u32,
 }
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+/// 活性检测对一个通道的结论（见 collector::liveness），每次巡检整体覆盖
+#[derive(Clone, Copy, Default)]
+pub struct Liveness {
+    /// Some 表示通道静默（带原因），None 表示有事件
+    pub reason: Option<&'static str>,
+    /// 本轮静默里已自动重建的次数
+    pub rebuilds: u32,
+    /// 自动重建后恢复的累计次数
+    pub recoveries: u32,
+}
+
 #[derive(Default)]
 struct Capabilities {
     generation: u64,
     values: BTreeMap<String, Capability>,
-    /// 活性检测判定为静默的通道 → 原因。叠加在采集路径自报的状态上：
-    /// 路径自报 active / degraded 时一律按 degraded 上报并带原因，恢复后撤掉，回到自报状态
-    silent: BTreeMap<String, String>,
+    /// 活性检测的结论。静默叠加在采集路径自报的状态上：路径自报 active / degraded 时
+    /// 一律按 degraded 上报并带原因与重建次数，恢复后撤掉，回到自报状态
+    liveness: BTreeMap<String, Liveness>,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -94,12 +116,12 @@ impl Health {
                     Capability {
                         path: String::new(),
                         state: if *on { "unknown" } else { "disabled" }.into(),
-                        reason: None,
+                        ..Default::default()
                     },
                 )
             })
             .collect();
-        caps.silent.clear();
+        caps.liveness.clear();
         caps.generation
     }
     pub fn capability(&self, generation: u64, name: &str, path: &str, state: &str) {
@@ -110,31 +132,32 @@ impl Health {
                 Capability {
                     path: path.into(),
                     state: state.into(),
-                    reason: None,
+                    ..Default::default()
                 },
             );
         }
     }
-    /// 活性检测的结论：Some 表示通道静默（带原因），None 表示有事件、撤掉静默标记
-    pub fn silence(&self, generation: u64, name: &str, reason: Option<&str>) {
+    /// 活性检测的结论，旧一轮采集的不作数
+    pub fn liveness(&self, generation: u64, name: &str, liveness: Liveness) {
         let mut caps = self.capabilities.lock().unwrap_or_else(|e| e.into_inner());
-        if caps.generation != generation {
-            return;
+        if caps.generation == generation {
+            caps.liveness.insert(name.into(), liveness);
         }
-        match reason {
-            Some(r) => caps.silent.insert(name.into(), r.into()),
-            None => caps.silent.remove(name),
-        };
     }
     fn capabilities(&self) -> BTreeMap<String, Capability> {
         let caps = self.capabilities.lock().unwrap_or_else(|e| e.into_inner());
         let mut out = caps.values.clone();
-        for (name, reason) in &caps.silent {
-            if let Some(c) = out.get_mut(name)
+        for (name, l) in &caps.liveness {
+            let Some(c) = out.get_mut(name) else {
+                continue;
+            };
+            c.recoveries = l.recoveries;
+            if let Some(reason) = l.reason
                 && (c.state == "active" || c.state == "degraded")
             {
                 c.state = "degraded".into();
-                c.reason = Some(reason.clone());
+                c.reason = Some(reason.into());
+                c.rebuilds = l.rebuilds;
             }
         }
         out
@@ -205,32 +228,51 @@ mod tests {
         assert_eq!(value["sequence"], 2);
     }
 
-    /// 静默叠加在自报状态上：active 变 degraded 并带原因，撤掉后回到 active；
-    /// 不可用的路径不受影响，旧一轮采集的结论不作数
+    fn silent(rebuilds: u32, recoveries: u32) -> Liveness {
+        Liveness {
+            reason: Some("收不到"),
+            rebuilds,
+            recoveries,
+        }
+    }
+
+    /// 静默叠加在自报状态上：active 变 degraded 并带原因与重建次数，撤掉后回到 active、
+    /// 只留恢复次数；不可用的路径不受影响，旧一轮采集的结论不作数
     #[test]
     fn silence_overlays_reported_state() {
         let health = Health::new();
         let generation = health.begin(&[("process", true), ("files", true)]);
         health.capability(generation, "process", "etw", "active");
         health.capability(generation, "files", "rdcw", "unavailable");
-        health.silence(generation, "process", Some("收不到"));
-        health.silence(generation, "files", Some("收不到"));
-        health.silence(generation - 1, "network", Some("旧的"));
+        health.liveness(generation, "process", silent(2, 0));
+        health.liveness(generation, "files", silent(1, 0));
+        health.liveness(generation - 1, "network", silent(0, 0));
         let value: serde_json::Value = serde_json::from_str(&health.json()).unwrap();
         let process = &value["capabilities"]["process"];
         assert_eq!(process["state"], "degraded");
         assert_eq!(process["path"], "etw");
         assert_eq!(process["reason"], "收不到");
-        assert_eq!(value["capabilities"]["files"]["state"], "unavailable");
-        assert!(value["capabilities"]["files"].get("reason").is_none());
+        assert_eq!(process["rebuilds"], 2);
+        assert!(process.get("recoveries").is_none(), "零次不上报");
+        let files = &value["capabilities"]["files"];
+        assert_eq!(files["state"], "unavailable");
+        assert!(files.get("reason").is_none());
+        assert!(files.get("rebuilds").is_none(), "重建次数只跟着原因");
         assert!(value["capabilities"].get("network").is_none());
 
-        health.silence(generation, "process", None);
+        let recovered = Liveness {
+            recoveries: 1,
+            ..Default::default()
+        };
+        health.liveness(generation, "process", recovered);
         let value: serde_json::Value = serde_json::from_str(&health.json()).unwrap();
-        assert_eq!(value["capabilities"]["process"]["state"], "active");
-        assert!(value["capabilities"]["process"].get("reason").is_none());
+        let process = &value["capabilities"]["process"];
+        assert_eq!(process["state"], "active");
+        assert!(process.get("reason").is_none());
+        assert!(process.get("rebuilds").is_none());
+        assert_eq!(process["recoveries"], 1, "已自动恢复，第 1 次");
 
-        health.silence(generation, "process", Some("收不到"));
+        health.liveness(generation, "process", silent(1, 1));
         let next = health.begin(&[("process", true)]);
         health.capability(next, "process", "etw", "active");
         let value: serde_json::Value = serde_json::from_str(&health.json()).unwrap();

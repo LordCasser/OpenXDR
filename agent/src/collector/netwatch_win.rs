@@ -26,7 +26,7 @@ use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::{UserTrace, stop_trace_by_name};
+use ferrisetw::trace::{TraceError, UserTrace, stop_trace_by_name};
 
 use super::inventory::Proto;
 use super::netwatch::{self, ConnInfo, ConnSampler};
@@ -57,7 +57,27 @@ fn kind_of(event_id: u16) -> Option<Kind> {
 }
 
 pub fn spawn(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>) {
-    std::thread::spawn(move || run(agent_id, sink, registry));
+    // 采样表与 UDP 服务表在会话之外持有：失明重建会话后，同一目标不在采样窗口内重报
+    let samplers = Arc::new(Mutex::new(Samplers::default()));
+    let services = Arc::new(Mutex::new(UdpServices::default()));
+    let health = sink.clone();
+    let start = move || start(&agent_id, &sink, &registry, &samplers, &services);
+    match start() {
+        Ok(trace) => {
+            eprintln!("网络采集: ETW Kernel-Network（TCP 出站与入站、UDP 出站，60s 采样）");
+            liveness::spawn(
+                health,
+                &liveness::NETWORK,
+                liveness::probe_network,
+                trace,
+                move || start().map_err(|e| format!("{e:?}")),
+            );
+        }
+        Err(e) => {
+            health.capability("network", "etw", "unavailable");
+            eprintln!("网络采集不可用（{e:?}），进程采集不受影响");
+        }
+    }
 }
 
 /// 一条原始连接：本机一侧与对端，端口已转主机序
@@ -76,12 +96,19 @@ struct Samplers {
     udp_out: ConnSampler,
 }
 
-fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>) {
+/// 起一个网络采集会话：先停掉同名旧会话再新建，trace 句柄 drop 即停会话
+fn start(
+    agent_id: &str,
+    sink: &EventSink,
+    registry: &Arc<Mutex<ProcessRegistry>>,
+    samplers: &Arc<Mutex<Samplers>>,
+    services: &Arc<Mutex<UdpServices>>,
+) -> Result<UserTrace, TraceError> {
     let health_sink = sink.clone();
-    // ETW 回调要求 'static，采样表/注册表/出口全部按所有权移进闭包；
+    // ETW 回调要求 'static，采样表/注册表/出口全部按所有权（Arc）移进闭包；
     // 注册表由 mod.rs 传入，与进程采集共享
-    let samplers = Mutex::new(Samplers::default());
-    let services = Mutex::new(UdpServices::default());
+    let (agent_id, sink) = (agent_id.to_string(), sink.clone());
+    let (registry, samplers, services) = (registry.clone(), samplers.clone(), services.clone());
 
     let provider = Provider::by_guid(KERNEL_NETWORK_GUID)
         .add_callback(move |record: &EventRecord, locator: &SchemaLocator| {
@@ -150,29 +177,12 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
         .build();
 
     let _ = stop_trace_by_name(SESSION);
-    match UserTrace::new()
+    let trace = UserTrace::new()
         .named(SESSION.to_string())
         .enable(provider)
-        .start_and_process()
-    {
-        Ok(_trace) => {
-            health_sink.capability("network", "etw", "active");
-            eprintln!("网络采集: ETW Kernel-Network（TCP 出站与入站、UDP 出站，60s 采样）");
-            liveness::spawn(
-                health_sink.clone(),
-                &liveness::NETWORK,
-                liveness::probe_network,
-            );
-            // trace 句柄保活；agent 退出即进程结束，无需额外清理
-            while !health_sink.is_closed() {
-                std::thread::sleep(Duration::from_millis(250));
-            }
-        }
-        Err(e) => {
-            health_sink.capability("network", "etw", "unavailable");
-            eprintln!("网络采集不可用（{e:?}），进程采集不受影响");
-        }
-    }
+        .start_and_process()?;
+    health_sink.capability("network", "etw", "active");
+    Ok(trace)
 }
 
 impl Samplers {

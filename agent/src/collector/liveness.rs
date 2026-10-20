@@ -88,42 +88,203 @@ fn assess(watch: &Watch, quiet: Duration, since_probe: Option<Duration>) -> (boo
     let probe = quiet >= watch.probe_after && since_probe.is_none_or(|d| d >= watch.probe_after);
     (probe, quiet >= watch.degrade_after)
 }
-
 /// 静默时长：从最近一次事件算，开始盯之前的事件不算（刚启动的通道从启动时刻算）
-fn quiet_since(channel: Channel, started: u64, now: u64) -> Duration {
-    let last = LAST[channel as usize].load(Ordering::Relaxed).max(started);
-    Duration::from_millis(now.saturating_sub(last))
+fn quiet_since(last: u64, started: u64, now: u64) -> Duration {
+    Duration::from_millis(now.saturating_sub(last.max(started)))
 }
 
-/// 开始盯一个通道，直到这一轮采集结束（上报侧关闭）。probe 在巡检线程上同步执行
+fn last_event(channel: Channel) -> u64 {
+    LAST[channel as usize].load(Ordering::Relaxed)
+}
+
+/// 降级后第 n 次（从 0 起）自动重建前要等多久：距降级 1 分钟试第一次，
+/// 再隔 5 分钟、15 分钟各试一次，之后每小时一次
+fn backoff(attempts: u32) -> Duration {
+    const MIN: u64 = 60;
+    Duration::from_secs(match attempts {
+        0 => MIN,
+        1 => 5 * MIN,
+        2 => 15 * MIN,
+        _ => 60 * MIN,
+    })
+}
+
+/// 盯一个通道的巡检状态：何时自检、何时降级、何时重建、是否已恢复。时刻都用 now_ms 的毫秒数
+struct Supervisor<H, P, R> {
+    watch: &'static Watch,
+    probe: P,
+    rebuild: R,
+    /// 正在跑的采集实例，重建失败时为 None
+    current: Option<H>,
+    started: u64,
+    probed: Option<u64>,
+    silent: bool,
+    /// 本轮降级的起点或最近一次重建的时刻，没在降级为 None
+    since: Option<u64>,
+    /// 本轮降级里已重建的次数
+    attempts: u32,
+    /// 重建后恢复的累计次数
+    recoveries: u32,
+}
+
+impl<H, P: Fn(), R: FnMut() -> Result<H, String>> Supervisor<H, P, R> {
+    fn new(watch: &'static Watch, probe: P, instance: H, rebuild: R, now: u64) -> Self {
+        Self {
+            watch,
+            probe,
+            rebuild,
+            current: Some(instance),
+            started: now,
+            probed: None,
+            silent: false,
+            since: None,
+            attempts: 0,
+            recoveries: 0,
+        }
+    }
+
+    fn probe(&mut self, now: u64) {
+        (self.probe)();
+        self.probed = Some(now);
+    }
+
+    /// 一次巡检：last 是通道最近一次收到原始事件的时刻
+    fn tick(&mut self, last: u64, now: u64) -> crate::health::Liveness {
+        let watch = self.watch;
+        let quiet = quiet_since(last, self.started, now);
+        let since_probe = self
+            .probed
+            .map(|t| Duration::from_millis(now.saturating_sub(t)));
+        let (probe_now, degraded) = assess(watch, quiet, since_probe);
+        if probe_now {
+            self.probe(now);
+        }
+        if degraded != self.silent {
+            self.silent = degraded;
+            if degraded {
+                eprintln!("采集活性: {}（{}）", watch.reason, watch.name);
+            } else if self.attempts > 0 {
+                self.attempts = 0;
+                self.recoveries += 1;
+                eprintln!(
+                    "采集活性: {} 已自动恢复，第 {} 次",
+                    watch.name, self.recoveries
+                );
+            } else {
+                eprintln!("采集活性: {} 恢复收到事件", watch.name);
+            }
+        }
+        if degraded {
+            let since = *self.since.get_or_insert(now);
+            if Duration::from_millis(now.saturating_sub(since)) >= backoff(self.attempts) {
+                self.attempts += 1;
+                self.since = Some(now);
+                eprintln!(
+                    "采集活性: {} 第 {} 次自动重建采集",
+                    watch.name, self.attempts
+                );
+                // 先停旧的再起新的：新旧两路不同时在收
+                drop(self.current.take());
+                match (self.rebuild)() {
+                    Ok(h) => self.current = Some(h),
+                    Err(e) => eprintln!("采集活性: {} 重建失败（{e}）", watch.name),
+                }
+                // 重建完立刻自检：新实例看得见，下一轮巡检静默时长就归零，判为恢复
+                self.probe(now);
+            }
+        } else {
+            self.since = None;
+        }
+        crate::health::Liveness {
+            reason: degraded.then_some(watch.reason),
+            rebuilds: self.attempts,
+            recoveries: self.recoveries,
+        }
+    }
+}
+
+/// 盯一个通道并在它失明时重建采集实例，直到这一轮采集结束（上报侧关闭）。
+///
+/// instance 是正在跑的采集实例，drop 即停，而且要停干净（线程退出、会话关掉、程序卸下）才返回；
+/// rebuild 起一个新实例。重建总是先停旧的再起新的，新旧两路不会同时在收，同一事件不会报两次。
+/// 跨实例要留的状态（进程注册表、连接采样表）由调用方在外面持有、捕获进 rebuild，重建不丢；
+/// 已经交给上报侧的事件不经过这里，也不受影响。probe 与 rebuild 都在巡检线程上同步执行
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-pub fn spawn(sink: super::EventSink, watch: &'static Watch, probe: impl Fn() + Send + 'static) {
+pub fn spawn<H: Send + 'static>(
+    sink: super::EventSink,
+    watch: &'static Watch,
+    probe: impl Fn() + Send + 'static,
+    instance: H,
+    rebuild: impl FnMut() -> Result<H, String> + Send + 'static,
+) {
+    // 上报侧一关就醒，当场停掉实例：配置切换会马上起新一轮采集，旧 ETW 会话要赶在新的同名会话
+    // 起来之前停，晚了按句柄停可能停错。拿不到运行时（只有单测）才退回整段睡
+    let rt = tokio::runtime::Handle::try_current().ok();
     std::thread::spawn(move || {
-        let started = now_ms();
-        let mut probed: Option<Instant> = None;
-        let mut silent = false;
+        let mut supervisor = Supervisor::new(watch, probe, instance, rebuild, now_ms());
         loop {
-            std::thread::sleep(TICK);
-            if sink.is_closed() {
+            let closed = match &rt {
+                Some(rt) => {
+                    rt.block_on(async { tokio::time::timeout(TICK, sink.closed()).await.is_ok() })
+                }
+                None => {
+                    std::thread::sleep(TICK);
+                    sink.is_closed()
+                }
+            };
+            if closed {
                 return;
             }
-            let quiet = quiet_since(watch.channel, started, now_ms());
-            let (probe_now, degraded) = assess(watch, quiet, probed.map(|t| t.elapsed()));
-            if probe_now {
-                probe();
-                probed = Some(Instant::now());
-            }
-            if degraded != silent {
-                silent = degraded;
-                if degraded {
-                    eprintln!("采集活性: {}（{}）", watch.reason, watch.name);
-                } else {
-                    eprintln!("采集活性: {} 恢复收到事件", watch.name);
-                }
-            }
-            sink.silence(watch.name, degraded.then_some(watch.reason));
+            let liveness = supervisor.tick(last_event(watch.channel), now_ms());
+            sink.liveness(watch.name, liveness);
         }
     });
+}
+
+/// 叫停一个采集线程的信号，采集循环每轮都要看一眼
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+#[derive(Clone, Default)]
+pub struct Stop(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl Stop {
+    pub fn requested(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
+/// 一个可叫停的采集线程：drop 时叫停并等它退出，作为 spawn 的采集实例用
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub struct Worker {
+    stop: Stop,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl Worker {
+    pub fn spawn(run: impl FnOnce(&Stop) + Send + 'static) -> Self {
+        let stop = Stop::default();
+        let own = stop.clone();
+        Self {
+            stop,
+            thread: Some(std::thread::spawn(move || run(&own))),
+        }
+    }
+
+    /// 不盯活性的通道没人持有实例：放手让线程跑到这一轮采集结束
+    pub fn detach(mut self) {
+        self.thread = None;
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl Drop for Worker {
+    fn drop(&mut self) {
+        if let Some(thread) = self.thread.take() {
+            self.stop.0.store(true, Ordering::Relaxed);
+            let _ = thread.join();
+        }
+    }
 }
 
 /// 进程自检：持注册表锁拉起自检进程并登记 pid。采集回调处理任何进程事件都要先拿这把锁，
@@ -262,10 +423,10 @@ mod tests {
         let started = now_ms();
         std::thread::sleep(Duration::from_millis(5));
         let later = now_ms() + 11 * 60 * 1000;
-        let quiet = quiet_since(Channel::Network, started, later);
+        let quiet = quiet_since(last_event(Channel::Network), started, later);
         assert!(assess(&NETWORK, quiet, Some(MIN)).1, "11 分钟零事件应降级");
         pulse(Channel::Network);
-        let quiet = quiet_since(Channel::Network, started, now_ms());
+        let quiet = quiet_since(last_event(Channel::Network), started, now_ms());
         assert_eq!(
             assess(&NETWORK, quiet, None),
             (false, false),
@@ -279,6 +440,133 @@ mod tests {
         assert_eq!(assess(&FILES, 10 * MIN, None), (true, false));
         assert_eq!(assess(&FILES, 29 * MIN, Some(9 * MIN)), (false, false));
         assert!(assess(&FILES, 30 * MIN, Some(MIN)).1);
+    }
+
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+
+    /// 模拟的采集通道：记着哪些实例在跑、建过几个、哪个起看得见事件
+    #[derive(Default)]
+    struct Fleet {
+        running: Vec<u32>,
+        built: u32,
+        /// 编号不小于它的实例看得见自检；u32::MAX 表示怎么重建都是瞎的
+        sighted_from: u32,
+        /// 每次重建发生的时刻
+        rebuilt_at: Vec<u64>,
+        /// 巡检结束（实例随巡检一起停掉）前还在跑的实例
+        last_running: Vec<u32>,
+    }
+
+    struct Fake(u32, Rc<RefCell<Fleet>>);
+
+    impl Drop for Fake {
+        fn drop(&mut self) {
+            self.1.borrow_mut().running.retain(|id| *id != self.0);
+        }
+    }
+
+    fn launch(fleet: &Rc<RefCell<Fleet>>) -> Fake {
+        let mut f = fleet.borrow_mut();
+        let id = f.built;
+        f.built += 1;
+        f.running.push(id);
+        Fake(id, fleet.clone())
+    }
+
+    const TICK_MS: u64 = 30_000;
+
+    /// 按 30 秒一轮跑巡检：自检落在看得见的实例上，这一刻就算收到了事件。
+    /// fail 为真时重建直接报错（会话起不来），否则起一个新实例
+    fn simulate(
+        watch: &'static Watch,
+        sighted_from: u32,
+        fail: bool,
+        ticks: usize,
+    ) -> (Vec<crate::health::Liveness>, Rc<RefCell<Fleet>>) {
+        let fleet = Rc::new(RefCell::new(Fleet {
+            sighted_from,
+            ..Default::default()
+        }));
+        let clock = Rc::new(Cell::new(1u64));
+        let probed = Rc::new(Cell::new(false));
+        let first = launch(&fleet);
+        let (f, c, p) = (fleet.clone(), clock.clone(), probed.clone());
+        let mut sup = Supervisor::new(
+            watch,
+            move || p.set(true),
+            first,
+            move || {
+                assert!(f.borrow().running.is_empty(), "新实例起来前旧的必须已停");
+                f.borrow_mut().rebuilt_at.push(c.get());
+                if fail {
+                    return Err("会话起不来".into());
+                }
+                Ok(launch(&f))
+            },
+            clock.get(),
+        );
+        let mut last = 0;
+        let mut out = Vec::new();
+        for _ in 0..ticks {
+            clock.set(clock.get() + TICK_MS);
+            out.push(sup.tick(last, clock.get()));
+            let f = fleet.borrow();
+            if probed.replace(false) && f.running.iter().any(|id| *id >= f.sighted_from) {
+                last = clock.get();
+            }
+            assert!(f.running.len() <= 1, "新旧实例同时在收会重复上报");
+        }
+        let running = fleet.borrow().running.clone();
+        fleet.borrow_mut().last_running = running;
+        drop(sup);
+        assert!(fleet.borrow().running.is_empty(), "巡检结束实例跟着停");
+        (out, fleet)
+    }
+
+    /// 进程通道静默 5 分钟降级，1 分钟后重建，新实例看得见自检，下一轮回到正常并记一次恢复
+    #[test]
+    fn rebuild_recovers() {
+        let (out, fleet) = simulate(&PROCESS, 1, false, 20);
+        // 第 10 轮（5 分钟）降级，还没重建
+        assert!(out[8].reason.is_none());
+        assert_eq!(out[9].reason, Some(PROCESS.reason));
+        assert_eq!(out[9].rebuilds, 0);
+        // 第 12 轮（降级后 1 分钟）重建
+        assert_eq!(out[11].reason, Some(PROCESS.reason));
+        assert_eq!(out[11].rebuilds, 1);
+        assert_eq!(fleet.borrow().rebuilt_at, vec![1 + 12 * TICK_MS]);
+        // 第 13 轮恢复：撤掉原因，记「已自动恢复，第 1 次」
+        assert!(out[12].reason.is_none());
+        assert_eq!(out[12].rebuilds, 0);
+        assert_eq!(out[12].recoveries, 1);
+        assert!(out[19].reason.is_none() && out[19].recoveries == 1);
+        let f = fleet.borrow();
+        assert_eq!(f.last_running, vec![1], "只剩重建出来的实例在跑");
+        assert_eq!(f.built, 2, "恢复后不再重建");
+    }
+
+    /// 重建一直不见效：1、5、15 分钟后各试一次，之后每小时一次，始终降级并带已试次数
+    #[test]
+    fn rebuild_backs_off() {
+        for fail in [false, true] {
+            let ticks = 10 + 2 * (1 + 5 + 15 + 60 + 60);
+            let (out, fleet) = simulate(&PROCESS, u32::MAX, fail, ticks);
+            let degraded = 1 + 10 * TICK_MS;
+            let minutes: Vec<u64> = fleet
+                .borrow()
+                .rebuilt_at
+                .iter()
+                .map(|t| (t - degraded) / 60_000)
+                .collect();
+            assert_eq!(minutes, vec![1, 6, 21, 81, 141], "fail={fail}");
+            let last = out.last().unwrap();
+            assert_eq!(last.reason, Some(PROCESS.reason));
+            assert_eq!(last.rebuilds, 5);
+            assert_eq!(last.recoveries, 0);
+            let f = fleet.borrow();
+            assert_eq!(f.last_running.len(), usize::from(!fail));
+        }
     }
 
     #[test]

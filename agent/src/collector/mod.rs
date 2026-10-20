@@ -271,17 +271,17 @@ pub struct EventSink {
 }
 
 impl EventSink {
-    #[cfg(any(target_os = "windows", feature = "ebpf"))]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     pub async fn closed(&self) {
         self.tx.closed().await;
     }
     pub fn capability(&self, name: &str, path: &str, state: &str) {
         self.health.capability(self.generation, name, path, state);
     }
-    /// 活性检测的结论（见 liveness）：Some 为静默原因，None 为恢复
+    /// 活性检测的结论（见 liveness）
     #[cfg(any(target_os = "linux", target_os = "windows"))]
-    pub fn silence(&self, name: &str, reason: Option<&str>) {
-        self.health.silence(self.generation, name, reason);
+    pub fn liveness(&self, name: &str, liveness: crate::health::Liveness) {
+        self.health.liveness(self.generation, name, liveness);
     }
 
     /// 返回 false 表示上报侧已关闭，采集任务应当退出。

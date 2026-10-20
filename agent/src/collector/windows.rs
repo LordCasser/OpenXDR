@@ -12,7 +12,7 @@ use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::{UserTrace, stop_trace_by_name};
+use ferrisetw::trace::{TraceError, UserTrace, stop_trace_by_name};
 use std::sync::{Arc, Mutex};
 
 const KERNEL_PROCESS_GUID: &str = "22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716";
@@ -24,10 +24,37 @@ const EVENT_PROCESS_STOP: u16 = 2;
 const SESSION: &str = "OpenXDR-Process";
 
 pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessRegistry>>) {
-    let cb_agent_id = agent_id.clone();
+    match start(&agent_id, &tx, &registry) {
+        Ok(trace) => {
+            // 会话起得来不等于有事件：实机见过 ETW 会话在、事件全无（被 logman stop、会话被挤占），
+            // 活性检测兜住，失明就停掉会话重建一个
+            let probe = registry.clone();
+            super::liveness::spawn(
+                tx.clone(),
+                &super::liveness::PROCESS,
+                move || super::liveness::probe_process(&probe),
+                trace,
+                move || start(&agent_id, &tx, &registry).map_err(|e| format!("{e:?}")),
+            );
+        }
+        Err(e) => {
+            eprintln!("ETW 采集不可用（{e:?}），回落到轮询采集");
+            poll::run(agent_id, tx).await;
+        }
+    }
+}
+
+/// 起一个进程采集会话：先停掉同名旧会话再新建。trace 句柄 drop 即停会话。
+/// 注册表在会话之外持有（与网络采集共享），重建后已登记的进程 GUID 照用
+fn start(
+    agent_id: &str,
+    tx: &EventSink,
+    registry: &Arc<Mutex<ProcessRegistry>>,
+) -> Result<UserTrace, TraceError> {
+    let cb_agent_id = agent_id.to_string();
     let cb_tx = tx.clone();
-    let probe = registry.clone();
-    // ETW 回调是 Fn，注册表（与网络采集共享）经 Arc 移进回调加锁使用
+    let registry = registry.clone();
+    // ETW 回调是 Fn，注册表经 Arc 移进回调加锁使用
 
     let provider = Provider::by_guid(KERNEL_PROCESS_GUID)
         .add_callback(move |record: &EventRecord, locator: &SchemaLocator| {
@@ -88,25 +115,12 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
         .build();
 
     let _ = stop_trace_by_name(SESSION);
-    match UserTrace::new()
+    let trace = UserTrace::new()
         .named(SESSION.to_string())
         .enable(provider)
-        .start_and_process()
-    {
-        Ok(_trace) => {
-            tx.capability("process", "etw", "active");
-            // 会话起得来不等于有事件：实机见过 ETW 会话在、事件全无，靠活性检测兜住
-            super::liveness::spawn(tx.clone(), &super::liveness::PROCESS, move || {
-                super::liveness::probe_process(&probe)
-            });
-            // trace 句柄保活；channel 关闭即 agent 退出，无需额外清理
-            tx.closed().await
-        }
-        Err(e) => {
-            eprintln!("ETW 采集不可用（{e:?}），回落到轮询采集");
-            poll::run(agent_id, tx).await;
-        }
-    }
+        .start_and_process()?;
+    tx.capability("process", "etw", "active");
+    Ok(trace)
 }
 
 /// ETW 的 ImageName 常是设备路径（\Device\HarddiskVolumeN\...），按它读文件

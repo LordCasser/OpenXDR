@@ -27,6 +27,7 @@ use windows_sys::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED
 use windows_sys::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 
 use super::EventSink;
+use super::liveness::{Stop, Worker};
 use crate::pb::AgentEvent;
 
 /// OCSF File System Activity
@@ -53,34 +54,58 @@ pub fn spawn(agent_id: String, sink: EventSink, dirs: &[String]) -> io::Result<u
     } else {
         dirs.to_vec()
     };
-    let mut n = 0;
-    for dir in targets {
-        // 失败目录静默跳过（与 Linux 侧一致）
-        let Some(handle) = open_dir(&dir) else {
-            continue;
-        };
-        n += 1;
-        let (a, s) = (agent_id.clone(), sink.clone());
+    let (workers, n, canary) = start(&agent_id, &sink, &targets)?;
+    match canary {
+        // 静默重建：关掉全部目录句柄重新打开。RDCW 只报打开之后的变更，不会把已有文件当新建
+        Some(dir) => super::liveness::spawn(
+            sink.clone(),
+            &super::liveness::FILES,
+            move || super::liveness::probe_files(dir),
+            workers,
+            move || {
+                start(&agent_id, &sink, &targets)
+                    .map(|(w, _, _)| w)
+                    .map_err(|e| e.to_string())
+            },
+        ),
+        None => workers.into_iter().for_each(Worker::detach),
+    }
+    Ok(n)
+}
+
+/// 每个目录一个监控线程。返回线程、盯上的敏感目录数，以及挂上了的自检目录
+fn start(
+    agent_id: &str,
+    sink: &EventSink,
+    targets: &[String],
+) -> io::Result<(Vec<Worker>, usize, Option<&'static str>)> {
+    let watch = |handle: HANDLE, dir: String| {
+        let (a, s) = (agent_id.to_string(), sink.clone());
         // HANDLE 是裸指针不实现 Send，按 usize 搬过线程边界再转回
         let handle = handle as usize;
-        std::thread::spawn(move || watch_loop(handle as HANDLE, &dir, &a, &s));
+        Worker::spawn(move |stop| watch_loop(handle as HANDLE, &dir, &a, &s, stop))
+    };
+    let mut workers = Vec::new();
+    for dir in targets {
+        // 失败目录静默跳过（与 Linux 侧一致）
+        if let Some(handle) = open_dir(dir) {
+            workers.push(watch(handle, dir.clone()));
+        }
     }
+    let n = workers.len();
     if n == 0 {
         return Err(io::Error::new(io::ErrorKind::NotFound, "没有可监控的目录"));
     }
     // 自检目录单独一个监控句柄，活性检测改写其中的文件确认通道活着（事件按路径认出、不上报）。
     // 一个敏感目录都没盯上就不挂
-    if let Some(dir) = super::liveness::canary_dir()
-        && let Some(handle) = open_dir(dir)
-    {
-        let (a, s) = (agent_id.clone(), sink.clone());
-        let handle = handle as usize;
-        std::thread::spawn(move || watch_loop(handle as HANDLE, dir, &a, &s));
-        super::liveness::spawn(sink.clone(), &super::liveness::FILES, move || {
-            super::liveness::probe_files(dir)
+    let canary = super::liveness::canary_dir()
+        .and_then(|dir| open_dir(dir).map(|handle| (dir, handle)))
+        .map(|(dir, handle)| {
+            workers.push(watch(handle, dir.to_string()));
+            dir
         });
-    }
-    Ok(n)
+    sink.capability("files", "rdcw", "active");
+    Ok((workers, n, canary))
 }
 
 /// 以目录方式打开监控根（FILE_FLAG_BACKUP_SEMANTICS 是开目录句柄的钥匙）。
@@ -114,7 +139,7 @@ impl Drop for OwnedHandle {
     }
 }
 
-fn watch_loop(handle: HANDLE, dir: &str, agent_id: &str, sink: &EventSink) {
+fn watch_loop(handle: HANDLE, dir: &str, agent_id: &str, sink: &EventSink, stop: &Stop) {
     let handle = OwnedHandle(handle);
     // SAFETY: 安全属性与名称传空指针（匿名、默认安全描述符）是 API 允许的用法；空句柄下面已检查。
     let event = unsafe { CreateEventW(std::ptr::null(), 1, 0, std::ptr::null()) };
@@ -128,8 +153,8 @@ fn watch_loop(handle: HANDLE, dir: &str, agent_id: &str, sink: &EventSink) {
     let event = OwnedHandle(event);
     // Windows 要求通知缓冲区 DWORD 对齐。
     let mut storage = vec![0u32; 16384];
-    while !sink.is_closed() {
-        let returned = match read_changes(handle.0, event.0, &mut storage, sink) {
+    while !sink.is_closed() && !stop.requested() {
+        let returned = match read_changes(handle.0, event.0, &mut storage, sink, stop) {
             Ok(Some(n)) => n,
             Ok(None) => return,
             Err(err) if err.raw_os_error() == Some(ERROR_NOTIFY_ENUM_DIR as i32) => {
@@ -168,6 +193,7 @@ fn read_changes(
     event: HANDLE,
     storage: &mut [u32],
     sink: &EventSink,
+    stop: &Stop,
 ) -> io::Result<Option<usize>> {
     let mut overlapped = OVERLAPPED {
         hEvent: event,
@@ -196,7 +222,7 @@ fn read_changes(
     }
     let mut returned = 0;
     loop {
-        if sink.is_closed() {
+        if sink.is_closed() || stop.requested() {
             // 取消仅发出请求，必须等待 I/O 完成后才能释放缓冲区及 OVERLAPPED。
             // SAFETY: handle 与 overlapped 正是上面发起的那次 I/O；CancelIoEx 只发取消请求，随后以 bWait = 1
             // 调 GetOverlappedResult 阻塞到 I/O 真正结束，之后 storage 与 overlapped 才可以释放。
@@ -396,7 +422,7 @@ mod tests {
         let raw = handle as usize;
         let (done, finished) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
-            watch_loop(raw as HANDLE, &d, "agent-t", &sink);
+            watch_loop(raw as HANDLE, &d, "agent-t", &sink, &Stop::default());
             let _ = done.send(());
         });
         // 首次读取异步启动，用不同文件名重试，既不无限等也不依赖线程调度顺序。
@@ -436,7 +462,7 @@ mod tests {
         let raw = open_dir(&path).unwrap() as usize;
         let (done, finished) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
-            watch_loop(raw as HANDLE, &path, "agent-t", &sink);
+            watch_loop(raw as HANDLE, &path, "agent-t", &sink, &Stop::default());
             let _ = done.send(());
         });
         assert!(matches!(

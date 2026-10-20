@@ -87,52 +87,122 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 pub async fn run(agent_id: String, tx: EventSink, collect_network: bool) {
-    if let Err(e) = run_ebpf(agent_id.clone(), tx.clone(), collect_network).await {
-        eprintln!("eBPF 采集不可用（{e}），尝试 netlink proc connector");
-        if collect_network {
-            tx.capability("network", "ebpf", "unavailable");
-            dnswatch::spawn(agent_id.clone(), tx.clone(), None);
-        }
-        // 与默认构建同一降级链：netlink 拿不到再退轮询，不直接从最强掉到最弱
-        match netlink::spawn(agent_id.clone(), tx.clone()) {
-            Ok(()) => eprintln!("采集方式: netlink proc connector（用户态，捕获全部 exec）"),
-            Err(e) => {
-                eprintln!("netlink 采集不可用（{e}），回落到轮询采集（会漏短命进程）");
-                poll::run(agent_id, tx).await;
+    // 跨重建要留的状态都在这里建一次：进程注册表（已登记的 GUID 映射，退出事件靠它复用启动 GUID）、
+    // 连接采样表与监听表（重建后同一目标不在采样窗口内重报）、DNS 源端口归属
+    let registry: Shared<ProcessRegistry> = Arc::new(Mutex::new(seeded_registry()));
+    let rt = tokio::runtime::Handle::current();
+    let process = {
+        let (agent_id, tx, registry, rt) =
+            (agent_id.clone(), tx.clone(), registry.clone(), rt.clone());
+        move || start_process(&agent_id, &tx, &registry, &rt)
+    };
+    let pipeline = match process() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("eBPF 采集不可用（{e}），尝试 netlink proc connector");
+            if collect_network {
+                tx.capability("network", "ebpf", "unavailable");
+                dnswatch::spawn(agent_id.clone(), tx.clone(), None);
             }
+            // 与默认构建同一降级链：netlink 拿不到再退轮询，不直接从最强掉到最弱
+            match netlink::spawn(agent_id.clone(), tx.clone()) {
+                Ok(()) => eprintln!("采集方式: netlink proc connector（用户态，捕获全部 exec）"),
+                Err(e) => {
+                    eprintln!("netlink 采集不可用（{e}），回落到轮询采集（会漏短命进程）");
+                    poll::run(agent_id, tx).await;
+                }
+            }
+            return;
+        }
+    };
+    // 进程活性检测放在挂载成功之后：失败会回落 netlink，那条路径自己盯，
+    // 自检进程得登记在真正处理事件的那张注册表里。静默重建只重载进程这一组程序
+    let probe = registry.clone();
+    super::liveness::spawn(
+        tx.clone(),
+        &super::liveness::PROCESS,
+        move || super::liveness::probe_process(&probe),
+        pipeline,
+        move || process().map_err(|e| e.to_string()),
+    );
+
+    // 网络采集独立降级：老内核没有 inet_sock_set_state 时进程采集照常
+    if !collect_network {
+        return;
+    }
+    let owners: Shared<HashMap<u16, (u32, Instant)>> = Default::default();
+    let state = Arc::new(ConnState {
+        registry: registry.clone(),
+        tcp_out: Default::default(),
+        tcp_in: Default::default(),
+        udp_out: Default::default(),
+        listeners: Default::default(),
+        dns_owners: owners.clone(),
+    });
+    let network = {
+        let (agent_id, tx, rt) = (agent_id.clone(), tx.clone(), rt.clone());
+        move || start_network(&agent_id, &tx, &state, &rt)
+    };
+    match network() {
+        Ok(pipeline) => {
+            let udp = if pipeline.udp { "、UDP 出站" } else { "" };
+            eprintln!("网络采集: eBPF（TCP 出站与入站{udp}，60s 采样）");
+            super::liveness::spawn(
+                tx.clone(),
+                &super::liveness::NETWORK,
+                super::liveness::probe_network,
+                pipeline,
+                move || network().map_err(|e| e.to_string()),
+            );
+            dnswatch::spawn(
+                agent_id.clone(),
+                tx.clone(),
+                Some(dns_resolver(registry, owners)),
+            );
+        }
+        Err(e) => {
+            tx.capability("network", "ebpf", "unavailable");
+            eprintln!("网络采集不可用（{e}）");
+            dnswatch::spawn(agent_id, tx, None);
         }
     }
 }
 
-async fn run_ebpf(
-    agent_id: String,
-    tx: EventSink,
-    collect_network: bool,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use aya::maps::perf::AsyncPerfEventArray;
-    use aya::programs::TracePoint;
-    use aya::util::online_cpus;
+/// 一组挂好的 eBPF 程序与它们的读取任务，作为活性检测的采集实例。
+/// drop 时先停读取任务（JoinSet 析构即 abort），再随 Ebpf 卸下程序：字段按声明顺序析构
+struct Pipeline {
+    _readers: tokio::task::JoinSet<()>,
+    _bpf: aya::Ebpf,
+    /// 网络组：UDP 出站探针挂上了没有
+    udp: bool,
+}
 
-    let mut readers = tokio::task::JoinSet::new();
-    let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!(concat!(
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+/// 进程与网络各自载入一份对象：两组程序不共用 map，各自重建互不打扰
+fn load() -> Result<aya::Ebpf, BoxError> {
+    Ok(aya::Ebpf::load(aya::include_bytes_aligned!(concat!(
         env!("OUT_DIR"),
         "/openxdr-ebpf"
-    )))?;
+    )))?)
+}
 
-    let program: &mut TracePoint = bpf
-        .program_mut("sched_process_exec")
-        .ok_or("eBPF 程序缺失")?
-        .try_into()?;
-    program.load()?;
-    program.attach("sched", "sched_process_exec")?;
+/// 挂上进程启动与退出探针，按 CPU 派发读取任务
+fn start_process(
+    agent_id: &str,
+    tx: &EventSink,
+    registry: &Shared<ProcessRegistry>,
+    rt: &tokio::runtime::Handle,
+) -> Result<Pipeline, BoxError> {
+    use aya::maps::perf::AsyncPerfEventArray;
+    use aya::util::online_cpus;
 
-    let exit_program: &mut TracePoint = bpf
-        .program_mut("sched_process_exit")
-        .ok_or("eBPF 程序缺失")?
-        .try_into()?;
-    exit_program.load()?;
-    exit_program.attach("sched", "sched_process_exit")?;
-    tx.capability("process", "ebpf", "active");
+    // 重建在活性检测的线程上做，读取任务要派到 tokio 运行时上
+    let _rt = rt.enter();
+    let mut readers = tokio::task::JoinSet::new();
+    let mut bpf = load()?;
+    attach_tracepoint(&mut bpf, "sched_process_exec", "sched")?;
+    attach_tracepoint(&mut bpf, "sched_process_exit", "sched")?;
 
     let mut events: AsyncPerfEventArray<_> = bpf
         .take_map("EVENTS")
@@ -149,12 +219,10 @@ async fn run_ebpf(
 
     // exec 事件按 CPU 分发到多个任务，进程血缘是全局的，注册表要共享。
     // exec 频率远低于包速率，这把锁的争用可以忽略。
-    let registry = std::sync::Arc::new(std::sync::Mutex::new(seeded_registry()));
-
     for cpu in online_cpus().map_err(|(_, e)| e)? {
         let mut buf = events.open(cpu, None)?;
         let tx = tx.clone();
-        let agent_id = agent_id.clone();
+        let agent_id = agent_id.to_string();
         let registry = registry.clone();
         readers.spawn(async move {
             let mut bufs = (0..8)
@@ -185,7 +253,7 @@ async fn run_ebpf(
     for cpu in online_cpus().map_err(|(_, e)| e)? {
         let mut buf = exits.open(cpu, None)?;
         let tx = tx.clone();
-        let agent_id = agent_id.clone();
+        let agent_id = agent_id.to_string();
         let registry = registry.clone();
         readers.spawn(async move {
             let mut bufs = (0..8)
@@ -213,46 +281,13 @@ async fn run_ebpf(
         });
     }
 
-    // 网络采集独立降级：老内核没有 inet_sock_set_state 时进程采集照常
-    if collect_network {
-        let owners: Shared<HashMap<u16, (u32, Instant)>> = Default::default();
-        match spawn_conn_readers(&mut bpf, &agent_id, &tx, &registry, &owners, &mut readers).await {
-            Ok(udp) => {
-                tx.capability("network", "ebpf", if udp { "active" } else { "degraded" });
-                super::liveness::spawn(
-                    tx.clone(),
-                    &super::liveness::NETWORK,
-                    super::liveness::probe_network,
-                );
-                let udp = if udp { "、UDP 出站" } else { "" };
-                eprintln!("网络采集: eBPF（TCP 出站与入站{udp}，60s 采样）");
-                dnswatch::spawn(
-                    agent_id.clone(),
-                    tx.clone(),
-                    Some(dns_resolver(registry.clone(), owners)),
-                );
-            }
-            Err(e) => {
-                tx.capability("network", "ebpf", "unavailable");
-                eprintln!("网络采集不可用（{e}）");
-                dnswatch::spawn(agent_id.clone(), tx.clone(), None);
-            }
-        }
-    }
-
-    // 进程活性检测放在全部挂载成功之后：中途失败会回落 netlink，那条路径自己盯，
-    // 自检进程得登记在真正处理事件的那张注册表里
-    let probe = registry.clone();
-    super::liveness::spawn(tx.clone(), &super::liveness::PROCESS, move || {
-        super::liveness::probe_process(&probe)
-    });
-
-    // 常驻：bpf 句柄在本栈上保活，程序保持挂载
-    tx.closed().await;
-    Ok(())
+    tx.capability("process", "ebpf", "active");
+    Ok(Pipeline {
+        _readers: readers,
+        _bpf: bpf,
+        udp: false,
+    })
 }
-
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 fn attach_tracepoint(bpf: &mut aya::Ebpf, name: &str, category: &str) -> Result<(), BoxError> {
     let program: &mut aya::programs::TracePoint =
@@ -270,7 +305,8 @@ fn attach_kprobe(bpf: &mut aya::Ebpf, name: &str, function: &str) -> Result<(), 
     Ok(())
 }
 
-/// 连接事件的用户态共享状态：各 CPU 的读取任务共用，同一目标不因内核把事件派到不同 CPU 而重复上报
+/// 连接事件的用户态共享状态：各 CPU 的读取任务共用，同一目标不因内核把事件派到不同 CPU 而重复上报；
+/// 也跨重建保留，重建后不在采样窗口内重报
 struct ConnState {
     registry: Shared<ProcessRegistry>,
     tcp_out: Mutex<ConnSampler>,
@@ -281,36 +317,28 @@ struct ConnState {
     dns_owners: Shared<HashMap<u16, (u32, Instant)>>,
 }
 
-/// 挂载连接探针并按 CPU 派发读取任务。UDP 探针挂不上只降级，返回是否挂上了
-async fn spawn_conn_readers(
-    bpf: &mut aya::Ebpf,
+/// 挂载连接探针并按 CPU 派发读取任务。UDP 探针挂不上只降级，记在 Pipeline::udp 上
+fn start_network(
     agent_id: &str,
     tx: &EventSink,
-    registry: &Shared<ProcessRegistry>,
-    dns_owners: &Shared<HashMap<u16, (u32, Instant)>>,
-    readers: &mut tokio::task::JoinSet<()>,
-) -> Result<bool, BoxError> {
+    state: &Arc<ConnState>,
+    rt: &tokio::runtime::Handle,
+) -> Result<Pipeline, BoxError> {
     use aya::maps::perf::AsyncPerfEventArray;
     use aya::util::online_cpus;
 
-    attach_tracepoint(bpf, "inet_sock_set_state", "sock")?;
-    let udp = attach_kprobe(bpf, "kp_udp_sendmsg", "udp_sendmsg")
-        .and_then(|()| attach_kprobe(bpf, "kp_udpv6_sendmsg", "udpv6_sendmsg"));
+    let _rt = rt.enter();
+    let mut readers = tokio::task::JoinSet::new();
+    let mut bpf = load()?;
+    attach_tracepoint(&mut bpf, "inet_sock_set_state", "sock")?;
+    let udp = attach_kprobe(&mut bpf, "kp_udp_sendmsg", "udp_sendmsg")
+        .and_then(|()| attach_kprobe(&mut bpf, "kp_udpv6_sendmsg", "udpv6_sendmsg"));
     if let Err(e) = &udp {
         eprintln!("UDP 出站采集不可用（{e}）");
     }
 
     let mut conns: AsyncPerfEventArray<_> =
         bpf.take_map("CONNS").ok_or("CONNS map 缺失")?.try_into()?;
-
-    let state = Arc::new(ConnState {
-        registry: registry.clone(),
-        tcp_out: Default::default(),
-        tcp_in: Default::default(),
-        udp_out: Default::default(),
-        listeners: Default::default(),
-        dns_owners: dns_owners.clone(),
-    });
 
     for cpu in online_cpus().map_err(|(_, e)| e)? {
         let mut buf = conns.open(cpu, None)?;
@@ -342,7 +370,13 @@ async fn spawn_conn_readers(
             }
         });
     }
-    Ok(udp.is_ok())
+    let udp = udp.is_ok();
+    tx.capability("network", "ebpf", if udp { "active" } else { "degraded" });
+    Ok(Pipeline {
+        _readers: readers,
+        _bpf: bpf,
+        udp,
+    })
 }
 
 fn to_conn_event(agent_id: &str, state: &ConnState, ev: &ConnEvent) -> Option<AgentEvent> {
