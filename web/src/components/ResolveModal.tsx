@@ -37,12 +37,12 @@ export function ResolveModal({ open, title, hint, initialNote, optional, contrad
     }
   }
   return (
-    <Modal open={open} title={title} onCancel={() => { if (!busy) onCancel() }} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => form.submit()} confirmLoading={busy} destroyOnHidden>
+    <Modal open={open} title={<div style={{ paddingInlineEnd: 24 }}>{title}</div>} onCancel={() => { if (!busy) onCancel() }} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => form.submit()} confirmLoading={busy} destroyOnHidden>
       <Typography.Paragraph type="secondary">{hint}</Typography.Paragraph>
       {contradicts && <Alert type="warning" showIcon title={t('resolveContradicts')} style={{ marginBottom: 16 }} />}
       {children}
       <Form disabled={busy} form={form} layout="vertical" onFinish={finish} initialValues={{ note: initialNote }}>
-        <Form.Item name="note" label={t('resolveNote')} extra={optional && t('resolveNoteOptional')}
+        <Form.Item name="note" label={t('resolveNote')} extra={optional && <div style={{ paddingInlineEnd: 72 }}>{t('resolveNoteOptional')}</div>}
           rules={optional ? [] : [{ required: true, whitespace: true, message: t('resolveNoteRequired') }]}>
           <Input.TextArea rows={4} maxLength={2000} showCount autoFocus placeholder={optional ? t('resolveNoteOptionalPlaceholder') : undefined} />
         </Form.Item>
