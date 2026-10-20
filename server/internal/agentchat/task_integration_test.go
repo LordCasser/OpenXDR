@@ -83,7 +83,9 @@ func TestRunTaskWrapUp(t *testing.T) {
 	db.Asset.Create().SetHostname("h").SetGroupID(group.ID).SaveX(ctx)
 	for _, c := range []struct {
 		name, wrapStop, wantStatus string
-	}{{"收尾成功", "stop", "succeeded"}, {"收尾仍耗尽", "max_turns", "failed"}} {
+		report                     bool
+	}{{"收尾成功", "stop", "succeeded", true}, {"收尾交了报告但轮数用完", "max_turns", "succeeded", true},
+		{"收尾仍耗尽且没交报告", "max_turns", "failed", false}, {"收尾出错", "error", "failed", true}} {
 		t.Run(c.name, func(t *testing.T) {
 			session := db.AgentSession.Create().SetKind("task").SetGroupID(group.ID).
 				SetInitiator(commandgate.SystemActor).SetModel("m").SaveX(ctx)
@@ -100,8 +102,10 @@ func TestRunTaskWrapUp(t *testing.T) {
 				if len(r.Tools) != 1 || r.Tools[0].Name != "report" || r.MaxTurns != wrapUpTurns || len(r.Messages) != 1 || !strings.Contains(r.Prompt, "report") {
 					t.Errorf("收尾请求不符：工具 %v 轮数 %d 历史 %d 提示 %q", r.Tools, r.MaxTurns, len(r.Messages), r.Prompt)
 				}
-				if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 部分未验证"}`)); err != nil {
-					return nil, err
+				if c.report {
+					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 部分未验证"}`)); err != nil {
+						return nil, err
+					}
 				}
 				return &piruntime.Result{StopReason: c.wrapStop}, nil
 			}}}
@@ -116,8 +120,8 @@ func TestRunTaskWrapUp(t *testing.T) {
 			if len(seqs) != 2 || seqs[0] != 1 || seqs[1] != 2 {
 				t.Errorf("收尾消息应接着编号入库：%v", seqs)
 			}
-			if n := db.Report.Query().Where(report.SessionIDEQ(session.ID)).CountX(ctx); n != 1 {
-				t.Errorf("报告应保存 1 份，得到 %d", n)
+			if n := db.Report.Query().Where(report.SessionIDEQ(session.ID)).CountX(ctx); (n == 1) != c.report {
+				t.Errorf("报告份数不符：%d", n)
 			}
 		})
 	}

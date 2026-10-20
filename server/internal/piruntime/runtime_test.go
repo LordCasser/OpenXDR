@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -40,6 +41,25 @@ func TestPiProcess(t *testing.T) {
 			os.Exit(5)
 		}
 		send(`{"type":"result","response":"完成","stop_reason":"stop","turns":2}`)
+	case "parallel":
+		// 两个调用一起发出，结果按完成顺序回来
+		send(`{"type":"tool_request","call_id":"a","name":"query","args":{}}`)
+		send(`{"type":"tool_request","call_id":"b","name":"query","args":{}}`)
+		got := map[string]bool{}
+		for range 2 {
+			var reply struct {
+				CallID  string `json:"call_id"`
+				Success bool
+			}
+			if decoder.Decode(&reply) != nil || !reply.Success {
+				os.Exit(3)
+			}
+			got[reply.CallID] = true
+		}
+		if !got["a"] || !got["b"] {
+			os.Exit(4)
+		}
+		send(`{"type":"result","response":"完成","stop_reason":"stop","turns":1}`)
 	case "duplicate":
 		send(tool)
 		var reply any
@@ -122,6 +142,28 @@ func TestRuntime(t *testing.T) {
 				t.Fatalf("预期 %q，实际 %v", tc.want, err)
 			}
 		})
+	}
+}
+
+// 一次发出的多个工具调用并发处理：一条在等审批或跑长命令，另一条不该排在它后面
+func TestRuntimeParallelTools(t *testing.T) {
+	runtime := testRuntime(t)
+	var calls, active, peak atomic.Int32
+	result, err := runtime.Run(context.Background(), Request{Prompt: "parallel", Tools: []Tool{{Name: "query", Parameters: json.RawMessage(`{"type":"object"}`)}}},
+		func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+			calls.Add(1)
+			n := active.Add(1)
+			defer active.Add(-1)
+			for p := peak.Load(); n > p && !peak.CompareAndSwap(p, n); p = peak.Load() {
+			}
+			time.Sleep(300 * time.Millisecond)
+			return "1", nil
+		}, func(context.Context, Event) error { return nil })
+	if err != nil || result.Response != "完成" || calls.Load() != 2 {
+		t.Fatalf("result=%+v err=%v calls=%d", result, err, calls.Load())
+	}
+	if peak.Load() != 2 {
+		t.Fatalf("两个调用应同时在处理，最多只有 %d 个", peak.Load())
 	}
 }
 

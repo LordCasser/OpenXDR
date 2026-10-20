@@ -41,6 +41,9 @@ xdr suppress pve1 8f1d3b56-7a29-4e03-b5c8-1d4f9e2a7b60 'VM100 vpn-proxy 每天 1
 xdr suppress pve1 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90 'Termix 面板每分钟 SSH 健康检查' 30 'process.cmd_line~=__TERMIX_EXIT' 'dst_endpoint.port=22'
 xdr propose-close <事件 id> false_positive '误报/良性：……（定性、关键证据、依据）' <报告 id>
 xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件）；级别 ok 只存档不推送 / attention（默认）/ urgent
+xdr report '标题' - attention <<'EOF'        # 正文也可以从 heredoc 读；标题有空格或括号时整个用引号括起来
+# 结论
+EOF
 ```
 
 **保持上下文干净**：大结果先重定向到文件，再用 `jq`、`grep`、`head`、`awk` 取需要的部分，不要把整块原始数据读进对话。
@@ -68,7 +71,8 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
   也不要 `events WHERE id IN (SELECT event_id ...)`：这两种写法都会扫全表、超时。已知单个事件 id 时直接 `WHERE id = '...'` 也可以。
 - 报「查询超过 5 秒被取消」是范围太大，不是语法错：收窄 ts、加 asset_id 或换 alert_events，不要反复改写同一条查询。
 - 带 raw 等 jsonb 列的结果要进一步处理时用 `xdr sql --json`：TSV 会把 JSON 里的反斜杠再转义一层，解析不回来。
-  jq 里取字段用 `.raw.process.cmd_line`，`->` / `->>` 是 SQL 的写法，jq 不认。
+  jq 里取字段用 `.raw.process.cmd_line`，`->` / `->>` 是 SQL 的写法，jq 不认。`--json` 输出是每行一个对象（JSON Lines），
+  要当数组处理（`.[0:3]`、`length`、排序）用 `jq -s`。
 - `raw` 是 jsonb，用路径取字段，**不要**对 `raw::text` 做截取或 LIKE 切片：
   - 进程（class_uid 1007）：`raw->'process'->>'name'`、`raw->'process'->>'cmd_line'`、`raw->'process'->'file'->>'path'`、
     父进程 `raw->'process'->'parent_process'->>'name'`（同样有 pid、cmd_line）；`->>` 取出的是文本，后面不能再接 `->` 或 `->>`，

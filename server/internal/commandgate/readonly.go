@@ -98,7 +98,11 @@ func split(cmd string) ([]segment, bool) {
 					return nil, false
 				case '$':
 					if j+1 < len(cmd) && cmd[j+1] == '(' {
-						return nil, false
+						end, ok := substitution(cmd, j)
+						if !ok {
+							return nil, false
+						}
+						j = end
 					}
 				case '\\':
 					j++
@@ -118,8 +122,17 @@ func split(cmd string) ([]segment, bool) {
 			}
 		case c == '`', c == '(', c == ')', c == '{' && !inWord, c == '}' && !inWord:
 			return nil, false
-		case c == '$' && i+1 < len(cmd) && (cmd[i+1] == '(' || cmd[i+1] == '\''):
+		case c == '$' && i+1 < len(cmd) && cmd[i+1] == '\'':
 			return nil, false
+		case c == '$' && i+1 < len(cmd) && cmd[i+1] == '(':
+			// 命令替换：里面的命令同样要只读，整段原样留在词里（拿它当程序名照样不认）
+			end, ok := substitution(cmd, i)
+			if !ok {
+				return nil, false
+			}
+			word.WriteString(cmd[i : end+1])
+			inWord = true
+			i = end
 		case c == ' ' || c == '\t':
 			flushWord()
 		case c == ';' || c == '\n':
@@ -174,6 +187,37 @@ func split(cmd string) ([]segment, bool) {
 	}
 	flushSegment(len(cmd))
 	return segments, true
+}
+
+// substitution 找到从 cmd[i]（'$('）开始的命令替换的右括号，里面的命令递归判定只读；$(( 算术展开不认
+func substitution(cmd string, i int) (int, bool) {
+	depth := 0
+	for j := i + 1; j < len(cmd); j++ {
+		switch cmd[j] {
+		case '\'':
+			end := strings.IndexByte(cmd[j+1:], '\'')
+			if end < 0 {
+				return 0, false
+			}
+			j += end + 1
+		case '"':
+			for j++; j < len(cmd) && cmd[j] != '"'; j++ {
+				if cmd[j] == '\\' {
+					j++
+				}
+			}
+		case '\\':
+			j++
+		case '(':
+			depth++
+		case ')':
+			if depth--; depth == 0 {
+				inner := cmd[i+2 : j]
+				return j, !strings.HasPrefix(inner, "(") && ReadOnly(inner)
+			}
+		}
+	}
+	return 0, false
 }
 
 // redirect 解析从 cmd[i]（'>'）开始的输出重定向，只放行丢弃输出与合并描述符；返回目标结束的位置
@@ -256,7 +300,7 @@ var readOnlyPrograms = map[string]func(args []string) bool{
 	"last": nil, "lastb": nil, "lastlog": nil, "getent": nil, "ps": nil, "pgrep": nil, "pidof": nil, "pstree": nil,
 	"ss": nil, "netstat": nil, "lsof": nil, "lsblk": nil, "findmnt": nil, "lscpu": nil, "lspci": nil, "lsusb": nil,
 	"lsmod": nil, "modinfo": nil, "vmstat": nil, "iostat": nil, "mpstat": nil, "getfacl": nil, "lsattr": nil,
-	"pveversion": nil, "printenv": nil, "locale": nil, "getconf": nil, "atq": nil, "ipcs": nil, "lsns": nil,
+	"pveversion": nil, "printenv": nil, "locale": nil, "getconf": nil, "atq": nil, "ipcs": nil, "lsns": nil, "which": nil,
 	"hostid": nil, "arch": nil, "systemd-detect-virt": nil, "lslogins": nil,
 	"find":        noArg("-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"),
 	"sort":        noArgPrefix("-o", "--output"),
@@ -273,7 +317,7 @@ var readOnlyPrograms = map[string]func(args []string) bool{
 	"gawk":        awkRead,
 	"mawk":        awkRead,
 	"ip":          noWord("set", "add", "del", "delete", "flush", "change", "replace", "append", "prepend", "exec", "-batch", "-b", "-force"),
-	"systemctl":   subcommand(true, "status", "show", "cat", "list-units", "list-unit-files", "list-timers", "list-sockets", "list-dependencies", "is-active", "is-enabled", "is-failed", "is-system-running"),
+	"systemctl":   subcommand(true, "status", "show", "cat", "list-units", "list-unit-files", "list-timers", "list-sockets", "list-jobs", "list-paths", "list-dependencies", "is-active", "is-enabled", "is-failed", "is-system-running"),
 	"timedatectl": subcommand(true, "status", "show", "timesync-status", "show-timesync"),
 	"hostnamectl": subcommand(true, "status"),
 	"docker":      subcommand(false, "ps", "images", "inspect", "logs", "stats", "version", "info", "top", "port", "diff"),
@@ -289,6 +333,9 @@ var readOnlyPrograms = map[string]func(args []string) bool{
 	"zfs":         subcommand(false, "list", "get"),
 	"chronyc":     subcommand(false, "tracking", "sources", "sourcestats", "activity"),
 	"sshd":        sshdTest,
+	"sed":         sedRead,
+	"swapon":      swaponShow,
+	"command":     onlyFlagPrefix("-v", "-V"), // command 不带 -v 就是执行后面的命令
 	"loginctl":    subcommand(true, "list-sessions", "list-users", "list-seats", "show-session", "show-user", "session-status", "user-status"),
 }
 
@@ -476,4 +523,80 @@ func awkRead(args []string) bool {
 		}
 	}
 	return script
+}
+
+// swaponShow swapon 只认 --show / -s 这类查看；带设备名或 -a 就是启用交换分区
+func swaponShow(args []string) bool {
+	show := false
+	for _, a := range args {
+		switch {
+		case a == "--show" || strings.HasPrefix(a, "--show=") || a == "-s" || a == "--summary":
+			show = true
+		case a == "--noheadings" || a == "--bytes" || a == "--raw":
+		default:
+			return false
+		}
+	}
+	return show
+}
+
+// sedRead 只认替换（s///，标志限 g p i I m 和数字）与打印、删除、退出这类不碰文件的命令；
+// -i 原地改写、-f 读脚本、w 写文件、e 执行命令一律不认，解析不了的也不认
+func sedRead(args []string) bool {
+	var scripts []string
+	explicit := false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-n" || a == "--quiet" || a == "--silent" || a == "-E" || a == "-r" || a == "--regexp-extended" || a == "-u" || a == "-z":
+		case a == "-e":
+			if i++; i >= len(args) {
+				return false
+			}
+			scripts, explicit = append(scripts, args[i]), true
+		case strings.HasPrefix(a, "--expression="):
+			scripts, explicit = append(scripts, strings.TrimPrefix(a, "--expression=")), true
+		case strings.HasPrefix(a, "-"):
+			return false
+		case !explicit && len(scripts) == 0:
+			scripts = append(scripts, a)
+		}
+	}
+	if len(scripts) == 0 {
+		return false
+	}
+	for _, script := range scripts {
+		for _, cmd := range strings.FieldsFunc(script, func(r rune) bool { return r == ';' || r == '\n' }) {
+			if !sedCommand(strings.TrimSpace(cmd)) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+var sedAddress = regexp.MustCompile(`^(?:\d+|\$|/(?:[^/\\]|\\.)*/)(?:,(?:\d+|\$|/(?:[^/\\]|\\.)*/))?`)
+
+func sedCommand(c string) bool {
+	c = strings.TrimSpace(sedAddress.ReplaceAllString(c, ""))
+	switch {
+	case c == "p" || c == "d" || c == "q" || c == "=" || c == "!d" || c == "!p":
+		return true
+	case len(c) < 2 || c[0] != 's':
+		return false
+	}
+	delim := c[1]
+	if delim == '\\' || delim == '\n' || (delim >= 'a' && delim <= 'z') || (delim >= 'A' && delim <= 'Z') || (delim >= '0' && delim <= '9') {
+		return false
+	}
+	parts, i := 0, 2
+	for ; i < len(c) && parts < 2; i++ {
+		switch c[i] {
+		case '\\':
+			i++
+		case delim:
+			parts++
+		}
+	}
+	return parts == 2 && strings.Trim(c[i:], "gpiIm0123456789") == ""
 }

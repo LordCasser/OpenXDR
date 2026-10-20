@@ -25,6 +25,14 @@ func TestReadOnlyAccepts(t *testing.T) {
 		`stat -c %y /etc/shadow; cat /etc/hostname`,
 		`sshd -T 2>/dev/null | grep -E 'permitrootlogin|passwordauthentication'`,
 		`echo '=== ATQ ==='; atq 2>/dev/null; loginctl list-sessions --no-legend`,
+		// 实地巡检里被拒的只读写法：命令替换、sed 替换、swapon --show、list-jobs、which
+		`echo "===MEM==="; free -h; swapon --show 2>/dev/null`,
+		`systemctl list-units --state=failed --no-pager --no-legend; systemctl list-jobs --no-pager | head -5`,
+		`cat /etc/crontab 2>/dev/null; for u in $(cut -d: -f1 /etc/passwd); do c=$(crontab -u $u -l 2>/dev/null); [ -n "$c" ] && echo "--$u--" && echo "$c"; done`,
+		`lastlog -u $(getent passwd | awk -F: '$3>=1000&&$3<65000{printf "%s,",$1}' | sed 's/,$//') 2>/dev/null | head -15`,
+		`which storcli storcli64 perccli arcconf 2>/dev/null; dmesg 2>/dev/null | grep -iE 'megasas|BBU|battery' | tail -5`,
+		`sed -n '1,20p' /etc/hosts; sed -E 's#/+#/#g' x; sed '/^#/d;/^$/d' /etc/fstab; command -v zpool`,
+		`echo "today is $(date +%F)"`,
 	} {
 		if !ReadOnly(cmd) {
 			t.Errorf("应判为只读：%s", cmd)
@@ -101,6 +109,24 @@ func TestReadOnlyRejects(t *testing.T) {
 		`chage -d 0 root`,
 		`sshd`,
 		`loginctl terminate-session 3`,
+		// 命令替换里的命令同样要只读
+		`for u in $(cat /etc/shadow); do echo $u; done`,
+		`echo $(rm -rf /tmp/x)`,
+		`echo $((1+1))`,
+		`echo $(ls $(rm -rf /))`,
+		// sed：原地改写、写文件、执行命令、读脚本文件
+		`sed -i 's/a/b/' /etc/hosts`,
+		`sed -ni 's/a/b/p' /etc/hosts`,
+		`sed 's/a/b/w /etc/x' in`,
+		`sed 's/a/b/e' in`,
+		`sed 'w /tmp/out' in`,
+		`sed '1e id' in`,
+		`sed -f script.sed in`,
+		`sed --in-place 's/a/b/' f`,
+		// swapon / command 的执行形态
+		`swapon -a`,
+		`swapon /dev/sda2`,
+		`command rm -rf /tmp/x`,
 		`sshd -D -p 2222`,
 		`sshd -T -o PermitRootLogin=yes`,
 		`rpm -e pkg`,
