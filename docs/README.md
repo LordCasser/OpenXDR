@@ -49,6 +49,6 @@
 | 端点采集 | collection.md | `agent/src/collector/` |
 | 流量探针 | collection.md | `sensor/src/` |
 | 事件 schema | events.md | `proto/`、`agent/src/collector/mod.rs`、`server/internal/grpcsvc/` |
-| 检测管线 | detection.md | `server/internal/{sigma,intel,dedup,suppress,correlate,ueba,triage}` |
+| 检测管线 | detection.md | `server/internal/{sigma,intel,dedup,suppress,fpstats,correlate,ueba,triage}` |
 | 响应处置 | detection.md | `server/internal/response`、`agent/src/respond/` |
 | 配置项 | deployment.md 配置表 + detection.md | `server/main.go` |

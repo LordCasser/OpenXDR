@@ -110,6 +110,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `sigma`：Sigma 兼容规则引擎（解析、修饰符、条件求值、热重载）
 - `intel`：威胁情报碰撞（IP / 域名 / 文件哈希）
 - `dedup` / `suppress`：告警去重与误报抑制
+- `fpstats`：误报统计——同规则同主机被人反复判误报时生成待组管理员批准的抑制草案（单活）
 - `correlate`：按实体把告警关联成 incident 事件图
 - `ueba`：首次出现检测（先学习后告警）
 - `triage`：旧 AI 研判引擎（带只读调查工具逐个研判 incident）

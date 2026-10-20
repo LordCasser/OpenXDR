@@ -177,6 +177,23 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
   这台主机近 30 天真实命中过的规则（平台指令触发的不算），**必须带字段条件**且要对得上其中至少一次命中的事件，
   理由必填，有效期 1–90 天；条件相同的生效或待批抑制不重复提，30 天内被拒过的同样条件不再接受。主机所在组的管理员在抑制页批准（有效期从批准时重新算，立即生效）或拒绝，
   与命令审批同一档权限，写审计；侧栏显示待批数量
+- **误报统计 → 抑制草案**（`server/internal/fpstats`，单活租约 `fp-stats`，默认每 6 小时一轮）：把人反复下的「误报」结论回喂到规则层。
+  - 统计口径：近 `FP_SUPPRESS_WINDOW_DAYS`（30）天有告警（平台指令触发的除外）的 incident，按（规则、主机）计数，主机决定所属组；
+    一个 incident 含多条规则时对每条规则各算一次。**计入**的误报是人下的结论——有结案人、不是系统自动结案、
+    不是原样采纳 AI 结案建议（`resolution_source=ai_proposal`）；人选了误报、说明沿用 AI 研判的（`ai_verdict`）计入，
+    结论是人下的，接口只在与 AI 研判一致时才允许不写理由。`ai_proposal` 与系统自动结案（`resolved_by=system`）结论和理由都出自 AI，
+    计入就成了 AI 提议结案 → 统计 → 提议抑制的自我强化，单独计数写进依据、不进分子也不进分母；早期没记结案人的不算。
+  - 门槛：计入的误报 ≥ `FP_SUPPRESS_MIN_COUNT`（5），误报率 = 误报 /（误报 + 属实 + 未结案）≥ `FP_SUPPRESS_MIN_RATIO`（90%），
+    窗口内**没有任何**属实结论（`closed`，不论谁判的）。未结案的进分母：大部分还没人看过时不出草案。
+  - 窄优先：按 `query.hostname`、`dst_endpoint.ip`、`file.path`、`reg_key.path`、`module.file.path`、`process.file.path`、
+    `src_endpoint.ip` 的顺序（先看规则作用的对象，最后才是发起进程）对每个取值单独过门槛，第一个有取值过门槛的字段出草案
+    （每个取值一条 `equals` 条件，同一（规则、主机）一轮最多 5 条）；这些命中都出自同一个进程映像时再加一条 `process.file.path` 条件。
+    事件体已过保留期的命中不知道是哪个值：属实与未结案的从严算进每个取值，误报的不算。
+    **没有任何取值单独够数**（实体分散）且整条规则过门槛时才出不带条件的整条规则草案，理由与依据里标明「整条规则」。
+  - 草案即 `status=proposed` 的抑制（`created_by=fp-stats`），挂进上面同一个组管理员审批流程，批准前不进索引；
+    带依据（计入的事件、谁判的、比例、未计入的数量）与建议有效期 `FP_SUPPRESS_DAYS`（30，1–90）。
+  - 不重复：同（规则、主机或全局）已有生效且范围不比草案窄的抑制、或与草案互相包含的待批草案时不生成；
+    `FP_SUPPRESS_COOLDOWN_DAYS`（30）天内被拒过的，范围不比它窄的草案不再生成（拒了窄的，宽的更不提；更窄的可以再问）。
 
 ## 爆破得手升级（`internal/ingest/processor.go` 与旧接入路径 `internal/grpcsvc/bruteforce.go`）
 
@@ -344,6 +361,7 @@ temperature 0.1，超时 `AI_TIMEOUT_SECONDS` 默认 120s
 - **人工案例回喂**：研判时 `appendCaseHistory` 取近 90 天同规则或同主机、人工结案的事件（排除系统自动结案与
   `resolution_source` 非空的采纳 AI），连同当时的 AI 结论与结案说明放进上下文。批量结案逐条写同样的字段，
   所以和单个结案一样回喂；同一说明批量关掉的事件会各自作为案例出现。
+- **规则层回喂**：同一规则在同一主机上被人反复判误报，由误报统计生成待批准的抑制草案，见上文「抑制」。
 
 ### 准确度（`server/internal/api/accuracy.go`）
 
@@ -478,6 +496,9 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 | `RULES_RELOAD_SECONDS` | `30`（0 关闭） | 规则热重载扫描周期 |
 | `ALERT_DEDUP_WINDOW_MINUTES` | `5` | 告警去重窗口 |
 | `SUPPRESSION_RELOAD_SECONDS` | `30` | 抑制重载/计数回写周期 |
+| `FP_SUPPRESS_MIN_COUNT` / `FP_SUPPRESS_MIN_RATIO` | `5` / `90` | 误报统计草案门槛：计入的人工误报次数与误报率（%）；次数 0 关闭 |
+| `FP_SUPPRESS_WINDOW_DAYS` / `FP_SUPPRESS_DAYS` / `FP_SUPPRESS_COOLDOWN_DAYS` | `30` / `30` / `30` | 统计窗口、草案建议有效期（1–90）、被拒后冷却期 |
+| `FP_SUPPRESS_INTERVAL_HOURS` | `6` | 误报统计周期 |
 | `INTEL_RELOAD_SECONDS` | `30` | 情报重载/计数回写周期 |
 | `CORRELATE_WINDOW_MINUTES` | `30` | 关联时间窗 |
 | `CORRELATE_INTERVAL_SECONDS` | `10` | 关联批次周期 |
