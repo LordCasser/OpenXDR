@@ -36,6 +36,8 @@ type sourceConfig struct {
 	BindPasswordEnv string       `json:"bindPasswordEnv"`
 	CAEnv           string       `json:"caEnv"`
 	IntervalSeconds int          `json:"intervalSeconds"`
+	// IncludeServiceAccounts 仅 Authentik 使用，默认只同步人类用户
+	IncludeServiceAccounts bool `json:"includeServiceAccounts"`
 }
 
 var envName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,127}$`)
@@ -100,6 +102,9 @@ func (c sourceConfig) job(getenv func(string) string) (Job, error) {
 	transport.TLSClientConfig = tlsConfig
 	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
 	job := Job{Interval: time.Duration(interval) * time.Second}
+	if c.IncludeServiceAccounts && c.Kind != "authentik" {
+		return Job{}, fmt.Errorf("仅 Authentik 支持 includeServiceAccounts")
+	}
 	switch c.Kind {
 	case "keycloak", "entra":
 		if c.BaseDN != "" || c.Filter != "" || c.BindUserEnv != "" || c.BindPasswordEnv != "" {
@@ -128,6 +133,19 @@ func (c sourceConfig) job(getenv func(string) string) (Job, error) {
 			}
 			job.Source, job.Reader = r.source, r
 		}
+	case "authentik":
+		if c.Realm != "" || c.TenantID != uuid.Nil || c.OAuth != nil || c.BaseDN != "" || c.Filter != "" || c.BindUserEnv != "" || c.BindPasswordEnv != "" {
+			return Job{}, fmt.Errorf("Authentik 只接受 url、tokenEnv 与 includeServiceAccounts")
+		}
+		token, err := c.tokenProvider(getenv, client)
+		if err != nil {
+			return Job{}, err
+		}
+		r, err := NewAuthentik(c.ID, c.GroupID, c.URL, c.IncludeServiceAccounts, client, token)
+		if err != nil {
+			return Job{}, err
+		}
+		job.Source, job.Reader = r.source, r
 	case "ad", "ldap":
 		if c.Realm != "" || c.TenantID != uuid.Nil || c.TokenEnv != "" || c.OAuth != nil {
 			return Job{}, fmt.Errorf("LDAP 目录不能包含 HTTP 目录配置")
