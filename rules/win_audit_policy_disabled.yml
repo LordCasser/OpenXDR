@@ -1,0 +1,26 @@
+title: Windows Audit Policy Disabled
+id: 884c43ab-b6a7-40bc-84c7-427ff5c00155
+status: experimental
+description: |
+  检测审计策略被关闭：Security 4719 的 AuditPolicyChanges 含「成功移除」%%8448 或「失败移除」%%8450。
+  关掉某个子类别的审计是擦除痕迹前的准备动作，之后的登录、进程、对象访问不再进 Security 日志。
+  agent 原样上报 EventData 里的消息 ID，取值对照（msobjs.dll）：%%8448 成功移除、%%8449 成功添加、
+  %%8450 失败移除、%%8451 失败添加。只开启审计（8449 / 8451）不报。
+  已知误报：域环境组策略刷新把本机 auditpol 手工加开的子类别改回 GPO 设定时同样产生「移除」，
+  执行者是机器账号且成批出现；调整审计基线的变更窗口也会触发，确认后按主机窄抑制。
+tags:
+  - attack.defense_evasion
+  - attack.t1562.002
+logsource:
+  category: authentication
+  product: windows
+detection:
+  audit_policy_change:
+    # 平台自定义活动取值：15=审计策略变更（4719）
+    activity_id: 15
+  removed:
+    policy_changes|contains:
+      - '%%8448'
+      - '%%8450'
+  condition: audit_policy_change and removed
+level: high

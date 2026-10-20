@@ -116,7 +116,7 @@ OCSF 3002 未覆盖这些语义，activity_id 从 10 起自定义（`authwatch_w
 | 12 | 4732 | 加入本地组 | user.name=成员、group_name=组名 |
 | 13 | 1102 | Security 日志被清空 | user.name=操作者、log_cleared=true |
 | 14 | 4648 | 显式凭据登录 | user.name、src_endpoint.ip、target_server、process_name |
-| 15 | 4719 | 审计策略变更 | policy_category/subcategory/changes |
+| 15 | 4719 | 审计策略变更 | policy_category/subcategory/changes，原样是 `%%` 消息 ID（changes：8448 成功移除、8449 成功添加、8450 失败移除、8451 失败添加） |
 
 ### PowerShell 脚本块（4104 → 1007）
 

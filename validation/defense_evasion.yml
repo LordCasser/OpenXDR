@@ -151,3 +151,46 @@ cases:
         path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\EventLog"
       reg_value:
         data: "ImagePath=C:\\Windows\\System32\\svchost.exe -k LocalServiceNetworkRestricted; Start=2; State=Stopped"
+
+  - name: auditpol 关闭登录子类别的成功与失败审计（4719，实机回放第四轮的原始事件）
+    technique: T1562.002
+    source: atomic T1562.002
+    class: 3002
+    os: windows
+    event:
+      activity_id: 15
+      status_id: 1
+      user:
+        name: "OPENXDR-TESTWIN$"
+      policy_category: "%%8272"
+      policy_subcategory: "%%12288"
+      policy_changes: "%%8448, %%8450"
+
+  - name: auditpol 只关闭失败审计（4719 失败移除）
+    technique: T1562.002
+    source: atomic T1562.002
+    class: 3002
+    os: windows
+    event:
+      activity_id: 15
+      status_id: 1
+      user:
+        name: attacker
+      policy_category: "%%8274"
+      policy_subcategory: "%%12800"
+      policy_changes: "%%8450"
+
+  - name: auditpol 开启审计（4719 成功/失败添加，良性对照）
+    technique: T1562.002
+    source: 实机回放第四轮的恢复动作
+    class: 3002
+    os: windows
+    expect: undetected
+    event:
+      activity_id: 15
+      status_id: 1
+      user:
+        name: "OPENXDR-TESTWIN$"
+      policy_category: "%%8272"
+      policy_subcategory: "%%12288"
+      policy_changes: "%%8449, %%8451"
