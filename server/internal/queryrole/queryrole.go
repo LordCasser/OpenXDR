@@ -243,7 +243,9 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
 		`COMMENT ON VIEW ` + schema + `.ip_infos IS '本组主机连过的公网地址：反向解析与 VirusTotal 结果'`,
 		`COMMENT ON VIEW ` + schema + `.reports IS '本组历史报告（level：ok / attention / urgent）'`,
 		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '` + role + `') THEN CREATE ROLE ` + role + ` LOGIN; END IF; END $$`,
-		`ALTER ROLE ` + role + ` WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 5`,
+		// PostgreSQL 16 起非超级用户连 NOSUPERUSER / NOREPLICATION / NOBYPASSRLS 都不许写（NOCREATEDB 也要求自己有 CREATEDB）；
+		// CREATE ROLE 建出来本来就没有这些属性，agentchat/query.go 每次查询前还会核对一遍
+		`ALTER ROLE ` + role + ` WITH LOGIN NOCREATEROLE CONNECTION LIMIT 5`,
 		`ALTER ROLE ` + role + ` SET search_path = ` + schema,
 		`ALTER ROLE ` + role + ` SET default_transaction_read_only = on`,
 		`ALTER ROLE ` + role + ` SET statement_timeout = '5s'`,
