@@ -120,6 +120,32 @@ jobs:
         working-directory: ${{ matrix.crate }}
         run: cargo test
 
+  # 发版有 arm64 安装包：原生 arm runner 上编译与跑测试，守住 arm64 不回归（c_char 符号、结构体布局等）
+  collectors-arm64:
+    name: ${{ matrix.crate }} (arm64)
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [agent, sensor]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.crate }}
+      - name: 构建
+        working-directory: ${{ matrix.crate }}
+        run: cargo build --locked
+      - name: 静态检查
+        working-directory: ${{ matrix.crate }}
+        run: cargo clippy --all-targets -- -D warnings
+      - name: 测试
+        working-directory: ${{ matrix.crate }}
+        run: cargo test
+
   # 内核采集是可选特性，单独一项：它需要 nightly 工具链和 bpf-linker
   kernel-collectors:
     name: ${{ matrix.crate }} (${{ matrix.feature }})
