@@ -109,17 +109,6 @@
           "4",
           "5"
         ]
-      },
-      {
-        "rule": "temporal:linux-account-auth-burst",
-        "anchor": "5",
-        "evidence": [
-          "1",
-          "2",
-          "3",
-          "4",
-          "5"
-        ]
       }
     ]
   },
@@ -435,17 +424,6 @@
           "4",
           "5"
         ]
-      },
-      {
-        "rule": "temporal:linux-account-auth-burst",
-        "anchor": "5",
-        "evidence": [
-          "1",
-          "2",
-          "3",
-          "4",
-          "5"
-        ]
       }
     ]
   },
@@ -548,19 +526,7 @@
         }
       }
     ],
-    "matches": [
-      {
-        "rule": "temporal:linux-account-auth-burst",
-        "anchor": "5",
-        "evidence": [
-          "1",
-          "2",
-          "3",
-          "4",
-          "5"
-        ]
-      }
-    ]
+    "matches": []
   },
   {
     "name": "五分钟闭区间边界",
@@ -664,17 +630,6 @@
     "matches": [
       {
         "rule": "temporal:linux-auth-burst",
-        "anchor": "5",
-        "evidence": [
-          "1",
-          "2",
-          "3",
-          "4",
-          "5"
-        ]
-      },
-      {
-        "rule": "temporal:linux-account-auth-burst",
         "anchor": "5",
         "evidence": [
           "1",
@@ -2156,5 +2111,402 @@
       }
     ],
     "matches": []
+  },
+  {
+    "name": "账号单机失败不足两台资产",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 100,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 200,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 300,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 400,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "迟到的另一台主机使不同资产数达标",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 100,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 200,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 300,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 400,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 350,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-account-auth-burst",
+        "anchor": "6",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "6"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "单机持续失败后另一台主机一次",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 100,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 150,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 200,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 250,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "7",
+        "seconds": 300,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "rule": "temporal:linux-account-auth-burst",
+        "anchor": "7",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      }
+    ]
   }
 ]

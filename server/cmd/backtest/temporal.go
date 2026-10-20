@@ -95,7 +95,7 @@ func (b *temporalBacktest) apply(c candidate) error {
 			continue
 		}
 		key := windowKey{d.groupBy, temporal.Scope{Group: c.group.UUID, Entity: d.entity}}
-		window := append(b.windows[key], temporal.Event{ID: c.id, Time: c.ts, Scope: key.scope, Rules: c.rules})
+		window := append(b.windows[key], temporal.Event{ID: c.id, Time: c.ts, Scope: key.scope, Asset: c.asset.UUID.String(), Rules: c.rules})
 		cutoff := c.ts.Add(-b.snapshot.MaxWindow())
 		start := 0
 		for start < len(window) && window[start].Time.Before(cutoff) {

@@ -36,7 +36,7 @@ export function TemporalRuleAtAlert({ alertId, ruleId }: { alertId: string; rule
           { key: 'kind', label: t('temporalRuleGroupBy'), children: <Space wrap>
             <Tag>{t(rule.kind === 'event_count' ? 'temporalCount' : 'temporalSequence')}</Tag>
             <Tag>{t(rule.groupBy === 'account' ? 'temporalGroupByAccount' : 'temporalGroupByAsset')}</Tag>
-            <Typography.Text type="secondary">{t('temporalRuleWindow', { seconds: rule.windowSeconds })}{rule.threshold ? ` · ${t('temporalRuleThreshold', { count: rule.threshold })}` : ''}</Typography.Text>
+            <Typography.Text type="secondary">{t('temporalRuleWindow', { seconds: rule.windowSeconds })}{rule.threshold ? ` · ${t('temporalRuleThreshold', { count: rule.threshold })}` : ''}{rule.minAssets > 1 ? ` · ${t('temporalRuleMinAssets', { count: rule.minAssets })}` : ''}</Typography.Text>
           </Space> },
           { key: 'revision', label: t('temporalGapsRevision'), children: <Typography.Text copyable style={{ overflowWrap: 'anywhere' }}>{detail.data.revision}</Typography.Text> },
           { key: 'used', label: t('temporalRuleFirstUsed'), children: fmtTime(detail.data.createdAt) },

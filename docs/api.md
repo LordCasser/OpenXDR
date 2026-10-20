@@ -31,7 +31,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | GET | `/api/attack` | ATT&CK 覆盖矩阵：按杀伤链顺序的战术列与技术格，含未打标签、无数据源的规则数 |
 | GET | `/api/temporal-gaps?assetId=&from=&to=&limit=` | 该资产的时序检测缺口（`candidate_limit` / `late`），详见 [时序检测](temporal-detection.md#缺口查询接口) |
 | GET | `/api/temporal-rule-snapshots?limit=&alertId=` | 已归档的时序规则版本（**全局 admin / analyst**，角色每次从库里取），按首次使用时间倒序：`{items:[{revision,createdAt,format,baseRuleCount,temporalRules}],truncated}`；`limit` 默认 20、范围 1..100。带 `alertId` 时只返回该告警命中时的版本（单事件告警、旧版本告警或调用者看不到的告警返回空列表） |
-| GET | `/api/temporal-rule-snapshots/{revision}?rule=` | 按版本哈希取当时的时序规则：`{revision,createdAt,rules:[{id,title,author,kind,groupBy,severity,windowSeconds,threshold,references,source,base}]}`，`base` 为该规则引用的基础规则原文；`rule` 只取一条（不存在 404）。按原文重算版本哈希，归档被改动或格式不支持时 500 拒绝展示。权限同上 |
+| GET | `/api/temporal-rule-snapshots/{revision}?rule=` | 按版本哈希取当时的时序规则：`{revision,createdAt,rules:[{id,title,author,kind,groupBy,severity,windowSeconds,threshold,minAssets,references,source,base}]}`，`base` 为该规则引用的基础规则原文；`rule` 只取一条（不存在 404）。按原文重算版本哈希，归档被改动或格式不支持时 500 拒绝展示。权限同上 |
 
 `GET /api/events` 参数：`from`/`to`（RFC3339，默认近 24h）、`assetId`、
 `classUid`（1001 文件 / 1007 进程 / 3002 认证 / 4001 网络 / 4003 DNS /

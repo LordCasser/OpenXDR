@@ -211,7 +211,7 @@ AND existing.ts=EXCLUDED.ts AND existing.rules=EXCLUDED.rules AND existing.accou
 
 // observeScope 回查同一实体的候选窗口并记录新命中。column 只取固定列名，不拼接外部输入。
 func (s *Snapshot) observeScope(ctx context.Context, tx *sql.Tx, result *Observation, e Event, assetID uuid.UUID, groupBy, column string, scope Scope, key any) ([]Match, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT event_id,ts,rules FROM temporal_candidates
+	rows, err := tx.QueryContext(ctx, `SELECT event_id,ts,rules,asset_id FROM temporal_candidates
 WHERE revision=$1 AND group_id=$2 AND `+column+`=$3 AND ts >= $4 AND ts <= $5
 ORDER BY ts,event_id LIMIT 10001`, s.revision, scope.Group, key, e.Time.Add(-s.window), e.Time.Add(s.window))
 	if err != nil {
@@ -221,7 +221,8 @@ ORDER BY ts,event_id LIMIT 10001`, s.revision, scope.Group, key, e.Time.Add(-s.w
 	for rows.Next() {
 		candidate := Event{Scope: scope}
 		var data []byte
-		if err := rows.Scan(&candidate.ID, &candidate.Time, &data); err != nil {
+		var asset uuid.UUID
+		if err := rows.Scan(&candidate.ID, &candidate.Time, &data, &asset); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -229,6 +230,7 @@ ORDER BY ts,event_id LIMIT 10001`, s.revision, scope.Group, key, e.Time.Add(-s.w
 			rows.Close()
 			return nil, err
 		}
+		candidate.Asset = asset.String()
 		candidates = append(candidates, candidate)
 	}
 	err = rows.Err()

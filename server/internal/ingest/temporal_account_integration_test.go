@@ -184,3 +184,42 @@ func TestTemporalAccountConcurrentAssets(t *testing.T) {
 		}
 	}
 }
+
+// min_assets: 2：单台资产再多次也不出账号命中（交给资产规则）；迟到的第二台资产事件
+// 使不同资产数达标时，命中落在越过的那一刻，重启重投不重复。
+func TestTemporalAccountMinAssetsWithLateEvent(t *testing.T) {
+	p, client, db := testProcessor(t)
+	t.Cleanup(func() { client.Close(); db.Close() })
+	rule := "id: spread\nkind: event_count\ngroup_by: account\nmin_assets: 2\nwithin: 1m\nrules: [base]\nthreshold: 3\n"
+	p.Temporal = temporalStoreFixtureWithRule(t, rule, assetRule)
+	f := &accountFixture{t: t, p: p, client: client, now: time.Now().UTC().Truncate(time.Microsecond), metrics: &capacityMetrics{}}
+	group := uuid.New()
+	a1, a2 := f.asset(group), f.asset(group)
+	first, second, fourth := f.event(a1, 0, "ops"), f.event(a1, 10, "ops"), f.event(a1, 30, "ops")
+	f.process(first, second, fourth)
+	if f.detections("spread") != 0 || f.detections("by-asset") != 1 {
+		t.Fatal("单台资产三次失败应只命中资产规则")
+	}
+	late := f.event(a2, 20, "OPS")
+	f.process(late)
+	var anchor, alertAsset uuid.UUID
+	var evidence []byte
+	if err := db.QueryRow(`SELECT d.anchor_id,d.evidence,a.asset_id FROM temporal_detections d JOIN alerts a ON a.id=d.alert_id WHERE d.rule_id='spread'`).Scan(&anchor, &evidence, &alertAsset); err != nil {
+		t.Fatal(err)
+	}
+	var ids []uuid.UUID
+	if err := json.Unmarshal(evidence, &ids); err != nil {
+		t.Fatal(err)
+	}
+	if anchor != late.ID || alertAsset != a2 || !slices.Equal(ids, []uuid.UUID{first.ID, second.ID, late.ID}) {
+		t.Fatalf("迟到资产达标的命中错误: anchor=%s asset=%s evidence=%v", anchor, alertAsset, ids)
+	}
+	// 处理器重建后全部重投：不重复命中，之后的终点前序已满足也不再出命中
+	restarted := *p
+	restarted.Temporal = temporalStoreFixtureWithRule(t, rule, assetRule)
+	f.p = &restarted
+	f.process(first, second, late, fourth, f.event(a2, 40, "ops"))
+	if n := f.detections("spread"); n != 1 {
+		t.Fatalf("重投或持续失败重复命中: %d", n)
+	}
+}

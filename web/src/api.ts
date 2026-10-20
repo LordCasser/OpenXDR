@@ -343,6 +343,7 @@ export interface ArchivedTemporalRule {
   severity: number
   windowSeconds: number
   threshold?: number
+  minAssets: number
   references: string[]
   source: string
   base: Record<string, string>

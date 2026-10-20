@@ -44,7 +44,7 @@ func TestTemporalBacktestReplay(t *testing.T) {
 	for i := range 5 {
 		spread = append(spread, feed(i%3, i*60, "Admin", group))
 	}
-	// 一小时后同一主机五次、换账号：资产维度与账号维度各一次
+	// 一小时后同一主机五次、换账号：只命中资产维度，账号规则要求至少两台资产
 	var burst []uuid.UUID
 	for i := range 5 {
 		burst = append(burst, feed(0, 3600+i, "deploy", group))
@@ -55,13 +55,13 @@ func TestTemporalBacktestReplay(t *testing.T) {
 
 	account := b.stats["temporal:linux-account-auth-burst"]
 	asset := b.stats["temporal:linux-auth-burst"]
-	if account.hits != 2 || account.entities["account:admin"] != 1 || account.entities["account:deploy"] != 1 || account.groupBy != temporal.GroupByAccount {
+	if account.hits != 1 || account.entities["account:admin"] != 1 || account.entities["account:deploy"] != 0 || account.groupBy != temporal.GroupByAccount {
 		t.Fatalf("账号维度回测错误: %+v", account)
 	}
 	if asset.hits != 1 || asset.entities["web-1"] != 1 || asset.groupBy != temporal.GroupByAsset {
 		t.Fatalf("资产维度回测错误: %+v", asset)
 	}
-	if len(account.samples) != 2 || !slices.Equal(account.samples[0], spread) || !slices.Equal(asset.samples[0], burst) {
+	if len(account.samples) != 1 || !slices.Equal(account.samples[0], spread) || !slices.Equal(asset.samples[0], burst) {
 		t.Fatalf("样例证据错误: %v %v", account.samples, asset.samples)
 	}
 	if b.skipped["no_account"] != 1 || b.skipped["unscoped"] != 1 || b.candidates != 12 {

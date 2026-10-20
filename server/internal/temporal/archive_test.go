@@ -105,7 +105,7 @@ func TestViewArchiveMatchesLoadedRevision(t *testing.T) {
 				t.Fatalf("%s 缺少基础规则 %s 原文", r.ID, ref)
 			}
 		}
-		if r.ID == "temporal:linux-account-auth-burst" && (r.GroupBy != GroupByAccount || r.WindowSeconds != 600 || r.Threshold != 5) {
+		if r.ID == "temporal:linux-account-auth-burst" && (r.GroupBy != GroupByAccount || r.WindowSeconds != 600 || r.Threshold != 5 || r.MinAssets != 2) {
 			t.Fatalf("账号规则元数据错误: %+v", r)
 		}
 	}

@@ -89,6 +89,7 @@ type ArchivedRule struct {
 	Severity      int16             `json:"severity"`
 	WindowSeconds int               `json:"windowSeconds"`
 	Threshold     int               `json:"threshold,omitempty"`
+	MinAssets     int               `json:"minAssets"`
 	References    []string          `json:"references"`
 	Source        string            `json:"source"`
 	Base          map[string]string `json:"base"`
@@ -128,7 +129,7 @@ func ViewArchive(data []byte, revision string) ([]ArchivedRule, error) {
 			base[ref] = doc.Base[ref]
 		}
 		rules = append(rules, ArchivedRule{ID: rule.id, Title: rule.title, Author: rule.author, Kind: rule.kind, GroupBy: rule.groupBy,
-			Severity: rule.severity, WindowSeconds: int(rule.window / time.Second), Threshold: rule.threshold,
+			Severity: rule.severity, WindowSeconds: int(rule.window / time.Second), Threshold: rule.threshold, MinAssets: rule.minAssets,
 			References: append([]string(nil), rule.references...), Source: source, Base: base})
 	}
 	sort.Slice(rules, func(i, j int) bool { return rules[i].ID < rules[j].ID })

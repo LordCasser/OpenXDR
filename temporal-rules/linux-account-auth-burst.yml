@@ -6,4 +6,5 @@ group_by: account
 within: 10m
 rules: [9c4e6b2d-8f13-47a5-9e07-3d5a8c1f6b42]
 threshold: 5
+min_assets: 2
 level: high

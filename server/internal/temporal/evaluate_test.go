@@ -226,3 +226,88 @@ func TestSnapshotEvaluatesByDimension(t *testing.T) {
 		}
 	}
 }
+
+func TestMinAssetsConfiguration(t *testing.T) {
+	refs := map[string]bool{"a": true, "b": true}
+	base := "id: x\nkind: event_count\nwithin: 1m\nrules: [a]\nthreshold: 3\n"
+	for text, want := range map[string]int{
+		base:                         1,
+		base + "min_assets: 1\n":     1,
+		base + "group_by: account\n": 1,
+		base + "group_by: account\nmin_assets: 2\n": 2,
+		base + "group_by: account\nmin_assets: 3\n": 3,
+	} {
+		r, err := Compile([]byte(text), refs)
+		if err != nil || r.minAssets != want {
+			t.Fatalf("应接受 %q: %v", text, err)
+		}
+	}
+	for _, text := range []string{
+		base + "min_assets: 2\n",
+		base + "group_by: asset\nmin_assets: 2\n",
+		base + "group_by: account\nmin_assets: 0\n",
+		base + "group_by: account\nmin_assets: -1\n",
+		base + "group_by: account\nmin_assets: 101\n",
+		base + "group_by: account\nmin_assets: 4\n",
+		"id: x\nkind: event_count\nwithin: 1m\nrules: [a]\nthreshold: 200\ngroup_by: account\nmin_assets: 101\n",
+		"id: x\nkind: sequence\nwithin: 1m\nrules: [a,b]\ngroup_by: account\nmin_assets: 1\n",
+	} {
+		if _, err := Compile([]byte(text), refs); err == nil {
+			t.Fatalf("应拒绝: %q", text)
+		}
+	}
+}
+
+// 计数达到 threshold 且不同资产数达到 min_assets 的那一刻才出命中；与到达顺序无关。
+func TestMinAssetsCrossing(t *testing.T) {
+	r, err := Compile([]byte("id: x\nkind: event_count\nwithin: 10m\nrules: [a]\nthreshold: 3\ngroup_by: account\nmin_assets: 2\n"), map[string]bool{"a": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	on := func(n, seconds int, asset string) Event {
+		e := event(n, seconds, "a")
+		e.Asset = asset
+		return e
+	}
+	cases := []struct {
+		name     string
+		events   []Event
+		anchors  []int
+		evidence [][]int
+	}{
+		{"单资产不命中", []Event{on(1, 0, "h1"), on(2, 1, "h1"), on(3, 2, "h1"), on(4, 3, "h1")}, nil, nil},
+		{"两资产达到阈值", []Event{on(1, 0, "h1"), on(2, 1, "h2"), on(3, 2, "h1"), on(4, 3, "h2")}, []int{3}, [][]int{{1, 2, 3}}},
+		// 计数先到阈值，第二台资产出现的那一刻才越过；证据是窗口内全部计数事件
+		{"计数先到后补资产", []Event{on(1, 0, "h1"), on(2, 1, "h1"), on(3, 2, "h1"), on(4, 3, "h1"), on(5, 4, "h2"), on(6, 5, "h2")}, []int{5}, [][]int{{1, 2, 3, 4, 5}}},
+		// 迟到的第二台资产排在中间：命中落在它身上，之后的终点前序已满足不再重复
+		{"迟到资产使不同资产数达标", []Event{on(1, 0, "h1"), on(2, 1, "h1"), on(4, 3, "h1"), on(3, 2, "h2")}, []int{3}, [][]int{{1, 2, 3}}},
+		{"回落后再越过", []Event{on(1, 0, "h1"), on(2, 1, "h2"), on(3, 2, "h1"), on(4, 1000, "h1"), on(5, 1001, "h1"), on(6, 1002, "h2")}, []int{3, 6}, [][]int{{1, 2, 3}, {4, 5, 6}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			matches, err := r.Evaluate(tc.events)
+			if err != nil || len(matches) != len(tc.anchors) {
+				t.Fatalf("%+v %v", matches, err)
+			}
+			for i, m := range matches {
+				if m.Anchor != event(tc.anchors[i], 0).ID {
+					t.Fatalf("终点错误: %+v", m)
+				}
+				var want []uuid.UUID
+				for _, n := range tc.evidence[i] {
+					want = append(want, event(n, 0).ID)
+				}
+				if !reflect.DeepEqual(m.Evidence, want) {
+					t.Fatalf("证据错误: %v", m.Evidence)
+				}
+			}
+		})
+	}
+	if _, err := r.Evaluate([]Event{event(1, 0, "a")}); err == nil {
+		t.Fatal("min_assets 规则缺少资产必须拒绝")
+	}
+	conflict := on(1, 0, "h1")
+	if _, err := r.Evaluate([]Event{conflict, on(1, 0, "h2")}); err == nil {
+		t.Fatal("同一事件资产不同必须拒绝")
+	}
+}

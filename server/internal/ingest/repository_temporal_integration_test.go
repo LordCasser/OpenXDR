@@ -41,7 +41,9 @@ func TestRepositoryTemporalRulesPersistLateReplay(t *testing.T) {
 			var events []Envelope
 			if kind == "count" {
 				for i := 0; i < 5; i++ {
-					events = append(events, makeEvent(i, 3002, `{"activity_id":1,"status_id":2,"user":{"name":"operator"}}`))
+					e := makeEvent(i, 3002, `{"activity_id":1,"status_id":2,"user":{"name":"operator"}}`)
+					e.Username = "operator"
+					events = append(events, e)
 				}
 			} else if kind == "account" {
 				// 同组三台主机上同一账号的失败认证，单机都不到阈值
@@ -91,6 +93,12 @@ func TestRepositoryTemporalRulesPersistLateReplay(t *testing.T) {
 			var detections int
 			if err := db.QueryRow(`SELECT count(*) FROM temporal_detections WHERE rule_id=$1`, rule).Scan(&detections); err != nil || detections != 1 {
 				t.Fatalf("重复命中: %d %v", detections, err)
+			}
+			// 单机五次失败只是主机规则的事；账号规则要求至少两台资产，不重复告警
+			if kind == "count" {
+				if err := db.QueryRow(`SELECT count(*) FROM temporal_detections WHERE rule_id='temporal:linux-account-auth-burst'`).Scan(&detections); err != nil || detections != 0 {
+					t.Fatalf("单机失败触发了账号规则: %d %v", detections, err)
+				}
 			}
 		})
 	}

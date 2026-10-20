@@ -22,6 +22,7 @@ type Rule struct {
 	threshold  int
 	severity   int16
 	groupBy    string
+	minAssets  int
 }
 
 // 聚合实体维度：asset 按资产（默认），account 按同组规范化用户名跨资产累计。
@@ -40,6 +41,7 @@ type definition struct {
 	Rules     []string `yaml:"rules"`
 	Threshold int      `yaml:"threshold"`
 	GroupBy   string   `yaml:"group_by"`
+	MinAssets *int     `yaml:"min_assets"`
 }
 
 // Compile 使用 OpenXDR 的时序规则格式，不解释 Sigma 单事件 condition 中的聚合语法。
@@ -86,6 +88,22 @@ func Compile(data []byte, references map[string]bool) (*Rule, error) {
 	default:
 		return nil, fmt.Errorf("不支持的时序规则类型 %q", d.Kind)
 	}
+	// min_assets：计数窗口内参与计数的事件须来自至少 N 台不同资产。只有账号维度能跨资产，
+	// 资产维度写大于 1 的值永远无法满足，按配置错误拒绝而不是静默不出命中。
+	minAssets := 1
+	if d.MinAssets != nil {
+		minAssets = *d.MinAssets
+		switch {
+		case d.Kind != "event_count":
+			return nil, fmt.Errorf("min_assets 只能用于 event_count")
+		case minAssets < 1 || minAssets > 100:
+			return nil, fmt.Errorf("min_assets 必须为 1 至 100")
+		case minAssets > 1 && d.GroupBy != GroupByAccount:
+			return nil, fmt.Errorf("min_assets 大于 1 时 group_by 必须为 account")
+		case minAssets > d.Threshold:
+			return nil, fmt.Errorf("min_assets 不能大于 threshold")
+		}
+	}
 	for _, id := range d.Rules {
 		if !references[id] {
 			return nil, fmt.Errorf("未知基础规则 %q", id)
@@ -94,5 +112,5 @@ func Compile(data []byte, references map[string]bool) (*Rule, error) {
 	if strings.TrimSpace(d.Title) == "" {
 		d.Title = d.ID
 	}
-	return &Rule{title: d.Title, author: strings.TrimSpace(d.Author), severity: severity, id: d.ID, kind: d.Kind, window: window, references: append([]string(nil), d.Rules...), threshold: d.Threshold, groupBy: d.GroupBy}, nil
+	return &Rule{title: d.Title, author: strings.TrimSpace(d.Author), severity: severity, id: d.ID, kind: d.Kind, window: window, references: append([]string(nil), d.Rules...), threshold: d.Threshold, groupBy: d.GroupBy, minAssets: minAssets}, nil
 }

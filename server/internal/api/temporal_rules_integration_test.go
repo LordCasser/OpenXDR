@@ -121,7 +121,7 @@ func TestTemporalRuleSnapshotHistory(t *testing.T) {
 		t.Fatalf("按版本取规则错误: %+v", detail)
 	}
 	got := detail.Rules[0]
-	if got.ID != rule || got.GroupBy != "account" || got.Threshold != 5 || !strings.Contains(got.Source, "group_by: account") || !strings.Contains(got.Base[got.References[0]], "status_id: 2") {
+	if got.ID != rule || got.GroupBy != "account" || got.Threshold != 5 || got.MinAssets != 2 || !strings.Contains(got.Source, "group_by: account") || !strings.Contains(got.Base[got.References[0]], "status_id: 2") {
 		t.Fatalf("规则原文或引用的基础规则缺失: %+v", got)
 	}
 	if err := json.Unmarshal(get(admin, "/api/temporal-rule-snapshots/"+snapshot.Revision(), 200), &detail); err != nil || len(detail.Rules) != 3 {

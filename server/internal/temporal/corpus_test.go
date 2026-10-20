@@ -86,7 +86,7 @@ func TestRepositoryTemporalCorpus(t *testing.T) {
 					if entity == "" || !current.Relevant(groupBy, refs) {
 						continue
 					}
-					events[groupBy] = append(events[groupBy], Event{ID: id(input.ID), Time: at, Scope: Scope{Group: id(input.Group), Entity: entity}, Rules: refs})
+					events[groupBy] = append(events[groupBy], Event{ID: id(input.ID), Time: at, Scope: Scope{Group: id(input.Group), Entity: entity}, Asset: input.Asset, Rules: refs})
 					found, err := current.Evaluate(groupBy, events[groupBy])
 					if err != nil {
 						t.Fatal(err)

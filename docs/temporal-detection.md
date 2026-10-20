@@ -32,12 +32,17 @@ rules: [discovery-rule-id, persistence-rule-id]
 id: account-auth-failure-burst
 kind: event_count
 group_by: account
+min_assets: 2
 within: 10m
 rules: [authentication-failure-rule-id]
 threshold: 5
 ```
 
-加载拒绝未知字段、未知 `group_by` 取值、多 YAML 文档、不存在的基础规则、与基础规则冲突的 ID 和不支持的类型。
+`event_count` 可选 `min_assets`（1–100，默认 1）：窗口内参与计数的事件须来自至少 N 台不同资产。
+它只对 `group_by: account` 有意义；`group_by: asset` 时写大于 1 的值、用于 `sequence`、超出范围或大于 `threshold` 都拒绝加载。
+账号规则设 `min_assets: 2` 可避免单机多次失败同时触发主机规则与账号规则的重复告警。
+
+加载拒绝未知字段、未知 `group_by` 取值、非法 `min_assets`、多 YAML 文档、不存在的基础规则、与基础规则冲突的 ID 和不支持的类型。
 窗口限定为 1 秒至 24 小时；计数阈值为 2 至 10000；序列为 2 至 8 步，不允许 threshold。
 `level` 支持 informational、low、medium、high、critical，省略时默认 medium；未知值拒绝加载，等级跟随同一快照传入告警。
 格式是 OpenXDR 自有时序规则契约，不宣称兼容 Sigma correlation 标准。
@@ -53,8 +58,12 @@ threshold: 5
   也不从原文或模型输出推断账号。`username` 为空的事件不参与账号规则，计入 `no_account` 缺口；资产维度规则照常。
 - 窗口包含两端，按 `[终点时间−within, 终点时间]` 取候选。
 - 计数是不同事件的数量。同时间戳的不同 ID 仍可计数；按时间、UUID 排序确定终点。
-  只在窗口内计数恰好达到阈值的终点产生命中（越过阈值那一刻）：持续爆破时窗口一直在阈值之上，不逐条出命中，
-  计数回落到阈值以下再越过才有下一次。否则每个终点都绑定告警、证据事件永不过期，写库次数随窗口线性增长。
+  只在条件越过的那一刻产生命中：条件是窗口内计数达到 `threshold` 且不同资产数达到 `min_assets`，
+  终点之前同窗口的事件已满足条件就不是越过的那一刻。持续爆破时窗口一直满足条件，不逐条出命中，
+  回落到不满足再越过才有下一次。否则每个终点都绑定告警、证据事件永不过期，写库次数随窗口线性增长。
+  `min_assets` 为 1 时即窗口内计数恰好达到阈值的终点。设了 `min_assets` 时，可能计数早已达到阈值、
+  第二台资产的事件出现时才越过，此时证据是窗口内全部计数事件（可能多于 threshold 条）。
+  迟到事件补上第二台资产时，命中落在它按事件时间越过的终点上，之后的终点前序已满足，不再重复。
   新事件只重新求值它之后（含同一时刻）的终点；更早的终点已在当时求值落库（`temporal/evaluate.go`、`postgres.go`）。
 - 序列每一步必须使用不同且严格晚于前一步的事件。同时间戳不证明先后，不能跨步骤使用。
   同一个基础规则可重复出现在步骤中，但必须由不同时间的事件分别满足。
@@ -110,7 +119,7 @@ threshold: 5
 ### 历史规则查询
 
 `GET /api/temporal-rule-snapshots` 列出最近使用过的版本，`GET /api/temporal-rule-snapshots/{revision}?rule=<ID>`
-按版本哈希取当时的时序规则原文、元数据（类型、`group_by`、窗口、阈值、等级）及其引用的基础规则原文，参数见 [REST API](api.md#事件与告警)。
+按版本哈希取当时的时序规则原文、元数据（类型、`group_by`、窗口、阈值、`min_assets`、等级）及其引用的基础规则原文，参数见 [REST API](api.md#事件与告警)。
 只有全局 admin / analyst 可读，角色每次从库里取，降权立即生效；viewer 返回 403。
 
 告警本身不存版本：时序告警经 `temporal_detections.alert_id` 关联命中记录，命中记录带版本（去重指纹含版本，
@@ -164,7 +173,7 @@ threshold: 5
 
 [`temporal-rules/`](../temporal-rules/README.md) 提供同主机认证失败计数、同账号跨主机认证失败计数、
 下载执行后敏感文件变更序列，需显式配置后启用。规则仅作时间关联，不推断跨账号身份或进程因果链。
-[`validation/temporal/`](../validation/temporal/README.md) 包含 27 个原文回放用例，并配套三条规则的
+[`validation/temporal/`](../validation/temporal/README.md) 包含 30 个原文回放用例，并配套三条规则的
 真实 PostgreSQL 迟到/重投/处理器恢复测试；不声称完成实机或生产误报率验收。
 
 ## 回测
