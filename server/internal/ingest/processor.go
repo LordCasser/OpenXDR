@@ -146,7 +146,7 @@ ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 	}
 	var observation temporal.Observation
 	if snapshot != nil {
-		ids := snapshot.CandidateRules(baseHits)
+		ids := snapshot.CandidateRules(e.ClassUID, e.AssetOS, raw, baseHits)
 		if len(ids) > 0 {
 			observation, err = snapshot.Observe(ctx, tx, e.ID, ids)
 			if err != nil {

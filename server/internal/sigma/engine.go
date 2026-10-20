@@ -160,6 +160,9 @@ type Rule struct {
 	Severity int16
 	ClassUID int    // 0 = 不限
 	Product  string // logsource product，空表示不限操作系统
+	// Signal 信号规则（openxdr_signal: true）：只作时序规则的输入，命中不单独产生告警。
+	// Evaluate 不返回它，只有 EvaluateSignals 返回，未启用时序检测时完全不生效。
+	Signal bool
 	// ATT&CK 标签，来自 Sigma tags。不影响匹配，用于覆盖矩阵
 	Tactics    []string
 	Techniques []string
@@ -501,15 +504,27 @@ func classify(err error) string {
 	return msg
 }
 
-// Evaluate 匹配一条事件。os 是事件所属资产的操作系统（未知时传空串），
+// Evaluate 匹配一条事件，只返回会产生告警的规则，信号规则不在其中。os 是事件所属资产的操作系统（未知时传空串），
 // 用于把 Windows 规则挡在 Linux 事件之外——反之亦然。
 // 可并发调用：除按事件分配的 memo 外不持有可变状态。
 func (e *Engine) Evaluate(classUID int, os string, raw map[string]any) []*Rule {
+	return e.evaluate(classUID, os, raw, false)
+}
+
+// EvaluateSignals 只匹配信号规则，供时序候选使用；命中不得用来产生告警。
+func (e *Engine) EvaluateSignals(classUID int, os string, raw map[string]any) []*Rule {
+	return e.evaluate(classUID, os, raw, true)
+}
+
+func (e *Engine) evaluate(classUID int, os string, raw map[string]any, signal bool) []*Rule {
 	s := e.load()
 	ctx := evalCtx{raw: raw, memo: make([]int8, s.maxSels)}
 	var hits []*Rule
 	match := func(rules []*Rule) {
 		for _, r := range rules {
+			if r.Signal != signal {
+				continue
+			}
 			// 资产 OS 未知时不做限制，宁可多看一眼也别漏；已知就必须对得上
 			if r.Product != "" && os != "" && r.Product != os {
 				continue
@@ -652,6 +667,17 @@ func Compile(data []byte) (*Rule, error) {
 		if sev, ok := levelMap[strings.ToLower(level)]; ok {
 			rule.Severity = sev
 		}
+	}
+	// openxdr_signal 是 OpenXDR 自有扩展字段（Sigma 允许自定义顶层字段，SigmaHQ 规则不会带）。
+	// 只接受 true，且级别必须是 informational：拿不准的写法拒绝加载，不猜它该不该告警
+	if v, ok := doc["openxdr_signal"]; ok {
+		if v != true {
+			return nil, fmt.Errorf("openxdr_signal 只能写 true")
+		}
+		if level, _ := doc["level"].(string); level != "informational" {
+			return nil, fmt.Errorf("信号规则的 level 必须为 informational")
+		}
+		rule.Signal = true
 	}
 	rule.Tactics, rule.Techniques = parseAttackTags(doc["tags"])
 	ls, _ := doc["logsource"].(map[string]any)

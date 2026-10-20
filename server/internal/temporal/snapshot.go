@@ -202,10 +202,12 @@ func (s *Store) Reload(baseDir, temporalDir string) error {
 	return nil
 }
 
-// CandidateRules 只保留时序规则实际引用的命中；其他基础告警照常处理。
-func (s *Snapshot) CandidateRules(hits []*sigma.Rule) []string {
+// CandidateRules 返回本事件要写入时序候选的基础规则 ID：hits（EvaluateBase 的告警规则命中）与信号规则命中中，
+// 被时序规则实际引用的那些。其他基础告警照常处理；信号规则只在这里匹配、不产生告警，
+// 没被任何时序规则引用的信号不落候选，候选量只随用到的信号增长。
+func (s *Snapshot) CandidateRules(class int, osName string, raw map[string]any, hits []*sigma.Rule) []string {
 	var ids []string
-	for _, hit := range hits {
+	for _, hit := range slices.Concat(hits, s.base.EvaluateSignals(class, osName, raw)) {
 		if s.referenced[hit.ID] {
 			ids = append(ids, hit.ID)
 		}

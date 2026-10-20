@@ -18,6 +18,8 @@ type ruleRow struct {
 	Severity      int16    `json:"severity"`
 	ClassUID      int      `json:"classUid"`
 	Product       string   `json:"product"`
+	// Signal 信号规则：只作时序规则输入，命中不单独告警
+	Signal bool `json:"signal,omitempty"`
 	// 该类别是否有采集源在供数：false 表示规则加载了但撞不到事件
 	Ingested   bool     `json:"ingested"`
 	Source     string   `json:"source"`
@@ -50,7 +52,7 @@ func mapRules(api *http.ServeMux, rules sigma.Catalog) {
 			out[i] = ruleRow{
 				Kind: rule.Kind, WindowSeconds: rule.WindowSeconds, Threshold: rule.Threshold, References: rule.References,
 				ID: rule.ID, Title: rule.Title, Author: rule.Author, Severity: rule.Severity,
-				ClassUID: rule.ClassUID, Product: rule.Product,
+				ClassUID: rule.ClassUID, Product: rule.Product, Signal: rule.Signal,
 				Ingested: ingested, Source: source,
 				Tactics: rule.Tactics, Techniques: rule.Techniques,
 			}

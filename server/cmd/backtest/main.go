@@ -157,7 +157,8 @@ WHERE e.ts >= $1 AND e.ts < $2`+filter, from, to)
 			continue
 		}
 		sigma.WithActor(doc, username)
-		for _, r := range b.engine.Evaluate(class, osName, doc) {
+		// 信号规则线上不出告警，但回测要看它的量：被时序规则引用后就是候选量
+		for _, r := range slices.Concat(b.engine.Evaluate(class, osName, doc), b.engine.EvaluateSignals(class, osName, doc)) {
 			hits = append(hits, hit{r.ID, host, summary(doc)})
 		}
 	}
@@ -223,8 +224,12 @@ func report(stats map[string]*stat, events, commanded, days int, took time.Durat
 			hosts = append(hosts, fmt.Sprintf("%s(%d)", cmp.Or(h, "?"), n))
 		}
 		slices.Sort(hosts)
+		title := s.rule.Title
+		if s.rule.Signal {
+			title = "[信号，不告警] " + title
+		}
 		fmt.Printf("| %.1f | %s | %d | %s `%s` | %s |\n", float64(s.hits)/float64(days), strings.Join(hosts, " "),
-			s.rule.Severity, s.rule.Title, s.rule.ID, strings.Join(s.samples, "<br>"))
+			s.rule.Severity, title, s.rule.ID, strings.Join(s.samples, "<br>"))
 	}
 	fmt.Printf("\n%d 条规则在回测期内没有命中\n", silent)
 }

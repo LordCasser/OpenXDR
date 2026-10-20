@@ -41,6 +41,10 @@ func mapAttack(api *http.ServeMux, rules sigma.Catalog) {
 		out := attackCoverage{}
 
 		for _, rule := range rules.Rules() {
+			// 信号规则不单独告警，不算检测覆盖
+			if rule.Signal {
+				continue
+			}
 			_, ingested := sigma.IngestedClass(rule.ClassUID)
 			if rule.ClassUID == 0 {
 				ingested = true

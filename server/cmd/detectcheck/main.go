@@ -36,6 +36,7 @@ type corpusFile struct {
 		OS        string         `yaml:"os"`
 		Event     map[string]any `yaml:"event"`
 		// expect: detected（默认）| undetected（已知缺口，显式记录）
+		// | signal（不出告警，但有标了该技术的信号规则命中，供时序规则关联，见 temporal-rules/README.md）
 		Expect string `yaml:"expect"`
 	} `yaml:"cases"`
 }
@@ -47,6 +48,7 @@ type result struct {
 	source    string
 	expect    string
 	detected  bool
+	signal    bool // 没有告警规则命中、但标了该技术的信号规则命中
 	by        string
 }
 
@@ -100,11 +102,17 @@ func main() {
 				// 用例自带技术时组名不适用了，别贴错标签
 				technique, group = c.Technique, ""
 			}
-			by := matchedBy(engine, technique, c.Class, c.OS, c.Event)
-			results = append(results, result{
-				technique: technique, group: group, caseName: c.Name,
-				source: c.Source, expect: expect, detected: by != "", by: by,
-			})
+			if expect != "detected" && expect != "undetected" && expect != "signal" {
+				fmt.Fprintf(os.Stderr, "%s / %s: 未知 expect %q\n", path, c.Name, expect)
+				os.Exit(2)
+			}
+			r := result{technique: technique, group: group, caseName: c.Name, source: c.Source, expect: expect}
+			if r.by = matchedBy(engine.Evaluate(c.Class, c.OS, c.Event), technique); r.by != "" {
+				r.detected = true
+			} else if r.by = matchedBy(engine.EvaluateSignals(c.Class, c.OS, c.Event), technique); r.by != "" {
+				r.signal = true
+			}
+			results = append(results, r)
 		}
 	}
 
@@ -116,8 +124,8 @@ func main() {
 
 // matchedBy 返回命中的规则标题，未命中返回空。
 // 只认标了目标技术的规则——父技术与子技术互认（T1059 ↔ T1059.004）。
-func matchedBy(engine *sigma.Engine, technique string, class int, os string, event map[string]any) string {
-	for _, rule := range engine.Evaluate(class, os, event) {
+func matchedBy(hits []*sigma.Rule, technique string) string {
+	for _, rule := range hits {
 		for _, tech := range rule.Techniques {
 			if techniqueMatch(tech, technique) {
 				return rule.Title
@@ -149,44 +157,59 @@ func printReport(results []result) {
 		group := byTech[tech]
 		fmt.Printf("\n%s %s\n", tech, group[0].group)
 		for _, r := range group {
-			switch {
-			case r.detected && r.expect == "detected":
+			switch got := r.outcome(); {
+			case got == r.expect && got == "detected":
 				fmt.Printf("  ✓ %-46s → %s\n", trim(r.caseName), r.by)
-			case !r.detected && r.expect == "undetected":
+			case got == r.expect && got == "signal":
+				fmt.Printf("  ◇ %-46s （仅信号，供时序关联）→ %s\n", trim(r.caseName), r.by)
+			case got == r.expect:
 				fmt.Printf("  ○ %-46s （已知缺口）\n", trim(r.caseName))
-			case !r.detected:
-				fmt.Printf("  ✗ %-46s 无规则命中\n", trim(r.caseName))
+			case got == "undetected":
+				fmt.Printf("  ✗ %-46s 无规则命中（预期 %s）\n", trim(r.caseName), r.expect)
 			default:
-				fmt.Printf("  ! %-46s 标为已知缺口但实际命中 %s\n", trim(r.caseName), r.by)
+				fmt.Printf("  ! %-46s 预期 %s 但实际 %s：%s\n", trim(r.caseName), r.expect, got, r.by)
 			}
 		}
 	}
 
-	var detected, gaps, mismatch int
+	var detected, signals, gaps, mismatch int
 	techCovered := map[string]bool{}
 	for _, r := range results {
-		switch {
-		case r.detected && r.expect == "detected":
+		switch got := r.outcome(); {
+		case got != r.expect:
+			mismatch++
+		case got == "detected":
 			detected++
 			techCovered[r.technique] = true
-		case !r.detected && r.expect == "undetected":
-			gaps++
+		case got == "signal":
+			signals++
 		default:
-			mismatch++
+			gaps++
 		}
 	}
-	fmt.Printf("\n合计 %d 个用例：%d 命中，%d 已知缺口，%d 不符合预期\n",
-		len(results), detected, gaps, mismatch)
+	fmt.Printf("\n合计 %d 个用例：%d 命中，%d 仅信号，%d 已知缺口，%d 不符合预期\n",
+		len(results), detected, signals, gaps, mismatch)
 	fmt.Printf("覆盖技术数：%d / %d\n", len(techCovered), len(byTech))
 	if mismatch > 0 {
-		fmt.Println("\n不符合预期的用例要么补规则，要么在语料里显式标 expect: undetected —— 别让它悬着。")
+		fmt.Println("\n不符合预期的用例要么补规则，要么在语料里显式标 expect: undetected / signal —— 别让它悬着。")
 	}
+}
+
+// outcome 实际结果：detected（告警规则命中）、signal（只有信号规则命中）、undetected
+func (r result) outcome() string {
+	switch {
+	case r.detected:
+		return "detected"
+	case r.signal:
+		return "signal"
+	}
+	return "undetected"
 }
 
 func countMismatch(results []result) int {
 	n := 0
 	for _, r := range results {
-		if (r.detected && r.expect == "undetected") || (!r.detected && r.expect == "detected") {
+		if r.outcome() != r.expect {
 			n++
 		}
 	}

@@ -52,12 +52,21 @@ type temporalBacktest struct {
 	stats      map[string]*temporalStat
 	skipped    map[string]int
 	candidates int
-	last       candidate
+	// byRule 每条被引用的基础规则（含信号规则）贡献的候选数；peak 每个维度单个实体窗口里最多同时有多少候选
+	byRule map[string]int
+	peak   map[string]peakWindow
+	last   candidate
+}
+
+type peakWindow struct {
+	size  int
+	label string
+	at    time.Time
 }
 
 func newTemporalBacktest(snapshot *temporal.Snapshot, rules []*sigma.Rule, samples int) *temporalBacktest {
 	b := &temporalBacktest{snapshot: snapshot, samples: samples, windows: map[windowKey][]temporal.Event{},
-		stats: map[string]*temporalStat{}, skipped: map[string]int{}}
+		stats: map[string]*temporalStat{}, skipped: map[string]int{}, byRule: map[string]int{}, peak: map[string]peakWindow{}}
 	for _, r := range rules {
 		if r.Kind != "" {
 			b.stats[r.ID] = &temporalStat{entities: map[string]int{}}
@@ -69,7 +78,7 @@ func newTemporalBacktest(snapshot *temporal.Snapshot, rules []*sigma.Rule, sampl
 // candidateOf 只做基础匹配，不改回放状态：分段读取失败重试时不会重复计数。
 func (b *temporalBacktest) candidateOf(class int, osName string, doc map[string]any, username string) []string {
 	sigma.WithActor(doc, username)
-	return b.snapshot.CandidateRules(b.snapshot.EvaluateBase(class, osName, doc))
+	return b.snapshot.CandidateRules(class, osName, doc, b.snapshot.EvaluateBase(class, osName, doc))
 }
 
 // apply 按排序依次喂入候选；顺序倒退说明读取有误，直接报错而不是给出错误的命中数。
@@ -79,6 +88,9 @@ func (b *temporalBacktest) apply(c candidate) error {
 	}
 	b.last = c
 	b.candidates++
+	for _, id := range c.rules {
+		b.byRule[id]++
+	}
 	if !c.asset.Valid || !c.group.Valid || c.group.UUID == uuid.Nil {
 		b.skipped["unscoped"]++
 		return nil
@@ -103,6 +115,9 @@ func (b *temporalBacktest) apply(c candidate) error {
 		}
 		window = window[start:]
 		b.windows[key] = window
+		if len(window) > b.peak[d.groupBy].size {
+			b.peak[d.groupBy] = peakWindow{len(window), d.label, c.ts}
+		}
 		if len(window) > 10000 {
 			b.skipped["candidate_limit"]++
 			continue
@@ -310,4 +325,38 @@ func (b *temporalBacktest) report(rules []*sigma.Rule, from, to time.Time, event
 		reasons = append(reasons, "无")
 	}
 	fmt.Printf("\n未参与时序求值的候选（覆盖缺口）：%s\n", strings.Join(reasons, "，"))
+	b.reportCandidates(rules, to.Sub(from))
+}
+
+// reportCandidates 报告候选量：每条被引用的基础规则贡献多少候选（信号规则单独标出），以及单个实体窗口的峰值。
+// 线上 Observe 回查 [t − 最大窗口, t + 最大窗口]，最坏是这里峰值（只含 t 之前一个最大窗口）的约两倍，对照 10000 的上限看余量。
+func (b *temporalBacktest) reportCandidates(rules []*sigma.Rule, span time.Duration) {
+	days := span.Hours() / 24
+	fmt.Println("\n| 候选 | 每天 | 类型 | 基础规则 |")
+	fmt.Println("|---:|---:|---|---|")
+	var ids []string
+	for id := range b.byRule {
+		ids = append(ids, id)
+	}
+	slices.SortFunc(ids, func(x, y string) int { return cmp.Or(b.byRule[y]-b.byRule[x], strings.Compare(x, y)) })
+	byID := map[string]*sigma.Rule{}
+	for _, r := range rules {
+		byID[r.ID] = r
+	}
+	for _, id := range ids {
+		kind, title := "告警", id
+		if r := byID[id]; r != nil {
+			title = r.Title + " `" + id + "`"
+			if r.Signal {
+				kind = "信号"
+			}
+		}
+		fmt.Printf("| %d | %.1f | %s | %s |\n", b.byRule[id], float64(b.byRule[id])/days, kind, strings.ReplaceAll(title, "|", "\\|"))
+	}
+	for _, groupBy := range []string{temporal.GroupByAsset, temporal.GroupByAccount} {
+		if p, ok := b.peak[groupBy]; ok {
+			fmt.Printf("\n%s维度单实体窗口（最大窗口 %s）候选峰值 %d 条：%s，%s\n", map[string]string{temporal.GroupByAsset: "资产", temporal.GroupByAccount: "账号"}[groupBy],
+				b.snapshot.MaxWindow(), p.size, p.label, p.at.Format(time.RFC3339))
+		}
+	}
 }

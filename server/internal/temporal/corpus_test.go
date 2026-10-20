@@ -74,7 +74,7 @@ func TestRepositoryTemporalCorpus(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				refs := current.CandidateRules(current.EvaluateBase(input.ClassUID, input.OS, input.Raw))
+				refs := current.CandidateRules(input.ClassUID, input.OS, input.Raw, current.EvaluateBase(input.ClassUID, input.OS, input.Raw))
 				if len(refs) == 0 {
 					continue
 				}
