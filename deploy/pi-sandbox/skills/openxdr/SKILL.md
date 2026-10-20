@@ -95,6 +95,13 @@ EOF
     退出事件（`raw->>'activity_id'='2'`）有 `raw->'process'->>'exit_code'`、`raw->>'duration_ms'`
   - 网络（4001）：`raw->'dst_endpoint'->>'ip'`、`->>'port'`、`->>'hostname'`（agent 解析过的域名）、`raw->'process'->>'name'`；
     `raw->'connection_info'->>'direction'`（outbound / inbound，入站时 src 是对端、进程是本机服务）、`->>'protocol_name'`（tcp / udp）
+  - 流量探针会话（`source='sensor'`，4001 / 4003）：没有进程字段，src 恒为发起方。源地址不是纳管主机时会话归到目的端主机上
+    （公网打进反代网关的），`asset_id` 是被访问的那台。`raw->'tls'->>'sni'`、`->>'ja3_hash'`（客户端指纹）、`->>'ja3s_hash'`、
+    `raw->'tls'->'cert'`（仅 TLS ≤1.2）、`raw->'http_request'->>'hostname'` / `->'url'->>'path'` / `->>'user_agent'`（明文 HTTP）、
+    `raw->'traffic'->>'bytes_out'` / `->>'bytes_in'`、`raw->>'duration_ms'`。
+    `raw->'tls'->>'handshake_only' = 'true'` 表示客户端握完手（或只发了 ClientHello）就断开、没发任何请求：扫描、证书探测、存活检查的典型形态，
+    单独出现不告警。研判网关上的事件时用它分清对端是「只来摸过」还是「真发了请求」，同一 ja3_hash 在大量来源上只握手是批量扫描；
+    没有这个字段不等于发了请求（跟丢了或会话中途才看到时不标），要确认请求内容还得看反代日志
   - DNS（4003）：`raw->'query'->>'hostname'`、`->>'type'`、`->>'rcode_id'`（3 是 NXDOMAIN，没有表示无应答）、`raw->'answers'`、`raw->'process'->>'name'`
   - 平台指令：`alerts.command_id` 不为空、或事件带 `raw->'platform_command'->>'uid'` 的，是平台下发的指令（包括你自己执行的 `xdr exec`）
     拉起的进程触发的——来源已知，统计威胁时排除（`AND command_id IS NULL`），不要把自己的巡检命令当成可疑活动报告

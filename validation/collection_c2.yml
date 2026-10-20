@@ -86,3 +86,26 @@ cases:
           subject: "example.com"
           issuer: "DigiCert TLS RSA SHA256 2020 CA1"
           self_signed: false
+
+  # 只握手不发请求是公网入口的背景噪声（扫描器、证书监控、存活探测），单独告警只会按扫描源 IP
+  # 刷出成片低危告警。这个事实写进事件体（tls.handshake_only）留给研判：调查网关上的事件时
+  # 用它区分「只来摸过」与「真发了请求」。这里锁住不告警的决定，哪天有规则开始命中它就是回归
+  - name: 公网扫描器对网关只握手不发请求（记录事实、不单独告警）
+    technique: T1595
+    source: sensor 本地回放（netns 里 openssl s_client 对网关只握手，抓包得到的事件体）
+    class: 4001
+    expect: undetected
+    event:
+      src_endpoint:
+        ip: "198.51.100.7"
+        port: 55282
+      dst_endpoint:
+        ip: "203.0.113.10"
+        port: 443
+      connection_info:
+        protocol_num: 6
+      tls:
+        sni: "gw.example"
+        ja3_hash: "f146948b4a599d4d7ddf071b74696983"
+        ja3s_hash: "15af977ce25de452b96affa2addb1036"
+        handshake_only: true
