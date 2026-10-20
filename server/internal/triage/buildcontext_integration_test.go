@@ -50,6 +50,12 @@ func TestBuildContext(t *testing.T) {
 		SetEventID(evt2.ID).SetIncidentID(inc.ID).Save(ctx); err != nil {
 		t.Fatal(err)
 	}
+	// 复发归并进来的同类告警：汇总里要能看到重复次数
+	if _, err := client.Alert.Create().
+		SetTs(now.Add(time.Hour)).SetRuleID("r-quiet").SetSeverity(2).
+		SetEventID(evt2.ID).SetIncidentID(inc.ID).Save(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	e := &Engine{DB: client}
 	out, err := e.buildContext(ctx, inc)
@@ -62,6 +68,7 @@ func TestBuildContext(t *testing.T) {
 		"r-loud", "r-quiet", "severity=4", "count=3",
 		"parent.exe", // 未截断事件原文
 		"…",          // 超长事件截断标记
+		"- r-quiet：2 条告警（去重前累计命中 2 次）\n- r-loud：1 条告警（去重前累计命中 3 次）", // 按规则汇总，多的在前
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("上下文缺少 %q，实际:\n%s", want, out)

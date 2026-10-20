@@ -3,6 +3,7 @@
 package triage
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -196,6 +197,9 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 	}
 	fmt.Fprintf(&sb, "# 事件: %s\n创建时间: %s\n", title, inc.CreatedAt.Format(time.RFC3339))
 	fmt.Fprintf(&sb, "## 实体关系图\n%s\n", inc.Graph)
+	if err := e.appendRuleTally(ctx, &sb, inc.ID); err != nil {
+		return "", err
+	}
 	fmt.Fprintf(&sb, "## 告警明细（%d 条，按时间排序）\n", len(alerts))
 	for _, a := range alerts {
 		raw := "{}"
@@ -221,6 +225,37 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 	e.appendCaseHistory(ctx, &sb, inc, alerts)
 	e.appendMemories(ctx, &sb, alerts)
 	return sb.String(), nil
+}
+
+// appendRuleTally 按规则汇总 incident 的全部告警：复发归并会把同类告警并进同一个 incident，
+// 明细只列前 50 条，模型要看到「同一规则重复了 N 次」而不是只看第一条。
+func (e *Engine) appendRuleTally(ctx context.Context, sb *strings.Builder, incID uuid.UUID) error {
+	type ruleTally struct {
+		RuleID string `json:"rule_id"`
+		Alerts int    `json:"count"`
+		Hits   int    `json:"sum"`
+	}
+	var tally []ruleTally
+	if err := e.DB.Alert.Query().Where(alert.IncidentIDEQ(incID)).
+		GroupBy(alert.FieldRuleID).
+		Aggregate(ent.Count(), ent.Sum(alert.FieldCount)).
+		Scan(ctx, &tally); err != nil {
+		return err
+	}
+	slices.SortFunc(tally, func(a, b ruleTally) int {
+		return cmp.Or(b.Alerts-a.Alerts, strings.Compare(a.RuleID, b.RuleID))
+	})
+	sb.WriteString("## 告警汇总（按规则统计同类重复，含明细未列出的）\n")
+	for _, t := range tally {
+		rule := t.RuleID
+		if e.Rules != nil {
+			if title := e.Rules.TitleOf(t.RuleID); title != "" {
+				rule = title
+			}
+		}
+		fmt.Fprintf(sb, "- %s：%d 条告警（去重前累计命中 %d 次）\n", rule, t.Alerts, t.Hits)
+	}
+	return nil
 }
 
 // appendMemories 事件所在组积累的长期记忆（人工在前）：环境里什么是正常的，研判时作背景
