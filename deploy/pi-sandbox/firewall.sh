@@ -1,5 +1,5 @@
 #!/bin/sh
-# 沙箱主机防火墙：容器出口只放行模型端点，容器不能访问宿主；sandboxd 端口只对平台节点开放。
+# 沙箱主机防火墙：容器出口只放行模型端点（其余立刻拒绝），容器不能访问宿主；sandboxd 端口只对平台节点开放。
 # 规则放在自有链里，重复执行只会重建自有链；Docker 不管 DOCKER-USER，重启 docker 也不会冲掉。
 # 用法：MODEL_ENDPOINTS="10.0.0.5:8000 ..." PLATFORM_NODES="10.0.0.1 10.0.0.2" sh firewall.sh
 set -eu
@@ -17,7 +17,9 @@ iptables -A OPENXDR-SBX-FWD -i "$BRIDGE" -m conntrack --ctstate RELATED,ESTABLIS
 for ep in $MODEL_ENDPOINTS; do
   iptables -A OPENXDR-SBX-FWD -i "$BRIDGE" -p tcp -d "${ep%:*}" --dport "${ep##*:}" -j RETURN
 done
-iptables -A OPENXDR-SBX-FWD -i "$BRIDGE" -j DROP
+# 出口拒绝而不是丢弃：沙箱里访问外网立刻失败（TCP 回 RST、其余回 ICMP），不会挂到超时、看起来像静默返回空
+iptables -A OPENXDR-SBX-FWD -i "$BRIDGE" -p tcp -j REJECT --reject-with tcp-reset
+iptables -A OPENXDR-SBX-FWD -i "$BRIDGE" -j REJECT --reject-with icmp-admin-prohibited
 
 chain OPENXDR-SBX-IN INPUT
 iptables -A OPENXDR-SBX-IN -i "$BRIDGE" -j DROP

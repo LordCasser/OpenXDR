@@ -23,7 +23,7 @@ docker build -t openxdr-pi-sandbox:latest deploy/pi-sandbox
 docker network create -o com.docker.network.bridge.name=br-sandbox \
   -o com.docker.network.bridge.enable_icc=false openxdr-sandbox
 
-# 3. 防火墙：出口只放行模型端点，sandboxd 端口只对 server 节点开放
+# 3. 防火墙：出口只放行模型端点（其余立刻拒绝），sandboxd 端口只对 server 节点开放
 install -D -m 0755 firewall.sh /usr/local/lib/openxdr/firewall.sh
 cat > /etc/openxdr/sandbox-firewall.env <<'X'
 MODEL_ENDPOINTS=10.0.0.5:8000

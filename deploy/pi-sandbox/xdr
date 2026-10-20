@@ -7,7 +7,7 @@ CONTEXT=${XDR_CONTEXT:-/tmp/xdr/context.json}
 
 call() { # 工具名 参数JSON
   local resp
-  resp=$(curl -sS --max-time 1800 --unix-socket "$SOCKET" -H 'Content-Type: application/json' \
+  resp=$(/usr/bin/curl -sS --max-time 1800 --unix-socket "$SOCKET" -H 'Content-Type: application/json' \
     -d "$(jq -cn --arg n "$1" --argjson a "$2" '{name:$n,args:$a}')" http://xdr/tool) || { echo "xdr 通道不可用" >&2; exit 2; }
   if jq -e 'has("error")' >/dev/null <<<"$resp"; then jq -r .error <<<"$resp" >&2; exit 1; fi
   jq -r .output <<<"$resp"

@@ -13,6 +13,9 @@ COPY skills/ ./skills/
 COPY xdr /usr/local/bin/xdr
 # jq 薄包装：过滤式里写了 SQL 的 -> 而报语法错时补一句提示，其余行为与退出码不变
 COPY jq /usr/local/bin/jq
+# 沙箱没有外网：curl / wget 换成立刻报错并指路的包装，xdr 用 /usr/bin/curl 走 unix socket
+COPY no-egress /usr/local/bin/curl
+RUN ln -s curl /usr/local/bin/wget
 RUN useradd -m -u 10010 agent
 USER agent
 ENV HOME=/home/agent XDR_SOCKET=/tmp/xdr/xdr.sock XDR_CONTEXT=/tmp/xdr/context.json

@@ -344,7 +344,7 @@ func (s *Service) history(ctx context.Context, id uuid.UUID) ([]json.RawMessage,
 }
 
 // sandboxPrompt 沙箱模式追加在 Pi 默认系统提示之后：工具是 Pi 自带的 bash 等，平台能力全部经 xdr 命令，详细用法在 openxdr skill
-const sandboxPrompt = "你是 OpenXDR 运维与安全助手，在隔离沙箱里工作：这里的 bash 和文件只属于沙箱，不是受管主机。开始前先读 openxdr skill。" +
+const sandboxPrompt = "你是 OpenXDR 运维与安全助手，在隔离沙箱里工作：这里的 bash 和文件只属于沙箱，不是受管主机；沙箱没有外网，查公网 IP 归属用 xdr sql 查 ip_infos。开始前先读 openxdr skill。" +
 	"在主机上执行命令、查平台数据、登记待办、记录长期记忆、提交报告一律用 xdr 命令（exec、sql、track、ignore、identify、egress、remember、forget、suppress、propose-close、report）；" +
 	"组内资产、规则名、待办（open_findings / ignored_findings）、长期记忆（memories）与交给你的对象（subjects）用 xdr context 查看。" +
 	memoryNote +
@@ -578,7 +578,7 @@ const queryDescription = "通过当前组专属只读数据库身份查询授权
 	"findings(id, asset_id, key, title, severity, status, first_seen, last_seen, resolved_at, note)；" +
 	"suppressions(id, rule_id, asset_id, reason, status, conditions, expires_at, matched_count, last_matched_at)；" +
 	"memories(id, asset_id, content, source, author, updated_at)；asset_links(src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen)；" +
-	"ip_infos(ip, ptr, as_owner, country, malicious, suspicious, domains)；reports(id, created_at, title, level, markdown, summary：一句话结论)；" +
+	"ip_infos(ip, ptr, as_owner, country, malicious, suspicious, domains：本组外联与告警里出现的公网地址)；reports(id, created_at, title, level, markdown, summary：一句话结论)；" +
 	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id, detail：合成检测如外联心跳 xdr:beacon 的间隔统计依据)；" +
 	"incidents(id, created_at, status, title, ai_verdict)；" +
 	"events(id, ts, class_uid, source, asset_id, username, conn_tuple, raw)；" +

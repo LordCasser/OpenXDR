@@ -1,0 +1,11 @@
+#!/bin/sh
+# 装成沙箱里的 curl / wget：容器出口只放行模型端点，访问外网必然失败。
+# 与其让请求超时或 -s 静默返回空、白费一轮，不如立刻说清楚该用什么。xdr 自己用 /usr/bin/curl 走 unix socket，不受影响。
+cat >&2 <<'EOF'
+沙箱没有外网：容器出口只放行模型端点，curl / wget 访问任何地址都会失败，不要重试或换写法（python、/usr/bin/curl 同样连不上）。
+- 查公网 IP 的归属、AS、国家、PTR、历史解析域名：xdr sql "SELECT * FROM ip_infos WHERE ip = '<地址>'"
+  没有记录说明平台还没补全（后台会给告警里出现的公网地址排队补），报告里注明「未验证」即可。
+- 情报命中的来源与说明看告警与事件：xdr sql 查 alerts / alert_events。
+- 确需从受管主机访问网络：xdr exec <主机> '<命令>'，在主机上执行，受高风险名单与审批约束。
+EOF
+exit 7
