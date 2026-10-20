@@ -77,7 +77,7 @@ func (s *Store) Watch(ctx context.Context, baseDir, temporalDir string, interval
 			}
 			after := s.Current()
 			if before == nil || before.Revision() != after.Revision() {
-				slog.Info("检测规则快照已更新", "revision", after.Revision())
+				slog.Info("检测规则快照已更新", "revision", after.Revision(), "dir", after.Dir())
 			}
 		}
 	}

@@ -1,6 +1,8 @@
 package temporal
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -143,4 +145,114 @@ func TestSnapshotConcurrentReaders(t *testing.T) {
 		}
 	}
 	readers.Wait()
+}
+
+// 版本目录写完后补 SHA256SUMS，再用 rename 原子替换 current 链接。
+func publishVersion(t *testing.T, root, name string, files map[string]string, manifest bool) string {
+	t.Helper()
+	dir := filepath.Join(root, name)
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	var sums strings.Builder
+	for file, body := range files {
+		writeRule(t, filepath.Join(dir, file), body)
+		fmt.Fprintf(&sums, "%x  %s\n", sha256.Sum256([]byte(body)), file)
+	}
+	if manifest {
+		writeRule(t, filepath.Join(dir, "SHA256SUMS"), sums.String())
+	}
+	return dir
+}
+
+func switchLink(t *testing.T, root, target string) {
+	t.Helper()
+	tmp := filepath.Join(root, "current.tmp")
+	if err := os.Symlink(target, tmp); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, filepath.Join(root, "current")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSymlinkVersionDirectoryRelease(t *testing.T) {
+	base, _ := fixture(t)
+	root := t.TempDir()
+	current := filepath.Join(root, "current")
+	second := strings.ReplaceAll(validTemporal, "threshold: 2", "threshold: 3")
+	publishVersion(t, root, "v-1", map[string]string{"count.yml": validTemporal}, true)
+	publishVersion(t, root, "v-2", map[string]string{"count.yml": second}, true)
+	switchLink(t, root, "v-1")
+	var store Store
+	if err := store.Reload(base, current); err != nil {
+		t.Fatal(err)
+	}
+	first := store.Current()
+	if len(first.rules) != 1 || first.rules[0].threshold != 2 || filepath.Base(first.Dir()) != "v-1" {
+		t.Fatalf("链接未解析到 v-1: %+v", first.rules)
+	}
+	switchLink(t, root, "v-2")
+	if err := store.Reload(base, current); err != nil {
+		t.Fatal(err)
+	}
+	released := store.Current()
+	if released.Revision() == first.Revision() || released.rules[0].threshold != 3 || filepath.Base(released.Dir()) != "v-2" {
+		t.Fatal("切换链接未发布新版本")
+	}
+	// 半写入：缺清单、清单列的文件还没写、文件内容与清单不符、多出未列文件，都整批拒绝并保留 v-2。
+	more := strings.ReplaceAll(validTemporal, "id: repeated", "id: more")
+	sums := fmt.Sprintf("%x  count.yml\n%x  more.yml\n", sha256.Sum256([]byte(validTemporal)), sha256.Sum256([]byte(more)))
+	cases := []struct {
+		name   string
+		damage func(dir string)
+	}{
+		{"缺清单", func(string) {}},
+		{"文件未写完", func(dir string) {
+			writeRule(t, filepath.Join(dir, "SHA256SUMS"), sums)
+			if err := os.Remove(filepath.Join(dir, "more.yml")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"内容被改", func(dir string) {
+			writeRule(t, filepath.Join(dir, "SHA256SUMS"), sums)
+			writeRule(t, filepath.Join(dir, "more.yml"), more+"# 改动\n")
+		}},
+		{"未列文件", func(dir string) {
+			writeRule(t, filepath.Join(dir, "SHA256SUMS"), fmt.Sprintf("%x  count.yml\n", sha256.Sum256([]byte(validTemporal))))
+		}},
+		{"清单格式错", func(dir string) {
+			writeRule(t, filepath.Join(dir, "SHA256SUMS"), "not-a-digest  count.yml\n")
+		}},
+	}
+	for i, tc := range cases {
+		version := fmt.Sprintf("v-broken-%d", i)
+		tc.damage(publishVersion(t, root, version, map[string]string{"count.yml": validTemporal, "more.yml": more}, false))
+		switchLink(t, root, version)
+		if err := store.Reload(base, current); err == nil {
+			t.Fatalf("%s: 半写入目录必须拒绝", tc.name)
+		}
+		if store.Current() != released {
+			t.Fatalf("%s: 失败重载替换了有效快照", tc.name)
+		}
+	}
+	// 首次加载就指向半写入目录时不能产生快照，调用方据此拒绝启动。
+	var fresh Store
+	if err := fresh.Reload(base, current); err == nil || fresh.Current() != nil {
+		t.Fatal("首次加载半写入目录必须失败")
+	}
+	// 普通目录不强制清单，保持原有用法；版本不依赖路径。
+	plain := t.TempDir()
+	writeRule(t, filepath.Join(plain, "count.yml"), validTemporal)
+	if snapshot, err := LoadSnapshot(base, plain); err != nil || snapshot.Revision() != first.Revision() {
+		t.Fatalf("普通目录加载失败或版本依赖路径: %v", err)
+	}
+	// 基础规则目录也经符号链接时同样解析一次再读。
+	baseLink := filepath.Join(root, "base-current")
+	if err := os.Symlink(base, baseLink); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot, err := LoadSnapshot(baseLink, plain); err != nil || snapshot.Revision() != first.Revision() {
+		t.Fatalf("基础规则链接未解析: %v", err)
+	}
 }
