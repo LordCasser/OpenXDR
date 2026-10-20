@@ -1,0 +1,46 @@
+title: SSH Private Key Access
+id: 9ec89191-b328-4ada-85d0-e595903b990c
+status: experimental
+description: |
+  检测读取、拷贝、编码 SSH 私钥（用户 ~/.ssh/id_* 与主机 /etc/ssh/ssh_host_*_key），
+  以及用 find 按私钥文件名全盘搜索——窃取私钥用于横向移动或长期访问。
+  只认读取/拷贝/编码类工具：ssh -i、scp -i、ssh-keygen 等正常使用私钥的命令不算，带 .pub 的公钥操作不算。
+tags:
+  - attack.credential_access
+  - attack.t1552.004
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  reader:
+    Image|endswith:
+      - '/cat'
+      - '/cp'
+      - '/base64'
+      - '/xxd'
+      - '/od'
+      - '/head'
+      - '/tail'
+      - '/less'
+      - '/more'
+      - '/strings'
+  key_path:
+    CommandLine|contains:
+      - '/.ssh/id_rsa'
+      - '/.ssh/id_dsa'
+      - '/.ssh/id_ecdsa'
+      - '/.ssh/id_ed25519'
+      - '/etc/ssh/ssh_host_'
+  finder:
+    Image|endswith: '/find'
+    CommandLine|contains:
+      - '-name id_rsa'
+      - '-name id_dsa'
+      - '-name id_ecdsa'
+      - '-name id_ed25519'
+      - "-name 'id_"
+      - '-name "id_'
+  public_key:
+    CommandLine|contains: '.pub'
+  condition: ((reader and key_path) or finder) and not public_key
+level: medium
