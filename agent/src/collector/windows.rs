@@ -168,11 +168,11 @@ pub(crate) fn seeded_registry() -> ProcessRegistry {
 }
 
 /// 现场查询进程细节。全部 best-effort：任何一步失败就放弃该项，事件照常上报。
-mod inspect {
+pub(super) mod inspect {
     use windows_sys::Wdk::System::Threading::NtQueryInformationProcess;
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, UNICODE_STRING};
     use windows_sys::Win32::Security::{
-        GetTokenInformation, LookupAccountSidW, TOKEN_QUERY, TOKEN_USER, TokenUser,
+        GetTokenInformation, LookupAccountSidW, PSID, TOKEN_QUERY, TOKEN_USER, TokenUser,
     };
     use windows_sys::Win32::System::Diagnostics::Debug::ReadProcessMemory;
     use windows_sys::Win32::System::Threading::{
@@ -382,10 +382,18 @@ mod inspect {
         // SAFETY: GetTokenInformation 成功，buf 开头是系统写好的 TOKEN_USER，且 buf 8 字节对齐；
         // 取出的 Sid 指向 buf 内部，buf 在本函数结束前存活且不再改动，后续使用都在此之内。
         let sid = unsafe { (*buf.as_ptr().cast::<TOKEN_USER>()).User.Sid };
+        // SAFETY: sid 指向仍存活的 buf 内由系统写好的 SID，调用期间不改动。
+        unsafe { account_name(sid) }
+    }
 
+    /// SID → DOMAIN\user（persistwatch 也用它给用户配置单元标注属主）。
+    ///
+    /// # Safety
+    /// `sid` 指向一个有效的 SID，调用期间存活且不被改写。
+    pub unsafe fn account_name(sid: PSID) -> Option<String> {
         let (mut name_len, mut domain_len, mut sid_use) = (0u32, 0u32, 0i32);
         // SAFETY: 第一段只问长度：名称与域缓冲传空指针是 API 约定的用法，系统只写三个长度出参；
-        // sid 指向仍存活的 buf，系统名传空表示本机。
+        // 调用方保证 sid 有效，系统名传空表示本机。
         unsafe {
             LookupAccountSidW(
                 std::ptr::null(),
@@ -403,7 +411,7 @@ mod inspect {
         let mut name = vec![0u16; name_len as usize];
         let mut domain = vec![0u16; domain_len as usize];
         // SAFETY: name / domain 按上一步返回的长度（字符数，含结尾 NUL）分配，传入的容量与之相符；
-        // sid 仍指向存活的 buf；所有出参都指向栈上变量。
+        // 调用方保证 sid 有效；所有出参都指向栈上变量。
         let ok = unsafe {
             LookupAccountSidW(
                 std::ptr::null(),

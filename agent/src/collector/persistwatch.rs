@@ -21,7 +21,7 @@ const CLASS_FILE: u32 = 1001;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
 
-/// 监控的注册表键（HKLM 与 HKCU 各查一遍），直接枚举键下的值。
+/// 监控的注册表键（HKLM 与每个已加载的用户配置单元各查一遍），直接枚举键下的值。
 /// 值的增改就是持久化动作本身，事件天然高信噪比。
 /// CurrentVersion\Windows 盯的是 AppInit_DLLs 一系值。
 const WATCH_KEYS: &[&str] = &[
@@ -31,25 +31,27 @@ const WATCH_KEYS: &[&str] = &[
     r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows",
 ];
 
-/// 树形监控点（hive, 键, 子键枚举深度）：键本身是容器，威胁写在子键的值里，
+/// 树形监控点（键, 子键枚举深度）：键本身是容器，威胁写在子键的值里，
 /// 整棵子树按深度纳入快照，子键值与其增删都可见。
 /// - Defender 排除项：Paths/Extensions/Processes 子键下的值即排除清单，落地前常见动作
 /// - IFEO：每个可执行文件一个子键，Debugger 值即调试器劫持
-/// - COM 劫持：HKCU 的 CLSID 子键下 InprocServer32/LocalServer32 默认值（无需管理员；
-///   HKCU\Software\Classes 是合并视图，HKLM 侧的系统级注册也一并纳入）
-const WATCH_TREES: &[(winreg::Hive, &str, u32)] = &[
+const MACHINE_TREES: &[(&str, u32)] = &[
+    (r"SOFTWARE\Microsoft\Windows Defender\Exclusions", 1),
     (
-        winreg::Hive::LocalMachine,
-        r"SOFTWARE\Microsoft\Windows Defender\Exclusions",
-        1,
-    ),
-    (
-        winreg::Hive::LocalMachine,
         r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options",
         1,
     ),
-    (winreg::Hive::CurrentUser, r"Software\Classes\CLSID", 2),
 ];
+
+/// 用户配置单元里的树形监控点。
+/// - COM 劫持：用户自己的 CLSID 注册（InprocServer32/LocalServer32 默认值，无需管理员）。
+///   HKCU\Software\Classes 只有该用户自己的注册（实体是 HKU\<SID>_Classes，即 UsrClass.dat，
+///   经 HKU\<SID>\Software\Classes 链接可达）；HKLM 与用户注册的合并视图是 HKCR，不在这里。
+const USER_TREES: &[(&str, u32)] = &[(r"Software\Classes\CLSID", 2)];
+
+/// 注册表快照按配置单元分组：None 是 HKLM，Some(SID) 是该用户已加载的配置单元。
+/// 分组是为了让用户登录/登出（配置单元加载/卸载）不被当成键值增删，见 [`diff_hives`]。
+type RegSnapshot = HashMap<Option<String>, HashMap<String, String>>;
 
 /// 服务清单所在的注册表键（仅 HKLM，服务不挂在 HKCU 下）。
 const SERVICES_KEY: &str = r"SYSTEM\CurrentControlSet\Services";
@@ -80,8 +82,14 @@ fn run(agent_id: &str, sink: &EventSink) {
 
         // 五类快照各自独立 diff，一类读取失败只跳过自己这一轮
         let reg_now = registry_snapshot();
-        for (path, data, activity) in diff(&reg_seen, &reg_now) {
-            if !sink.send(registry_event(agent_id, path, data, activity)) {
+        for (sid, path, data, activity) in diff_hives(&reg_seen, &reg_now) {
+            if !sink.send(registry_event(
+                agent_id,
+                path,
+                data,
+                activity,
+                sid.as_deref(),
+            )) {
                 return;
             }
         }
@@ -98,7 +106,7 @@ fn run(agent_id: &str, sink: &EventSink) {
         if let Some(svc_now) = services_snapshot() {
             if let Some(seen) = &svc_seen {
                 for (path, data, activity) in diff(seen, &svc_now) {
-                    if !sink.send(registry_event(agent_id, path, data, activity)) {
+                    if !sink.send(registry_event(agent_id, path, data, activity, None)) {
                         return;
                     }
                 }
@@ -152,19 +160,77 @@ fn diff<'a, V: PartialEq>(
     out
 }
 
-/// 注册表快照：完整值路径（含 hive 前缀与值名）-> 值内容。
-fn registry_snapshot() -> HashMap<String, String> {
+/// 按配置单元 diff：只比两轮都在的配置单元。
+/// 新出现的（用户登录、配置单元加载）这一轮静默建基线，不把存量值报成新增；
+/// 消失的（用户登出、配置单元卸载）直接从基线里丢掉，不报删除——
+/// 否则每次登出都会触发「Autostart Registry Entry or Service Deleted」。
+fn diff_hives<'a>(
+    seen: &'a RegSnapshot,
+    now: &'a RegSnapshot,
+) -> Vec<(&'a Option<String>, &'a String, &'a String, u8)> {
+    now.iter()
+        .filter_map(|(hive, cur)| seen.get(hive).map(|old| (hive, old, cur)))
+        .flat_map(|(hive, old, cur)| {
+            diff(old, cur)
+                .into_iter()
+                .map(move |(path, data, activity)| (hive, path, data, activity))
+        })
+        .collect()
+}
+
+/// 注册表快照：HKLM 一份，每个已加载的用户配置单元一份。
+/// 用户配置单元只覆盖已加载的（已登录、或被服务/任务以该用户身份载入）：
+/// 不调用 RegLoadKey 去挂别人的 NTUSER.DAT——那会和用户登录抢文件锁，
+/// 用户离线期间对其配置单元的离线篡改因此看不到，等其登录加载后才以那时为基线。
+fn registry_snapshot() -> RegSnapshot {
+    let mut snap = RegSnapshot::new();
+    snap.insert(
+        None,
+        hive_snapshot(winreg::LOCAL_MACHINE, "HKLM", MACHINE_TREES),
+    );
+    let loaded = winreg::subkeys(winreg::USERS, "").unwrap_or_default();
+    for sid in user_hives(&loaded) {
+        // 先拿住配置单元根键的句柄再读：持有句柄期间配置单元不会被卸载，
+        // 不会读到一半赶上登出、把读不到的值当成删除。打不开说明刚卸载，跳过。
+        let Some(root) = winreg::Key::open(winreg::USERS, sid) else {
+            continue;
+        };
+        snap.insert(
+            Some(sid.to_string()),
+            hive_snapshot(root.raw(), "HKCU", USER_TREES),
+        );
+    }
+    snap
+}
+
+/// HKEY_USERS 下要看的配置单元：交互用户（本地/域账户 S-1-5-21-…、Entra ID 账户 S-1-12-1-…）
+/// 与 LocalSystem（S-1-5-18，agent 自身身份，以 SYSTEM 运行的程序写的 HKCU 落在这里）。
+/// `<SID>_Classes` 是用户 Software\Classes 的实体，经 `<SID>\Software\Classes` 链接读，
+/// 不单独当用户；.DEFAULT 与 LocalService/NetworkService 不是登录用户，不看。
+fn user_hives(names: &[String]) -> impl Iterator<Item = &str> {
+    names.iter().map(String::as_str).filter(|name| {
+        !name.ends_with("_Classes")
+            && (*name == "S-1-5-18"
+                || name.starts_with("S-1-5-21-")
+                || name.starts_with("S-1-12-1-"))
+    })
+}
+
+/// 单个配置单元的快照：事件路径（hive 前缀 + 键 + 值名）-> 值内容。
+/// 用户配置单元统一写成 `HKCU\...`，与规则按 HKCU 前缀匹配的形态一致，属主另记 SID。
+fn hive_snapshot(
+    root: winreg::HKEY,
+    prefix: &str,
+    trees: &[(&str, u32)],
+) -> HashMap<String, String> {
     let mut snap = HashMap::new();
-    for (hive_name, hive) in hives() {
-        for key in WATCH_KEYS {
-            for (name, data) in winreg::values(hive, key) {
-                snap.insert(format!("{hive_name}\\{key}\\{name}"), data);
-            }
+    for key in WATCH_KEYS {
+        for (name, data) in winreg::values(root, key) {
+            snap.insert(format!("{prefix}\\{key}\\{name}"), data);
         }
     }
-    // 树形键各自绑定 hive，不走上面的双 hive 循环
-    for (hive, key, depth) in WATCH_TREES {
-        snapshot_tree(&mut snap, hive.name(), *hive, key, *depth);
+    for (key, depth) in trees {
+        snapshot_tree(&mut snap, prefix, root, key, *depth);
     }
     snap
 }
@@ -173,20 +239,20 @@ fn registry_snapshot() -> HashMap<String, String> {
 /// 键打不开（不存在/权限）静默跳过——IFEO、排除项这类键默认不存在是正常的。
 fn snapshot_tree(
     snap: &mut HashMap<String, String>,
-    hive_name: &str,
-    hive: winreg::Hive,
+    prefix: &str,
+    root: winreg::HKEY,
     key: &str,
     depth: u32,
 ) {
-    for (name, data) in winreg::values(hive, key) {
-        snap.insert(format!("{hive_name}\\{key}\\{name}"), data);
+    for (name, data) in winreg::values(root, key) {
+        snap.insert(format!("{prefix}\\{key}\\{name}"), data);
     }
     if depth == 0 {
         return;
     }
-    if let Some(subkeys) = winreg::subkeys(hive, key) {
+    if let Some(subkeys) = winreg::subkeys(root, key) {
         for sub in subkeys {
-            snapshot_tree(snap, hive_name, hive, &format!("{key}\\{sub}"), depth - 1);
+            snapshot_tree(snap, prefix, root, &format!("{key}\\{sub}"), depth - 1);
         }
     }
 }
@@ -198,17 +264,17 @@ fn snapshot_tree(
 /// 返回 None 表示连 Services 键都打不开或 SCM 枚举失败（权限等），本轮整体跳过：
 /// 拿着缺 State 字段的半份快照去 diff，会把全量服务误报成"修改"。
 fn services_snapshot() -> Option<HashMap<String, String>> {
-    let names = winreg::subkeys(winreg::Hive::LocalMachine, SERVICES_KEY)?;
+    let names = winreg::subkeys(winreg::LOCAL_MACHINE, SERVICES_KEY)?;
     let states = service_states()?;
     let mut snap = HashMap::new();
     for name in names {
         let key = format!(r"{SERVICES_KEY}\{name}");
-        let image_path = winreg::values(winreg::Hive::LocalMachine, &key)
+        let image_path = winreg::values(winreg::LOCAL_MACHINE, &key)
             .into_iter()
             .find(|(n, _)| n.eq_ignore_ascii_case("ImagePath"))
             .map(|(_, data)| data)
             .unwrap_or_default();
-        let start = winreg::dword(winreg::Hive::LocalMachine, &key, "Start")
+        let start = winreg::dword(winreg::LOCAL_MACHINE, &key, "Start")
             .map(|v| v.to_string())
             .unwrap_or_else(|| "?".to_string());
         // 注册表里有键但 SCM 没有对应服务（卸载残留等）时状态记 "?"
@@ -459,12 +525,23 @@ fn parse_wmi_json(json: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-fn registry_event(agent_id: &str, path: &str, data: &str, activity: u8) -> AgentEvent {
-    let raw = serde_json::json!({
+/// 注册表事件。`sid` 是用户配置单元的属主（HKLM 为 None），记在 user 而不是 actor.user：
+/// 快照只知道写在谁的配置单元里，不知道是谁写的——管理员也能写已加载的别人的配置单元。
+fn registry_event(
+    agent_id: &str,
+    path: &str,
+    data: &str,
+    activity: u8,
+    sid: Option<&str>,
+) -> AgentEvent {
+    let mut raw = serde_json::json!({
         "activity_id": activity,
         "reg_key": { "path": path },
         "reg_value": { "data": data },
     });
+    if let Some(sid) = sid {
+        raw["user"] = hive_owner(sid, winreg::account_name(sid).as_deref());
+    }
     event(agent_id, CLASS_REGISTRY, raw)
 }
 
@@ -504,58 +581,76 @@ fn event(agent_id: &str, class_uid: u32, raw: serde_json::Value) -> AgentEvent {
     }
 }
 
-fn hives() -> [(&'static str, winreg::Hive); 2] {
-    [
-        ("HKLM", winreg::Hive::LocalMachine),
-        ("HKCU", winreg::Hive::CurrentUser),
-    ]
+/// 用户配置单元的属主：`uid` 是 SID，`name` 是解析出的 DOMAIN\user
+/// （账户已删除等解析不到时省略）。
+fn hive_owner(sid: &str, name: Option<&str>) -> serde_json::Value {
+    match name {
+        Some(name) => serde_json::json!({ "uid": sid, "name": name }),
+        None => serde_json::json!({ "uid": sid }),
+    }
 }
 
-/// 最小注册表读取封装：只读枚举子键、枚举值、读单个 DWORD。
+/// 最小注册表读取封装：只读枚举子键、枚举值、读单个 DWORD，外加 SID 解析账户名。
 mod winreg {
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::ConvertStringSidToSidW;
+    use windows_sys::Win32::Security::PSID;
+    pub use windows_sys::Win32::System::Registry::HKEY;
     use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, REG_DWORD, REG_EXPAND_SZ, REG_SZ,
-        RegCloseKey, RegEnumKeyExW, RegEnumValueW, RegOpenKeyExW, RegQueryValueExW,
+        HKEY_LOCAL_MACHINE, HKEY_USERS, KEY_READ, REG_DWORD, REG_EXPAND_SZ, REG_SZ, RegCloseKey,
+        RegEnumKeyExW, RegEnumValueW, RegOpenKeyExW, RegQueryValueExW,
     };
 
-    #[derive(Clone, Copy)]
-    pub enum Hive {
-        LocalMachine,
-        CurrentUser,
-    }
+    pub const LOCAL_MACHINE: HKEY = HKEY_LOCAL_MACHINE;
+    pub const USERS: HKEY = HKEY_USERS;
 
-    impl Hive {
-        fn raw(self) -> HKEY {
-            match self {
-                Hive::LocalMachine => HKEY_LOCAL_MACHINE,
-                Hive::CurrentUser => HKEY_CURRENT_USER,
+    /// 打开的键句柄，离开作用域自动关闭。
+    pub struct Key(HKEY);
+
+    impl Key {
+        /// 打开 root 下的子键（空串即 root 本身的新句柄），失败返回 None。
+        pub fn open(root: HKEY, key: &str) -> Option<Key> {
+            let key_w: Vec<u16> = key.encode_utf16().chain(std::iter::once(0)).collect();
+            let mut handle: HKEY = std::ptr::null_mut();
+            // SAFETY: key_w 是以 0 结尾的 UTF-16 键名，调用期间存活；handle 是栈上出参，成功时系统写入新句柄；
+            // root 是预定义根键或调用方持有的有效句柄。
+            if unsafe { RegOpenKeyExW(root, key_w.as_ptr(), 0, KEY_READ, &mut handle) } != 0 {
+                return None;
             }
+            Some(Key(handle))
         }
 
-        /// 事件路径里的 hive 前缀。
-        pub fn name(self) -> &'static str {
-            match self {
-                Hive::LocalMachine => "HKLM",
-                Hive::CurrentUser => "HKCU",
-            }
+        pub fn raw(&self) -> HKEY {
+            self.0
         }
     }
 
-    /// 打开键，失败返回 None。子模块内部统一走这里，免得每个函数重复开键样板。
-    fn open(hive: Hive, key: &str) -> Option<HKEY> {
-        let key_w: Vec<u16> = key.encode_utf16().chain(std::iter::once(0)).collect();
-        let mut handle: HKEY = std::ptr::null_mut();
-        // SAFETY: key_w 是以 0 结尾的 UTF-16 键名，调用期间存活；handle 是栈上出参，成功时系统写入新句柄；
-        // hive.raw() 是预定义根键，无需关闭。
-        if unsafe { RegOpenKeyExW(hive.raw(), key_w.as_ptr(), 0, KEY_READ, &mut handle) } != 0 {
+    impl Drop for Key {
+        fn drop(&mut self) {
+            // SAFETY: self.0 是 RegOpenKeyExW 成功返回、只由本对象持有的句柄，只在这里关一次。
+            unsafe { RegCloseKey(self.0) };
+        }
+    }
+
+    /// SID 字符串 → DOMAIN\user，解析不到（账户已删除、格式不对）返回 None。
+    pub fn account_name(sid: &str) -> Option<String> {
+        let sid_w: Vec<u16> = sid.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut psid: PSID = std::ptr::null_mut();
+        // SAFETY: sid_w 以 0 结尾且调用期间存活；psid 是栈上出参，成功时系统写入 LocalAlloc 分配的 SID。
+        if unsafe { ConvertStringSidToSidW(sid_w.as_ptr(), &mut psid) } == 0 {
             return None;
         }
-        Some(handle)
+        // SAFETY: psid 是上面转换成功得到的有效 SID，查询期间不释放。
+        let name = unsafe { super::super::windows::inspect::account_name(psid) };
+        // SAFETY: psid 由 ConvertStringSidToSidW 以 LocalAlloc 分配，按约定用 LocalFree 释放一次，之后不再使用。
+        unsafe { LocalFree(psid) };
+        name
     }
 
     /// 枚举键下全部子键名。返回 None 表示键打不开（权限等）。
-    pub fn subkeys(hive: Hive, key: &str) -> Option<Vec<String>> {
-        let handle = open(hive, key)?;
+    pub fn subkeys(root: HKEY, key: &str) -> Option<Vec<String>> {
+        let key = Key::open(root, key)?;
+        let handle = key.raw();
         let mut out = Vec::new();
         let mut index = 0u32;
         loop {
@@ -581,14 +676,13 @@ mod winreg {
             out.push(String::from_utf16_lossy(&name[..name_len as usize]));
             index += 1;
         }
-        // SAFETY: handle 是 open 成功返回、只由本函数持有的键句柄，枚举完关一次。
-        unsafe { RegCloseKey(handle) };
         Some(out)
     }
 
     /// 读单个 DWORD 值（如服务的 Start 启动类型），读不到或类型不符返回 None。
-    pub fn dword(hive: Hive, key: &str, name: &str) -> Option<u32> {
-        let handle = open(hive, key)?;
+    pub fn dword(root: HKEY, key: &str, name: &str) -> Option<u32> {
+        let key = Key::open(root, key)?;
+        let handle = key.raw();
         let name_w: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
         let mut kind = 0u32;
         let mut data = 0u32;
@@ -605,16 +699,15 @@ mod winreg {
                 &mut data_len,
             )
         };
-        // SAFETY: handle 是 open 成功返回、只由本函数持有的键句柄，查完关一次。
-        unsafe { RegCloseKey(handle) };
         (rc == 0 && kind == REG_DWORD).then_some(data)
     }
 
     /// 枚举键下全部值，返回 (值名, 内容)。字符串类型给原文，其余给类型标注。
-    pub fn values(hive: Hive, key: &str) -> Vec<(String, String)> {
-        let Some(handle) = open(hive, key) else {
+    pub fn values(root: HKEY, key: &str) -> Vec<(String, String)> {
+        let Some(key) = Key::open(root, key) else {
             return Vec::new();
         };
+        let handle = key.raw();
 
         let mut out = Vec::new();
         let mut index = 0u32;
@@ -658,8 +751,6 @@ mod winreg {
             out.push((value_name, content));
             index += 1;
         }
-        // SAFETY: handle 是 open 成功返回、只由本函数持有的键句柄，枚举完关一次。
-        unsafe { RegCloseKey(handle) };
         out
     }
 }
@@ -696,6 +787,98 @@ mod tests {
                 .any(|&(p, v, a)| p == "drop" && v == "gone" && a == 4),
             "删除应报 Delete(4)，内容为旧值"
         );
+    }
+
+    const KEI: &str = "S-1-5-21-2781788264-1670449695-3224139109-1000";
+    const RUN: &str = r"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\Updater";
+
+    type Hive<'a> = (Option<&'a str>, &'a [(&'a str, &'a str)]);
+
+    fn hives(entries: &[Hive]) -> RegSnapshot {
+        entries
+            .iter()
+            .map(|(sid, pairs)| (sid.map(str::to_string), snap(pairs)))
+            .collect()
+    }
+
+    #[test]
+    fn user_hives_keeps_user_sids_only() {
+        let names: Vec<String> = [
+            ".DEFAULT",
+            "S-1-5-19",
+            "S-1-5-20",
+            KEI,
+            &format!("{KEI}_Classes"),
+            "S-1-5-18",
+            "S-1-12-1-111-222-333-444",
+            "S-1-12-1-111-222-333-444_Classes",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let got: Vec<&str> = user_hives(&names).collect();
+        // _Classes 是用户 Software\Classes 的实体，经 <SID>\Software\Classes 链接读，不单独算用户
+        assert_eq!(got, vec![KEI, "S-1-5-18", "S-1-12-1-111-222-333-444"]);
+    }
+
+    #[test]
+    fn hive_unload_is_not_delete() {
+        // kei 登出：配置单元卸载，其 Run 值从快照里整组消失，不能报成删除
+        let seen = hives(&[
+            (None, &[]),
+            (Some(KEI), &[(RUN, r"C:\Users\kei\updater.exe")]),
+        ]);
+        let now = hives(&[(None, &[])]);
+        assert!(diff_hives(&seen, &now).is_empty());
+    }
+
+    #[test]
+    fn hive_load_is_silent_baseline() {
+        // kei 登录：配置单元加载，存量 Run 值不该报成新增
+        let seen = hives(&[(None, &[])]);
+        let now = hives(&[
+            (None, &[]),
+            (Some(KEI), &[(RUN, r"C:\Users\kei\updater.exe")]),
+        ]);
+        assert!(diff_hives(&seen, &now).is_empty());
+    }
+
+    #[test]
+    fn loaded_hive_changes_carry_owner() {
+        // 同一路径在两个用户的配置单元里各自独立，删除只报真正删了的那个用户
+        let other = "S-1-5-21-1-2-3-1001";
+        let seen = hives(&[
+            (Some(KEI), &[(RUN, "a.exe")]),
+            (Some(other), &[(RUN, "b.exe")]),
+        ]);
+        let now = hives(&[(Some(KEI), &[]), (Some(other), &[(RUN, "b.exe")])]);
+        let d = diff_hives(&seen, &now);
+        assert_eq!(d.len(), 1);
+        let (sid, path, data, activity) = d[0];
+        assert_eq!(sid.as_deref(), Some(KEI));
+        assert_eq!((path.as_str(), data.as_str(), activity), (RUN, "a.exe", 4));
+    }
+
+    #[test]
+    fn hive_owner_omits_unresolved_name() {
+        assert_eq!(
+            hive_owner(KEI, Some(r"DESKTOP\kei")),
+            serde_json::json!({ "uid": KEI, "name": r"DESKTOP\kei" })
+        );
+        assert_eq!(hive_owner(KEI, None), serde_json::json!({ "uid": KEI }));
+    }
+
+    #[test]
+    fn registry_snapshot_paths_are_hkcu_shaped() {
+        // 读本机真实注册表：用户配置单元的路径一律写成 HKCU\...（规则按这个前缀匹配），
+        // 不出现 HKU\<SID>；HKLM 侧保持 HKLM\...
+        for (sid, snap) in registry_snapshot() {
+            let prefix = if sid.is_some() { r"HKCU\" } else { r"HKLM\" };
+            assert!(
+                snap.keys().all(|p| p.starts_with(prefix)),
+                "{sid:?} 下有不以 {prefix} 开头的路径"
+            );
+        }
     }
 
     #[test]
