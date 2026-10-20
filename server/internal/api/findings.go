@@ -3,10 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -15,6 +12,7 @@ import (
 	"openxdr/server/ent/finding"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
+	"openxdr/server/internal/findings"
 )
 
 type findingRow struct {
@@ -75,7 +73,7 @@ func mapFindings(mux *http.ServeMux, db *ent.Client) {
 		writeJSON(w, out)
 	})
 
-	// 已处理与忽略必须写原因：忽略原因会交给巡检 AI，已处理的下一轮仍会复查
+	// 已处理与忽略必须写原因（findings.Clean）；对话里代人忽略也走 findings.Set，口径一致
 	mux.HandleFunc("POST /api/findings/{id}/status", func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
@@ -86,13 +84,13 @@ func mapFindings(mux *http.ServeMux, db *ent.Client) {
 			Status string `json:"status"`
 			Note   string `json:"note"`
 		}
-		if json.NewDecoder(r.Body).Decode(&body) != nil || !slices.Contains([]string{"open", "resolved", "ignored"}, body.Status) {
-			http.Error(w, "status 必须是 open / resolved / ignored", http.StatusBadRequest)
+		if json.NewDecoder(r.Body).Decode(&body) != nil {
+			http.Error(w, "请求格式错误", http.StatusBadRequest)
 			return
 		}
-		note := strings.TrimSpace(body.Note)
-		if body.Status != "open" && (note == "" || utf8.RuneCountInString(note) > 2000) {
-			http.Error(w, "须写明原因（1–2000 字）", http.StatusBadRequest)
+		note, err := findings.Clean(body.Status, body.Note)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		f, err := db.Finding.Get(r.Context(), id)
@@ -107,17 +105,10 @@ func mapFindings(mux *http.ServeMux, db *ent.Client) {
 		if !requireGroup(w, r, db, f.GroupID, "analyst") {
 			return
 		}
-		u := f.Update().SetStatus(body.Status)
-		if body.Status == "open" {
-			u.ClearResolvedAt().ClearResolvedBy().ClearNote()
-		} else {
-			u.SetResolvedAt(time.Now()).SetResolvedBy(auth.From(r.Context()).Username).SetNote(note)
-		}
-		if err := u.Exec(r.Context()); err != nil {
+		if err := findings.Set(r.Context(), db, f, body.Status, note, auth.From(r.Context()).Username, audit.RemoteAddr(r), ""); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		audit.Log(r.Context(), db, r, "finding_status", f.Title, strings.TrimSpace(body.Status+" "+note))
 		w.WriteHeader(http.StatusNoContent)
 	})
 }

@@ -21,7 +21,7 @@
 | `SANDBOX_KEY` | 空 | 与 sandboxd 的共享密钥，至少 32 个字符 |
 | `SANDBOX_CA_FILE` | 空 | 校验 sandboxd 证书的 CA；空用系统根证书 |
 
-Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/identify/egress/memories/remember/forget/suppress/propose_close/report，以及已配置组的 query。suppress 提交抑制草案，组管理员批准后才生效，见 [检测链路 · 抑制](detection.md#抑制serverinternalsuppress)。identify 把对某个监听服务的调查结论写回资产（来源 investigation，不覆盖人工标注），见 [资产图谱与攻击面](asset-map.md#服务说明与调查)；egress 同样写回对某个公网外联的调查结论（只收这台主机确实连过的公网地址）。
+Pi 不注册内置文件和 shell 工具，平台只暴露 exec/track/ignore/identify/egress/memories/remember/forget/suppress/propose_close/report，以及已配置组的 query。suppress 提交抑制草案，组管理员批准后才生效，见 [检测链路 · 抑制](detection.md#抑制serverinternalsuppress)。identify 把对某个监听服务的调查结论写回资产（来源 investigation，不覆盖人工标注），见 [资产图谱与攻击面](asset-map.md#服务说明与调查)；egress 同样写回对某个公网外联的调查结论（只收这台主机确实连过的公网地址）。
 没有新增对外工具执行端口，身份、组和来源均由 Go 绑定，模型不能修改；命令一律真执行，没有演练模式。
 每轮上下文包含本组最多 200 台资产的 UUID、主机名和 OS；超出会标注截断。
 每轮最多「组内主机数 × 20 + 遗留待办数 + 32」次模型调用（32–256），预算写进系统提示让模型留出提交报告的余量，每次输出最多 8192 token。exec 送入模型的 stdout/stderr 各最多 16 KiB，截断标记为 `truncated=true`，Command 记录仍保留原始回执。GLM 显式关闭模板 thinking。未实现费用预算或自动历史压缩。
@@ -218,6 +218,13 @@ severity 只有 low / medium / high，detail 必填，每轮最多新登记 10 �
 每轮会话的系统提示数据带 `open_findings`（遗留）与 `ignored_findings`（忽略及原因，各最多 100 条），
 模型据此先复查遗留、不再报忽略项；轮数预算按遗留条数加宽。人在控制台「运维待办」标已处理或忽略，
 接口见 `docs/api.md`。删组、主机换组或移出组时，该主机在原组的待办一并删除。
+
+用户在对话里明确要求忽略某条待办时，AI 用 `ignore({host,key,reason})`（沙箱里是 `xdr ignore <主机名> <key> <理由>`）
+代为忽略，效果与待办页人工忽略完全一致（同一段 `internal/findings` 逻辑）：状态改为 ignored、原因写进 note、
+`resolved_by` 记发起对话的用户，审计 `finding_status` 记在该用户名下，说明里附「AI 会话 <id> 代 <用户> 执行」。
+闸门：只认 kind=chat、发起人是人类用户的会话，且每次调用都从库里重新读该用户在会话所属组的角色，必须是组管理员；
+定时任务（system 身份）与非组管理员发起的对话一律拒绝，并告诉模型把要忽略的项写进回复或报告由人处理。
+skill 里写明只有用户明确要求时才能用，不得自行决定忽略。
 
 ## 预设任务
 

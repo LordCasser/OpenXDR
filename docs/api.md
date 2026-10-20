@@ -22,7 +22,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | GET | `/api/incidents/groups?status=review\|unresolved` | 按规则归并（只是视图，不改 incident）：未结案事件按「主告警的规则 + 主机」分组，主告警取事件里级别最高的告警（同级取最早）；情报命中的规则 ID 形如 `intel:ip:1.2.3.4`，同一目标自然归一组。每组含 `ruleId`、`ruleTitle`、`assetId`、`hostname`、`count`、`severity`、`firstAt` / `lastAt`（事件创建时间）、`verdicts`（`benign` / `suspicious` / `malicious` / `none` 各几个）与组内事件 `incidents`（同列表项）；按事件数、最近时间倒序。`status` 默认 `review`，只接受 `review` / `unresolved`；最多扫最近 2000 个事件，超出时 `X-Truncated: 1`，`X-Total-Count` 为匹配总数 |
 | POST | `/api/incidents/batch-status` | 批量结案 `{"ids":[…],"status":"closed\|false_positive","note":"…","confirmMalicious":false}`：一次 1–200 个，口径与单个结案一致（理由规则、结案人与时间、作为人工案例回喂研判），一个事务内全部成功或全部不动，逐条写 `incident_status` 审计。任一事件不存在（404）、不在调用者有 analyst 权限的组内（403）、已被结案（409）或需写理由却没写（400）都整批拒绝；含 AI 判恶意的事件按 `false_positive` 结案必须 `confirmMalicious: true`，否则 409。说明原样等于这批里某个事件的 AI 结案建议时，整批记为 `resolution_source=ai_proposal`。返回 `{"resolved":n}` |
 | GET | `/api/findings?status=` | 运维待办（巡检 AI 登记，按组裁剪，最近 500 条），含主机名、首次与最近发现时间 |
-| POST | `/api/findings/{id}/status` | `{"status":"open\|resolved\|ignored","note":"…"}`，需组内 analyst；resolved / ignored 必须写原因，忽略原因会交给巡检 AI，之后不再登记 |
+| POST | `/api/findings/{id}/status` | `{"status":"open\|resolved\|ignored","note":"…"}`，需组内 analyst；resolved / ignored 必须写原因，忽略原因会交给巡检 AI，之后不再登记，写审计 `finding_status`；组管理员发起的 Pi 对话里 AI 可按用户明确要求代为忽略，口径相同（见 `docs/pi-backend.md`「运维待办」） |
 | GET | `/api/incidents/{id}/report` | 事件报告（Markdown 附件下载）：判定、攻击链、涉及实体、告警时间线、处置记录、处置建议 |
 | GET | `/api/events` | 原始事件检索，参数见下 |
 | GET | `/api/events/{id}/related` | 与这条日志有确定关联的日志，按关联方式分组：ancestor 父进程链 / process 同一进程 / child 子进程 / connection 同一连接 / peer 别的主机连同一远端 / nearby 同主机前后两分钟；只取调用者可见的资产 |

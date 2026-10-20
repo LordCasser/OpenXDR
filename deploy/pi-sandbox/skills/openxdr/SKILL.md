@@ -14,6 +14,9 @@ description: OpenXDR 运维与安全助手的工作手册。处理安全事件�
 - `xdr exec` 的命令真实执行在主机上。少数高风险命令会暂停，等组管理员批准，返回「仍在等待批准」时：
   **不要改写、拆分命令去绕开**，先做不依赖它的工作，最后在回复或报告里列出仍在等待批准的操作。
 - 用户没要求处置时只做只读排查：不改配置、不重启服务、不删文件、不杀进程。
+- `xdr ignore` 忽略待办等同组管理员本人在待办页点忽略，**只有用户在对话里明确要求忽略某条待办时才用**，
+  理由照用户说的写；不得自行决定忽略，觉得某条不必处理就写进回复或报告，由人决定。定时任务和非组管理员发起的对话里会被拒绝，不要重试。
+  `xdr track ... withdrawn` 只能撤回本轮登记错的条目，不是忽略。
 - 结论要区分「已观察」「推断」「未验证」。输出带 `truncated` 时只是部分证据，不能说成完整覆盖。
 
 ## 命令
@@ -31,6 +34,7 @@ xdr sql --json - > ev.jsonl <<'EOF'          # --json 每行一个 JSON 对象�
 SELECT alert_id, event_ts, raw FROM alert_events WHERE incident_id = '<事件 id>'
 EOF
 xdr track pve1 disk-full medium open '根分区 93%' '/dev/sda1 93%，journal 占 11G'
+xdr ignore pve2 raid-bbu-failed '用户要求忽略：电池已订货，下周更换'   # 只在用户明确要求忽略时用，见下
 xdr identify pve1 udp/5405 low 'Corosync 集群通信' '进程 corosync，PVE 集群心跳，仅集群内访问'
 xdr egress pve2 208.111.34.178 low 'Tailscale 中继' 'tailscaled 连 DERP 中继，组网正常业务'
 xdr memories                                # 本组长期记忆（实时，含刚记下的）：id 来源 主机 内容

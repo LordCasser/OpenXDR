@@ -14,7 +14,9 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/finding"
+	"openxdr/server/internal/auth"
 	"openxdr/server/internal/commandgate"
+	"openxdr/server/internal/findings"
 )
 
 const trackDescription = "登记或复查一条运维待办。只登记需要人去处理的具体问题，一个问题一条；" +
@@ -156,4 +158,74 @@ func (s *Service) findingsFor(ctx context.Context, group uuid.UUID, hostnames ma
 		}
 	}
 	return open, ignored, nil
+}
+
+const ignoreDescription = "按用户在对话里的明确要求忽略一条运维待办，效果同待办页的人工忽略：记在发起对话的人名下，" +
+	"巡检 AI 以后不再登记。只有用户明确说要忽略某条待办时才用，不得自行决定忽略；只在组管理员发起的对话里可用，定时任务不能用。" +
+	"host 与 key 取 open_findings 里的值；reason 写用户给的忽略理由（1–2000 字）。"
+
+var ignoreParameters = json.RawMessage(`{"type":"object","properties":{` +
+	`"host":{"type":"string"},` +
+	`"key":{"type":"string"},` +
+	`"reason":{"type":"string","minLength":1,"maxLength":2000}},` +
+	`"required":["host","key","reason"],"additionalProperties":false}`)
+
+// ignore 代发起对话的组管理员忽略待办：落库与审计走控制台同一套 findings.Set。
+// 身份只认人发起的对话会话，用户与组内角色每次从库里重新取。
+func (s *Service) ignore(ctx context.Context, session *ent.AgentSession, who commandgate.Request, args json.RawMessage) (string, error) {
+	u, err := s.groupAdmin(ctx, session, who)
+	if err != nil {
+		return "", err
+	}
+	var body struct {
+		Host   uuid.UUID `json:"host"`
+		Key    string    `json:"key"`
+		Reason string    `json:"reason"`
+	}
+	if err := json.Unmarshal(args, &body); err != nil {
+		return "", err
+	}
+	note, err := findings.Clean("ignored", body.Reason)
+	if err != nil {
+		return "", err
+	}
+	f, err := s.DB.Finding.Query().
+		Where(finding.GroupIDEQ(session.GroupID), finding.AssetIDEQ(body.Host), finding.KeyEQ(body.Key)).
+		Only(ctx)
+	if ent.IsNotFound(err) {
+		return "", errors.New("本组这台主机上没有这个 key 的待办，host 与 key 取 xdr context 里 open_findings 的值")
+	}
+	if err != nil {
+		return "", err
+	}
+	if f.Status == "ignored" {
+		return marshal(map[string]any{"id": f.ID, "status": "ignored", "note": f.Note, "already": true})
+	}
+	via := "AI 会话 " + session.ID.String() + " 代 " + u.Username + " 执行"
+	if err := findings.Set(ctx, s.DB, f, "ignored", note, u.Username, "server", via); err != nil {
+		return "", err
+	}
+	return marshal(map[string]any{"id": f.ID, "status": "ignored", "by": u.Username})
+}
+
+// errNotHumanAdmin 定时任务或非组管理员的会话里调用忽略时给模型的说明
+var errNotHumanAdmin = errors.New("忽略待办只能在组管理员发起的对话里、按用户的明确要求执行；" +
+	"当前会话不满足（定时任务或发起人不是组管理员），不要重试，把需要忽略的待办写进回复或报告，由组管理员在待办页处理")
+
+// groupAdmin 会话发起人必须是人，且此刻仍是会话所属组的管理员。
+func (s *Service) groupAdmin(ctx context.Context, session *ent.AgentSession, who commandgate.Request) (*ent.User, error) {
+	if who.System || who.UserID == uuid.Nil || session.Kind != "chat" || session.Initiator == commandgate.SystemActor {
+		return nil, errNotHumanAdmin
+	}
+	u, err := s.DB.User.Get(ctx, who.UserID)
+	if ent.IsNotFound(err) {
+		return nil, errNotHumanAdmin
+	}
+	if err != nil {
+		return nil, err
+	}
+	if u.Username != session.Initiator || !auth.Allowed(auth.GroupRole(ctx, s.DB, u, session.GroupID), "admin") {
+		return nil, errNotHumanAdmin
+	}
+	return u, nil
 }

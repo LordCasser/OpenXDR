@@ -25,6 +25,7 @@ const XDR: Record<string, [Activity['kind'], MsgKey]> = {
   egress: ['record', 'actEgress'],
   remember: ['record', 'actRemember'],
   forget: ['record', 'actForget'],
+  ignore: ['record', 'actIgnore'],
   suppress: ['record', 'actSuppress'],
   'propose-close': ['record', 'actProposeClose'],
   report: ['report', 'actReport'],

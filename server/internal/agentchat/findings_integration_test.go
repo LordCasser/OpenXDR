@@ -11,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"openxdr/server/ent"
+	"openxdr/server/ent/auditlog"
 	"openxdr/server/ent/finding"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/testdb"
@@ -129,5 +131,79 @@ func TestTrackFindings(t *testing.T) {
 	}
 	if n := db.Finding.Query().Where(finding.StatusEQ("open")).CountX(ctx); n != 1 {
 		t.Errorf("应只有一条遗留：%d", n)
+	}
+}
+
+// 对话里代人忽略待办：只有组管理员发起的对话可以，定时任务与非管理员一律拒绝；落库与审计同控制台
+func TestIgnoreFinding(t *testing.T) {
+	ctx, db := testdb.New(t)
+	group := db.Group.Create().SetName("g").SaveX(ctx)
+	host := db.Asset.Create().SetHostname("pve2").SetGroupID(group.ID).SaveX(ctx)
+	f := db.Finding.Create().SetGroupID(group.ID).SetAssetID(host.ID).SetKey("raid-bbu-failed").SetTitle("RAID 电池故障").SaveX(ctx)
+	boss := db.User.Create().SetUsername("boss").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
+	member := db.GroupMember.Create().SetGroupID(group.ID).SetUserID(boss.ID).SetRole("admin").SaveX(ctx)
+	ana := db.User.Create().SetUsername("ana").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
+	db.GroupMember.Create().SetGroupID(group.ID).SetUserID(ana.ID).SetRole("analyst").SaveX(ctx)
+	chat := func(initiator string) *ent.AgentSession {
+		return db.AgentSession.Create().SetKind("chat").SetGroupID(group.ID).SetInitiator(initiator).SetModel("m").SetStatus("running").SaveX(ctx)
+	}
+	task := db.AgentSession.Create().SetKind("task").SetGroupID(group.ID).SetInitiator(commandgate.SystemActor).
+		SetModel("m").SetStatus("running").SetTitle("巡检").SaveX(ctx)
+	s := &Service{DB: db}
+	args := []byte(`{"host":"` + host.ID.String() + `","key":"raid-bbu-failed","reason":"电池已订货，下周更换"}`)
+	ignore := func(session *ent.AgentSession, who commandgate.Request) (string, error) {
+		return s.tool(ctx, session, who, "ignore", args)
+	}
+	untouched := func() {
+		t.Helper()
+		if got := db.Finding.GetX(ctx, f.ID); got.Status != "open" || got.Note != nil {
+			t.Fatalf("待办不该被改：%+v", got)
+		}
+	}
+
+	if out, err := ignore(task, commandgate.Request{System: true}); err == nil || !strings.Contains(err.Error(), "定时任务") {
+		t.Fatalf("定时任务必须拒绝并说明原因：%s %v", out, err)
+	}
+	untouched()
+	if _, err := ignore(chat(ana.Username), commandgate.Request{UserID: ana.ID}); err == nil {
+		t.Fatal("组内 analyst 发起的对话不能忽略")
+	}
+	untouched()
+	if _, err := ignore(chat(ana.Username), commandgate.Request{UserID: boss.ID}); err == nil {
+		t.Fatal("代办身份必须是会话发起人")
+	}
+	untouched()
+	// 角色每次从库里取：降级后立即失效
+	db.GroupMember.UpdateOne(member).SetRole("analyst").ExecX(ctx)
+	if _, err := ignore(chat(boss.Username), commandgate.Request{UserID: boss.ID}); err == nil {
+		t.Fatal("降级后不能再忽略")
+	}
+	untouched()
+	db.GroupMember.UpdateOne(member).SetRole("admin").ExecX(ctx)
+
+	session := chat(boss.Username)
+	out, err := ignore(session, commandgate.Request{UserID: boss.ID})
+	if err != nil || !strings.Contains(out, `"status":"ignored"`) {
+		t.Fatalf("组管理员的对话应能忽略：%s %v", out, err)
+	}
+	got := db.Finding.GetX(ctx, f.ID)
+	if got.Status != "ignored" || got.Note == nil || *got.Note != "电池已订货，下周更换" || got.ResolvedBy == nil || *got.ResolvedBy != "boss" {
+		t.Fatalf("忽略应记在发起人名下并带理由：%+v", got)
+	}
+	logs := db.AuditLog.Query().Where(auditlog.ActionEQ("finding_status")).AllX(ctx)
+	if len(logs) != 1 || logs[0].Username != "boss" || logs[0].Detail == nil ||
+		!strings.Contains(*logs[0].Detail, "电池已订货") || !strings.Contains(*logs[0].Detail, session.ID.String()) {
+		t.Fatalf("审计应记人、理由与会话：%+v", logs)
+	}
+	if out, err := ignore(session, commandgate.Request{UserID: boss.ID}); err != nil || !strings.Contains(out, `"already":true`) {
+		t.Fatalf("已忽略的应原样告知：%s %v", out, err)
+	}
+	if _, err := s.tool(ctx, session, commandgate.Request{UserID: boss.ID}, "ignore",
+		[]byte(`{"host":"`+host.ID.String()+`","key":"nope","reason":"x"}`)); err == nil {
+		t.Error("没有的待办应报错")
+	}
+	if _, err := s.tool(ctx, session, commandgate.Request{UserID: boss.ID}, "ignore",
+		[]byte(`{"host":"`+host.ID.String()+`","key":"raid-bbu-failed","reason":"  "}`)); err == nil {
+		t.Error("空理由应拒绝")
 	}
 }

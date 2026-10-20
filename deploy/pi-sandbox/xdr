@@ -35,6 +35,7 @@ usage() {
   xdr sql [--json] <只读SQL|->           查本组只读视图，默认 TSV（首行列名）；--json 每行一个 JSON 对象，
                                          jsonb 列保持原样，适合交给 jq；- 表示从 stdin 读 SQL
   xdr track <主机名> <key> <low|medium|high> <open|resolved|withdrawn> <标题> <详情>
+  xdr ignore <主机名> <key> <理由>        用户在对话里明确要求时忽略待办（同待办页人工忽略；仅组管理员发起的对话可用）
   xdr identify <主机名> <tcp/端口|udp/端口> <high|medium|low> <服务名> <依据与结论>
   xdr egress <主机名> <公网地址> <high|medium|low> <用途> <依据与结论>
   xdr memories                           本组长期记忆（实时，含本轮刚记下的；id、来源、主机、内容）
@@ -73,6 +74,9 @@ case "$cmd" in
   track)
     [ $# -ge 6 ] || { usage; exit 2; }
     call track "$(jq -cn --arg h "$(host_id "$1")" --arg k "$2" --arg sv "$3" --arg st "$4" --arg t "$5" --arg d "$6" '{host:$h,key:$k,severity:$sv,status:$st,title:$t,detail:$d}')" ;;
+  ignore)
+    [ $# -ge 3 ] || { usage; exit 2; }
+    call ignore "$(jq -cn --arg h "$(host_id "$1")" --arg k "$2" --arg r "$3" '{host:$h,key:$k,reason:$r}')" ;;
   identify)
     [ $# -ge 5 ] || { usage; exit 2; }
     call identify "$(jq -cn --arg h "$(host_id "$1")" --arg p "$2" --arg r "$3" --arg n "$4" --arg note "$5" '{host:$h,port:$p,risk:$r,name:$n,note:$note}')" ;;

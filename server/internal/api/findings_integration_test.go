@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"openxdr/server/ent/auditlog"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/suppress"
@@ -57,6 +58,9 @@ func TestAPIFindings(t *testing.T) {
 	}
 	if f := client.Finding.GetX(ctx, fA.ID); f.Status != "ignored" || f.Note == nil || *f.Note != "计划下线" || f.ResolvedBy == nil {
 		t.Errorf("忽略未落库：%+v", f)
+	}
+	if n := client.AuditLog.Query().Where(auditlog.ActionEQ("finding_status"), auditlog.DetailEQ("ignored 计划下线")).CountX(ctx); n != 1 {
+		t.Errorf("忽略应落审计，得到 %d 条", n)
 	}
 	if code := post(admin, `{"status":"open"}`); code != http.StatusNoContent || client.Finding.GetX(ctx, fA.ID).Note != nil {
 		t.Errorf("重开应清掉原因，得到 %d", code)
