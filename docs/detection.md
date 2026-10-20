@@ -308,6 +308,23 @@ temperature 0.1，超时 `AI_TIMEOUT_SECONDS` 默认 120s
 引擎只取 `content` 里的 JSON。推理服务在内网时注意 `NO_PROXY`——Go 默认
 读 `HTTP_PROXY`，内网端点可能被错误代理。
 
+### 人工结案与批量结案（`server/internal/api`）
+
+- 需人工复核的口径统一在 `server/internal/review`（`Needed`）：未结案，且 AI 没判良性、最高级别 ≥ 高危(4)
+  或含人工提交的诱饵观察；低危良性放满 `AUTO_CLOSE_BENIGN_DAYS`（默认 7）天由 janitor 按误报自动结案（`resolved_by=system`）。
+- 单个结案（`POST /api/incidents/{id}/status`）与批量结案（`POST /api/incidents/batch-status`）共用
+  `resolutionOf`：结论与 AI 研判一致时理由可空（说明取研判摘要，记 `resolution_source=ai_verdict`），
+  相反或没研判必须写；结案记结案人与时间、清掉 AI 结案建议、逐条写 `incident_status` 审计。
+- 批量结案一次最多 200 个，一个事务内锁住这批事件，任一不可见、已结案或缺理由就整批拒绝，不做部分结案。
+  AI 判恶意的事件按误报结案必须显式二次确认（`confirmMalicious`），不能被一批良性顺手带走；控制台默认把它们
+  排除在批量误报之外，勾选确认才一起关。
+- 事件页「按规则归并」视图（`GET /api/incidents/groups`）把同一规则（或同一情报目标）在同一主机上反复产生的
+  未结案事件归成一组，显示事件数、首末时间与 AI 研判分布，可整组结案。归并只是视图，不合并 incident。
+  组内有 AI 结案建议时说明默认预填建议文本；原样采纳记 `ai_proposal`。
+- **人工案例回喂**：研判时 `appendCaseHistory` 取近 90 天同规则或同主机、人工结案的事件（排除系统自动结案与
+  `resolution_source` 非空的采纳 AI），连同当时的 AI 结论与结案说明放进上下文。批量结案逐条写同样的字段，
+  所以和单个结案一样回喂；同一说明批量关掉的事件会各自作为案例出现。
+
 ### 准确度（`server/internal/api/accuracy.go`）
 
 研判结论落库时记下当次用的模型（`ai_verdict.model`，`triage/engine.go` 的 `withModel`），
