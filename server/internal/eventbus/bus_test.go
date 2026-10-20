@@ -1,10 +1,35 @@
 package eventbus
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go"
 )
+
+func TestNotStoredOnlyProvenRejections(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{nats.ErrNoStreamResponse, true},
+		{fmt.Errorf("包装: %w", nats.ErrNoResponders), true},
+		{&nats.APIError{Code: 503, Description: "raft: not leader"}, true},
+		{&nats.APIError{Code: 500, ErrorCode: 10009, Description: "JetStream cluster can not handle request"}, true},
+		{nats.ErrTimeout, false},
+		{context.DeadlineExceeded, false},
+		{&nats.APIError{Code: 503, Description: "raft: write error"}, false},
+		{&nats.APIError{Code: 503, ErrorCode: 10077, Description: "maximum messages exceeded"}, false},
+		{nats.ErrInvalidJSAck, false},
+	} {
+		if got := notStored(tc.err); got != tc.want {
+			t.Errorf("notStored(%v) = %t，期望 %t", tc.err, got, tc.want)
+		}
+	}
+}
 
 func TestShardStableAndBounded(t *testing.T) {
 	for _, key := range []string{"asset-a", "asset-b", "10.0.0.1"} {

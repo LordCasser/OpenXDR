@@ -3,6 +3,7 @@ package eventbus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"openxdr/server/internal/ingest"
+	"openxdr/server/internal/natsretry"
 )
 
 const (
@@ -65,6 +67,7 @@ type JetStream struct {
 	metrics    Metrics
 	subs       []*nats.Subscription
 	monitorEnd chan struct{}
+	retry      natsretry.Policy
 }
 
 func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, maxAge time.Duration, processor Processor, metrics Metrics) (*JetStream, error) {
@@ -121,7 +124,7 @@ func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, ma
 		nc.Close()
 		return nil, err
 	}
-	b := &JetStream{nc: nc, js: js, shards: shards, replicas: replicas, metrics: metrics, monitorEnd: make(chan struct{})}
+	b := &JetStream{nc: nc, js: js, shards: shards, replicas: replicas, metrics: metrics, monitorEnd: make(chan struct{}), retry: natsretry.Default}
 	for i := 0; i < shards; i++ {
 		shard := fmt.Sprintf("%02x", i)
 		subject := "openxdr.events." + shard
@@ -163,12 +166,39 @@ func (b *JetStream) Publish(ctx context.Context, e ingest.Envelope) error {
 	msg := nats.NewMsg("openxdr.events." + fmt.Sprintf("%02x", shard))
 	msg.Data = body
 	msg.Header.Set(nats.MsgIdHdr, e.ID.String())
-	if _, err = b.js.PublishMsg(msg, nats.Context(ctx)); err != nil {
+	// 选主瞬断在这里吸收，不把错误抛给 agent/sensor 让整条上报连接断开重连
+	err = b.retry.Do(ctx, func() error {
+		_, err := b.js.PublishMsg(msg, nats.Context(ctx))
+		return err
+	}, notStored)
+	if err != nil {
 		b.metrics.PublishFailed()
 		return err
 	}
 	b.metrics.Published(e.Source)
 	return nil
+}
+
+// jsClusterNotLeader nats-server 的 JSClusterNotLeaderErr（err_code 10009），nats.go 没有导出常量
+const jsClusterNotLeader nats.ErrorCode = 10009
+
+// notStored 能证明流没有收下这条消息的发布错误，重发安全：
+//   - ErrNoStreamResponse / ErrNoResponders：流 leader 只在当选后订阅主题，选主空档里没人订阅，
+//     NATS 直接回 no responders，消息根本没进任何副本（nats.go 自己已先重试两次）
+//   - 503「raft: not leader」：旧 leader 收到消息时已卸任，raft 提案被拒、没有写入日志
+//   - 10009 集群非 leader：在提案前就拒绝
+//
+// 超时等「可能已写入」的错误不在此列，按原样报错。即便误判，Nats-Msg-Id 去重窗口与
+// 事件稳定 ID 的主键幂等也保证重发不会产生重复事件。
+func notStored(err error) bool {
+	if errors.Is(err, nats.ErrNoStreamResponse) || errors.Is(err, nats.ErrNoResponders) {
+		return true
+	}
+	var api *nats.APIError
+	if !errors.As(err, &api) {
+		return false
+	}
+	return api.ErrorCode == jsClusterNotLeader || (api.Code == 503 && api.ErrorCode == 0 && api.Description == "raft: not leader")
 }
 
 func (b *JetStream) Ready() bool {
