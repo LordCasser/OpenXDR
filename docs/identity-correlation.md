@@ -74,7 +74,7 @@ SID 使用常见十进制表示并校验数值范围；未知 SID 不降级为�
 
 ## 多目录接入
 
-按多身份源实现，不绑定单一厂商。已实现 Keycloak、Entra ID、AD/LDAP 账号读取及通用存储，端点本地账号见下文 Linux 部分；
+按多身份源实现，不绑定单一厂商。已实现 Keycloak、Entra ID、Authentik、AD/LDAP 账号读取及通用存储，端点本地账号见下文 Linux 部分；
 目录组/成员、设备和会话关系仍未实现。
 
 `internal/identity/directory` 的来源包含固定 ID、授权资产组、类型和权威地址。
@@ -119,6 +119,26 @@ accountEnabled 的可读性还应按租户授权及当前 Graph 文档确认；�
 协议依据：[用户枚举](https://learn.microsoft.com/en-us/graph/api/user-list?view=graph-rest-1.0)、
 [组织查询](https://learn.microsoft.com/en-us/graph/api/organization-list?view=graph-rest-1.0)、
 [Graph 分页](https://learn.microsoft.com/en-us/graph/paging)。
+
+### Authentik 账号适配器
+
+`NewAuthentik` 接受实例根地址（必须 HTTPS，校验证书，可用 `caEnv` 追加根 CA）和令牌提供器，
+只调用 `GET <根地址>/api/v3/core/users/?page=N&page_size=100`，Bearer 认证，拒绝 HTTP 跳转。
+来源权威地址即实例根地址。账号以 `uuid` 作为不可变外部 ID（规范成小写），`username` 只作名称，
+`pk`、显示名与邮箱不参与身份；`is_active` 映射 enabled，缺省保留未知。
+
+`type` 为 internal / external 视为人类用户，service_account / internal_service_account 视为服务账号；
+默认只同步人类用户，`includeServiceAccounts: true` 时一并同步。出现未知或缺失的 type 无法判定口径，整次读取失败。
+
+一致快照与 Keycloak 同口径：每轮前后各用 `page=1&page_size=1` 取一次 `pagination.count`，
+每页自报的 count 也必须等于轮前总数；两次相同且去重后的账号数（含服务账号，过滤在校验之后）恰好等于它才算成功。
+重复 uuid、漏页或总数变化则整轮重扫，最多 3 轮仍不一致即失败。分页按 `pagination.next` 前进，
+要求 `current` 与请求页一致、`next` 为 0 或下一页；单页最多 100 条、2 MiB，整次最多 10000 账号/1000 页/2 分钟，
+单请求最长 30 秒。HTTP 错误、坏字段、超限、令牌缺失或取消都使整次读取失败，不返回部分结果；错误不回显响应体或令牌。
+Authentik 不提供 SID，账号只作为目录身份锚点，同名端点账号只列为候选。
+
+本地 HTTPS 模拟服务覆盖分页与过滤、前后总数/页内总数不一致、重复与漏账号、坏字段与未知类型、令牌与 HTTP 错误、
+TLS 证书校验失败、单请求超时与整轮取消，以及配置到同步、身份图和查询接口的 PostgreSQL 链路；尚无真实 Authentik 实例验收。
 
 ### AD / LDAP 账号适配器
 
@@ -183,6 +203,20 @@ accountEnabled 的可读性还应按租户授权及当前 Graph 文档确认；�
 ```
 
 Entra 使用 `kind: entra`、Graph 根 URL、`tenantId` 和 `tokenEnv`，不填 realm。
+Authentik 使用 `kind: authentik`、实例根 `url` 和 `tokenEnv`（API 令牌，需能读取用户列表），
+可选 `includeServiceAccounts`（默认 false，只同步人类用户），不接受 realm、tenantId、LDAP 字段或 oauth：
+
+```json
+[{
+  "id": "33333333-3333-4333-8333-333333333333",
+  "groupId": "22222222-2222-4222-8222-222222222222",
+  "kind": "authentik",
+  "url": "https://auth.example.invalid",
+  "tokenEnv": "AUTHENTIK_TOKEN",
+  "intervalSeconds": 900
+}]
+```
+
 AD/LDAP 使用 `kind: ad` 或 `ldap`、`url`、`baseDN`、`bindUserEnv`、`bindPasswordEnv`，可选 `filter`。
 所有来源可用 `caEnv` 引用额外 PEM 根证书；CA 在启动时加载。同步周期默认 900 秒，范围 300–86400 秒。
 HTTP 目录可选择静态 tokenEnv 或下文的 OAuth 客户端凭据模式；静态令牌过期会记录失败，更新环境后需重启服务。
@@ -471,4 +505,4 @@ viewer 只读；组内 analyst/admin 可操作。中英文文案同步。
 - 组查询视图用只有 CREATEROLE 的非超级用户开通验证通过。
 - 未做浏览器交互与生产验收。
 - 仍未实现：目录组/成员关系、跨重启会话、Windows 登录的 Pi 专用视图（AI 用 events 查 4624/4625）、
-  Entra/Keycloak 账号与端点账号的强证据（它们不提供 SID，只能人工确认）。
+  Entra/Keycloak/Authentik 账号与端点账号的强证据（它们不提供 SID，只能人工确认）。
