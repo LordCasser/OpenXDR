@@ -117,6 +117,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `commandgate`：人工与 AI exec 的组权限、命令名单、阻塞审批与审计
 - `schedule` / `report`：`tasks/*.yml` 预设任务按组定时拉起 Pi 会话（系统身份），报告 HTML/PDF 渲染
 - `response`：响应处置（结束进程 / 主机隔离），含自动响应钩子
+- `natsretry`：NATS 选主瞬断的有界重试，只用于调用方能证明对端没收下的错误（事件发布、跨节点指令投递）
 - `notify`：Webhook 通知（generic / dingtalk / feishu / wecom）
 - `syslog`：syslog 接入（UDP+TCP，RFC3164/RFC5424）
 - `api` / `auth` / `audit`：REST API、认证与 RBAC、审计日志

@@ -21,6 +21,23 @@ consumer group 消费。两种模式共用 `ingest.Processor`，检测语义不�
 - agent 指令通过 NATS request/reply 路由到持有其 gRPC 长连接的 server；
   在线判断同样跨节点，响应结果仍落共享数据库审计。
 
+## 选主瞬断
+
+JetStream 流换 leader 的一两秒里，server 内部有界重试（首次 100ms、翻倍到 1s 封顶、
+从首次尝试起总计约 5 秒，`internal/natsretry`），不把错误抛给 agent/sensor 让上报连接断开，
+也不把指令立刻判成 unknown。只重试能证明对端**肯定没收下**的错误：
+
+| 路径 | 重试的错误 | 依据 |
+|---|---|---|
+| 事件发布 | no responders（`ErrNoStreamResponse`） | 流 leader 当选后才订阅主题，选主空档没有订阅者，NATS 直接回 no responders，消息没进任何副本 |
+| 事件发布 | 503 `raft: not leader`、10009 集群非 leader | 旧 leader 已卸任，raft 提案被拒，没有写入日志 |
+| 指令投递 | no responders | 服务端查不到订阅才回这个状态，没有交给任何节点（agent 重连换节点的空档） |
+| 指令投递 | 持有订阅的节点回「agent 指令连接已失效」 | 同一队列组只投一个成员，它没把指令放进通道（旧连接还没退订） |
+
+其它错误照原样处理：事件发布超时等直接报错（即便重发，Nats-Msg-Id 去重与事件稳定 ID 主键
+也保证不重复）；指令投递超时、连接中断等**可能已下发**的失败不重试，记 unknown、禁止自动重发；
+「队列已满」等确定的拒绝重试改变不了结果，维持原口径。重试超限后返回最后一次错误，口径与重试前相同。
+
 ## 三节点启动
 
 ```bash

@@ -10,6 +10,12 @@
 - events 按 UTC 日分区：新库直接建分区表，保留期改为整分区退役（被引用的证据并入月归档分区）；指向 events 的外键改由触发器维护。
   老库照旧运行，用 `cmd/eventpartition` 在线迁移（镜像触发器同步、分批回填可续跑、逐日核对、短锁切换、可回滚），步骤见 [事件表分区](docs/event-partitioning.md)。
 
+### 修复
+
+- JetStream 换 leader 时 agent 上报连接被整条断开（`raft: not leader`）、跨节点 exec 被判成 unknown：
+  事件发布与指令投递对能证明没被接收的错误（no responders、raft 非 leader、旧连接拒收）在 server 内部有界重试约 5 秒；
+  可能已下发的失败仍记 unknown、不重发。依据见 [集群](docs/cluster.md#选主瞬断)。
+
 ## [0.2.1] - 2026-10-20
 
 ### 修复
