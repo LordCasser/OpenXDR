@@ -22,6 +22,12 @@ export function EventFacts({ classUid, raw, username }: { classUid: number; raw:
   add('path', t('factPath'), p.file?.path && mono(p.file.path))
   add('cmd', t('factCmd'), p.cmd_line && p.cmd_line !== p.name && mono(p.cmd_line))
   add('user', t('factUser'), username)
+  // SSH 登录归属：agent 按 sshd 认证日志与审计会话号打的，可信自动化来源据此认
+  const ls: Raw | undefined = r.login_session
+  add('login', t('factLogin'), ls?.src_ip && <>
+    <span className="mono">{ls.user}@{ls.src_ip}</span>
+    {ls.key_fp ? <>{' '}{ls.key_type && <Tag variant="filled">{ls.key_type}</Tag>}{mono(ls.key_fp)}</> : <Typography.Text type="secondary"> · {ls.auth_method}</Typography.Text>}
+  </>)
   const container = containerLabel(r.container)
   add('container', t('factContainer'), container && <><Tag variant="filled">{r.container.runtime}</Tag>{container}{r.container.name ? <Typography.Text type="secondary"> · {r.container.uid}</Typography.Text> : null}</>)
   // 周期行为汇总：折叠了多少次、首末时间
