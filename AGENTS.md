@@ -35,7 +35,8 @@
   NATS JetStream 提供按资产分片的持久事件队列，PostgreSQL 提供幂等、持久去重
   与后台任务租约，跨节点响应指令走 NATS request/reply；
   HTTP REST（:8080，会话 cookie 认证）与 gRPC（:8081，agent/sensor 接入 + 控制信道）。
-  启动时自动建表（`client.Schema.Create`），无手动迁移。
+  启动时自动建表（`client.Schema.Create`），无手动迁移；唯独 events 是按天分区表，由 `eventpart` 维护、
+  ent 迁移不碰它（所有 `Schema.Create` 都要带 `eventpart.SchemaOption`），老库用 `cmd/eventpartition` 在线迁移。
 - **web/**（React 19 + TypeScript + Vite，antd 6 + react-router + TanStack Query）：管理控制台，
   AI 助手为主入口，按路由懒加载页面。nginx 容器部署，端口 5173→80；本地开发 8080 被占时用
   `OPENXDR_API=http://localhost:<端口> npm run dev` 指定后端。
@@ -119,12 +120,13 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `notify`：Webhook 通知（generic / dingtalk / feishu / wecom）
 - `syslog`：syslog 接入（UDP+TCP，RFC3164/RFC5424）
 - `api` / `auth` / `audit`：REST API、认证与 RBAC、审计日志
-- `janitor`：原始事件保留期清理、低危良性事件到期自动结案
+- `janitor`：原始事件保留期清理（分区表上整体退役日分区）、低危良性事件到期自动结案
+- `eventpart`：events 按天分区——建表、ent diff hook、分区预建（单活）、退役、替代外键的触发器与在线迁移逻辑
 - `assetmap`：资产图谱与攻击面——设备清单物化、依赖边聚合、区域与暴露判定、AI 标注（单活增量扫描事件）
 - `cmdorigin`：核对事件上的平台指令标记（agent 给指令拉起的进程树打标），通过的告警挂到指令上、不进关联与研判
 - `review`：需人工复核的统一口径（通知、总览计数、列表筛选与自动结案共用）
 - `testdb`：集成测试共享的 Postgres 连接与清表（仅 `integration` tag 编译）
-- `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`backtest`（用真实事件回测规则命中量）、`gencerts`（证书工具）、`sandboxd`（Pi 沙箱守护进程，见 `deploy/pi-sandbox`）
+- `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`backtest`（用真实事件回测规则命中量）、`gencerts`（证书工具）、`sandboxd`（Pi 沙箱守护进程，见 `deploy/pi-sandbox`）、`eventpartition`（老库 events 在线迁移成分区表，见 `docs/event-partitioning.md`）
 
 数据库实体定义在 `server/ent/schema/`（ent 代码生成，生成物已提交在 `server/ent/` 下）。
 

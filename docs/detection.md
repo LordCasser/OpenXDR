@@ -415,6 +415,8 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 - 只删**未被任何告警引用**的过期事件（`event.Not(event.HasAlerts())`）——
   证据跟着 incident 的生命周期走；每批 10000 条批间让出 100ms；同周期
   顺带清过期会话（`janitor.go:19,46-83`）
+- events 是按天分区表时，过期日分区整体退役：被告警 / 时序证据引用的事件并进月归档分区，
+  其余随分区删除；逐行清理只碰归档与默认分区（`eventpart.Retire`，见 [event-partitioning.md](event-partitioning.md)）
 
 ## 认证、RBAC 与审计
 

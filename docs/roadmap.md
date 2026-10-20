@@ -55,8 +55,8 @@ Security 日志 4624/4625 订阅（Security-Auditing 的 ETW provider 是受保�
 `xdr:bruteforce-success`，按用户维度隔离，Linux/Windows 通用。
 
 **3. ~~事件检索规模化~~ ✅ 索引已完成**（pg_trgm GIN）。
-待评估：events 表按时间分区（原生分区即可，TimescaleDB 作为可选增强），
-等真实数据量说话再动。
+~~events 表按时间分区~~ ✅ 已完成：生产到了 78 GB / 7800 万行，改为原生按天范围分区，
+保留期清理变成退役日分区，老库用 `cmd/eventpartition` 在线迁移，见 [event-partitioning.md](event-partitioning.md)。
 
 **4. 检测面对拍验证 —— 合成回放 ✅ 已完成，实机待环境。**
 

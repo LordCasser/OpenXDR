@@ -139,7 +139,8 @@ incident 的 status/graph 随关联与研判演进。janitor 只删无告警引�
 | `server/internal/triage` | LLM 研判（带只读调查工具） |
 | `server/internal/notify` | webhook 通知 |
 | `server/internal/response` | 响应处置指令下发（结束进程/主机隔离）与自动响应 |
-| `server/internal/janitor` | 数据保留与过期清理 |
+| `server/internal/janitor` | 数据保留与过期清理（events 分区表上整体退役日分区） |
+| `server/internal/eventpart` | events 按天分区：建表、ent 共存、预建、退役、在线迁移（见 event-partitioning.md） |
 | `server/internal/auth` | 会话、RBAC、登录限速 |
 | `server/internal/audit` | 操作审计 |
 | `agent/src/collector` | 端点采集（平台差异封死在模块内，对外一个 channel） |

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	atlas "ariga.io/atlas/sql/schema"
@@ -72,8 +73,14 @@ func Migrate(ctx context.Context, client *ent.Client, db *sql.DB) error {
 	if err := EnsureReleaseTrigger(ctx, db, Parent); err != nil {
 		return err
 	}
-	_, err = EnsureDays(ctx, db, Parent, Today(), PremakeDays)
-	return err
+	// 已有的分区表上预建可能一时等不到锁，不值得因此起不来：交给后台维护重试，期间新事件暂落默认分区
+	if _, err := EnsureDays(ctx, db, Parent, Today(), PremakeDays); err != nil {
+		if kind == "" {
+			return err
+		}
+		slog.Warn("启动时预建事件分区失败，交给后台维护重试", "err", err)
+	}
+	return nil
 }
 
 // Partitioned 报告 events 是否已是分区表。迁移前的老库返回 false，各处按老路径运行。

@@ -30,6 +30,7 @@
 | [ssh-decoy.md](ssh-decoy.md) | 独立 SSH 诱饵靶场原型：固定 Banner、标记核实、事件与验证边界 | 进行授权诱骗实验；不用于生产部署 |
 | [multi-carrier-decoys.md](multi-carrier-decoys.md) | 多载体登记、HTTP/HTML、文件打开监视、模拟 Shell 与认证事件回传 | 布放与验收通用诱饵 |
 | [decoy-defense.md](decoy-defense.md) | 诱饵、暂停注入、输出填充的运行策略、事件契约和平台接入边界 | 开发和验收三层诱饵防御 |
+| [event-partitioning.md](event-partitioning.md) | events 按天分区：主键与引用处理、ent 共存、预建与退役、老库在线迁移与回滚 | 改 events 表结构或保留期；执行分区迁移 |
 | [cluster.md](cluster.md) | JetStream 队列、server 集群、幂等语义、故障恢复与 Prometheus/Grafana | 部署多节点；排查积压、重投与节点故障 |
 | [../deploy/ha/README.md](../deploy/ha/README.md) | 跨宿主机高可用：Patroni + 三节点 JetStream + Keepalived VIP，初始化与切换验收 | 部署两故障域 HA；升级或排查 VIP、主备切换 |
 

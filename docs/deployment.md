@@ -369,7 +369,7 @@ server 全部通过环境变量配置，均有默认值：
 | `VULN_OSV_URL` | `https://osv-vulnerabilities.storage.googleapis.com` | OSV 下载地址，可指向内网镜像 |
 | `VULN_DIR` | 空 | 离线漏洞库目录（放 `Debian.zip`、`Ubuntu.zip`），设置后不联网 |
 | `BEACON_LEARNING_DAYS` | `7` | 外联心跳学习期，按资产接入时间算；首次启用回放这段历史只学不报 |
-| `RETENTION_DAYS` | `30` | 原始事件保留天数，0 表示不清理。被告警引用的证据事件不受影响 |
+| `RETENTION_DAYS` | `30` | 原始事件保留天数，0 表示不清理。被告警引用的证据事件不受影响。events 是分区表时按日分区整体退役（老库迁移见 [event-partitioning.md](event-partitioning.md)） |
 | `IPINFO_PTR` | `true` | 对资产连过的公网地址做反向解析（PTR），结果缓存，供图谱展示与 AI 标注认地址；内网没有外部解析时可设 `false` |
 | `VT_ALERT_MIN_ENGINES` | `3` | VirusTotal 判恶意的引擎数达到该值，就把地址加入威胁情报（来源 virustotal，随缓存期到期），之后再有主机连它即按情报命中告警；重查后不再达到即失效，人工录入的同一地址不动；0 关闭 |
 | `VT_API_KEY` | 空 | VirusTotal API key。配置后查询公网目的地址的归属、国家、恶意判定与历史解析域名；**会把资产连过的公网 IP 发给 VirusTotal**，不配置则不查 |
