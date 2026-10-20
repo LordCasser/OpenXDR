@@ -35,6 +35,11 @@ func TestReadOnlyAccepts(t *testing.T) {
 		`echo "today is $(date +%F)"`,
 		`smartctl --all /dev/sda 2>/dev/null | grep -iE 'BBU|battery' | head; storcli /c0 show all 2>/dev/null | grep -iA2 'BBU\|Battery' | head -12; arcconf GETCONFIG 1 AD 2>/dev/null | grep -i battery | head -5`,
 		`smartctl -H -d megaraid,0 /dev/sda; storcli64 /c0/bbu show; perccli /c0/cv show all`,
+		// 进 LXC / 容器看：里面的命令按同一份清单判定，单引号脚本递归判定
+		`visudo -c 2>&1 | head -5; vtysh -c 'show bfd peers' 2>/dev/null | head -8`,
+		`pct exec 203 -- sh -c 'du -sh /var/lib/docker/containers/*/ 2>/dev/null | sort -rh | head -5; docker ps --format "{{.Names}} {{.Status}}" 2>/dev/null | head -10' 2>/dev/null`,
+		`pct exec 203 -- cat /etc/caddy/Caddyfile | grep -c reverse_proxy`,
+		`docker exec authentik-server-1 ls /data; pct exec 203 -- docker exec authentik-server-1 cat /etc/hostname`,
 	} {
 		if !ReadOnly(cmd) {
 			t.Errorf("应判为只读：%s", cmd)
@@ -104,6 +109,25 @@ func TestReadOnlyRejects(t *testing.T) {
 		`dmesg -c`,
 		`docker rm -f x`,
 		`docker exec x sh`,
+		// 容器里的执行：写操作、带选项、脚本里有 shell 会展开的内容、sh -c 多带参数都交给人
+		`pct exec 203 -- rm -rf /tmp/x`,
+		`pct exec 203 -- sh -c 'cat /etc/hosts; rm -f /tmp/x'`,
+		`pct exec 203 -- sh -c "grep x /etc/caddy/Caddyfile > /tmp/.dom.$$.txt"`,
+		`pct exec 203 -- sh -c "cat \$(ls)"`,
+		`pct exec 203 -- sh -c "ls $HOME"`,
+		`pct exec 203 -- sh -c 'ls' extra`,
+		`pct exec 203 -- sh -c 'cat /etc/shadow'`,
+		`pct exec 203 cat /etc/hosts`,
+		`pct exec x -- cat /etc/hosts`,
+		`pct enter 203`,
+		`docker exec -u root x cat /etc/hosts`,
+		`docker exec --privileged x ls`,
+		`docker exec x sh -c 'reboot'`,
+		`visudo`,
+		`visudo -f /etc/sudoers.d/x`,
+		`vtysh -c 'conf t' -c 'no router bgp'`,
+		`vtysh -c 'show run' -c 'write'`,
+		`vtysh`,
 		`qm guest exec 108 -- id`,
 		`qm stop 108`,
 		`zfs destroy pool/x`,

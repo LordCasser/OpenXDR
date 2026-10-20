@@ -32,6 +32,13 @@ func ReadOnly(cmd string) bool {
 		if (strict || secretPath.MatchString(seg.raw)) && !metadataOnly[program] {
 			return false
 		}
+		// 容器里执行的命令按同一份清单判定；shell 会展开的段，判定看到的和容器里真跑的可能不是一回事
+		if inner, ok := containerExec(program, args); ok {
+			if seg.dynamic || !argvReadOnly(inner) {
+				return false
+			}
+			continue
+		}
 		check, known := readOnlyPrograms[program]
 		if !known || (check != nil && !check(args)) {
 			return false
@@ -40,11 +47,43 @@ func ReadOnly(cmd string) bool {
 	return true
 }
 
-// segment 一个命令段：去掉引号后的词、原文（密钥路径按原文找，含重定向目标）、是否有输入重定向
+// containerExec 拆出 pct exec <ID> -- 命令、docker exec <容器> 命令里在容器内执行的参数表；
+// docker exec 带任何选项（-u、-e、--privileged 这类）都不认
+func containerExec(program string, args []string) ([]string, bool) {
+	switch {
+	case program == "pct" && len(args) >= 4 && args[0] == "exec" && vmid.MatchString(args[1]) && args[2] == "--":
+		return args[3:], true
+	case program == "docker" && len(args) >= 3 && args[0] == "exec" && !strings.HasPrefix(args[1], "-"):
+		return args[2:], true
+	}
+	return nil, false
+}
+
+var vmid = regexp.MustCompile(`^[0-9]+$`)
+
+// argvReadOnly 不经 shell 直接执行的参数表：sh -c 只认恰好一个脚本参数，脚本按 shell 命令递归判定
+func argvReadOnly(words []string) bool {
+	if len(words) == 3 && (words[0] == "sh" || words[0] == "bash" || words[0] == "/bin/sh" || words[0] == "/bin/bash") && words[1] == "-c" {
+		return ReadOnly(words[2])
+	}
+	program, args, ok := command(words)
+	if !ok || program == "" {
+		return false
+	}
+	if inner, ok := containerExec(program, args); ok {
+		return argvReadOnly(inner)
+	}
+	check, known := readOnlyPrograms[program]
+	return known && (check == nil || check(args))
+}
+
+// segment 一个命令段：去掉引号后的词、原文（密钥路径按原文找，含重定向目标）、是否有输入重定向、
+// 单引号外是否出现 $ 或反斜杠（shell 会展开或转义，去引号后的词和真正传给程序的参数可能不同）
 type segment struct {
-	words []string
-	raw   string
-	input bool
+	words   []string
+	raw     string
+	input   bool
+	dynamic bool
 }
 
 // secretPath 与默认名单的读密钥条目同一范围，宽一点无妨：命中后只许 ls / stat 这类看元数据的命令
@@ -57,7 +96,7 @@ var metadataOnly = map[string]bool{"ls": true, "stat": true, "test": true, "[": 
 func split(cmd string) ([]segment, bool) {
 	var segments []segment
 	var words []string
-	start, redirected := 0, false
+	start, redirected, dynamic := 0, false, false
 	var word strings.Builder
 	inWord, input := false, false
 	flushWord := func() {
@@ -74,9 +113,9 @@ func split(cmd string) ([]segment, bool) {
 	flushSegment := func(end int) {
 		flushWord()
 		if len(words) > 0 {
-			segments = append(segments, segment{words, cmd[start:end], redirected})
+			segments = append(segments, segment{words, cmd[start:end], redirected, dynamic})
 		}
-		words, redirected = nil, false
+		words, redirected, dynamic = nil, false, false
 		start = end + 1
 	}
 	for i := 0; i < len(cmd); i++ {
@@ -111,10 +150,12 @@ func split(cmd string) ([]segment, bool) {
 			if j >= len(cmd) {
 				return nil, false
 			}
+			dynamic = dynamic || strings.ContainsAny(cmd[i+1:j], "$\\")
 			word.WriteString(cmd[i+1 : j])
 			inWord = true
 			i = j
 		case c == '\\':
+			dynamic = true
 			if i+1 < len(cmd) {
 				word.WriteByte(cmd[i+1])
 				inWord = true
@@ -130,6 +171,7 @@ func split(cmd string) ([]segment, bool) {
 			if !ok {
 				return nil, false
 			}
+			dynamic = true
 			word.WriteString(cmd[i : end+1])
 			inWord = true
 			i = end
@@ -181,6 +223,7 @@ func split(cmd string) ([]segment, bool) {
 			flushWord()
 			input, redirected = true, true // 输入重定向只是读文件；文件名留在段原文里，提到密钥路径照样拦
 		default:
+			dynamic = dynamic || c == '$'
 			word.WriteByte(c)
 			inWord = true
 		}
@@ -333,6 +376,8 @@ var readOnlyPrograms = map[string]func(args []string) bool{
 	"zfs":         subcommand(false, "list", "get"),
 	"chronyc":     subcommand(false, "tracking", "sources", "sourcestats", "activity"),
 	"sshd":        sshdTest,
+	"visudo":      onlyFlag("-c"),
+	"vtysh":       vtyshShow,
 	"sed":         sedRead,
 	"smartctl":    smartctlRead,
 	"storcli":     raidShow,
@@ -359,6 +404,19 @@ func sshdTest(args []string) bool {
 		}
 	}
 	return test
+}
+
+// vtyshShow vtysh 只认成对的 -c 'show …'，配置模式和别的选项一律不认
+func vtyshShow(args []string) bool {
+	if len(args) == 0 || len(args)%2 != 0 {
+		return false
+	}
+	for i := 0; i < len(args); i += 2 {
+		if args[i] != "-c" || !strings.HasPrefix(strings.TrimSpace(args[i+1]), "show ") {
+			return false
+		}
+	}
+	return true
 }
 
 func noArg(banned ...string) func([]string) bool {
