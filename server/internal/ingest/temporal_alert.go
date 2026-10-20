@@ -40,11 +40,11 @@ func (p *Processor) temporalAlert(ctx context.Context, tx *sql.Tx, match tempora
 		return false, err
 	}
 	hit := intel.Hit{RuleID: match.RuleID, Severity: match.Severity}
-	created, err := p.upsertAlert(ctx, tx, e, hit, command)
+	created, err := p.upsertAlert(ctx, tx, e, hit, origin{command: command})
 	if err != nil {
 		return false, err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE temporal_detections SET alert_id=(SELECT alert_id FROM alert_dedup_state WHERE fingerprint=$1)
-WHERE revision=$2 AND rule_id=$3 AND anchor_id=$4`, alertFingerprint(e, hit, command), match.Revision, match.RuleID, match.Anchor)
+WHERE revision=$2 AND rule_id=$3 AND anchor_id=$4`, alertFingerprint(e, hit, origin{command: command}), match.Revision, match.RuleID, match.Anchor)
 	return created, err
 }

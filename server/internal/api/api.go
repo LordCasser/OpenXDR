@@ -94,6 +94,8 @@ type alertRow struct {
 	Event      json.RawMessage `json:"event"`
 	// 合成检测（心跳等）的依据，一行人读的话；规则命中为空
 	Detail *string `json:"detail,omitempty"`
+	// 来自登记的可信自动化来源（能出现在 incident 里的只有高危例外）
+	Automation *automationRef `json:"automation,omitempty"`
 }
 
 type incidentDetail struct {
@@ -118,6 +120,7 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 	mapCommandPolicy(mux, db, gate)
 	mapAgentSessions(mux, db, chat)
 	mapSuppressions(mux, db, suppressions, rules)
+	mapTrustedSources(mux, db)
 	mapIntel(mux, db, intelStore)
 	mapStats(mux, db, rules)
 	mapEvents(mux, db)
@@ -274,6 +277,17 @@ func getIncident(db *ent.Client, rules sigma.Catalog) http.HandlerFunc {
 			return
 		}
 
+		var sources []uuid.UUID
+		for _, a := range alerts {
+			if a.AutomationID != nil {
+				sources = append(sources, *a.AutomationID)
+			}
+		}
+		names, err := automationNames(r.Context(), db, sources)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		var assetID *uuid.UUID
 		var maxSev int16
 		rows := make([]alertRow, len(alerts))
@@ -286,7 +300,7 @@ func getIncident(db *ent.Client, rules sigma.Catalog) http.HandlerFunc {
 			}
 			row := alertRow{
 				ID: a.ID, Ts: a.Ts, LastTs: a.LastTs, Count: a.Count,
-				Severity: a.Severity, RuleID: a.RuleID, Detail: a.Detail,
+				Severity: a.Severity, RuleID: a.RuleID, Detail: a.Detail, Automation: refOf(a, names),
 			}
 			if title := rules.TitleOf(a.RuleID); title != "" {
 				row.RuleTitle = &title

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"openxdr/server/internal/automation"
 	"openxdr/server/internal/cmdorigin"
 	"openxdr/server/internal/identity"
 	"openxdr/server/internal/intel"
@@ -155,17 +156,25 @@ ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 		}
 	}
 	hits := intel.Detections(baseHits, p.Intel.Match(raw, e.Timestamp))
-	var command *uuid.UUID
+	var from origin
 	if len(hits) > 0 {
-		if command, err = cmdorigin.Of(ctx, tx, raw, e.AssetID, e.Timestamp); err != nil {
+		if from.command, err = cmdorigin.Of(ctx, tx, raw, e.AssetID, e.Timestamp); err != nil {
 			return err
+		}
+		// 平台指令优先：指令拉起的进程也在某次登录会话里，但发起与审批都有记录，挂在指令上更准
+		if from.command == nil && e.Source == "agent" {
+			if from.automation, err = automation.Of(ctx, tx, raw, e.AssetID, e.Timestamp); err != nil {
+				return err
+			}
 		}
 	}
 	for _, hit := range hits {
 		if p.Suppress.Suppressed(hit.RuleID, e.AssetID, raw, e.Timestamp) {
 			continue
 		}
-		created, err := p.upsertAlert(ctx, tx, e, hit, command)
+		hitFrom := from
+		hitFrom.watch = from.automation != nil && automation.Watch(hit.RuleID, baseHits)
+		created, err := p.upsertAlert(ctx, tx, e, hit, hitFrom)
 		if err != nil {
 			return err
 		}
@@ -190,8 +199,15 @@ ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 	return tx.Commit()
 }
 
-func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit intel.Hit, command *uuid.UUID) (bool, error) {
-	fingerprint := alertFingerprint(e, hit, command)
+// origin 告警的已知来源：平台指令，或登记的可信自动化（watch 为高危例外，仍进关联与研判）
+type origin struct {
+	command    *uuid.UUID
+	automation *uuid.UUID
+	watch      bool
+}
+
+func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit intel.Hit, from origin) (bool, error) {
+	fingerprint := alertFingerprint(e, hit, from)
 	// 同一指纹的所有集群节点在事务内串行，窗口判断与告警计数不会竞争。
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, fingerprint); err != nil {
 		return false, err
@@ -213,8 +229,9 @@ func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit
 
 	alertID = uuid.Must(uuid.NewV7())
 	if _, err := tx.ExecContext(ctx, `INSERT INTO alerts
-  (id, ts, rule_id, severity, event_id, asset_id, count, last_ts, command_id)
-VALUES ($1,$2,$3,$4,$5,$6,1,$2,$7)`, alertID, e.Timestamp, hit.RuleID, hit.Severity, e.ID, nullUUID(e.AssetID), nullUUID(command)); err != nil {
+  (id, ts, rule_id, severity, event_id, asset_id, count, last_ts, command_id, automation_id, automation_watch)
+VALUES ($1,$2,$3,$4,$5,$6,1,$2,$7,$8,$9)`, alertID, e.Timestamp, hit.RuleID, hit.Severity, e.ID, nullUUID(e.AssetID),
+		nullUUID(from.command), nullUUID(from.automation), from.watch); err != nil {
 		return false, err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO alert_dedup_state(fingerprint,alert_id,first_ts,last_ts)
@@ -242,14 +259,18 @@ func nullString(v string) any {
 	return v
 }
 
-func alertFingerprint(e Envelope, hit intel.Hit, command *uuid.UUID) string {
+func alertFingerprint(e Envelope, hit intel.Hit, from origin) string {
 	fingerprint := hit.RuleID + "|" + e.PartitionKey + e.FingerprintSuffix
 	if hit.RuleID == sigma.RuleBruteforceSuccess {
 		fingerprint += "|" + e.Username
 	}
 	// 指令触发的告警单独去重：否则之后同规则的真实命中会被并进这条「已知来源」的告警里
-	if command != nil {
-		fingerprint += "|cmd:" + command.String()
+	if from.command != nil {
+		fingerprint += "|cmd:" + from.command.String()
+	}
+	// 可信来源同理：并进去的真实命中会跟着不进关联
+	if from.automation != nil {
+		fingerprint += "|auto:" + from.automation.String()
 	}
 	return fingerprint
 }

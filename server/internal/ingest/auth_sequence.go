@@ -74,7 +74,7 @@ ORDER BY s.ts,s.id`, *e.AssetID, e.Username, status, e.ID, e.Timestamp, e.Timest
 		if err != nil {
 			return 0, err
 		}
-		fresh, err := p.upsertAlert(ctx, tx, candidate, intel.Hit{RuleID: sigma.RuleBruteforceSuccess, Severity: 5}, command)
+		fresh, err := p.upsertAlert(ctx, tx, candidate, intel.Hit{RuleID: sigma.RuleBruteforceSuccess, Severity: 5}, origin{command: command})
 		if err != nil {
 			return 0, err
 		}

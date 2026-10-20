@@ -25,6 +25,8 @@ type eventRow struct {
 	Username  *string         `json:"username"`
 	ConnTuple *string         `json:"connTuple"`
 	Raw       json.RawMessage `json:"raw"`
+	// 这条事件的告警来自登记的可信自动化来源
+	Automation *automationRef `json:"automation,omitempty"`
 }
 
 // mapEvents 原始事件检索：告警只是线索，取证要能沿着线索翻原始遥测。
@@ -86,9 +88,19 @@ func mapEvents(api *http.ServeMux, db *ent.Client) {
 		if len(rows) == limit {
 			w.Header().Set("X-Truncated", "1")
 		}
+		ids := make([]uuid.UUID, len(rows))
+		for i, e := range rows {
+			ids[i] = e.ID
+		}
+		sources, err := eventAutomation(r.Context(), db, ids)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		out := make([]eventRow, len(rows))
 		for i, e := range rows {
 			out[i] = toEventRow(e)
+			out[i].Automation = sources[e.ID]
 		}
 		writeJSON(w, out)
 	})

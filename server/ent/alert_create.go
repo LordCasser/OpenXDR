@@ -126,6 +126,34 @@ func (_c *AlertCreate) SetNillableCommandID(v *uuid.UUID) *AlertCreate {
 	return _c
 }
 
+// SetAutomationID sets the "automation_id" field.
+func (_c *AlertCreate) SetAutomationID(v uuid.UUID) *AlertCreate {
+	_c.mutation.SetAutomationID(v)
+	return _c
+}
+
+// SetNillableAutomationID sets the "automation_id" field if the given value is not nil.
+func (_c *AlertCreate) SetNillableAutomationID(v *uuid.UUID) *AlertCreate {
+	if v != nil {
+		_c.SetAutomationID(*v)
+	}
+	return _c
+}
+
+// SetAutomationWatch sets the "automation_watch" field.
+func (_c *AlertCreate) SetAutomationWatch(v bool) *AlertCreate {
+	_c.mutation.SetAutomationWatch(v)
+	return _c
+}
+
+// SetNillableAutomationWatch sets the "automation_watch" field if the given value is not nil.
+func (_c *AlertCreate) SetNillableAutomationWatch(v *bool) *AlertCreate {
+	if v != nil {
+		_c.SetAutomationWatch(*v)
+	}
+	return _c
+}
+
 // SetDetail sets the "detail" field.
 func (_c *AlertCreate) SetDetail(v string) *AlertCreate {
 	_c.mutation.SetDetail(v)
@@ -208,6 +236,10 @@ func (_c *AlertCreate) defaults() {
 		v := alert.DefaultCount
 		_c.mutation.SetCount(v)
 	}
+	if _, ok := _c.mutation.AutomationWatch(); !ok {
+		v := alert.DefaultAutomationWatch
+		_c.mutation.SetAutomationWatch(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := alert.DefaultID()
 		_c.mutation.SetID(v)
@@ -227,6 +259,9 @@ func (_c *AlertCreate) check() error {
 	}
 	if _, ok := _c.mutation.Count(); !ok {
 		return &ValidationError{Name: "count", err: errors.New(`ent: missing required field "Alert.count"`)}
+	}
+	if _, ok := _c.mutation.AutomationWatch(); !ok {
+		return &ValidationError{Name: "automation_watch", err: errors.New(`ent: missing required field "Alert.automation_watch"`)}
 	}
 	return nil
 }
@@ -286,6 +321,14 @@ func (_c *AlertCreate) createSpec() (*Alert, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CommandID(); ok {
 		_spec.SetField(alert.FieldCommandID, field.TypeUUID, value)
 		_node.CommandID = &value
+	}
+	if value, ok := _c.mutation.AutomationID(); ok {
+		_spec.SetField(alert.FieldAutomationID, field.TypeUUID, value)
+		_node.AutomationID = &value
+	}
+	if value, ok := _c.mutation.AutomationWatch(); ok {
+		_spec.SetField(alert.FieldAutomationWatch, field.TypeBool, value)
+		_node.AutomationWatch = value
 	}
 	if value, ok := _c.mutation.Detail(); ok {
 		_spec.SetField(alert.FieldDetail, field.TypeString, value)

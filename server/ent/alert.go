@@ -39,6 +39,10 @@ type Alert struct {
 	LastTs *time.Time `json:"last_ts,omitempty"`
 	// CommandID holds the value of the "command_id" field.
 	CommandID *uuid.UUID `json:"command_id,omitempty"`
+	// AutomationID holds the value of the "automation_id" field.
+	AutomationID *uuid.UUID `json:"automation_id,omitempty"`
+	// AutomationWatch holds the value of the "automation_watch" field.
+	AutomationWatch bool `json:"automation_watch,omitempty"`
 	// Detail holds the value of the "detail" field.
 	Detail *string `json:"detail,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -98,8 +102,10 @@ func (*Alert) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case alert.FieldEventID, alert.FieldAssetID, alert.FieldIncidentID, alert.FieldCommandID:
+		case alert.FieldEventID, alert.FieldAssetID, alert.FieldIncidentID, alert.FieldCommandID, alert.FieldAutomationID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
+		case alert.FieldAutomationWatch:
+			values[i] = new(sql.NullBool)
 		case alert.FieldSeverity, alert.FieldCount:
 			values[i] = new(sql.NullInt64)
 		case alert.FieldRuleID, alert.FieldDetail:
@@ -187,6 +193,19 @@ func (_m *Alert) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CommandID = new(uuid.UUID)
 				*_m.CommandID = *value.S.(*uuid.UUID)
+			}
+		case alert.FieldAutomationID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field automation_id", values[i])
+			} else if value.Valid {
+				_m.AutomationID = new(uuid.UUID)
+				*_m.AutomationID = *value.S.(*uuid.UUID)
+			}
+		case alert.FieldAutomationWatch:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field automation_watch", values[i])
+			} else if value.Valid {
+				_m.AutomationWatch = value.Bool
 			}
 		case alert.FieldDetail:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -282,6 +301,14 @@ func (_m *Alert) String() string {
 		builder.WriteString("command_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	if v := _m.AutomationID; v != nil {
+		builder.WriteString("automation_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("automation_watch=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AutomationWatch))
 	builder.WriteString(", ")
 	if v := _m.Detail; v != nil {
 		builder.WriteString("detail=")

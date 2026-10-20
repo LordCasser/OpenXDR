@@ -43,6 +43,7 @@ import (
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/ent/trustedsource"
 	"openxdr/server/ent/user"
 	"openxdr/server/ent/vulnrecord"
 	"openxdr/server/ent/zone"
@@ -123,6 +124,8 @@ type Client struct {
 	Task *TaskClient
 	// TaskRun is the client for interacting with the TaskRun builders.
 	TaskRun *TaskRunClient
+	// TrustedSource is the client for interacting with the TrustedSource builders.
+	TrustedSource *TrustedSourceClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 	// VulnRecord is the client for interacting with the VulnRecord builders.
@@ -172,6 +175,7 @@ func (c *Client) init() {
 	c.Suppression = NewSuppressionClient(c.config)
 	c.Task = NewTaskClient(c.config)
 	c.TaskRun = NewTaskRunClient(c.config)
+	c.TrustedSource = NewTrustedSourceClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.VulnRecord = NewVulnRecordClient(c.config)
 	c.Zone = NewZoneClient(c.config)
@@ -299,6 +303,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Suppression:      NewSuppressionClient(cfg),
 		Task:             NewTaskClient(cfg),
 		TaskRun:          NewTaskRunClient(cfg),
+		TrustedSource:    NewTrustedSourceClient(cfg),
 		User:             NewUserClient(cfg),
 		VulnRecord:       NewVulnRecordClient(cfg),
 		Zone:             NewZoneClient(cfg),
@@ -353,6 +358,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Suppression:      NewSuppressionClient(cfg),
 		Task:             NewTaskClient(cfg),
 		TaskRun:          NewTaskRunClient(cfg),
+		TrustedSource:    NewTrustedSourceClient(cfg),
 		User:             NewUserClient(cfg),
 		VulnRecord:       NewVulnRecordClient(cfg),
 		Zone:             NewZoneClient(cfg),
@@ -390,7 +396,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.DecoyObservation, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
 		c.HostCredential, c.IPInfo, c.Incident, c.Intel, c.Memory, c.ProcessBaseline,
 		c.Report, c.ReportRead, c.Session, c.SessionMessage, c.Setting, c.Suppression,
-		c.Task, c.TaskRun, c.User, c.VulnRecord, c.Zone,
+		c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord, c.Zone,
 	} {
 		n.Use(hooks...)
 	}
@@ -405,7 +411,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.DecoyObservation, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
 		c.HostCredential, c.IPInfo, c.Incident, c.Intel, c.Memory, c.ProcessBaseline,
 		c.Report, c.ReportRead, c.Session, c.SessionMessage, c.Setting, c.Suppression,
-		c.Task, c.TaskRun, c.User, c.VulnRecord, c.Zone,
+		c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord, c.Zone,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -478,6 +484,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Task.mutate(ctx, m)
 	case *TaskRunMutation:
 		return c.TaskRun.mutate(ctx, m)
+	case *TrustedSourceMutation:
+		return c.TrustedSource.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	case *VulnRecordMutation:
@@ -4905,6 +4913,139 @@ func (c *TaskRunClient) mutate(ctx context.Context, m *TaskRunMutation) (Value, 
 	}
 }
 
+// TrustedSourceClient is a client for the TrustedSource schema.
+type TrustedSourceClient struct {
+	config
+}
+
+// NewTrustedSourceClient returns a client for the TrustedSource from the given config.
+func NewTrustedSourceClient(c config) *TrustedSourceClient {
+	return &TrustedSourceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `trustedsource.Hooks(f(g(h())))`.
+func (c *TrustedSourceClient) Use(hooks ...Hook) {
+	c.hooks.TrustedSource = append(c.hooks.TrustedSource, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `trustedsource.Intercept(f(g(h())))`.
+func (c *TrustedSourceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TrustedSource = append(c.inters.TrustedSource, interceptors...)
+}
+
+// Create returns a builder for creating a TrustedSource entity.
+func (c *TrustedSourceClient) Create() *TrustedSourceCreate {
+	mutation := newTrustedSourceMutation(c.config, OpCreate)
+	return &TrustedSourceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TrustedSource entities.
+func (c *TrustedSourceClient) CreateBulk(builders ...*TrustedSourceCreate) *TrustedSourceCreateBulk {
+	return &TrustedSourceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TrustedSourceClient) MapCreateBulk(slice any, setFunc func(*TrustedSourceCreate, int)) *TrustedSourceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TrustedSourceCreateBulk{err: fmt.Errorf("calling to TrustedSourceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TrustedSourceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TrustedSourceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TrustedSource.
+func (c *TrustedSourceClient) Update() *TrustedSourceUpdate {
+	mutation := newTrustedSourceMutation(c.config, OpUpdate)
+	return &TrustedSourceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TrustedSourceClient) UpdateOne(_m *TrustedSource) *TrustedSourceUpdateOne {
+	mutation := newTrustedSourceMutation(c.config, OpUpdateOne, withTrustedSource(_m))
+	return &TrustedSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TrustedSourceClient) UpdateOneID(id uuid.UUID) *TrustedSourceUpdateOne {
+	mutation := newTrustedSourceMutation(c.config, OpUpdateOne, withTrustedSourceID(id))
+	return &TrustedSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TrustedSource.
+func (c *TrustedSourceClient) Delete() *TrustedSourceDelete {
+	mutation := newTrustedSourceMutation(c.config, OpDelete)
+	return &TrustedSourceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TrustedSourceClient) DeleteOne(_m *TrustedSource) *TrustedSourceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TrustedSourceClient) DeleteOneID(id uuid.UUID) *TrustedSourceDeleteOne {
+	builder := c.Delete().Where(trustedsource.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TrustedSourceDeleteOne{builder}
+}
+
+// Query returns a query builder for TrustedSource.
+func (c *TrustedSourceClient) Query() *TrustedSourceQuery {
+	return &TrustedSourceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTrustedSource},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TrustedSource entity by its id.
+func (c *TrustedSourceClient) Get(ctx context.Context, id uuid.UUID) (*TrustedSource, error) {
+	return c.Query().Where(trustedsource.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TrustedSourceClient) GetX(ctx context.Context, id uuid.UUID) *TrustedSource {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TrustedSourceClient) Hooks() []Hook {
+	return c.hooks.TrustedSource
+}
+
+// Interceptors returns the client interceptors.
+func (c *TrustedSourceClient) Interceptors() []Interceptor {
+	return c.inters.TrustedSource
+}
+
+func (c *TrustedSourceClient) mutate(ctx context.Context, m *TrustedSourceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TrustedSourceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TrustedSourceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TrustedSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TrustedSourceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TrustedSource mutation op: %q", m.Op())
+	}
+}
+
 // UserClient is a client for the User schema.
 type UserClient struct {
 	config
@@ -5311,15 +5452,15 @@ type (
 		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
 		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, IPInfo,
 		Incident, Intel, Memory, ProcessBaseline, Report, ReportRead, Session,
-		SessionMessage, Setting, Suppression, Task, TaskRun, User, VulnRecord,
-		Zone []ent.Hook
+		SessionMessage, Setting, Suppression, Task, TaskRun, TrustedSource, User,
+		VulnRecord, Zone []ent.Hook
 	}
 	inters struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
 		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
 		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, IPInfo,
 		Incident, Intel, Memory, ProcessBaseline, Report, ReportRead, Session,
-		SessionMessage, Setting, Suppression, Task, TaskRun, User, VulnRecord,
-		Zone []ent.Interceptor
+		SessionMessage, Setting, Suppression, Task, TaskRun, TrustedSource, User,
+		VulnRecord, Zone []ent.Interceptor
 	}
 )

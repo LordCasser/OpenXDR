@@ -31,6 +31,10 @@ const (
 	FieldLastTs = "last_ts"
 	// FieldCommandID holds the string denoting the command_id field in the database.
 	FieldCommandID = "command_id"
+	// FieldAutomationID holds the string denoting the automation_id field in the database.
+	FieldAutomationID = "automation_id"
+	// FieldAutomationWatch holds the string denoting the automation_watch field in the database.
+	FieldAutomationWatch = "automation_watch"
 	// FieldDetail holds the string denoting the detail field in the database.
 	FieldDetail = "detail"
 	// EdgeEvent holds the string denoting the event edge name in mutations.
@@ -76,6 +80,8 @@ var Columns = []string{
 	FieldCount,
 	FieldLastTs,
 	FieldCommandID,
+	FieldAutomationID,
+	FieldAutomationWatch,
 	FieldDetail,
 }
 
@@ -92,6 +98,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCount holds the default value on creation for the "count" field.
 	DefaultCount int
+	// DefaultAutomationWatch holds the default value on creation for the "automation_watch" field.
+	DefaultAutomationWatch bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -147,6 +155,16 @@ func ByLastTs(opts ...sql.OrderTermOption) OrderOption {
 // ByCommandID orders the results by the command_id field.
 func ByCommandID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCommandID, opts...).ToFunc()
+}
+
+// ByAutomationID orders the results by the automation_id field.
+func ByAutomationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutomationID, opts...).ToFunc()
+}
+
+// ByAutomationWatch orders the results by the automation_watch field.
+func ByAutomationWatch(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutomationWatch, opts...).ToFunc()
 }
 
 // ByDetail orders the results by the detail field.

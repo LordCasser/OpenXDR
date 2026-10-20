@@ -202,6 +202,40 @@ func (_u *AlertUpdate) ClearCommandID() *AlertUpdate {
 	return _u
 }
 
+// SetAutomationID sets the "automation_id" field.
+func (_u *AlertUpdate) SetAutomationID(v uuid.UUID) *AlertUpdate {
+	_u.mutation.SetAutomationID(v)
+	return _u
+}
+
+// SetNillableAutomationID sets the "automation_id" field if the given value is not nil.
+func (_u *AlertUpdate) SetNillableAutomationID(v *uuid.UUID) *AlertUpdate {
+	if v != nil {
+		_u.SetAutomationID(*v)
+	}
+	return _u
+}
+
+// ClearAutomationID clears the value of the "automation_id" field.
+func (_u *AlertUpdate) ClearAutomationID() *AlertUpdate {
+	_u.mutation.ClearAutomationID()
+	return _u
+}
+
+// SetAutomationWatch sets the "automation_watch" field.
+func (_u *AlertUpdate) SetAutomationWatch(v bool) *AlertUpdate {
+	_u.mutation.SetAutomationWatch(v)
+	return _u
+}
+
+// SetNillableAutomationWatch sets the "automation_watch" field if the given value is not nil.
+func (_u *AlertUpdate) SetNillableAutomationWatch(v *bool) *AlertUpdate {
+	if v != nil {
+		_u.SetAutomationWatch(*v)
+	}
+	return _u
+}
+
 // SetDetail sets the "detail" field.
 func (_u *AlertUpdate) SetDetail(v string) *AlertUpdate {
 	_u.mutation.SetDetail(v)
@@ -325,6 +359,15 @@ func (_u *AlertUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CommandIDCleared() {
 		_spec.ClearField(alert.FieldCommandID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.AutomationID(); ok {
+		_spec.SetField(alert.FieldAutomationID, field.TypeUUID, value)
+	}
+	if _u.mutation.AutomationIDCleared() {
+		_spec.ClearField(alert.FieldAutomationID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.AutomationWatch(); ok {
+		_spec.SetField(alert.FieldAutomationWatch, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Detail(); ok {
 		_spec.SetField(alert.FieldDetail, field.TypeString, value)
@@ -609,6 +652,40 @@ func (_u *AlertUpdateOne) ClearCommandID() *AlertUpdateOne {
 	return _u
 }
 
+// SetAutomationID sets the "automation_id" field.
+func (_u *AlertUpdateOne) SetAutomationID(v uuid.UUID) *AlertUpdateOne {
+	_u.mutation.SetAutomationID(v)
+	return _u
+}
+
+// SetNillableAutomationID sets the "automation_id" field if the given value is not nil.
+func (_u *AlertUpdateOne) SetNillableAutomationID(v *uuid.UUID) *AlertUpdateOne {
+	if v != nil {
+		_u.SetAutomationID(*v)
+	}
+	return _u
+}
+
+// ClearAutomationID clears the value of the "automation_id" field.
+func (_u *AlertUpdateOne) ClearAutomationID() *AlertUpdateOne {
+	_u.mutation.ClearAutomationID()
+	return _u
+}
+
+// SetAutomationWatch sets the "automation_watch" field.
+func (_u *AlertUpdateOne) SetAutomationWatch(v bool) *AlertUpdateOne {
+	_u.mutation.SetAutomationWatch(v)
+	return _u
+}
+
+// SetNillableAutomationWatch sets the "automation_watch" field if the given value is not nil.
+func (_u *AlertUpdateOne) SetNillableAutomationWatch(v *bool) *AlertUpdateOne {
+	if v != nil {
+		_u.SetAutomationWatch(*v)
+	}
+	return _u
+}
+
 // SetDetail sets the "detail" field.
 func (_u *AlertUpdateOne) SetDetail(v string) *AlertUpdateOne {
 	_u.mutation.SetDetail(v)
@@ -762,6 +839,15 @@ func (_u *AlertUpdateOne) sqlSave(ctx context.Context) (_node *Alert, err error)
 	}
 	if _u.mutation.CommandIDCleared() {
 		_spec.ClearField(alert.FieldCommandID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.AutomationID(); ok {
+		_spec.SetField(alert.FieldAutomationID, field.TypeUUID, value)
+	}
+	if _u.mutation.AutomationIDCleared() {
+		_spec.ClearField(alert.FieldAutomationID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.AutomationWatch(); ok {
+		_spec.SetField(alert.FieldAutomationWatch, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Detail(); ok {
 		_spec.SetField(alert.FieldDetail, field.TypeString, value)

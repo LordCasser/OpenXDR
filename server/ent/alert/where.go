@@ -101,6 +101,16 @@ func CommandID(v uuid.UUID) predicate.Alert {
 	return predicate.Alert(sql.FieldEQ(FieldCommandID, v))
 }
 
+// AutomationID applies equality check predicate on the "automation_id" field. It's identical to AutomationIDEQ.
+func AutomationID(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldEQ(FieldAutomationID, v))
+}
+
+// AutomationWatch applies equality check predicate on the "automation_watch" field. It's identical to AutomationWatchEQ.
+func AutomationWatch(v bool) predicate.Alert {
+	return predicate.Alert(sql.FieldEQ(FieldAutomationWatch, v))
+}
+
 // Detail applies equality check predicate on the "detail" field. It's identical to DetailEQ.
 func Detail(v string) predicate.Alert {
 	return predicate.Alert(sql.FieldEQ(FieldDetail, v))
@@ -479,6 +489,66 @@ func CommandIDIsNil() predicate.Alert {
 // CommandIDNotNil applies the NotNil predicate on the "command_id" field.
 func CommandIDNotNil() predicate.Alert {
 	return predicate.Alert(sql.FieldNotNull(FieldCommandID))
+}
+
+// AutomationIDEQ applies the EQ predicate on the "automation_id" field.
+func AutomationIDEQ(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldEQ(FieldAutomationID, v))
+}
+
+// AutomationIDNEQ applies the NEQ predicate on the "automation_id" field.
+func AutomationIDNEQ(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldNEQ(FieldAutomationID, v))
+}
+
+// AutomationIDIn applies the In predicate on the "automation_id" field.
+func AutomationIDIn(vs ...uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldIn(FieldAutomationID, vs...))
+}
+
+// AutomationIDNotIn applies the NotIn predicate on the "automation_id" field.
+func AutomationIDNotIn(vs ...uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldNotIn(FieldAutomationID, vs...))
+}
+
+// AutomationIDGT applies the GT predicate on the "automation_id" field.
+func AutomationIDGT(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldGT(FieldAutomationID, v))
+}
+
+// AutomationIDGTE applies the GTE predicate on the "automation_id" field.
+func AutomationIDGTE(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldGTE(FieldAutomationID, v))
+}
+
+// AutomationIDLT applies the LT predicate on the "automation_id" field.
+func AutomationIDLT(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldLT(FieldAutomationID, v))
+}
+
+// AutomationIDLTE applies the LTE predicate on the "automation_id" field.
+func AutomationIDLTE(v uuid.UUID) predicate.Alert {
+	return predicate.Alert(sql.FieldLTE(FieldAutomationID, v))
+}
+
+// AutomationIDIsNil applies the IsNil predicate on the "automation_id" field.
+func AutomationIDIsNil() predicate.Alert {
+	return predicate.Alert(sql.FieldIsNull(FieldAutomationID))
+}
+
+// AutomationIDNotNil applies the NotNil predicate on the "automation_id" field.
+func AutomationIDNotNil() predicate.Alert {
+	return predicate.Alert(sql.FieldNotNull(FieldAutomationID))
+}
+
+// AutomationWatchEQ applies the EQ predicate on the "automation_watch" field.
+func AutomationWatchEQ(v bool) predicate.Alert {
+	return predicate.Alert(sql.FieldEQ(FieldAutomationWatch, v))
+}
+
+// AutomationWatchNEQ applies the NEQ predicate on the "automation_watch" field.
+func AutomationWatchNEQ(v bool) predicate.Alert {
+	return predicate.Alert(sql.FieldNEQ(FieldAutomationWatch, v))
 }
 
 // DetailEQ applies the EQ predicate on the "detail" field.

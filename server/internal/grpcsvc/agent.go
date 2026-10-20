@@ -17,6 +17,7 @@ import (
 
 	"openxdr/server/ent"
 	"openxdr/server/ent/asset"
+	"openxdr/server/internal/automation"
 	"openxdr/server/internal/cmdorigin"
 	"openxdr/server/internal/dedup"
 	"openxdr/server/internal/enroll"
@@ -32,8 +33,11 @@ import (
 type Server struct {
 	pb.UnimplementedAgentServiceServer
 	DB *ent.Client
-	// SQL 核对平台指令标记用；不配置时不认指令标记，照常告警
-	SQL         cmdorigin.Querier
+	// SQL 核对平台指令标记与可信来源用；不配置时两者都不认，照常告警
+	SQL interface {
+		cmdorigin.Querier
+		automation.Querier
+	}
 	Rules       sigma.Catalog
 	DedupWindow time.Duration
 	Hub         *response.Hub
@@ -375,12 +379,19 @@ func (st *agentStream) detect(ev *pb.AgentEvent, eventID uuid.UUID, rawMap map[s
 	fpSuffix := fileFingerprintSuffix(ev.ClassUid, rawMap)
 
 	sigma.WithActor(rawMap, ev.Username)
-	hits := intel.Detections(st.s.Rules.Evaluate(int(ev.ClassUid), st.assetOS, rawMap), st.s.Intel.Match(rawMap, ts))
-	var command *uuid.UUID
+	rules := st.s.Rules.Evaluate(int(ev.ClassUid), st.assetOS, rawMap)
+	hits := intel.Detections(rules, st.s.Intel.Match(rawMap, ts))
+	var command, source *uuid.UUID
 	if len(hits) > 0 {
 		var err error
 		if command, err = cmdorigin.Of(st.ctx, st.s.SQL, rawMap, st.assetID, ts); err != nil {
 			return status.Errorf(codes.Unavailable, "核对平台指令失败: %v", err)
+		}
+		// 平台指令优先，其次是登记的可信自动化来源
+		if command == nil {
+			if source, err = automation.Of(st.ctx, st.s.SQL, rawMap, st.assetID, ts); err != nil {
+				return status.Errorf(codes.Unavailable, "核对可信来源失败: %v", err)
+			}
 		}
 	}
 	for _, h := range hits {
@@ -391,6 +402,9 @@ func (st *agentStream) detect(ev *pb.AgentEvent, eventID uuid.UUID, rawMap map[s
 		fingerprint := h.RuleID + fpSuffix
 		if command != nil {
 			fingerprint += "|cmd:" + command.String()
+		}
+		if source != nil {
+			fingerprint += "|auto:" + source.String()
 		}
 		if st.deduper.Hit(fingerprint, ts) {
 			continue
@@ -404,6 +418,8 @@ func (st *agentStream) detect(ev *pb.AgentEvent, eventID uuid.UUID, rawMap map[s
 			SetEventID(eventID).
 			SetNillableAssetID(st.assetID).
 			SetNillableCommandID(command).
+			SetNillableAutomationID(source).
+			SetAutomationWatch(source != nil && automation.Watch(h.RuleID, rules)).
 			SetLastTs(ts))
 		st.deduper.Track(fingerprint, alertID, ts)
 	}

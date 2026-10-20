@@ -19,6 +19,7 @@ import (
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/incident"
+	"openxdr/server/internal/automation"
 	"openxdr/server/internal/sigma"
 )
 
@@ -58,9 +59,10 @@ func (e *Engine) Run(ctx context.Context) {
 }
 
 func (e *Engine) batch(ctx context.Context) error {
-	// 平台指令触发的告警挂在指令上，不组成事件：来源已知，发起与审批都有记录
+	// 平台指令触发的告警挂在指令上，不组成事件：来源已知，发起与审批都有记录。
+	// 登记的可信自动化来源同理，只有高危例外照常进关联
 	pending, err := e.DB.Alert.Query().
-		Where(alert.IncidentIDIsNil(), alert.CommandIDIsNil()).
+		Where(alert.IncidentIDIsNil(), alert.CommandIDIsNil(), automation.Counted()).
 		Order(ent.Asc(alert.FieldTs)).
 		Limit(500).
 		WithEvent().

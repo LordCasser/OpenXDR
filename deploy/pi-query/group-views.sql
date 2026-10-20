@@ -32,6 +32,12 @@ CREATE OR REPLACE VIEW :"schema".suppressions WITH (security_barrier) AS
          status, conditions, reviewed_by, reviewed_at
   FROM public.suppressions WHERE asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id');
 
+-- 本组登记的可信自动化来源（只读；登记与撤销只能由组管理员在控制台做）
+CREATE OR REPLACE VIEW :"schema".trusted_sources WITH (security_barrier) AS
+  SELECT id, created_at, name, reason, created_by, expires_at, key_fingerprint, source_cidr, login_user,
+         matched_count, last_matched_at, revoked_at, revoked_by
+  FROM public.trusted_sources WHERE group_id = :'group_id';
+
 CREATE OR REPLACE VIEW :"schema".memories WITH (security_barrier) AS
   SELECT id, created_at, updated_at, asset_id, content, source, author
   FROM public.memories WHERE group_id = :'group_id';
@@ -64,14 +70,16 @@ CREATE OR REPLACE VIEW :"schema".events WITH (security_barrier) AS
 
 -- 告警：只含本组资产
 CREATE OR REPLACE VIEW :"schema".alerts WITH (security_barrier) AS
-  SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id, detail
+  SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id, detail,
+         automation_id, automation_watch
   FROM public.alerts
   WHERE asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id');
 
 -- 告警连同它的原始事件：在视图里按主键回查，跨视图 JOIN events 会全表扫描、必然超时
 CREATE OR REPLACE VIEW :"schema".alert_events WITH (security_barrier) AS
   SELECT a.id AS alert_id, a.ts, a.last_ts, a.count, a.rule_id, a.severity, a.asset_id, a.incident_id, a.command_id,
-         e.id AS event_id, e.ts AS event_ts, e.class_uid, e.username, e.conn_tuple, e.raw
+         e.id AS event_id, e.ts AS event_ts, e.class_uid, e.username, e.conn_tuple, e.raw,
+         a.automation_id, a.automation_watch
   FROM public.alerts a JOIN public.events e ON e.id = a.event_id AND e.asset_id = a.asset_id
   WHERE a.asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id');
 
@@ -132,6 +140,7 @@ COMMENT ON VIEW :"schema".incidents IS '本组 incident（全部告警都在本�
 COMMENT ON VIEW :"schema".commands IS '本组处置与命令执行记录';
 COMMENT ON VIEW :"schema".findings IS '本组运维待办（track 登记的问题，status 为 open / resolved / ignored）';
 COMMENT ON VIEW :"schema".suppressions IS '本组主机上的抑制规则（status：active 生效 / proposed 待批 / rejected 已拒绝）';
+COMMENT ON VIEW :"schema".trusted_sources IS '本组登记的可信自动化来源（SSH 公钥指纹 / 来源网段 / 登录用户）；alerts.automation_id 指向这里';
 COMMENT ON VIEW :"schema".memories IS '本组长期记忆（source：human 人工 / ai）';
 COMMENT ON VIEW :"schema".asset_links IS '本组主机发起的连接聚合成的依赖边';
 COMMENT ON VIEW :"schema".ip_infos IS '本组主机连过的与本组告警里出现的公网地址：反向解析、离线归属库（ipdb_*，DB-IP Lite）与 VirusTotal 结果';

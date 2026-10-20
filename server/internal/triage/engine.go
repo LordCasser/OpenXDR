@@ -233,6 +233,14 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 		if a.Detail != nil {
 			fmt.Fprintf(&sb, "  依据：%s\n", *a.Detail)
 		}
+		// 可信来源的告警只有高危例外会进 incident：来源是已登记的运维自动化，但这类行为在密钥被盗用时最要紧
+		if a.AutomationID != nil {
+			name := a.AutomationID.String()
+			if t, err := e.DB.TrustedSource.Get(ctx, *a.AutomationID); err == nil {
+				name = t.Name
+			}
+			fmt.Fprintf(&sb, "  来源：登记的可信自动化「%s」的 SSH 会话（高危例外仍需研判：确认是否符合该自动化的正常用途，警惕其凭据被盗用）\n", name)
+		}
 	}
 	e.appendIPInfo(ctx, &sb, alerts)
 	e.appendCaseHistory(ctx, &sb, inc, alerts)

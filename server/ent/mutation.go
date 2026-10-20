@@ -41,6 +41,7 @@ import (
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/ent/trustedsource"
 	"openxdr/server/ent/user"
 	"openxdr/server/ent/vulnrecord"
 	"openxdr/server/ent/zone"
@@ -93,6 +94,7 @@ const (
 	TypeSuppression      = "Suppression"
 	TypeTask             = "Task"
 	TypeTaskRun          = "TaskRun"
+	TypeTrustedSource    = "TrustedSource"
 	TypeUser             = "User"
 	TypeVulnRecord       = "VulnRecord"
 	TypeZone             = "Zone"
@@ -2583,28 +2585,30 @@ func (m *AgentSessionMutation) ResetEdge(name string) error {
 // AlertMutation represents an operation that mutates the Alert nodes in the graph.
 type AlertMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *uuid.UUID
-	ts              *time.Time
-	rule_id         *string
-	severity        *int16
-	addseverity     *int16
-	count           *int
-	addcount        *int
-	last_ts         *time.Time
-	command_id      *uuid.UUID
-	detail          *string
-	clearedFields   map[string]struct{}
-	event           *uuid.UUID
-	clearedevent    bool
-	asset           *uuid.UUID
-	clearedasset    bool
-	incident        *uuid.UUID
-	clearedincident bool
-	done            bool
-	oldValue        func(context.Context) (*Alert, error)
-	predicates      []predicate.Alert
+	op               Op
+	typ              string
+	id               *uuid.UUID
+	ts               *time.Time
+	rule_id          *string
+	severity         *int16
+	addseverity      *int16
+	count            *int
+	addcount         *int
+	last_ts          *time.Time
+	command_id       *uuid.UUID
+	automation_id    *uuid.UUID
+	automation_watch *bool
+	detail           *string
+	clearedFields    map[string]struct{}
+	event            *uuid.UUID
+	clearedevent     bool
+	asset            *uuid.UUID
+	clearedasset     bool
+	incident         *uuid.UUID
+	clearedincident  bool
+	done             bool
+	oldValue         func(context.Context) (*Alert, error)
+	predicates       []predicate.Alert
 }
 
 var _ ent.Mutation = (*AlertMutation)(nil)
@@ -3140,6 +3144,91 @@ func (m *AlertMutation) ResetCommandID() {
 	delete(m.clearedFields, alert.FieldCommandID)
 }
 
+// SetAutomationID sets the "automation_id" field.
+func (m *AlertMutation) SetAutomationID(u uuid.UUID) {
+	m.automation_id = &u
+}
+
+// AutomationID returns the value of the "automation_id" field in the mutation.
+func (m *AlertMutation) AutomationID() (r uuid.UUID, exists bool) {
+	v := m.automation_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutomationID returns the old "automation_id" field's value of the Alert entity.
+// If the Alert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AlertMutation) OldAutomationID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutomationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutomationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutomationID: %w", err)
+	}
+	return oldValue.AutomationID, nil
+}
+
+// ClearAutomationID clears the value of the "automation_id" field.
+func (m *AlertMutation) ClearAutomationID() {
+	m.automation_id = nil
+	m.clearedFields[alert.FieldAutomationID] = struct{}{}
+}
+
+// AutomationIDCleared returns if the "automation_id" field was cleared in this mutation.
+func (m *AlertMutation) AutomationIDCleared() bool {
+	_, ok := m.clearedFields[alert.FieldAutomationID]
+	return ok
+}
+
+// ResetAutomationID resets all changes to the "automation_id" field.
+func (m *AlertMutation) ResetAutomationID() {
+	m.automation_id = nil
+	delete(m.clearedFields, alert.FieldAutomationID)
+}
+
+// SetAutomationWatch sets the "automation_watch" field.
+func (m *AlertMutation) SetAutomationWatch(b bool) {
+	m.automation_watch = &b
+}
+
+// AutomationWatch returns the value of the "automation_watch" field in the mutation.
+func (m *AlertMutation) AutomationWatch() (r bool, exists bool) {
+	v := m.automation_watch
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutomationWatch returns the old "automation_watch" field's value of the Alert entity.
+// If the Alert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AlertMutation) OldAutomationWatch(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutomationWatch is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutomationWatch requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutomationWatch: %w", err)
+	}
+	return oldValue.AutomationWatch, nil
+}
+
+// ResetAutomationWatch resets all changes to the "automation_watch" field.
+func (m *AlertMutation) ResetAutomationWatch() {
+	m.automation_watch = nil
+}
+
 // SetDetail sets the "detail" field.
 func (m *AlertMutation) SetDetail(s string) {
 	m.detail = &s
@@ -3304,7 +3393,7 @@ func (m *AlertMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AlertMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 12)
 	if m.ts != nil {
 		fields = append(fields, alert.FieldTs)
 	}
@@ -3331,6 +3420,12 @@ func (m *AlertMutation) Fields() []string {
 	}
 	if m.command_id != nil {
 		fields = append(fields, alert.FieldCommandID)
+	}
+	if m.automation_id != nil {
+		fields = append(fields, alert.FieldAutomationID)
+	}
+	if m.automation_watch != nil {
+		fields = append(fields, alert.FieldAutomationWatch)
 	}
 	if m.detail != nil {
 		fields = append(fields, alert.FieldDetail)
@@ -3361,6 +3456,10 @@ func (m *AlertMutation) Field(name string) (ent.Value, bool) {
 		return m.LastTs()
 	case alert.FieldCommandID:
 		return m.CommandID()
+	case alert.FieldAutomationID:
+		return m.AutomationID()
+	case alert.FieldAutomationWatch:
+		return m.AutomationWatch()
 	case alert.FieldDetail:
 		return m.Detail()
 	}
@@ -3390,6 +3489,10 @@ func (m *AlertMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldLastTs(ctx)
 	case alert.FieldCommandID:
 		return m.OldCommandID(ctx)
+	case alert.FieldAutomationID:
+		return m.OldAutomationID(ctx)
+	case alert.FieldAutomationWatch:
+		return m.OldAutomationWatch(ctx)
 	case alert.FieldDetail:
 		return m.OldDetail(ctx)
 	}
@@ -3463,6 +3566,20 @@ func (m *AlertMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCommandID(v)
+		return nil
+	case alert.FieldAutomationID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutomationID(v)
+		return nil
+	case alert.FieldAutomationWatch:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutomationWatch(v)
 		return nil
 	case alert.FieldDetail:
 		v, ok := value.(string)
@@ -3543,6 +3660,9 @@ func (m *AlertMutation) ClearedFields() []string {
 	if m.FieldCleared(alert.FieldCommandID) {
 		fields = append(fields, alert.FieldCommandID)
 	}
+	if m.FieldCleared(alert.FieldAutomationID) {
+		fields = append(fields, alert.FieldAutomationID)
+	}
 	if m.FieldCleared(alert.FieldDetail) {
 		fields = append(fields, alert.FieldDetail)
 	}
@@ -3574,6 +3694,9 @@ func (m *AlertMutation) ClearField(name string) error {
 		return nil
 	case alert.FieldCommandID:
 		m.ClearCommandID()
+		return nil
+	case alert.FieldAutomationID:
+		m.ClearAutomationID()
 		return nil
 	case alert.FieldDetail:
 		m.ClearDetail()
@@ -3612,6 +3735,12 @@ func (m *AlertMutation) ResetField(name string) error {
 		return nil
 	case alert.FieldCommandID:
 		m.ResetCommandID()
+		return nil
+	case alert.FieldAutomationID:
+		m.ResetAutomationID()
+		return nil
+	case alert.FieldAutomationWatch:
+		m.ResetAutomationWatch()
 		return nil
 	case alert.FieldDetail:
 		m.ResetDetail()
@@ -29412,6 +29541,1158 @@ func (m *TaskRunMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *TaskRunMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown TaskRun edge %s", name)
+}
+
+// TrustedSourceMutation represents an operation that mutates the TrustedSource nodes in the graph.
+type TrustedSourceMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *uuid.UUID
+	created_at       *time.Time
+	group_id         *uuid.UUID
+	name             *string
+	reason           *string
+	created_by       *string
+	expires_at       *time.Time
+	key_fingerprint  *string
+	source_cidr      *string
+	login_user       *string
+	matched_count    *int
+	addmatched_count *int
+	last_matched_at  *time.Time
+	revoked_at       *time.Time
+	revoked_by       *string
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*TrustedSource, error)
+	predicates       []predicate.TrustedSource
+}
+
+var _ ent.Mutation = (*TrustedSourceMutation)(nil)
+
+// trustedsourceOption allows management of the mutation configuration using functional options.
+type trustedsourceOption func(*TrustedSourceMutation)
+
+// newTrustedSourceMutation creates new mutation for the TrustedSource entity.
+func newTrustedSourceMutation(c config, op Op, opts ...trustedsourceOption) *TrustedSourceMutation {
+	m := &TrustedSourceMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTrustedSource,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTrustedSourceID sets the ID field of the mutation.
+func withTrustedSourceID(id uuid.UUID) trustedsourceOption {
+	return func(m *TrustedSourceMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TrustedSource
+		)
+		m.oldValue = func(ctx context.Context) (*TrustedSource, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TrustedSource.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTrustedSource sets the old TrustedSource of the mutation.
+func withTrustedSource(node *TrustedSource) trustedsourceOption {
+	return func(m *TrustedSourceMutation) {
+		m.oldValue = func(context.Context) (*TrustedSource, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TrustedSourceMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TrustedSourceMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of TrustedSource entities.
+func (m *TrustedSourceMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TrustedSourceMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TrustedSourceMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TrustedSource.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TrustedSourceMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TrustedSourceMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TrustedSourceMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *TrustedSourceMutation) SetGroupID(u uuid.UUID) {
+	m.group_id = &u
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *TrustedSourceMutation) GroupID() (r uuid.UUID, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldGroupID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *TrustedSourceMutation) ResetGroupID() {
+	m.group_id = nil
+}
+
+// SetName sets the "name" field.
+func (m *TrustedSourceMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *TrustedSourceMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *TrustedSourceMutation) ResetName() {
+	m.name = nil
+}
+
+// SetReason sets the "reason" field.
+func (m *TrustedSourceMutation) SetReason(s string) {
+	m.reason = &s
+}
+
+// Reason returns the value of the "reason" field in the mutation.
+func (m *TrustedSourceMutation) Reason() (r string, exists bool) {
+	v := m.reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReason returns the old "reason" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldReason(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReason: %w", err)
+	}
+	return oldValue.Reason, nil
+}
+
+// ClearReason clears the value of the "reason" field.
+func (m *TrustedSourceMutation) ClearReason() {
+	m.reason = nil
+	m.clearedFields[trustedsource.FieldReason] = struct{}{}
+}
+
+// ReasonCleared returns if the "reason" field was cleared in this mutation.
+func (m *TrustedSourceMutation) ReasonCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldReason]
+	return ok
+}
+
+// ResetReason resets all changes to the "reason" field.
+func (m *TrustedSourceMutation) ResetReason() {
+	m.reason = nil
+	delete(m.clearedFields, trustedsource.FieldReason)
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *TrustedSourceMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *TrustedSourceMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *TrustedSourceMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *TrustedSourceMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *TrustedSourceMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *TrustedSourceMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetKeyFingerprint sets the "key_fingerprint" field.
+func (m *TrustedSourceMutation) SetKeyFingerprint(s string) {
+	m.key_fingerprint = &s
+}
+
+// KeyFingerprint returns the value of the "key_fingerprint" field in the mutation.
+func (m *TrustedSourceMutation) KeyFingerprint() (r string, exists bool) {
+	v := m.key_fingerprint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyFingerprint returns the old "key_fingerprint" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldKeyFingerprint(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyFingerprint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyFingerprint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyFingerprint: %w", err)
+	}
+	return oldValue.KeyFingerprint, nil
+}
+
+// ClearKeyFingerprint clears the value of the "key_fingerprint" field.
+func (m *TrustedSourceMutation) ClearKeyFingerprint() {
+	m.key_fingerprint = nil
+	m.clearedFields[trustedsource.FieldKeyFingerprint] = struct{}{}
+}
+
+// KeyFingerprintCleared returns if the "key_fingerprint" field was cleared in this mutation.
+func (m *TrustedSourceMutation) KeyFingerprintCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldKeyFingerprint]
+	return ok
+}
+
+// ResetKeyFingerprint resets all changes to the "key_fingerprint" field.
+func (m *TrustedSourceMutation) ResetKeyFingerprint() {
+	m.key_fingerprint = nil
+	delete(m.clearedFields, trustedsource.FieldKeyFingerprint)
+}
+
+// SetSourceCidr sets the "source_cidr" field.
+func (m *TrustedSourceMutation) SetSourceCidr(s string) {
+	m.source_cidr = &s
+}
+
+// SourceCidr returns the value of the "source_cidr" field in the mutation.
+func (m *TrustedSourceMutation) SourceCidr() (r string, exists bool) {
+	v := m.source_cidr
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceCidr returns the old "source_cidr" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldSourceCidr(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceCidr is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceCidr requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceCidr: %w", err)
+	}
+	return oldValue.SourceCidr, nil
+}
+
+// ClearSourceCidr clears the value of the "source_cidr" field.
+func (m *TrustedSourceMutation) ClearSourceCidr() {
+	m.source_cidr = nil
+	m.clearedFields[trustedsource.FieldSourceCidr] = struct{}{}
+}
+
+// SourceCidrCleared returns if the "source_cidr" field was cleared in this mutation.
+func (m *TrustedSourceMutation) SourceCidrCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldSourceCidr]
+	return ok
+}
+
+// ResetSourceCidr resets all changes to the "source_cidr" field.
+func (m *TrustedSourceMutation) ResetSourceCidr() {
+	m.source_cidr = nil
+	delete(m.clearedFields, trustedsource.FieldSourceCidr)
+}
+
+// SetLoginUser sets the "login_user" field.
+func (m *TrustedSourceMutation) SetLoginUser(s string) {
+	m.login_user = &s
+}
+
+// LoginUser returns the value of the "login_user" field in the mutation.
+func (m *TrustedSourceMutation) LoginUser() (r string, exists bool) {
+	v := m.login_user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLoginUser returns the old "login_user" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldLoginUser(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLoginUser is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLoginUser requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLoginUser: %w", err)
+	}
+	return oldValue.LoginUser, nil
+}
+
+// ClearLoginUser clears the value of the "login_user" field.
+func (m *TrustedSourceMutation) ClearLoginUser() {
+	m.login_user = nil
+	m.clearedFields[trustedsource.FieldLoginUser] = struct{}{}
+}
+
+// LoginUserCleared returns if the "login_user" field was cleared in this mutation.
+func (m *TrustedSourceMutation) LoginUserCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldLoginUser]
+	return ok
+}
+
+// ResetLoginUser resets all changes to the "login_user" field.
+func (m *TrustedSourceMutation) ResetLoginUser() {
+	m.login_user = nil
+	delete(m.clearedFields, trustedsource.FieldLoginUser)
+}
+
+// SetMatchedCount sets the "matched_count" field.
+func (m *TrustedSourceMutation) SetMatchedCount(i int) {
+	m.matched_count = &i
+	m.addmatched_count = nil
+}
+
+// MatchedCount returns the value of the "matched_count" field in the mutation.
+func (m *TrustedSourceMutation) MatchedCount() (r int, exists bool) {
+	v := m.matched_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMatchedCount returns the old "matched_count" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldMatchedCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMatchedCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMatchedCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMatchedCount: %w", err)
+	}
+	return oldValue.MatchedCount, nil
+}
+
+// AddMatchedCount adds i to the "matched_count" field.
+func (m *TrustedSourceMutation) AddMatchedCount(i int) {
+	if m.addmatched_count != nil {
+		*m.addmatched_count += i
+	} else {
+		m.addmatched_count = &i
+	}
+}
+
+// AddedMatchedCount returns the value that was added to the "matched_count" field in this mutation.
+func (m *TrustedSourceMutation) AddedMatchedCount() (r int, exists bool) {
+	v := m.addmatched_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMatchedCount resets all changes to the "matched_count" field.
+func (m *TrustedSourceMutation) ResetMatchedCount() {
+	m.matched_count = nil
+	m.addmatched_count = nil
+}
+
+// SetLastMatchedAt sets the "last_matched_at" field.
+func (m *TrustedSourceMutation) SetLastMatchedAt(t time.Time) {
+	m.last_matched_at = &t
+}
+
+// LastMatchedAt returns the value of the "last_matched_at" field in the mutation.
+func (m *TrustedSourceMutation) LastMatchedAt() (r time.Time, exists bool) {
+	v := m.last_matched_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastMatchedAt returns the old "last_matched_at" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldLastMatchedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastMatchedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastMatchedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastMatchedAt: %w", err)
+	}
+	return oldValue.LastMatchedAt, nil
+}
+
+// ClearLastMatchedAt clears the value of the "last_matched_at" field.
+func (m *TrustedSourceMutation) ClearLastMatchedAt() {
+	m.last_matched_at = nil
+	m.clearedFields[trustedsource.FieldLastMatchedAt] = struct{}{}
+}
+
+// LastMatchedAtCleared returns if the "last_matched_at" field was cleared in this mutation.
+func (m *TrustedSourceMutation) LastMatchedAtCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldLastMatchedAt]
+	return ok
+}
+
+// ResetLastMatchedAt resets all changes to the "last_matched_at" field.
+func (m *TrustedSourceMutation) ResetLastMatchedAt() {
+	m.last_matched_at = nil
+	delete(m.clearedFields, trustedsource.FieldLastMatchedAt)
+}
+
+// SetRevokedAt sets the "revoked_at" field.
+func (m *TrustedSourceMutation) SetRevokedAt(t time.Time) {
+	m.revoked_at = &t
+}
+
+// RevokedAt returns the value of the "revoked_at" field in the mutation.
+func (m *TrustedSourceMutation) RevokedAt() (r time.Time, exists bool) {
+	v := m.revoked_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokedAt returns the old "revoked_at" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldRevokedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokedAt: %w", err)
+	}
+	return oldValue.RevokedAt, nil
+}
+
+// ClearRevokedAt clears the value of the "revoked_at" field.
+func (m *TrustedSourceMutation) ClearRevokedAt() {
+	m.revoked_at = nil
+	m.clearedFields[trustedsource.FieldRevokedAt] = struct{}{}
+}
+
+// RevokedAtCleared returns if the "revoked_at" field was cleared in this mutation.
+func (m *TrustedSourceMutation) RevokedAtCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldRevokedAt]
+	return ok
+}
+
+// ResetRevokedAt resets all changes to the "revoked_at" field.
+func (m *TrustedSourceMutation) ResetRevokedAt() {
+	m.revoked_at = nil
+	delete(m.clearedFields, trustedsource.FieldRevokedAt)
+}
+
+// SetRevokedBy sets the "revoked_by" field.
+func (m *TrustedSourceMutation) SetRevokedBy(s string) {
+	m.revoked_by = &s
+}
+
+// RevokedBy returns the value of the "revoked_by" field in the mutation.
+func (m *TrustedSourceMutation) RevokedBy() (r string, exists bool) {
+	v := m.revoked_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokedBy returns the old "revoked_by" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldRevokedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokedBy: %w", err)
+	}
+	return oldValue.RevokedBy, nil
+}
+
+// ClearRevokedBy clears the value of the "revoked_by" field.
+func (m *TrustedSourceMutation) ClearRevokedBy() {
+	m.revoked_by = nil
+	m.clearedFields[trustedsource.FieldRevokedBy] = struct{}{}
+}
+
+// RevokedByCleared returns if the "revoked_by" field was cleared in this mutation.
+func (m *TrustedSourceMutation) RevokedByCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldRevokedBy]
+	return ok
+}
+
+// ResetRevokedBy resets all changes to the "revoked_by" field.
+func (m *TrustedSourceMutation) ResetRevokedBy() {
+	m.revoked_by = nil
+	delete(m.clearedFields, trustedsource.FieldRevokedBy)
+}
+
+// Where appends a list predicates to the TrustedSourceMutation builder.
+func (m *TrustedSourceMutation) Where(ps ...predicate.TrustedSource) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TrustedSourceMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TrustedSourceMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TrustedSource, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TrustedSourceMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TrustedSourceMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TrustedSource).
+func (m *TrustedSourceMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TrustedSourceMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.created_at != nil {
+		fields = append(fields, trustedsource.FieldCreatedAt)
+	}
+	if m.group_id != nil {
+		fields = append(fields, trustedsource.FieldGroupID)
+	}
+	if m.name != nil {
+		fields = append(fields, trustedsource.FieldName)
+	}
+	if m.reason != nil {
+		fields = append(fields, trustedsource.FieldReason)
+	}
+	if m.created_by != nil {
+		fields = append(fields, trustedsource.FieldCreatedBy)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, trustedsource.FieldExpiresAt)
+	}
+	if m.key_fingerprint != nil {
+		fields = append(fields, trustedsource.FieldKeyFingerprint)
+	}
+	if m.source_cidr != nil {
+		fields = append(fields, trustedsource.FieldSourceCidr)
+	}
+	if m.login_user != nil {
+		fields = append(fields, trustedsource.FieldLoginUser)
+	}
+	if m.matched_count != nil {
+		fields = append(fields, trustedsource.FieldMatchedCount)
+	}
+	if m.last_matched_at != nil {
+		fields = append(fields, trustedsource.FieldLastMatchedAt)
+	}
+	if m.revoked_at != nil {
+		fields = append(fields, trustedsource.FieldRevokedAt)
+	}
+	if m.revoked_by != nil {
+		fields = append(fields, trustedsource.FieldRevokedBy)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TrustedSourceMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case trustedsource.FieldCreatedAt:
+		return m.CreatedAt()
+	case trustedsource.FieldGroupID:
+		return m.GroupID()
+	case trustedsource.FieldName:
+		return m.Name()
+	case trustedsource.FieldReason:
+		return m.Reason()
+	case trustedsource.FieldCreatedBy:
+		return m.CreatedBy()
+	case trustedsource.FieldExpiresAt:
+		return m.ExpiresAt()
+	case trustedsource.FieldKeyFingerprint:
+		return m.KeyFingerprint()
+	case trustedsource.FieldSourceCidr:
+		return m.SourceCidr()
+	case trustedsource.FieldLoginUser:
+		return m.LoginUser()
+	case trustedsource.FieldMatchedCount:
+		return m.MatchedCount()
+	case trustedsource.FieldLastMatchedAt:
+		return m.LastMatchedAt()
+	case trustedsource.FieldRevokedAt:
+		return m.RevokedAt()
+	case trustedsource.FieldRevokedBy:
+		return m.RevokedBy()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TrustedSourceMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case trustedsource.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case trustedsource.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case trustedsource.FieldName:
+		return m.OldName(ctx)
+	case trustedsource.FieldReason:
+		return m.OldReason(ctx)
+	case trustedsource.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case trustedsource.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case trustedsource.FieldKeyFingerprint:
+		return m.OldKeyFingerprint(ctx)
+	case trustedsource.FieldSourceCidr:
+		return m.OldSourceCidr(ctx)
+	case trustedsource.FieldLoginUser:
+		return m.OldLoginUser(ctx)
+	case trustedsource.FieldMatchedCount:
+		return m.OldMatchedCount(ctx)
+	case trustedsource.FieldLastMatchedAt:
+		return m.OldLastMatchedAt(ctx)
+	case trustedsource.FieldRevokedAt:
+		return m.OldRevokedAt(ctx)
+	case trustedsource.FieldRevokedBy:
+		return m.OldRevokedBy(ctx)
+	}
+	return nil, fmt.Errorf("unknown TrustedSource field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TrustedSourceMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case trustedsource.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case trustedsource.FieldGroupID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case trustedsource.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case trustedsource.FieldReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReason(v)
+		return nil
+	case trustedsource.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case trustedsource.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case trustedsource.FieldKeyFingerprint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyFingerprint(v)
+		return nil
+	case trustedsource.FieldSourceCidr:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceCidr(v)
+		return nil
+	case trustedsource.FieldLoginUser:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLoginUser(v)
+		return nil
+	case trustedsource.FieldMatchedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMatchedCount(v)
+		return nil
+	case trustedsource.FieldLastMatchedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastMatchedAt(v)
+		return nil
+	case trustedsource.FieldRevokedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokedAt(v)
+		return nil
+	case trustedsource.FieldRevokedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokedBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TrustedSource field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TrustedSourceMutation) AddedFields() []string {
+	var fields []string
+	if m.addmatched_count != nil {
+		fields = append(fields, trustedsource.FieldMatchedCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TrustedSourceMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case trustedsource.FieldMatchedCount:
+		return m.AddedMatchedCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TrustedSourceMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case trustedsource.FieldMatchedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMatchedCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TrustedSource numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TrustedSourceMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(trustedsource.FieldReason) {
+		fields = append(fields, trustedsource.FieldReason)
+	}
+	if m.FieldCleared(trustedsource.FieldKeyFingerprint) {
+		fields = append(fields, trustedsource.FieldKeyFingerprint)
+	}
+	if m.FieldCleared(trustedsource.FieldSourceCidr) {
+		fields = append(fields, trustedsource.FieldSourceCidr)
+	}
+	if m.FieldCleared(trustedsource.FieldLoginUser) {
+		fields = append(fields, trustedsource.FieldLoginUser)
+	}
+	if m.FieldCleared(trustedsource.FieldLastMatchedAt) {
+		fields = append(fields, trustedsource.FieldLastMatchedAt)
+	}
+	if m.FieldCleared(trustedsource.FieldRevokedAt) {
+		fields = append(fields, trustedsource.FieldRevokedAt)
+	}
+	if m.FieldCleared(trustedsource.FieldRevokedBy) {
+		fields = append(fields, trustedsource.FieldRevokedBy)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TrustedSourceMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TrustedSourceMutation) ClearField(name string) error {
+	switch name {
+	case trustedsource.FieldReason:
+		m.ClearReason()
+		return nil
+	case trustedsource.FieldKeyFingerprint:
+		m.ClearKeyFingerprint()
+		return nil
+	case trustedsource.FieldSourceCidr:
+		m.ClearSourceCidr()
+		return nil
+	case trustedsource.FieldLoginUser:
+		m.ClearLoginUser()
+		return nil
+	case trustedsource.FieldLastMatchedAt:
+		m.ClearLastMatchedAt()
+		return nil
+	case trustedsource.FieldRevokedAt:
+		m.ClearRevokedAt()
+		return nil
+	case trustedsource.FieldRevokedBy:
+		m.ClearRevokedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown TrustedSource nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TrustedSourceMutation) ResetField(name string) error {
+	switch name {
+	case trustedsource.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case trustedsource.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case trustedsource.FieldName:
+		m.ResetName()
+		return nil
+	case trustedsource.FieldReason:
+		m.ResetReason()
+		return nil
+	case trustedsource.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case trustedsource.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case trustedsource.FieldKeyFingerprint:
+		m.ResetKeyFingerprint()
+		return nil
+	case trustedsource.FieldSourceCidr:
+		m.ResetSourceCidr()
+		return nil
+	case trustedsource.FieldLoginUser:
+		m.ResetLoginUser()
+		return nil
+	case trustedsource.FieldMatchedCount:
+		m.ResetMatchedCount()
+		return nil
+	case trustedsource.FieldLastMatchedAt:
+		m.ResetLastMatchedAt()
+		return nil
+	case trustedsource.FieldRevokedAt:
+		m.ResetRevokedAt()
+		return nil
+	case trustedsource.FieldRevokedBy:
+		m.ResetRevokedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown TrustedSource field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TrustedSourceMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TrustedSourceMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TrustedSourceMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TrustedSourceMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TrustedSourceMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TrustedSourceMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TrustedSourceMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown TrustedSource unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TrustedSourceMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown TrustedSource edge %s", name)
 }
 
 // UserMutation represents an operation that mutates the User nodes in the graph.

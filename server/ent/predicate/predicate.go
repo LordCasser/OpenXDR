@@ -102,6 +102,9 @@ type Task func(*sql.Selector)
 // TaskRun is the predicate function for taskrun builders.
 type TaskRun func(*sql.Selector)
 
+// TrustedSource is the predicate function for trustedsource builders.
+type TrustedSource func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
 

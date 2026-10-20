@@ -36,6 +36,7 @@ import (
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/ent/trustedsource"
 	"openxdr/server/ent/user"
 	"openxdr/server/ent/vulnrecord"
 	"openxdr/server/ent/zone"
@@ -100,6 +101,10 @@ func init() {
 	alertDescCount := alertFields[7].Descriptor()
 	// alert.DefaultCount holds the default value on creation for the count field.
 	alert.DefaultCount = alertDescCount.Default.(int)
+	// alertDescAutomationWatch is the schema descriptor for automation_watch field.
+	alertDescAutomationWatch := alertFields[11].Descriptor()
+	// alert.DefaultAutomationWatch holds the default value on creation for the automation_watch field.
+	alert.DefaultAutomationWatch = alertDescAutomationWatch.Default.(bool)
 	// alertDescID is the schema descriptor for id field.
 	alertDescID := alertFields[0].Descriptor()
 	// alert.DefaultID holds the default value on creation for the id field.
@@ -574,6 +579,24 @@ func init() {
 	taskrunDescID := taskrunFields[0].Descriptor()
 	// taskrun.DefaultID holds the default value on creation for the id field.
 	taskrun.DefaultID = taskrunDescID.Default.(func() uuid.UUID)
+	trustedsourceFields := schema.TrustedSource{}.Fields()
+	_ = trustedsourceFields
+	// trustedsourceDescCreatedAt is the schema descriptor for created_at field.
+	trustedsourceDescCreatedAt := trustedsourceFields[1].Descriptor()
+	// trustedsource.DefaultCreatedAt holds the default value on creation for the created_at field.
+	trustedsource.DefaultCreatedAt = trustedsourceDescCreatedAt.Default.(func() time.Time)
+	// trustedsourceDescName is the schema descriptor for name field.
+	trustedsourceDescName := trustedsourceFields[3].Descriptor()
+	// trustedsource.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	trustedsource.NameValidator = trustedsourceDescName.Validators[0].(func(string) error)
+	// trustedsourceDescMatchedCount is the schema descriptor for matched_count field.
+	trustedsourceDescMatchedCount := trustedsourceFields[10].Descriptor()
+	// trustedsource.DefaultMatchedCount holds the default value on creation for the matched_count field.
+	trustedsource.DefaultMatchedCount = trustedsourceDescMatchedCount.Default.(int)
+	// trustedsourceDescID is the schema descriptor for id field.
+	trustedsourceDescID := trustedsourceFields[0].Descriptor()
+	// trustedsource.DefaultID holds the default value on creation for the id field.
+	trustedsource.DefaultID = trustedsourceDescID.Default.(func() uuid.UUID)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescCreatedAt is the schema descriptor for created_at field.

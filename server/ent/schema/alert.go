@@ -26,6 +26,10 @@ func (Alert) Fields() []ent.Field {
 		field.Time("last_ts").Optional().Nillable(),
 		// 平台下发的指令（人工或 AI exec）拉起的进程触发的告警：照常留痕、挂在指令上，不进事件关联与研判
 		field.UUID("command_id", uuid.UUID{}).Optional().Nillable(),
+		// 登记的可信自动化来源（见 TrustedSource）的登录会话触发的告警：照常留痕、挂在来源上，不进事件关联与研判
+		field.UUID("automation_id", uuid.UUID{}).Optional().Nillable(),
+		// 来自可信来源、但规则属于高危例外（见 internal/automation.Watch）：仍进关联与研判
+		field.Bool("automation_watch").Default(false),
 		// 合成检测的依据（如心跳的间隔统计），一行人读的话；研判上下文与事件页一并展示。规则命中为空
 		field.Text("detail").Optional().Nillable(),
 	}
@@ -44,5 +48,6 @@ func (Alert) Indexes() []ent.Index {
 		index.Fields("incident_id"),
 		index.Fields("asset_id", "ts"),
 		index.Fields("command_id"),
+		index.Fields("automation_id"),
 	}
 }
