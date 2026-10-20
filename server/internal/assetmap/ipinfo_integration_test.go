@@ -3,9 +3,14 @@
 package assetmap
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -150,5 +155,63 @@ func TestEnricherFlagsIntel(t *testing.T) {
 	}
 	if row, _ = client.Intel.Query().Where(intel.ValueEQ("203.0.113.66")).Only(ctx); row.ExpiresAt == nil || row.ExpiresAt.After(later) {
 		t.Fatalf("不再达到阈值应立即失效: %+v", row.ExpiresAt)
+	}
+}
+
+// 告警里出现的公网地址先补：情报命中与入站对端不在依赖边里，以前永远轮不到；
+// 反向解析临时失败不落「查过」，隔一阵重试，不拖住别的地址
+func TestEnricherAlertPeers(t *testing.T) {
+	ctx, client := testdb.New(t)
+	group := client.Group.Create().SetName("prod").SaveX(ctx)
+	gw := client.Asset.Create().SetHostname("gateway").SetIPAddrs([]string{"10.1.1.100"}).SetGroupID(group.ID).SaveX(ctx)
+	now := time.Now()
+	client.AssetLink.Create().SetSrcIP("10.1.1.100").SetSrcAssetID(gw.ID).SetDstIP("203.0.113.10").SetDstPort(443).SetProto("tcp").
+		SetCount(500).SetFirstSeen(now).SetLastSeen(now).ExecX(ctx)
+	inbound := client.Event.Create().SetTs(now).SetClassUID(4001).SetSource("agent").SetAssetID(gw.ID).
+		SetRaw(json.RawMessage(`{"src_endpoint":{"ip":"176.120.22.61","port":58364},"dst_endpoint":{"ip":"10.1.1.100","port":443},"connection_info":{"direction":"inbound"}}`)).SaveX(ctx)
+	client.Alert.Create().SetTs(now).SetRuleID("intel:ip:176.120.22.61").SetSeverity(3).SetAssetID(gw.ID).SetEventID(inbound.ID).ExecX(ctx)
+	login := client.Event.Create().SetTs(now).SetClassUID(3002).SetSource("agent").SetAssetID(gw.ID).
+		SetRaw(json.RawMessage(`{"src_endpoint":{"ip":"198.51.100.44"}}`)).SaveX(ctx)
+	client.Alert.Create().SetTs(now.Add(-time.Minute)).SetRuleID("ssh-brute").SetSeverity(3).SetAssetID(gw.ID).SetEventID(login.ID).ExecX(ctx)
+
+	var vtCalls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		vtCalls = append(vtCalls, strings.TrimPrefix(r.URL.Path, "/api/v3/ip_addresses/"))
+		_, _ = w.Write([]byte(`{"data":{"attributes":{"as_owner":"Some ISP","country":"RU"}}}`))
+	}))
+	defer srv.Close()
+	var dials atomic.Int32
+	e := &Enricher{DB: client, PTR: true, VTKey: "k", VTPerMin: 2, VTPerDay: 500, TTL: 7 * 24 * time.Hour,
+		VTBase: srv.URL, HTTP: srv.Client(), Resolver: &net.Resolver{PreferGo: true, Dial: func(context.Context, string, string) (net.Conn, error) {
+			dials.Add(1)
+			return nil, errors.New("DNS 不可达")
+		}}}
+	if err := e.round(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(vtCalls, []string{"176.120.22.61", "198.51.100.44"}) {
+		t.Fatalf("应先查告警里的地址（最近的在前），再轮到外联：%v", vtCalls)
+	}
+	row := client.IPInfo.Query().Where(ipinfo.IP("176.120.22.61")).OnlyX(ctx)
+	if row.AsOwner != "Some ISP" || row.VtAt == nil || row.PtrAt != nil {
+		t.Fatalf("情报命中的入站对端应补上 VirusTotal，反向解析失败不该记成查过: %+v", row)
+	}
+	if dials.Load() == 0 {
+		t.Fatal("应尝试过反向解析")
+	}
+
+	// 解析失败的地址退避期内不再试，到点重试
+	before := dials.Load()
+	if err := e.round(ctx, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if dials.Load() != before {
+		t.Fatalf("退避期内不该重试失败的地址: %d → %d", before, dials.Load())
+	}
+	if err := e.round(ctx, now.Add(ptrRetryAfter+time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if dials.Load() == before {
+		t.Fatal("退避期过后应重试")
 	}
 }

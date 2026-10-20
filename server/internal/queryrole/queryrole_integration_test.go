@@ -79,6 +79,18 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 		client.Alert.Create().SetTs(now).SetRuleID("r").SetSeverity(3).SetAssetID(x.ID).SetEventID(events[x.ID].ID).SaveX(ctx)
 	}
 	client.Alert.Create().SetTs(now).SetRuleID("cross").SetSeverity(3).SetAssetID(a1.ID).SetEventID(events[b1.ID].ID).SaveX(ctx)
+	// ip_infos 还要带上本组告警里的地址：a 的情报命中与入站对端看得到，b 告警里的看不到
+	for _, x := range []struct {
+		asset      *ent.Asset
+		intel, src string
+	}{{a1, "203.0.113.5", "203.0.113.6"}, {b1, "198.51.100.5", "198.51.100.6"}} {
+		peer := client.Event.Create().SetTs(now).SetClassUID(4001).SetSource("agent").SetAssetID(x.asset.ID).
+			SetRaw(json.RawMessage(`{"src_endpoint":{"ip":"` + x.src + `"},"dst_endpoint":{"ip":"10.0.0.1"}}`)).SaveX(ctx)
+		client.Alert.Create().SetTs(now).SetRuleID("intel:ip:" + x.intel).SetSeverity(3).SetAssetID(x.asset.ID).SaveX(ctx)
+		client.Alert.Create().SetTs(now).SetRuleID("ssh-brute").SetSeverity(3).SetAssetID(x.asset.ID).SetEventID(peer.ID).SaveX(ctx)
+		client.IPInfo.Create().SetIP(x.intel).SaveX(ctx)
+		client.IPInfo.Create().SetIP(x.src).SaveX(ctx)
+	}
 
 	static := uuid.New()
 	p := &Provisioner{DB: db, Client: client, BaseDSN: dsn, Static: map[uuid.UUID]string{static: "postgres://manual"}}
@@ -114,12 +126,12 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 	}
 	for view, want := range map[string]string{
 		"findings": "1", "memories": "1", "suppressions": "1", "asset_links": "1", "reports": "1",
-		"ip_infos": "203.0.113.1",
+		"ip_infos": "203.0.113.1,203.0.113.5,203.0.113.6",
 	} {
 		var got string
 		q := `SELECT count(*)::text FROM ` + view
 		if view == "ip_infos" {
-			q = `SELECT string_agg(ip, ',') FROM ip_infos`
+			q = `SELECT string_agg(ip, ',' ORDER BY ip) FROM ip_infos`
 		}
 		if err := ro.QueryRowContext(ctx, q).Scan(&got); err != nil || got != want {
 			t.Errorf("%s 只应看到本组的数据：得到 %q，%v", view, got, err)
@@ -136,7 +148,7 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 		}
 	}
 	var proc string
-	if err := ro.QueryRowContext(ctx, `SELECT count(*), min(raw->'process'->>'name') FROM alert_events`).Scan(&n, &proc); err != nil || n != 1 || proc != "a1" {
+	if err := ro.QueryRowContext(ctx, `SELECT count(*), min(raw->'process'->>'name') FROM alert_events WHERE rule_id IN ('r', 'cross')`).Scan(&n, &proc); err != nil || n != 1 || proc != "a1" {
 		t.Errorf("alert_events 只应带出本组主机自己的事件：%d 条 %q，%v", n, proc, err)
 	}
 	if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM public.assets`).Scan(&n); err == nil {

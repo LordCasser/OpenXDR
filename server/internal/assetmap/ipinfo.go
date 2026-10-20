@@ -17,8 +17,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"openxdr/server/ent"
+	"openxdr/server/ent/alert"
 	"openxdr/server/ent/assetlink"
+	"openxdr/server/ent/event"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
 )
@@ -29,7 +33,9 @@ const (
 	// 每轮反向解析的上限：解析是串行的，单个最多等 ptrTimeout
 	ptrPerRound = 20
 	ptrTimeout  = 3 * time.Second
-	maxDomains  = 5
+	// 反向解析临时失败（超时、DNS 服务出错）的地址隔多久再试；查无记录不算失败
+	ptrRetryAfter = 30 * time.Minute
+	maxDomains    = 5
 )
 
 var (
@@ -59,6 +65,8 @@ type Enricher struct {
 	day       string
 	usedToday int
 	pauseTill time.Time
+	// 反向解析临时失败的地址到什么时候再试：只在内存里，换节点或重启从头来
+	ptrRetry map[string]time.Time
 }
 
 func (e *Enricher) Run(ctx context.Context) {
@@ -106,7 +114,7 @@ func (e *Enricher) round(ctx context.Context, now time.Time) error {
 			break
 		}
 		info := known[ip]
-		doPTR := ptrLeft > 0 && (info == nil || stale(info.PtrAt))
+		doPTR := ptrLeft > 0 && (info == nil || stale(info.PtrAt)) && !now.Before(e.ptrRetry[ip])
 		doVT := vtLeft > 0 && (info == nil || stale(info.VtAt))
 		if !doPTR && !doVT {
 			continue
@@ -114,8 +122,17 @@ func (e *Enricher) round(ctx context.Context, now time.Time) error {
 		upd := ipUpdate{}
 		if doPTR {
 			ptrLeft--
-			name := e.lookupPTR(ctx, ip)
-			upd.ptr = &name
+			// 临时失败不落库，过一阵再试；不然记成「查过、没有」要等缓存到期才重查
+			if name, err := e.lookupPTR(ctx, ip); err != nil {
+				if e.ptrRetry == nil {
+					e.ptrRetry = map[string]time.Time{}
+				}
+				e.ptrRetry[ip] = now.Add(ptrRetryAfter)
+				slog.Debug("反向解析失败，稍后重试", "ip", ip, "err", err)
+			} else {
+				delete(e.ptrRetry, ip)
+				upd.ptr = &name
+			}
 		}
 		if doVT {
 			vtLeft--
@@ -152,10 +169,15 @@ type ipSum struct {
 	Sum   int64  `json:"sum"`
 }
 
-// candidates 最近一周连过的公网地址（不含已纳管资产的地址），按连接量从多到少
+// candidates 待补信息的公网地址（不含已纳管资产的地址）：先是最近一周告警里出现的对端，最近的在前——
+// 情报命中与入站对端不在依赖边里，只按外联挑永远轮不到；再是最近一周连过的地址，按连接量从多到少
 func (e *Enricher) candidates(ctx context.Context, now time.Time) ([]string, error) {
+	peers, err := e.alertPeers(ctx, now)
+	if err != nil {
+		return nil, err
+	}
 	var sums []ipSum
-	err := e.DB.AssetLink.Query().Where(assetlink.LastSeenGT(now.Add(-enrichWindow))).
+	err = e.DB.AssetLink.Query().Where(assetlink.LastSeenGT(now.Add(-enrichWindow))).
 		GroupBy(assetlink.FieldDstIP).Aggregate(ent.Sum(assetlink.FieldCount)).Scan(ctx, &sums)
 	if err != nil {
 		return nil, err
@@ -165,13 +187,82 @@ func (e *Enricher) candidates(ctx context.Context, now time.Time) ([]string, err
 		return nil, err
 	}
 	slices.SortFunc(sums, func(a, b ipSum) int { return cmp.Or(cmp.Compare(b.Sum, a.Sum), cmp.Compare(a.DstIP, b.DstIP)) })
-	var out []string
 	for _, s := range sums {
-		if addr, err := netip.ParseAddr(s.DstIP); err == nil && Public(addr) && w.ByIP[addr] == nil {
-			out = append(out, s.DstIP)
+		peers = append(peers, s.DstIP)
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, ip := range peers {
+		if addr, err := netip.ParseAddr(ip); err == nil && Public(addr) && w.ByIP[addr] == nil && !seen[ip] {
+			seen[ip] = true
+			out = append(out, ip)
 		}
 	}
 	return out, nil
+}
+
+// alertPeers 最近一周告警里出现的地址，最近的在前：情报命中的地址取自规则 ID，其余取告警对应事件的两端。
+// 平台自己下发的指令触发的告警不算；只取最近 alertPeerLimit 条告警，公网与否由调用方筛
+func (e *Enricher) alertPeers(ctx context.Context, now time.Time) ([]string, error) {
+	since := now.Add(-enrichWindow)
+	alerts, err := e.DB.Alert.Query().Where(alert.TsGT(since), alert.CommandIDIsNil()).
+		Order(ent.Desc(alert.FieldTs)).Limit(alertPeerLimit).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var ids []uuid.UUID
+	for _, a := range alerts {
+		if a.EventID != nil {
+			ids = append(ids, *a.EventID)
+		}
+	}
+	raws := map[uuid.UUID][]string{}
+	if len(ids) > 0 {
+		// 事件按天分区：带上时间下限，只扫窗口内的分区
+		events, err := e.DB.Event.Query().Where(event.IDIn(ids...), event.TsGT(since.Add(-24*time.Hour))).
+			Select(event.FieldRaw).All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, ev := range events {
+			raws[ev.ID] = endpointIPs(ev.Raw)
+		}
+	}
+	var out []string
+	for _, a := range alerts {
+		if ip, ok := strings.CutPrefix(a.RuleID, "intel:ip:"); ok {
+			out = append(out, ip)
+		}
+		if a.EventID != nil {
+			out = append(out, raws[*a.EventID]...)
+		}
+	}
+	return out, nil
+}
+
+// alertPeerLimit 每轮最多看多少条告警找对端：生产一周几百条，够用且不拖慢一轮
+const alertPeerLimit = 2000
+
+// endpointIPs 事件两端的地址；外部数据不可信，解析不了就当没有
+func endpointIPs(raw json.RawMessage) []string {
+	var ev struct {
+		Src struct {
+			IP string `json:"ip"`
+		} `json:"src_endpoint"`
+		Dst struct {
+			IP string `json:"ip"`
+		} `json:"dst_endpoint"`
+	}
+	if json.Unmarshal(raw, &ev) != nil {
+		return nil
+	}
+	var out []string
+	for _, ip := range []string{ev.Src.IP, ev.Dst.IP} {
+		if ip != "" {
+			out = append(out, ip)
+		}
+	}
+	return out
 }
 
 // vtBudget 本轮还能查几次：每分钟上限，再受当天剩余额度与暂停期约束
@@ -185,15 +276,22 @@ func (e *Enricher) vtBudget(now time.Time) int {
 	return max(0, min(e.VTPerMin, e.VTPerDay-e.usedToday))
 }
 
-func (e *Enricher) lookupPTR(ctx context.Context, ip string) string {
+// lookupPTR 查无记录返回空串；超时、DNS 服务出错这类临时失败返回错误，由调用方稍后重试
+func (e *Enricher) lookupPTR(ctx context.Context, ip string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, ptrTimeout)
 	defer cancel()
 	r := cmp.Or(e.Resolver, net.DefaultResolver)
 	names, err := r.LookupAddr(ctx, ip)
-	if err != nil || len(names) == 0 {
-		return ""
+	var dnsErr *net.DNSError
+	switch {
+	case errors.As(err, &dnsErr) && dnsErr.IsNotFound:
+		return "", nil
+	case err != nil:
+		return "", err
+	case len(names) == 0:
+		return "", nil
 	}
-	return clean(strings.TrimSuffix(names[0], "."), 253)
+	return clean(strings.TrimSuffix(names[0], "."), 253), nil
 }
 
 type vtResult struct {

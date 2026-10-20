@@ -40,11 +40,16 @@ CREATE OR REPLACE VIEW :"schema".asset_links WITH (security_barrier) AS
   SELECT src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen
   FROM public.asset_links WHERE src_asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id');
 
--- 只给本组主机连过的地址，别组的外联目的不外泄
+-- 只给本组主机连过的地址与本组告警里出现的地址（情报命中、入站对端），别组的不外泄
 CREATE OR REPLACE VIEW :"schema".ip_infos WITH (security_barrier) AS
   SELECT ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at
   FROM public.ip_infos WHERE ip IN (SELECT dst_ip FROM public.asset_links
-    WHERE src_asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id'));
+    WHERE src_asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id'))
+  OR ip IN (SELECT substring(rule_id from 10) FROM public.alerts WHERE rule_id LIKE 'intel:ip:%'
+    AND asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id'))
+  OR ip IN (SELECT unnest(ARRAY[e.raw->'src_endpoint'->>'ip', e.raw->'dst_endpoint'->>'ip'])
+    FROM public.alerts a JOIN public.events e ON e.id = a.event_id AND e.asset_id = a.asset_id
+    WHERE a.asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id'));
 
 CREATE OR REPLACE VIEW :"schema".reports WITH (security_barrier) AS
   SELECT id, created_at, title, level, markdown, summary
@@ -128,7 +133,7 @@ COMMENT ON VIEW :"schema".findings IS '本组运维待办（track 登记的问�
 COMMENT ON VIEW :"schema".suppressions IS '本组主机上的抑制规则（status：active 生效 / proposed 待批 / rejected 已拒绝）';
 COMMENT ON VIEW :"schema".memories IS '本组长期记忆（source：human 人工 / ai）';
 COMMENT ON VIEW :"schema".asset_links IS '本组主机发起的连接聚合成的依赖边';
-COMMENT ON VIEW :"schema".ip_infos IS '本组主机连过的公网地址：反向解析与 VirusTotal 结果';
+COMMENT ON VIEW :"schema".ip_infos IS '本组主机连过的与本组告警里出现的公网地址：反向解析与 VirusTotal 结果';
 COMMENT ON VIEW :"schema".reports IS '本组历史报告（level：ok / attention / urgent）';
 COMMENT ON VIEW :"schema".identity_accounts IS '本组账号登记（directory 目录 / windows 组+资产+SID / linux 组+资产+UID+用户名）及当前所属身份';
 COMMENT ON VIEW :"schema".identities IS '本组身份：每个目录账号一个，没有目录锚点的主机账号各自独立';
