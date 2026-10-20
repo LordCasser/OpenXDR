@@ -56,6 +56,11 @@ SSH="ssh -F <ssh 配置>" GOPROXY=https://goproxy.cn,direct deploy/ha/release.sh
 每个节点切换前把旧镜像标成 `pre-<标签>`，回滚方式见脚本头部注释。
 agent 不走这个脚本：把新版本放进节点的 `dist/` 目录，agent 重连时自动升级。
 
+时序规则（`temporal-rules/`）按内容哈希发布成节点上的不可变版本目录 `temporal-rules/v-<哈希>/`（带 `SHA256SUMS`），
+再原子切换 `temporal-rules/current` 链接，保留最近 5 个版本；compose 只读挂载整个 `temporal-rules/` 到容器 `/temporal-rules`。
+开启时在节点 `.env` 设 `TEMPORAL_RULES_PATH=/temporal-rules/current`，server 每 `RULES_RELOAD_SECONDS` 整批重载；
+不设则保持单事件检测。回滚规则：把 `current` 链接切回旧版本目录（`ln -sfn v-<旧> current.tmp && mv -T current.tmp current`）。
+
 ## 验收
 
 1. `patronictl list` 必须是一主一同步副本；
