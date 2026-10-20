@@ -332,7 +332,8 @@ export interface SuppressCondition {
 export const reviewSuppression = (id: string, decision: 'approve' | 'reject') =>
   send('POST', `/api/suppressions/${id}/review`, { decision })
 
-export interface CollectorCapability { path: string; state: 'active' | 'degraded' | 'unavailable' | 'disabled' | 'unknown' }
+// reason：agent 活性检测判定通道开着却持续收不到事件时给出（只跟着 degraded），文字由 agent 生成
+export interface CollectorCapability { path: string; state: 'active' | 'degraded' | 'unavailable' | 'disabled' | 'unknown'; reason?: string }
 export interface CollectorHealthSnapshot {
   bootId: string; sequence: number; reportedUnixMs: number; receivedAt: string
   queueBytes: number; queueBatches: number; queueLimitBytes: number; droppedEvents: number; writeBlocked: boolean

@@ -41,7 +41,7 @@ export function CollectorHealth({ asset }: { asset: Asset }) {
       <Table<CollectorCapability & { name: string }> size="small" rowKey="name" pagination={false} dataSource={rows} columns={[
         { title: t('collectorComponent'), dataIndex: 'name', render: (name: string) => names[name] ? t(names[name]) : name },
         { title: t('collectorPath'), dataIndex: 'path', render: (path: string) => path || '—' },
-        { title: t('collectorState'), dataIndex: 'state', render: (value: string) => { const state = states[value] ?? states.unknown; return <Tag color={stale ? undefined : state.color}>{t(state.label)}</Tag> } },
+        { title: t('collectorState'), dataIndex: 'state', render: (value: string, row) => { const state = states[value] ?? states.unknown; return <Space size={4} wrap><Tag color={stale ? undefined : state.color}>{t(state.label)}</Tag>{row.reason && <Typography.Text type="secondary">{row.reason}</Typography.Text>}</Space> } },
       ]} />
       <Typography.Text type="secondary">{t('collectorEvidenceHint')}</Typography.Text>
     </Space>
