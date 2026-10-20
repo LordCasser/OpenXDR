@@ -31,3 +31,9 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: OpenXDR 事件处理 P95 超过 1 秒
+      - alert: OpenXDRCollectorSilent
+        expr: max by (capability) (openxdr_collector_capability_problem_hosts{silent="true"}) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} 台在线主机的 {{ $labels.capability }} 采集通道开着却持续收不到事件（agent 自检也没看到），检测处于失明状态"

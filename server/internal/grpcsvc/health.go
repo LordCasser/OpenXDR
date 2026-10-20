@@ -18,6 +18,8 @@ import (
 type capability struct {
 	Path  string `json:"path"`
 	State string `json:"state"`
+	// Reason 降级原因：agent 活性检测发现通道开着却收不到事件时给出，只能跟着 degraded
+	Reason string `json:"reason,omitempty"`
 }
 type receiptHealth struct {
 	Pending    uint64 `json:"pending"`
@@ -72,6 +74,9 @@ func checkSnapshot(bootID string, sequence uint64, reportedMs int64, caps map[st
 		}
 		if len(cap.Path) > 64 {
 			return status.Error(codes.InvalidArgument, "采集路径过长")
+		}
+		if len(cap.Reason) > 256 || (cap.Reason != "" && cap.State != "degraded") {
+			return status.Error(codes.InvalidArgument, "降级原因无效")
 		}
 	}
 	return nil

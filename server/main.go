@@ -110,7 +110,8 @@ func main() {
 
 	dedupWindow := time.Duration(getenvInt("ALERT_DEDUP_WINDOW_MINUTES", 5)) * time.Minute
 	registry := prometheus.NewRegistry()
-	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		telemetry.NewCollectorHealth(db))
 	events, router := startEventBus(db, rules, temporalRules, suppressions, intelStore, dedupWindow, hub, registry)
 	if router != nil {
 		defer router.Close()

@@ -2,9 +2,11 @@ package grpcsvc
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestHealthValidation(t *testing.T) {
@@ -19,6 +21,11 @@ func TestHealthValidation(t *testing.T) {
 	if _, err := parseHealth(string(raw), now); err != nil {
 		t.Fatal(err)
 	}
+	h.Capabilities["files"] = capability{Path: "rdcw", State: "degraded", Reason: "持续 30 分钟收不到文件事件，自检文件改动也没被看到"}
+	raw, _ = json.Marshal(h)
+	if parsed, err := parseHealth(string(raw), now); err != nil || parsed.Capabilities["files"].Reason == "" {
+		t.Fatalf("降级原因丢失: %v", err)
+	}
 	h.Receipts = &receiptHealth{Pending: 2, Incomplete: 1}
 	raw, _ = json.Marshal(h)
 	parsed, err := parseHealth(string(raw), now)
@@ -29,6 +36,12 @@ func TestHealthValidation(t *testing.T) {
 		func(h *collectorHealth) { h.Receipts = &receiptHealth{Pending: 256, Incomplete: 1} },
 		func(h *collectorHealth) { h.Receipts = &receiptHealth{Pending: ^uint64(0)} },
 		func(h *collectorHealth) { h.Sequence = 0 }, func(h *collectorHealth) { h.QueueBytes = 1 << 54 }, func(h *collectorHealth) { h.ReportedUnixMs = now.Add(-6 * time.Minute).UnixMilli() }, func(h *collectorHealth) { h.Capabilities = map[string]capability{"shell": {State: "active"}} }, func(h *collectorHealth) { h.Capabilities = map[string]capability{"process": {State: "perfect"}} },
+		func(h *collectorHealth) {
+			h.Capabilities = map[string]capability{"process": {State: "active", Reason: "收不到"}}
+		},
+		func(h *collectorHealth) {
+			h.Capabilities = map[string]capability{"process": {State: "degraded", Reason: strings.Repeat("长", 100)}}
+		},
 	} {
 		copy := h
 		change(&copy)

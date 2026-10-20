@@ -34,8 +34,9 @@ type healthSnapshot struct {
 	DroppedEvents int64     `json:"droppedEvents"`
 	WriteBlocked  bool      `json:"writeBlocked"`
 	Capabilities  map[string]struct {
-		Path  string `json:"path"`
-		State string `json:"state"`
+		Path   string `json:"path"`
+		State  string `json:"state"`
+		Reason string `json:"reason"`
 	} `json:"capabilities"`
 }
 
@@ -57,7 +58,13 @@ func healthProblems(h healthSnapshot, dropping bool, dropped int64) []problem {
 		if c.Path != "" {
 			text += "（" + c.Path + "）"
 		}
-		out = append(out, problem{"cap:" + name + ":" + c.State, text})
+		key := "cap:" + name + ":" + c.State
+		// 活性检测的降级（通道开着却没有数据）与路径自报的降级是两回事，原因进签名，变了要重新通知
+		if c.Reason != "" {
+			text += "：" + c.Reason
+			key += ":" + c.Reason
+		}
+		out = append(out, problem{key, text})
 	}
 	if h.WriteBlocked {
 		out = append(out, problem{"blocked", "本地缓存写不进去（磁盘满或缓存已满），断线时事件会丢"})
