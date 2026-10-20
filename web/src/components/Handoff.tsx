@@ -8,6 +8,7 @@ import { useCanAct, useSession } from '../app/session'
 import { useI18n, type MsgKey } from '../i18n'
 import { ResolveModal } from './ResolveModal'
 import { IncidentStatusTag, SeverityTag, errText } from './format'
+import { agreesWithAI, proposalNote, verdictStatus } from './verdict'
 
 // 对话只看组内角色（后端同口径）
 export function useCanChat() {
@@ -55,6 +56,9 @@ export function SubjectsBar({ subjects, groupId }: { subjects: string[]; groupId
   })
   const findingIds = parsed.filter(([k]) => k === 'finding').map(([, id]) => id)
   const findings = useQuery({ queryKey: ['findings', 'all'], queryFn: () => fetchFindings(), enabled: findingIds.length > 0, refetchInterval: 15_000 })
+  // 结案弹窗与事件页同口径：预填结论相同的 AI 结案建议，与研判一致时理由选填、相反时提示
+  const incident = resolving?.kind === 'incident' ? incidents.find(q => q.data?.id === resolving.id)?.data : undefined
+  const next = incident ? (resolving?.next as 'closed' | 'false_positive') : null
 
   const submit = async (note: string) => {
     if (!resolving) return
@@ -114,6 +118,9 @@ export function SubjectsBar({ subjects, groupId }: { subjects: string[]; groupId
         open={!!resolving}
         title={`${t(resolving ? RESOLVE_TITLE[resolving.next] : 'resolveClosedTitle')} · ${resolving?.title ?? ''}`}
         hint={t(resolving?.kind === 'finding' ? (resolving.next === 'ignored' ? 'findingIgnoreHint' : 'findingResolveHint') : 'resolveHint')}
+        initialNote={incident ? proposalNote([incident], next) : undefined}
+        optional={!!incident && agreesWithAI(incident.aiVerdict, next)}
+        contradicts={!!incident && !!verdictStatus(incident.aiVerdict) && !agreesWithAI(incident.aiVerdict, next)}
         onCancel={() => setResolving(null)}
         onSubmit={submit}
       />

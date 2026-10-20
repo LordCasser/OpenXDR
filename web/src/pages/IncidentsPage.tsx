@@ -13,7 +13,7 @@ import { useRowLink } from '../components/rowLink'
 import { useFlash } from '../components/useFlash'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
-import { agreesWithAI, verdictStatus } from '../components/verdict'
+import { agreesWithAI, proposalNote, verdictStatus } from '../components/verdict'
 import { INCIDENT_STATUSES, IncidentStatusTag, SeverityTag, errText, incidentStatusKey } from '../components/format'
 import { FilterCard, Page, STICKY_HEADER, WIDE_ONLY, useWideTable } from '../components/Page'
 import { useI18n } from '../i18n'
@@ -112,10 +112,7 @@ export function IncidentsPage() {
   // 批量按误报结案时，AI 判恶意的默认留下不关，勾选确认才一起关；单条是人点名的，照常处理
   const maliciousRows = resolving?.status === 'false_positive' && resolving.rows.length > 1 ? resolving.rows.filter(malicious) : []
   const targets = resolving?.rows.filter(r => confirmMalicious || !maliciousRows.includes(r)) ?? []
-  // 有结论相同的 AI 结案建议时，说明预填最近一条（可改）；原样提交后端记为采纳 AI 建议
-  const proposalNote = resolving?.rows
-    .flatMap(r => (r.closureProposal?.status === resolving.status ? [r.closureProposal] : []))
-    .sort((a, b) => b.at.localeCompare(a.at))[0]?.note
+  const prefill = proposalNote(resolving?.rows ?? [], resolving?.status)
 
   // 一次请求整批结案：组内权限、逐条审计与人工案例回喂照旧。失败时弹窗不关，备注不丢
   const batch = async (note: string) => {
@@ -246,7 +243,7 @@ export function IncidentsPage() {
         open={!!resolving}
         title={`${t(resolving?.status === 'closed' ? 'resolveClosedTitle' : 'resolveFpTitle')} · ${t('batchSelected', { n: targets.length })}`}
         hint={t('resolveHint')}
-        initialNote={proposalNote}
+        initialNote={prefill}
         optional={targets.length > 0 && targets.every(r => agreesWithAI(r.aiVerdict, resolving?.status ?? null))}
         contradicts={targets.some(r => verdictStatus(r.aiVerdict) && !agreesWithAI(r.aiVerdict, resolving?.status ?? null))}
         onCancel={() => setResolving(null)}
@@ -256,7 +253,7 @@ export function IncidentsPage() {
           <Alert type="error" showIcon style={{ marginBottom: 16 }} title={t('batchMalicious', { n: maliciousRows.length })}
             description={<Checkbox checked={confirmMalicious} onChange={e => setConfirmMalicious(e.target.checked)}>{t('batchMaliciousConfirm', { n: maliciousRows.length })}</Checkbox>} />
         )}
-        {proposalNote && (resolving?.rows.length ?? 0) > 1 && <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('batchProposalPrefilled')} />}
+        {prefill && (resolving?.rows.length ?? 0) > 1 && <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('batchProposalPrefilled')} />}
       </ResolveModal>
     </Page>
   )
