@@ -118,7 +118,7 @@ func main() {
 	slog.Info("HTTP 启动", "addr", httpAddr)
 	queryRoles := startQueryRoles(ctx, db, client, dsn)
 	chat := startChat(ctx, client, rules, hub, webhook, conf, queryRoles)
-	startScheduler(ctx, db, client, chat, conf, webhook)
+	scheduler := startScheduler(ctx, db, client, chat, conf, webhook)
 	enrollSvc := loadEnroll(client, silentAfter)
 	routes := http.NewServeMux()
 	registerSQLRoutes(routes, db)
@@ -134,7 +134,7 @@ func main() {
 		os.Exit(1)
 	}
 	httpServer := &http.Server{Addr: httpAddr, Handler: realip.Middleware(trustedProxies, mux), ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
-	serveUntilDone(ctx, httpServer, chat, grpcServer)
+	serveUntilDone(ctx, httpServer, chat, scheduler, grpcServer)
 }
 
 // openStore 连接数据库，在 schema 锁里建表并完成各模块的库结构迁移。
@@ -512,7 +512,9 @@ func startChat(ctx context.Context, client *ent.Client, rules sigma.Catalog, hub
 }
 
 // startScheduler 预设任务：Pi 启用才调度，集群单活；报告与失败通知走与 incident 相同的 webhook
-func startScheduler(ctx context.Context, db *sql.DB, client *ent.Client, chat *agentchat.Service, conf func() aiconf.Config, webhook *notify.Webhook) {
+// 返回的通道在调度器完全退出后关闭：停机时要等它把被打断的运行记成 interrupted，
+// 否则进程先退出，运行记录停在 running，只能等执行期限过了按失败清理，接手的 leader 也不会重跑
+func startScheduler(ctx context.Context, db *sql.DB, client *ent.Client, chat *agentchat.Service, conf func() aiconf.Config, webhook *notify.Webhook) <-chan struct{} {
 	report.Chromium = getenv("CHROMIUM_PATH", "chromium")
 	scheduler := &schedule.Scheduler{
 		DB: client, Runner: chat,
@@ -523,7 +525,12 @@ func startScheduler(ctx context.Context, db *sql.DB, client *ent.Client, chat *a
 		Timeout:      time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second,
 	}
 	// 常驻：任务定义照常同步到库里，Pi 模型配上才运行
-	go cluster.RunLeader(ctx, db, "schedule", scheduler.Run)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		cluster.RunLeader(ctx, db, "schedule", scheduler.Run)
+	}()
+	return done
 }
 
 // loadEnroll 主机在线接入配置。
@@ -631,7 +638,7 @@ func publicMux(app http.Handler, db *sql.DB, client *ent.Client, registry *prome
 }
 
 // serveUntilDone 服务 HTTP 直到出错或收到退出信号，然后依次排空 HTTP、Pi 会话与 gRPC。
-func serveUntilDone(ctx context.Context, httpServer *http.Server, chat *agentchat.Service, grpcServer *grpc.Server) {
+func serveUntilDone(ctx context.Context, httpServer *http.Server, chat *agentchat.Service, scheduler <-chan struct{}, grpcServer *grpc.Server) {
 	httpErr := make(chan error, 1)
 	go func() { httpErr <- httpServer.ListenAndServe() }()
 	select {
@@ -647,6 +654,11 @@ func serveUntilDone(ctx context.Context, httpServer *http.Server, chat *agentcha
 	defer cancel()
 	_ = httpServer.Shutdown(shutdownCtx)
 	chat.Wait(shutdownCtx)
+	select {
+	case <-scheduler:
+	case <-shutdownCtx.Done():
+		slog.Warn("等待定时任务收尾超时")
+	}
 	grpcDone := make(chan struct{})
 	go func() { grpcServer.GracefulStop(); close(grpcDone) }()
 	select {
