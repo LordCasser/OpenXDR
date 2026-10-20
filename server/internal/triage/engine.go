@@ -19,6 +19,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/alert"
 	"openxdr/server/ent/incident"
+	"openxdr/server/ent/ipinfo"
 	"openxdr/server/ent/predicate"
 	"openxdr/server/internal/review"
 )
@@ -222,6 +223,7 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 			fmt.Fprintf(&sb, "  依据：%s\n", *a.Detail)
 		}
 	}
+	e.appendIPInfo(ctx, &sb, alerts)
 	e.appendCaseHistory(ctx, &sb, inc, alerts)
 	e.appendMemories(ctx, &sb, alerts)
 	return sb.String(), nil
@@ -256,6 +258,74 @@ func (e *Engine) appendRuleTally(ctx context.Context, sb *strings.Builder, incID
 		fmt.Fprintf(sb, "- %s：%d 条告警（去重前累计命中 %d 次）\n", rule, t.Alerts, t.Hits)
 	}
 	return nil
+}
+
+// appendIPInfo 告警里出现的公网地址（情报命中的、事件两端的）在平台缓存里的背景：归属、反查、VirusTotal。
+// 后台补全过的才有，没有就不写，让模型知道「未验证」而不是去猜
+func (e *Engine) appendIPInfo(ctx context.Context, sb *strings.Builder, alerts []*ent.Alert) {
+	var ips []string
+	for _, a := range alerts {
+		if ip, ok := strings.CutPrefix(a.RuleID, "intel:ip:"); ok {
+			ips = append(ips, ip)
+		}
+		if a.Edges.Event != nil {
+			ips = append(ips, endpointIPs(a.Edges.Event.Raw)...)
+		}
+	}
+	if len(ips) == 0 {
+		return
+	}
+	rows, err := e.DB.IPInfo.Query().Where(ipinfo.IPIn(ips...)).Order(ipinfo.ByIP()).Limit(20).All(ctx)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	sb.WriteString("## 公网地址背景（平台缓存，可能过期；归属只说明是谁的网络，不说明善恶）\n")
+	for _, r := range rows {
+		fmt.Fprintf(sb, "- %s：%s\n", r.IP, ipFacts(r))
+	}
+}
+
+// ipFacts 一个地址的已知事实，离线库与 VirusTotal 分开写，不一致时模型能看出来
+func ipFacts(r *ent.IPInfo) string {
+	var parts []string
+	if r.IpdbAt != nil && (r.IpdbAsn != 0 || r.IpdbOrg != "" || r.IpdbCountry != "") {
+		parts = append(parts, fmt.Sprintf("离线库 AS%d %s，国家 %s", r.IpdbAsn, cmp.Or(r.IpdbOrg, "-"), cmp.Or(r.IpdbCountry, "-")))
+	}
+	if r.Ptr != "" {
+		parts = append(parts, "反查 "+r.Ptr)
+	}
+	if r.VtAt != nil {
+		parts = append(parts, fmt.Sprintf("VirusTotal AS%d %s，国家 %s，%d 个引擎判恶意、%d 个可疑", r.Asn, cmp.Or(r.AsOwner, "-"), cmp.Or(r.Country, "-"), r.Malicious, r.Suspicious))
+	}
+	if len(r.Domains) > 0 {
+		parts = append(parts, "历史解析域名 "+strings.Join(r.Domains, ", "))
+	}
+	if len(parts) == 0 {
+		return "已查过，没有归属信息"
+	}
+	return strings.Join(parts, "；")
+}
+
+// endpointIPs 事件两端的地址；事件原文不可信，解析不了就当没有
+func endpointIPs(raw json.RawMessage) []string {
+	var ev struct {
+		Src struct {
+			IP string `json:"ip"`
+		} `json:"src_endpoint"`
+		Dst struct {
+			IP string `json:"ip"`
+		} `json:"dst_endpoint"`
+	}
+	if json.Unmarshal(raw, &ev) != nil {
+		return nil
+	}
+	var out []string
+	for _, ip := range []string{ev.Src.IP, ev.Dst.IP} {
+		if ip != "" {
+			out = append(out, ip)
+		}
+	}
+	return out
 }
 
 // appendMemories 事件所在组积累的长期记忆（人工在前）：环境里什么是正常的，研判时作背景

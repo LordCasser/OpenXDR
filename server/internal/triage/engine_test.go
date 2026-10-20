@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
+
+	"openxdr/server/ent"
 )
 
 func TestParseVerdictValidJSON(t *testing.T) {
@@ -97,5 +100,16 @@ func TestWithModelRecordsTriageModel(t *testing.T) {
 		if out := withModel(json.RawMessage(raw), model); string(out) != raw {
 			t.Errorf("%s 应原样返回，得到 %s", raw, out)
 		}
+	}
+}
+
+func TestIPFacts(t *testing.T) {
+	now := time.Now()
+	r := &ent.IPInfo{IP: "203.0.113.7", IpdbAsn: 64500, IpdbOrg: "Example", IpdbAt: &now, Domains: []string{"a.example", "b.example"}}
+	if got := ipFacts(r); got != "离线库 AS64500 Example，国家 -；历史解析域名 a.example, b.example" {
+		t.Fatalf("得到 %q", got)
+	}
+	if got := ipFacts(&ent.IPInfo{IP: "203.0.113.8", IpdbAt: &now}); got != "已查过，没有归属信息" {
+		t.Fatalf("得到 %q", got)
 	}
 }

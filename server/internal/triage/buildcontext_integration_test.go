@@ -128,3 +128,32 @@ func TestBuildContextCaseHistory(t *testing.T) {
 		t.Errorf("无案例时不该有该段落：\n%s", out2)
 	}
 }
+
+// 告警里的公网地址带上平台缓存的背景：情报命中的地址与事件两端都算，离线库与 VirusTotal 分开写；没缓存的不写
+func TestBuildContextIPInfo(t *testing.T) {
+	ctx, client := testdb.New(t)
+	now := time.Now()
+	client.IPInfo.Create().SetIP("203.0.113.7").SetIpdbAsn(64500).SetIpdbOrg("Example Net A").SetIpdbCountry("AU").SetIpdbAt(now).SaveX(ctx)
+	client.IPInfo.Create().SetIP("198.51.100.44").SetPtr("scan.example.net").SetAsOwner("Some ISP").SetAsn(64501).SetCountry("RU").
+		SetMalicious(3).SetVtAt(now).SaveX(ctx)
+	client.IPInfo.Create().SetIP("192.0.2.99").SetIpdbAsn(64999).SetIpdbAt(now).SaveX(ctx) // 与本事件无关
+	ev := client.Event.Create().SetTs(now).SetClassUID(4001).SetSource("agent").
+		SetRaw(json.RawMessage(`{"src_endpoint":{"ip":"198.51.100.44"},"dst_endpoint":{"ip":"10.0.0.5"}}`)).SaveX(ctx)
+	inc := client.Incident.Create().SetStatus("open").SetTitle("外联").SetGraph(json.RawMessage(`{}`)).SaveX(ctx)
+	client.Alert.Create().SetTs(now).SetRuleID("intel:ip:203.0.113.7").SetSeverity(3).SetIncidentID(inc.ID).SaveX(ctx)
+	client.Alert.Create().SetTs(now).SetRuleID("ssh-brute").SetSeverity(3).SetEventID(ev.ID).SetIncidentID(inc.ID).SaveX(ctx)
+
+	out, err := (&Engine{DB: client}).buildContext(ctx, inc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"## 公网地址背景", "- 203.0.113.7：离线库 AS64500 Example Net A，国家 AU",
+		"- 198.51.100.44：反查 scan.example.net；VirusTotal AS64501 Some ISP，国家 RU，3 个引擎判恶意、0 个可疑"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("上下文缺少 %q：\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "192.0.2.99") {
+		t.Errorf("无关地址不该出现：\n%s", out)
+	}
+}

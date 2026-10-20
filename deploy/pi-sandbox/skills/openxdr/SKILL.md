@@ -72,7 +72,7 @@ EOF
 | suppressions | id, created_at, rule_id, asset_id, reason, created_by, expires_at, matched_count, last_matched_at, status(active/proposed/rejected), conditions(jsonb), reviewed_by, reviewed_at |
 | memories | id, created_at, updated_at, asset_id, content, source(human/ai), author |
 | asset_links | src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen（本组主机发起的连接聚合） |
-| ip_infos | ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at（本组主机连过的、本组告警里出现的公网地址：情报命中、入站对端都有；平台后台补全，as_owner 等来自 VirusTotal，未配置时只有 ptr；vt_at 为空表示还没查过） |
+| ip_infos | ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at, ipdb_asn, ipdb_org, ipdb_country, ipdb_at（本组主机连过的、本组告警里出现的公网地址：情报命中、入站对端都有；平台后台补全。as_owner 到 vt_at 来自 VirusTotal，未配置时为空，vt_at 为空表示还没查过；ipdb_* 来自本地离线库 DB-IP Lite（ipdb_country 是地理定位国家代码），库缺失时 ipdb_at 为空；两边都有时以 VirusTotal 为准、不一致可以都写进报告） |
 | reports | id, created_at, title, level(ok/attention/urgent), markdown, summary（本组历史报告，可与上一轮对比；定时任务的标题就是任务名） |
 | identities | id, kind(directory/host), name, anchor_account_id, created_at（每个目录账号一个身份；没有目录锚点的主机账号各自是主机内身份） |
 | identity_accounts | id, kind(directory/windows/linux), asset_id, name, domain, sid, uid, directory_account_id, first_seen, last_seen, identity_id, link_basis, link_confidence, link_source, linked_at（账号与当前所属身份） |

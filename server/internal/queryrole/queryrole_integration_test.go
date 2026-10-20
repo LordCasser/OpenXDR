@@ -44,7 +44,7 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 		client.Suppression.Create().SetRuleID("r").SetAssetID(x.asset.ID).SaveX(ctx)
 		client.AssetLink.Create().SetSrcIP("10.0.0.1").SetSrcAssetID(x.asset.ID).SetDstIP(x.ip).SetDstPort(443).SetProto("tcp").
 			SetCount(1).SetFirstSeen(now).SetLastSeen(now).SaveX(ctx)
-		client.IPInfo.Create().SetIP(x.ip).SaveX(ctx)
+		client.IPInfo.Create().SetIP(x.ip).SetIpdbAsn(64500).SetIpdbOrg("Example Net").SetIpdbCountry("AU").SaveX(ctx)
 		client.Report.Create().SetSessionID(uuid.New()).SetGroupID(x.group).SetTitle("r").SetMarkdown("m").SaveX(ctx)
 	}
 	client.Suppression.Create().SetRuleID("global").SaveX(ctx) // 全局抑制谁的视图里都不该有
@@ -131,7 +131,8 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 		var got string
 		q := `SELECT count(*)::text FROM ` + view
 		if view == "ip_infos" {
-			q = `SELECT string_agg(ip, ',' ORDER BY ip) FROM ip_infos`
+			// 离线库字段也在视图里
+			q = `SELECT string_agg(ip, ',' ORDER BY ip) FROM ip_infos WHERE ipdb_at IS NULL AND ipdb_country IN ('', 'AU')`
 		}
 		if err := ro.QueryRowContext(ctx, q).Scan(&got); err != nil || got != want {
 			t.Errorf("%s 只应看到本组的数据：得到 %q，%v", view, got, err)
