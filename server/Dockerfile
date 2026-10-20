@@ -1,5 +1,5 @@
 # 构建上下文是仓库根目录：server 需要 proto/ 生成代码已提交。
-# 镜像自带默认规则、预设任务与 agent 安装包（发版时注入），开箱即用；挂载目录并设 RULES_PATH / TASKS_PATH / AGENT_DIST_DIR 可覆盖。
+# 镜像自带默认规则、预设任务与 agent / sensor 安装包（发版时注入），开箱即用；挂载目录并设 RULES_PATH / TASKS_PATH / AGENT_DIST_DIR 可覆盖。
 # 离线 IP 归属库同理：发版时注入当月 DB-IP Lite，挂载目录并设 IPDB_DIR 可覆盖
 # 编译阶段都跑在构建机本架构上，Go 交叉编译到目标架构：多架构发版时 arm64 不在 QEMU 里编译（模拟下要几个小时）
 FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine3.24 AS build
@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /openxdr-server 
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /decoy-dist/decoyhost-linux-amd64 ./cmd/decoyhost && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /decoy-dist/decoyhost-linux-arm64 ./cmd/decoyhost
 
-# agent 安装包：发版时用 --build-context agents=<含 dist/ 的目录> 注入，本地构建为空目录
+# agent 与 sensor 安装包：发版时用 --build-context agents=<含 dist/ 的目录> 注入，本地构建为空目录
 FROM alpine:3.22.6 AS agents
 RUN mkdir /dist
 

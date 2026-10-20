@@ -1,6 +1,6 @@
 name: Release
 
-# 推 v* 标签即发版：编 agent / sensor → 把 agent 打进 server 镜像、推 GHCR（amd64 + arm64）→ 建 GitHub Release。
+# 推 v* 标签即发版：编 agent / sensor → 把 agent 与 sensor 安装包打进 server 镜像、推 GHCR（amd64 + arm64）→ 建 GitHub Release。
 # Release 附件：install.sh（一行安装）、docker-compose.yml、各平台安装包与 SHA256SUMS。
 on:
   push:
@@ -48,7 +48,8 @@ jobs:
           mkdir -p out/dist
           cp agent/target/x86_64-unknown-linux-musl/release/openxdr-agent out/dist/openxdr-agent-linux-amd64
           cp agent/target/x86_64-pc-windows-gnu/release/openxdr-agent.exe out/dist/openxdr-agent-windows-amd64.exe
-          cp sensor/target/x86_64-unknown-linux-musl/release/openxdr-sensor out/openxdr-sensor-linux-amd64
+          # sensor 与 agent 同目录：一行安装从这里下载，在线探针按这里的哈希自动升级
+          cp sensor/target/x86_64-unknown-linux-musl/release/openxdr-sensor out/dist/openxdr-sensor-linux-amd64
       - uses: actions/upload-artifact@v4
         with:
           name: binaries
@@ -101,7 +102,7 @@ jobs:
         with:
           context: .
           file: server/Dockerfile
-          # 把 agent 安装包打进镜像：升级镜像，在线 agent 跟着自动升级；离线 IP 归属库随镜像带一份
+          # 把 agent 与 sensor 安装包打进镜像：升级镜像，在线 agent 与探针跟着自动升级；离线 IP 归属库随镜像带一份
           build-contexts: |
             agents=out
             ipdb=ipdb-out
@@ -134,7 +135,7 @@ jobs:
         run: |
           tag=$TAG
           mkdir assets
-          cp out/dist/* out/openxdr-sensor-linux-amd64 assets/
+          cp out/dist/* assets/
           # 安装脚本钉住本版本：用户拿到的哪个 Release 的脚本，就装哪个版本
           sed "s/__OPENXDR_VERSION__/$tag/" deploy/install/install.sh > assets/install.sh
           cp deploy/install/docker-compose.yml deploy/nats.conf assets/

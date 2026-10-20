@@ -338,9 +338,38 @@ region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实�
 | `afpacket`（默认） | AF_PACKET v3 mmap 零拷贝环（2MiB×64 块），`PACKET_FANOUT_HASH` 按流哈希多 worker，内核重组分片 | 任意 Linux | `capture/afpacket.rs:12-19,81-89,150-158` |
 | `afxdp` | XDP 程序按 rx_queue redirect 到 XSKMAP，**仅入向（RX）** | `--features xdp` + 驱动支持 | `capture/afxdp.rs:19,185`、`sensor/ebpf/src/main.rs:19-24` |
 
-- `SENSOR_BACKEND` 选择后端，`SENSOR_WORKERS` 决定并行度（afxdp 下
-  worker 号=网卡队列号）（`main.rs:48,114-117`）
-- mTLS 变量与 agent 相同（`OPENXDR_CA/CERT/KEY`，`sensor/src/tls.rs:14-26`）
+- `SENSOR_IFACE` 抓包网卡、`SENSOR_BACKEND` 选择后端（只认 `afpacket` / `afxdp`），`SENSOR_WORKERS` 决定并行度
+  （afxdp 下 worker 号=网卡队列号）（`main.rs` `sensor`）
+- mTLS 变量与 agent 相同（`OPENXDR_CA/CERT/KEY`，`sensor/src/tls.rs`），三个必须同时配置
+
+### 接入、升级与抓包状态
+
+与 agent 同一套机制（`sensor/src/enroll.rs`、`upgrade.rs`、`health.rs`，server 侧 `grpcsvc/sensor_control.go`）：
+
+- **接入**：平台管理员在控制台签发「流量探针」令牌，主机上执行
+  `curl -fsSL <控制台>/api/enroll/sensor-install.sh | sudo sh -s -- <控制台> <令牌> <网卡>`。
+  不带网卡只列出本机网卡后退出（不替用户猜抓哪块）；网卡名按内核命名规则校验后写进 systemd unit。
+  `openxdr-sensor enroll-request` 本机生成私钥与 CSR，server 只认 CSR 里的公钥，证书 CN 固定写成
+  `sensor:<主机名>`；`enroll-apply` 校验证书与私钥配对后写进独立的 `sensor-identity-<uuid>/`，最后原子替换
+  `/etc/openxdr/sensor.env`。与同机 agent 共用目录，文件互不覆盖
+- **身份**：令牌分用途，agent 令牌签不出探针证书，探针令牌也签不出 `host:` 证书；gRPC 拦截器在所有 RPC 之前
+  核对证书用途——`sensor:` 证书进不了 agent 通道（注册、指令流、上报都不行），`host:` 证书进不了探针通道；
+  探针证书只能以自己的主机名注册、上报状态与会话（`FlowBatch.sensor_id` 必须一致）。gencerts 的通用证书两边都能进，与以往一致
+- **资产**：探针按主机名挂到同名资产上（没有就新建，归入令牌所属组）；与 agent 同机时共用一条资产记录，
+  版本（`sensor_version`）、心跳（`sensor_seen`）与抓包状态（`sensor_health`）各记各的，探针心跳不刷新 agent 的 `last_seen`。
+  只有探针的主机由探针登记地址
+- **升级**：启动与每次重连时注册，带上自身二进制哈希；与 `AGENT_DIST_DIR` 里的 `openxdr-sensor-linux-<arch>` 不同就经
+  已认证的 gRPC 通道下载（`DownloadSensor`）→ 校验哈希 → 新版跑 `version` 自检（10 秒超时）→ 旧版改名 `.prev` →
+  换上新版 → 停抓包、推完在途会话后以 75 退出，由 systemd 拉起新版。任何一步失败都继续跑旧版，下次重连再试。
+  `AGENT_AUTO_UPGRADE=false` 同时关掉 agent 与 sensor 的自动升级
+- **抓包状态**：连接期间每 15 秒上报一次，快照头与 agent 的 `collector_health` 同口径（`bootId`、`sequence`、
+  `reportedUnixMs`、组件状态），组件只有 `capture`，path 为「后端:网卡」；另带抓包线程数、包数、会话数、
+  内核丢包、上报队列丢弃（均为本次启动累计）与包/秒、会话/分钟。状态判定：抓包线程全退为 `unavailable`；
+  部分线程退出，或近一小时内某个上报间隔丢包超过千分之一为 `degraded`。server 只收比库里更新的快照
+- **通知**：抓包降级、不可用，以及快照停更超过 5 分钟（探针失联）走「主机采集异常」通知，签名与 agent 的问题分开记
+  （`sensor_problem`），互不清除
+- **退出**：SIGTERM / SIGINT 时停抓包，worker 把流表里的在途会话倒进队列，最多等 10 秒推完；
+  抓包线程全部异常退出时进程以非零退出，交给 systemd 重启
 
 ### 协议解析（按方向各探测一次）
 
@@ -370,8 +399,13 @@ DNS/JA3S/证书字段经 proto `FlowRecord` 的 `dns_rcode=19` / `dns_answers=20
 - 导出条件：TCP 见 FIN/RST、空闲 30s、最长生存 300s；每 5s 扫描；
   每 worker 上限 100 万条流（`flow.rs:101-110,173-191`）
 - **无采样、无逐事件去重**——聚合本身就是"五元组归并成会话"
-- 上报攒批：满 256 条或 2 秒一批，断线 5s 重连（`report.rs:12-13,92-117`）；
-  上报队列（65536）满丢会话并计数；内核丢包经 `PACKET_STATISTICS` 统计上报
+- 上报攒批：满 256 条或 2 秒一批，断线 5s 重连（`report.rs` `run` / `batches`）；
+  上报队列（65536）满丢会话并计数；内核丢包经 `PACKET_STATISTICS` 统计（读一次清零，探针累加成累计值）上报
+- **只握手标注**：客户端方向从 ClientHello 起逐个 TLS record 往前走（只看 5 字节 record 头，不重组、不解密），
+  数带载荷的应用数据 record（长度 ≥ 20 字节；TLS 1.3 加密的 close_notify 只有 19 字节，装不下请求）。
+  会话结束时应用数据 record 为 0（TLS 1.3 为 ≤1，即只有加密的 Finished）记 `tls_handshake_only`。
+  第一段客户端载荷不是 ClientHello、record 头对不上或跨段、会话中途才看到的，一律不标——跟丢只会让结论变成「不知道」。
+  没见过 ServerHello 时按 1.2 算，1.3 的 Finished 会被当成请求，宁可漏标（`proto_id.rs` `track_tls_client`）
 - server 侧归一化与 class_uid 判定（4001/4003）见 [events.md](events.md)
 
 ## 响应面（与采集同进程）

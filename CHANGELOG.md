@@ -22,6 +22,23 @@
   VirusTotal 有配置时照旧补充，两边字段分开存。私网与保留地址不查。库目录 `IPDB_DIR`，发版镜像自带当月库，
   本地构建为空库降级（启动日志说明）；`openxdr-ipdb` 命令下载更新并校验，替换后自动加载。
   组只读视图 `ip_infos`、AI 研判上下文（新增「公网地址背景」段）与控制台外联明细（AS 号、DB-IP 署名）同步带上。
+### 流量探针
+
+- sensor 产品化接入，与 agent 同一套机制：平台管理员在「添加主机」切到「流量探针」签发令牌，
+  `curl -fsSL <控制台>/api/enroll/sensor-install.sh | sudo sh -s -- <控制台> <令牌> <网卡>` 一行安装
+  （不带网卡只列出本机网卡后退出），本机生成私钥、server 签发 `sensor:<主机名>` 证书、写 systemd 服务。
+  令牌分用途（`enroll_tokens.kind`），agent 令牌签不出探针证书，反之亦然；探针令牌只有平台管理员能签。
+  gRPC 拦截器按证书用途隔离通道：`sensor:` 证书进不了 agent 通道，`host:` 证书进不了探针通道，探针证书只能以本机主机名上报。
+  gencerts 的通用证书照旧两边可用。
+- sensor 安装包与 agent 放同一个 `AGENT_DIST_DIR`（官方镜像已内置 `openxdr-sensor-linux-amd64`），新增 `/api/enroll/sensor/{platform}` 下载；
+  探针注册时按哈希自动升级：经 gRPC 下载、校验、自检、旧版留 `.prev`、推完在途会话后重启，失败继续跑旧版。`AGENT_AUTO_UPGRADE=false` 同时关闭。
+- 抓包状态与 agent 采集状态同口径上报（网卡、后端、抓包线程、内核丢包、上报队列丢弃、包/秒、会话/分钟），
+  资产列表来源标 sensor、资产详情新增「流量探针」卡片；抓包降级、不可用与探针失联走「主机采集异常」通知。
+  资产新增 `sensor_version`、`sensor_seen`、`sensor_health`、`sensor_problem` 列，启动时自动建。
+- 只握手不发请求的 TLS 会话标注 `tls.handshake_only`（探针跟客户端方向 TLS record，跟丢不标）。不单独告警，写进 Pi 技能说明供研判使用。
+- 行为变化：sensor 会话的源地址不是纳管资产时归到目的端资产（公网打进反代网关的会话归到网关上），组视图与研判由此可见；
+  资产图谱按入站记这类会话。此前这些会话不挂资产。
+- 修复：AF_PACKET 内核丢包计数按读取清零的增量当成累计值上报，多 worker 时还互相覆盖。
 
 ### 修复
 

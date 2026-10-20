@@ -55,6 +55,28 @@ curl -fsS https://<地址>/ -o /dev/null -w '%{http_code}\n'   # 自建 CA 时�
 3. **添加主机**：「资产 → 添加主机」选组，复制安装命令到主机上执行（Linux root / Windows 管理员）。agent 安装包已内置在 server 镜像里，
    之后升级 OpenXDR，在线 agent 会自动跟着升级。
 
+### 放一台流量探针（可选）
+
+在公网入口（反代网关）上或交换机镜像口旁放一台 sensor，就能看到「只握手不发请求」的扫描、TLS 指纹（JA3 / JA3S）、
+证书与明文 HTTP 头，研判不用再翻反代日志。sensor 只出会话元数据，不存报文，只有 Linux。
+
+1. **签发命令**：平台管理员在「资产 → 添加主机」切到「流量探针」，选组（探针所在主机归入这个组），填抓包网卡后生成命令。
+   探针令牌只有平台管理员能签：探针看到的会话会按地址归到任何组的资产上。
+2. **选网卡**：命令末尾是抓包网卡名。不知道填哪块就先不带网卡执行一次，脚本只列出本机网卡（名称、状态、地址）后退出：
+
+   ```bash
+   curl -fsSL https://<地址>/api/enroll/sensor-install.sh | sudo sh -s -- https://<地址> <令牌>            # 只列网卡
+   curl -fsSL https://<地址>/api/enroll/sensor-install.sh | sudo sh -s -- https://<地址> <令牌> <网卡名>   # 安装
+   ```
+
+   反代网关上抓它的公网口；镜像口场景抓接镜像流量的那块网卡。
+3. **核对**：`systemctl status openxdr-sensor` 为 running；控制台资产列表里这台主机的来源有 `sensor` 标签，资产详情「流量探针」卡片
+   显示抓包状态「已启用」、包/秒与会话/分钟在动。抓包降级、不可用或探针失联会走「主机采集异常」通知。
+
+与 agent 同一套机制：私钥在本机生成，证书 CN 为 `sensor:<主机名>`，只能进探针通道，冒充不了 agent；
+sensor 安装包同样内置在 server 镜像里，升级 OpenXDR 后在线探针按哈希自动升级（失败则继续跑旧版，旧版留作 `openxdr-sensor.prev`）。
+同一台主机可以同时装 agent 与 sensor，两者共用 `/etc/openxdr`，配置分别是 `agent.env` 与 `sensor.env`。
+
 ## 5. 升级、备份与卸载
 
 - **升级**：再执行一遍安装命令（已有的口令、密钥与 CA 保留不动），或改 `.env` 里的 `OPENXDR_VERSION` 后
@@ -71,6 +93,8 @@ curl -fsS https://<地址>/ -o /dev/null -w '%{http_code}\n'   # 自建 CA 时�
 | Let's Encrypt 申请失败 | 确认域名解析到本机公网 IP、公网能访问 80 与 443；内网环境改用 `OPENXDR_TLS=internal` |
 | 主机上执行安装命令报证书错误 | 自建 CA 模式下主机还没信任 CA，见第 4 步 |
 | agent 连不上 | 主机到 `<地址>:8081` 的网络与防火墙；`docker compose logs server` 看拒绝原因 |
+| 探针安装报「令牌用途不符」 | 用了 agent 令牌装探针（或反过来），在添加主机里切到对应的类型重新生成 |
+| 探针抓包状态「不可用」或一直没状态 | `journalctl -u openxdr-sensor` 看原因；常见是网卡名写错或网卡没起来，改 `/etc/systemd/system/openxdr-sensor.service` 里的 `SENSOR_IFACE` 或重新执行安装命令 |
 | 拉镜像慢或失败 | 给 Docker 配镜像加速或代理；镜像在 `ghcr.io/yaklang/` 下 |
 
 ## 给 AI agent 的说明
@@ -82,6 +106,8 @@ curl -fsS https://<地址>/ -o /dev/null -w '%{http_code}\n'   # 自建 CA 时�
 3. 执行第 2 节的安装命令，完整保留输出。失败时按第 6 节排查，不要关闭防火墙、不要改与 OpenXDR 无关的系统配置。
 4. 按第 3 节核对，全部通过后向用户报告：控制台地址、admin 口令、自建 CA 时被纳管主机要执行的信任命令与 SHA256 指纹，以及第 4 节的后续步骤。
 5. `.env` 里除 admin 口令外的内容（数据库口令、`HOST_CREDENTIAL_KEY`）不要输出到对话里，提醒用户备份即可。
+6. 替用户装流量探针时：先不带网卡执行一次探针安装命令拿到网卡列表，**问用户**抓哪块网卡，不要自己挑；
+   装完按「放一台流量探针」的核对步骤确认，并把抓包状态原样告诉用户。
 
 ### 队列持久确认
 

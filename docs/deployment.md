@@ -98,8 +98,16 @@ server 侧需要三样东西才会开放在线接入（缺哪样控制台会直�
 - 开了 mTLS 时：`TLS_CA_KEY_FILE` 指向 CA 私钥（gencerts 生成的 `ca.key`），用于签发主机证书。
   `TLS_CA_FILE` 可以是多张 CA 的信任包，签发用其中与私钥配对的那张、下发给 agent 的是整个信任包——
   原 CA 私钥丢失时另起一张接入 CA 追加进信任包即可，已有证书不受影响
-- `AGENT_DIST_DIR`（compose 已挂 `./dist`）里放 agent 安装包：
-  `openxdr-agent-linux-amd64`、`openxdr-agent-linux-arm64`、`openxdr-agent-windows-amd64.exe`
+- `AGENT_DIST_DIR`（compose 已挂 `./dist`）里放采集端安装包：
+  `openxdr-agent-linux-amd64`、`openxdr-agent-linux-arm64`、`openxdr-agent-windows-amd64.exe`，
+  以及流量探针 `openxdr-sensor-linux-amd64`、`openxdr-sensor-linux-arm64`（官方镜像已内置 amd64）
+
+流量探针（sensor）走同一套在线接入：平台管理员在「添加主机」切到「流量探针」签发令牌（组 admin 签不了——
+探针的会话会按地址归到任何组的资产上），在探针主机上执行
+`curl -fsSL <控制台>/api/enroll/sensor-install.sh | sudo sh -s -- <控制台> <令牌> <抓包网卡>`。
+不带网卡只列出本机网卡后退出。证书 CN 为 `sensor:<主机名>`，只能进探针通道；同样按 `AGENT_DIST_DIR` 里的版本自动升级，
+旧版保留为 `openxdr-sensor.prev`。抓包状态在资产详情的「流量探针」卡片里，异常走「主机采集异常」通知。
+细节见 [采集端详解](collection.md#接入升级与抓包状态)，给 AI agent 的安装步骤见 [安装](install.md#放一台流量探针可选)。
 
 也可以手工构建部署：
 
@@ -108,7 +116,7 @@ server 侧需要三样东西才会开放在线接入（缺哪样控制台会直�
 cd agent && cargo build --release
 sudo OPENXDR_SERVER=http://<server>:8081 ./target/release/openxdr-agent
 
-# 流量探针（需 root，网卡接核心交换机镜像口）
+# 流量探针（需 root，网卡接核心交换机镜像口或反代网关的公网口；生产用上面的在线接入）
 cd sensor && cargo build --release
 sudo env SENSOR_IFACE=eth0 OPENXDR_SERVER=http://<server>:8081 ./target/release/openxdr-sensor
 ```
@@ -301,7 +309,7 @@ OPENXDR_CA=certs/ca.crt OPENXDR_CERT=certs/client.crt OPENXDR_KEY=certs/client.k
 目录里已有 `ca.crt`/`ca.key` 时 gencerts 沿用这个 CA 只签新证书，不会让已发出的证书失效。
 
 通用 client 证书所有采集端共用，持证者可以冒充任何主机上报。给 agent 逐台发
-绑定证书可以消除这一点（sensor 没有主机身份，继续用通用证书）：
+绑定证书可以消除这一点（sensor 用在线接入签发的 `sensor:<主机名>` 证书，同样只能以本机身份上报、进不了 agent 通道）：
 
 ```bash
 # 在通用证书之外，为 web01、db01 各签一张身份绑定的证书
@@ -355,8 +363,8 @@ server 全部通过环境变量配置，均有默认值：
 | `ENROLL_PUBLIC_URL` | 空 | 被纳管主机可访问的可信 HTTPS 控制台地址 |
 | `ENROLL_GRPC_URL` | 空（不启用在线接入） | 写进 agent 配置的 gRPC 地址，主机上必须能访问 |
 | `TLS_CA_KEY_FILE` | 空 | CA 私钥，开了 mTLS 时在线接入用它签发主机证书 |
-| `AGENT_DIST_DIR` | 空 | agent 安装包目录，供安装脚本下载，也是在线 agent 自动升级的目标版本 |
-| `AGENT_AUTO_UPGRADE` | `true` | 在线 agent 与安装包哈希不同时自动升级，`false` 关闭 |
+| `AGENT_DIST_DIR` | 空 | agent 与 sensor 安装包目录，供安装脚本下载，也是在线 agent / sensor 自动升级的目标版本 |
+| `AGENT_AUTO_UPGRADE` | `true` | 在线 agent / sensor 与安装包哈希不同时自动升级，`false` 同时关闭两者 |
 | `TRUSTED_PROXIES` | 空 | 可信反向代理的地址或网段（逗号分隔）。只有来自这些地址的请求才采信 `X-Forwarded-For`，从右往左取第一个不可信地址作为客户端，登录退避与审计按它记来源；留空不还原 |
 | `INTEL_FEED_INTERVAL_HOURS` | `6` | 情报订阅同步周期（小时），订阅条目有效期为它的 8 倍 |
 | `RESPONSE_ENABLED` | `false` | 是否允许下发响应指令；开启后人工处置、Pi 命令、定时任务与自动响应下发的指令都会真执行 |

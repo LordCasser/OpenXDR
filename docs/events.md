@@ -175,14 +175,14 @@ Linux 另有 TCP 入站与 UDP 出站：
   "src_endpoint": { "ip": "...", "port": 51234 },
   "dst_endpoint": { "ip": "...", "port": 443 },
   "traffic": { "packets": 10, "bytes": 2048, "packets_in": 6, "bytes_in": 1200, "packets_out": 4, "bytes_out": 848 },
-  "tls": { "sni": "example.com", "ja3_hash": "...", "ja3s_hash": "...",
+  "tls": { "sni": "example.com", "ja3_hash": "...", "ja3s_hash": "...", "handshake_only": true,
            "cert": { "subject": "example.com", "issuer": "DigiCert CA",
                      "self_signed": false, "not_before": 1754000000, "not_after": 1786000000 } },
   "http_request": { "hostname": "...", "url": { "path": "/x" }, "user_agent": "..." }
 }
 ```
 
-- `tls` 对象在 SNI/JA3/JA3S/证书任一非空时出现；`ja3s_hash` 是服务端指纹，
+- `tls` 对象在 SNI/JA3/JA3S/证书/只握手任一非空时出现；`ja3s_hash` 是服务端指纹，
   与 `ja3_hash` 一样参与哈希情报碰撞
 - `tls.cert` 在解析到服务端 Certificate 消息时出现（仅 **TLS ≤1.2**——TLS 1.3 的
   证书加密传输，被动嗅探看不到）：subject/issuer 是叶证书 CN，
@@ -190,7 +190,12 @@ Linux 另有 TCP 入站与 UDP 出站：
   `not_before`/`not_after` 是 unix 秒。sensor 侧做有界重组（16KB 上限）应对
   证书跨 TCP 分段
 - sensor 上报前把 src 摆正为客户端方向（`sensor/src/report.rs:19-49`）
-- sensor 无进程信息；资产归属按**源 IP** 反查 asset（`sensor.go:67-98`）
+- `tls.handshake_only` 只在为真时出现：客户端发完 ClientHello（或握完手）就结束会话、没发任何请求，
+  扫描与证书探测的典型形态。只陈述事实，不单独告警，留给研判；sensor 跟丢 record 或中途才看到会话时不标，
+  所以没有这个字段不等于发了请求（判定见 [collection.md](collection.md#流聚合与上报)）
+- sensor 无进程信息；资产归属先按**源 IP** 反查 asset，源地址不是纳管资产时按**目的 IP**——公网打进反代网关的会话
+  归到网关上，组视图与研判才看得见，与 agent 记录入站连接同一口径（`sensor.go` `flowAsset`）。
+  资产图谱据此把这类会话按入站记，发起方是对端地址、不挂网关资产
 - `conn_tuple` 格式统一为 `tcp:src:sport>dst:dport`，agent 与 sensor 同格式，
   横向移动关联直接复用；源地址未知时留空（只有 agent 的 UDP 出站会出现），目的端总是有的
 
@@ -317,7 +322,7 @@ server 侧归一化（`server/internal/syslog/server.go:167-184`）：
 - **进程 GUID**：agent 侧 UUID v4，pid 复用直接覆盖；父 GUID 查不到为空；
   退出事件复用启动 GUID。server 只接受合法 UUID 才写入列（`agent.go:193-214`）
 - **conn_tuple**：`tcp:src:sport>dst:dport`，网络类关联与规则的统一键
-- **资产归属**：agent 事件按 agent_id 直查；sensor 按源 IP；syslog 按
+- **资产归属**：agent 事件按 agent_id 直查；sensor 按源 IP，源地址未纳管时按目的 IP；syslog 按
   主机名→源 IP 两级
 - **事件不可变**：原始事件只增不改；告警的 count/last_ts 随去重更新；
   incident 的 status/graph 随关联与研判演进。janitor 只删无告警引用的
