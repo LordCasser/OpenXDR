@@ -22,6 +22,9 @@ mod registry;
 mod authwatch;
 #[cfg(target_os = "linux")]
 mod local_accounts;
+// SSH 登录归属：authwatch 记下认证成功的 sshd 监控进程，进程采集按审计会话号对上
+#[cfg(target_os = "linux")]
+mod sshsession;
 
 #[cfg(target_os = "linux")]
 mod software;
@@ -397,6 +400,30 @@ fn command_env(_pid: u32) -> Option<Arc<str>> {
     None
 }
 
+/// 新进程所属的 SSH 登录：按它自己的审计会话号认；进程已退场读不到时沿父进程继承。
+/// 读到了会话号但认不出，就是不属于认得的登录——不能再从父进程继承
+#[cfg(target_os = "linux")]
+fn login_of(
+    registry: &ProcessRegistry,
+    pid: u32,
+    ppid: Option<u32>,
+) -> Option<Arc<serde_json::Value>> {
+    match sshsession::of(pid) {
+        Some(bound) => bound,
+        None => registry.login_of(ppid?),
+    }
+}
+
+/// Windows 的 OpenSSH 服务端日志与登录会话的对应关系没做，不打登录归属
+#[cfg(not(target_os = "linux"))]
+fn login_of(
+    _registry: &ProcessRegistry,
+    _pid: u32,
+    _ppid: Option<u32>,
+) -> Option<Arc<serde_json::Value>> {
+    None
+}
+
 #[cfg(target_os = "linux")]
 fn container_of(pid: u32) -> Option<Arc<Container>> {
     container::of(pid)
@@ -563,7 +590,7 @@ fn process_event(
     // 父进程的名字、路径与命令行（启动事件才有）：规则按父进程判断（ParentImage / ParentCommandLine）不用再回查
     let mut parent = None;
     let now = SystemTime::now();
-    let (guid, parent_guid, name, exe, started, container, command) =
+    let (guid, parent_guid, name, exe, started, container, command, login) =
         if activity == ACTIVITY_TERMINATE {
             known = registry.known(pid)?;
             registry.forget(pid);
@@ -579,17 +606,29 @@ fn process_event(
                 known.started,
                 known.container.clone(),
                 known.command.clone(),
+                known.login.clone(),
             )
         } else {
             let name = full_name(name, exe);
             let command = command_of(registry, pid, ppid);
+            let login = login_of(registry, pid, ppid);
             parent = ppid.and_then(|p| registry.known(p));
             let (guid, parent_guid) = registry.register(pid, ppid);
             let container = container_of(pid);
             registry.describe(pid, name, exe);
             registry.set_cmd_line(pid, cmd_line);
             registry.annotate(pid, Some(now), container.clone(), command.clone());
-            (guid, parent_guid, name, exe, None, container, command)
+            registry.set_login(pid, login.clone());
+            (
+                guid,
+                parent_guid,
+                name,
+                exe,
+                None,
+                container,
+                command,
+                login,
+            )
         };
     let mut raw = serde_json::json!({
         "activity_id": activity,
@@ -623,6 +662,9 @@ fn process_event(
     }
     if let Some(id) = &command {
         raw["platform_command"] = serde_json::json!({ "uid": id.as_ref() });
+    }
+    if let Some(login) = &login {
+        raw["login_session"] = login.as_ref().clone();
     }
     // 退出事件带上启动时间与运行时长；启动时间不知道（快照里读不到）就都不写
     if let Some(started) = started {
@@ -799,6 +841,55 @@ mod tests {
         assert_eq!(v["process"]["pid"], 300);
         assert_eq!(v["process"]["exit_code"], 137);
         assert_eq!(v["process"]["uid"], launch.process_guid);
+    }
+
+    /// 登录归属：进程自己的 /proc 读不到（已退场）时沿父进程继承，事件里写成 login_session
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn login_session_inherits_from_parent_when_gone() {
+        // 让会话表非空，进程采集才会去读 /proc
+        let login = sshsession::parse_accepted(
+            "Accepted publickey for root from 10.1.1.35 port 1 ssh2: ED25519 SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU",
+        )
+        .unwrap();
+        sshsession::accepted(std::process::id(), login.clone());
+        let mut reg = ProcessRegistry::default();
+        reg.seed(1, "sshd", None);
+        reg.set_login(1, Some(Arc::new(login.to_json(Some(42)))));
+        // 超出 pid_max 的 pid 一定读不到
+        let gone = 0x7fff_fff0;
+        let evt = process_event(
+            "a",
+            &mut reg,
+            ACTIVITY_LAUNCH,
+            ProcessInfo {
+                pid: gone,
+                name: "uname",
+                ppid: Some(1),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
+        assert_eq!(v["login_session"]["uid"], "42");
+        assert_eq!(v["login_session"]["src_ip"], "10.1.1.35");
+        assert!(reg.login_of(gone).is_some(), "孙进程还要接着继承");
+        // 父进程没有登录归属的不凭空生成
+        reg.seed(2, "cron", None);
+        let evt = process_event(
+            "a",
+            &mut reg,
+            ACTIVITY_LAUNCH,
+            ProcessInfo {
+                pid: gone - 1,
+                name: "sh",
+                ppid: Some(2),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
+        assert!(v.get("login_session").is_none());
     }
 
     /// 指令打标：agent 直接拉起的进程看环境变量，后代沿血缘继承；别的进程设了同名变量也不算

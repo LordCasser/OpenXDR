@@ -64,6 +64,8 @@ struct Entry {
     started: Option<SystemTime>,
     container: Option<Arc<Container>>,
     command: Option<Arc<str>>,
+    /// 所属的 SSH 登录（见 sshsession），事件里原样写出的 login_session 对象
+    login: Option<Arc<serde_json::Value>>,
     /// 父进程 pid：补发被折叠的祖先时沿它往上走
     ppid: Option<u32>,
     /// 被折叠、还没上报的启动事件
@@ -83,6 +85,8 @@ pub struct Known {
     pub container: Option<Arc<Container>>,
     /// 拉起它的平台指令 ID（指令进程及其后代）
     pub command: Option<Arc<str>>,
+    /// 所属的 SSH 登录
+    pub login: Option<Arc<serde_json::Value>>,
 }
 
 impl ProcessRegistry {
@@ -114,6 +118,7 @@ impl ProcessRegistry {
                 started: None,
                 container: None,
                 command: None,
+                login: None,
                 ppid,
                 held: None,
                 placeholder: None,
@@ -180,6 +185,19 @@ impl ProcessRegistry {
             e.container = container;
             e.command = command;
         }
+    }
+
+    /// 记下进程所属的 SSH 登录
+    pub fn set_login(&mut self, pid: u32, login: Option<Arc<serde_json::Value>>) {
+        if let Some(e) = self.guids.get_mut(&pid) {
+            e.login = login;
+        }
+    }
+
+    /// pid 所属的 SSH 登录：子进程自己的 /proc 读不到时（已退场）沿父进程继承
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub fn login_of(&self, pid: u32) -> Option<Arc<serde_json::Value>> {
+        self.guids.get(&pid).and_then(|e| e.login.clone())
     }
 
     /// pid 所属的平台指令，子进程沿血缘继承
@@ -265,6 +283,7 @@ impl ProcessRegistry {
             started: e.started,
             container: e.container.clone(),
             command: e.command.clone(),
+            login: e.login.clone(),
         })
     }
 

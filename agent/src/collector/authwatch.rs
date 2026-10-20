@@ -19,7 +19,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::pb::AgentEvent;
 
-use super::EventSink;
+use super::{EventSink, sshsession};
 
 /// OCSF Authentication
 const CLASS_AUTH: u32 = 3002;
@@ -110,7 +110,7 @@ fn spawn_sshd_journal(agent_id: String, sink: EventSink) -> (Option<Child>, Arc<
             "-n",
             "0",
             "-o",
-            "cat",
+            "json",
             "-t",
             "sshd",
             "-t",
@@ -148,9 +148,20 @@ fn spawn_sshd_journal(agent_id: String, sink: EventSink) -> (Option<Child>, Arc<
                 }
                 continue;
             };
-            let Some((rec, failure)) = parse_sshd(&line) else {
+            let Some(entry) = JournalEntry::parse(&line) else {
                 continue;
             };
+            let Some((mut rec, failure)) = parse_sshd(&entry.message) else {
+                continue;
+            };
+            // 只有内核凭据证明出自 root 身份 sshd 的认证成功日志，才拿来给会话进程打登录归属
+            if !failure
+                && let Some(pid) = entry.sshd_pid()
+                && let Some(login) = sshsession::parse_accepted(&entry.message)
+            {
+                sshsession::accepted(pid, login.clone());
+                rec.login = Some(login);
+            }
             if !sink.send(auth_event(&agent_id, &rec, failure)) {
                 break;
             }
@@ -162,6 +173,36 @@ fn spawn_sshd_journal(agent_id: String, sink: EventSink) -> (Option<Child>, Arc<
         }
     });
     (Some(child), alive)
+}
+
+/// journalctl -o json 的一行。MESSAGE 与 SYSLOG_IDENTIFIER 由写日志的进程自己给，谁都能写；
+/// _PID / _UID / _COMM 是 journald 从内核取的发送方凭据，客户端伪造不了
+struct JournalEntry {
+    message: String,
+    pid: Option<u32>,
+    uid: Option<u32>,
+    comm: String,
+}
+
+impl JournalEntry {
+    fn parse(line: &str) -> Option<Self> {
+        let v: serde_json::Value = serde_json::from_str(line).ok()?;
+        // 非 UTF-8 的 MESSAGE 会编成字节数组，不是 sshd 的认证日志
+        let message = v.get("MESSAGE")?.as_str()?.to_string();
+        let field = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default();
+        Some(Self {
+            message,
+            pid: field("_PID").parse().ok(),
+            uid: field("_UID").parse().ok(),
+            comm: field("_COMM").to_string(),
+        })
+    }
+
+    /// 出自 root 身份 sshd 监控进程的日志返回它的 pid（OpenSSH 9.8 起是 sshd-session）
+    fn sshd_pid(&self) -> Option<u32> {
+        let sshd = self.comm == "sshd" || self.comm == "sshd-session";
+        (self.uid == Some(0) && sshd).then_some(self.pid?)
+    }
 }
 
 /// 每行最多保留 16 KiB；超限后排到换行，不能把截断前缀当作完整认证日志。
@@ -229,6 +270,7 @@ fn sshd_record(s: &str) -> Option<LoginRecord> {
         user: user.to_string(),
         host: host.to_string(),
         line: "sshd".to_string(),
+        login: None,
     })
 }
 
@@ -236,6 +278,8 @@ struct LoginRecord {
     user: String,
     host: String,
     line: String,
+    /// 核对过出处的 sshd 认证成功：认证方式与公钥指纹，事件里写成 login_session
+    login: Option<sshsession::Login>,
 }
 
 /// 有界读取完整记录；inode 更换或文件缩短时从头读取当前文件。
@@ -287,6 +331,7 @@ fn parse_record(rec: &[u8]) -> Option<LoginRecord> {
         user,
         host: cstr(&rec[76..332]),
         line: cstr(&rec[8..40]),
+        login: None,
     })
 }
 
@@ -296,13 +341,16 @@ fn cstr(bytes: &[u8]) -> String {
 }
 
 fn auth_event(agent_id: &str, rec: &LoginRecord, failure: bool) -> AgentEvent {
-    let raw = serde_json::json!({
+    let mut raw = serde_json::json!({
         "activity_id": 1, // OCSF: Logon
         "status_id": if failure { 2 } else { 1 },
         "user": { "name": rec.user },
         "src_endpoint": { "ip": rec.host },
         "service": { "name": rec.line },
     });
+    if let Some(login) = &rec.login {
+        raw["login_session"] = login.to_json(None);
+    }
     AgentEvent {
         agent_id: agent_id.to_string(),
         ts_unix_ns: SystemTime::now()
@@ -358,6 +406,47 @@ mod tests {
         );
         assert!(parse_sshd("pam_unix(sshd:session): session opened for user root").is_none());
         assert!(parse_sshd("Connection closed by 10.1.1.35 port 51234").is_none());
+    }
+
+    /// 绑定会话只认内核凭据：MESSAGE 与标识谁都能写（logger -t sshd），_UID/_COMM 不能
+    #[test]
+    fn journal_entry_trusts_kernel_credentials_only() {
+        let line = |uid: &str, comm: &str| {
+            serde_json::json!({
+                "MESSAGE": "Accepted publickey for root from 10.1.1.35 port 1 ssh2",
+                "SYSLOG_IDENTIFIER": "sshd",
+                "_PID": "4242",
+                "_UID": uid,
+                "_COMM": comm,
+            })
+            .to_string()
+        };
+        let e = JournalEntry::parse(&line("0", "sshd")).unwrap();
+        assert_eq!(e.sshd_pid(), Some(4242));
+        assert!(parse_sshd(&e.message).is_some());
+        assert_eq!(
+            JournalEntry::parse(&line("0", "sshd-session"))
+                .unwrap()
+                .sshd_pid(),
+            Some(4242)
+        );
+        assert!(
+            JournalEntry::parse(&line("1000", "sshd"))
+                .unwrap()
+                .sshd_pid()
+                .is_none(),
+            "非 root 写的不认"
+        );
+        assert!(
+            JournalEntry::parse(&line("0", "logger"))
+                .unwrap()
+                .sshd_pid()
+                .is_none(),
+            "logger -t sshd 伪造的不认"
+        );
+        // 非 UTF-8 消息被 journald 编成字节数组
+        assert!(JournalEntry::parse(r#"{"MESSAGE":[65,66],"_PID":"1"}"#).is_none());
+        assert!(JournalEntry::parse("not json").is_none());
     }
 
     #[test]
