@@ -1,9 +1,9 @@
 import { Alert, Form, Input, Modal, Typography } from 'antd'
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '../i18n'
 
 // 结案与处理待办共用：必须写明原因，备注会作为案例交给 AI。onSubmit 失败时应抛出，弹窗与备注保留
-export function ResolveModal({ open, title, hint, initialNote, optional, contradicts, onCancel, onSubmit }: {
+export function ResolveModal({ open, title, hint, initialNote, optional, contradicts, children, onCancel, onSubmit }: {
   open: boolean
   title: string
   hint: string
@@ -13,6 +13,8 @@ export function ResolveModal({ open, title, hint, initialNote, optional, contrad
   optional?: boolean
   // 所选结论与 AI 研判相反：提示为什么要写理由，以及同意 AI 时该点哪个按钮
   contradicts?: boolean
+  // 批量结案的附加提示与确认（如 AI 判恶意的事件），放在备注之前
+  children?: ReactNode
   onCancel: () => void
   onSubmit: (note: string) => Promise<void>
 }) {
@@ -38,6 +40,7 @@ export function ResolveModal({ open, title, hint, initialNote, optional, contrad
     <Modal open={open} title={title} onCancel={() => { if (!busy) onCancel() }} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => form.submit()} confirmLoading={busy} destroyOnHidden>
       <Typography.Paragraph type="secondary">{hint}</Typography.Paragraph>
       {contradicts && <Alert type="warning" showIcon title={t('resolveContradicts')} style={{ marginBottom: 16 }} />}
+      {children}
       <Form disabled={busy} form={form} layout="vertical" onFinish={finish} initialValues={{ note: initialNote }}>
         <Form.Item name="note" label={t('resolveNote')} extra={optional && t('resolveNoteOptional')}
           rules={optional ? [] : [{ required: true, whitespace: true, message: t('resolveNoteRequired') }]}>

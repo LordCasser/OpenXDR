@@ -168,6 +168,35 @@ export async function setIncidentStatus(id: string, status: string, note?: strin
   if (!r.ok) await fail(r)
 }
 
+// 按规则归并：未结案事件按主告警的规则 + 主机分组（情报命中按同一目标），只是视图，不合并 incident
+export interface IncidentGroup {
+  key: string
+  ruleId: string
+  ruleTitle: string | null
+  assetId: string | null
+  hostname: string | null
+  count: number
+  severity: number
+  firstAt: string
+  lastAt: string
+  // AI 研判分布，none 为未研判
+  verdicts: Partial<Record<'benign' | 'suspicious' | 'malicious' | 'none', number>>
+  incidents: IncidentSummary[]
+}
+
+// status 只能是 review / unresolved；后端最多扫最近 2000 个事件，超出时 truncated
+export const fetchIncidentGroups = (status: string) => list<IncidentGroup>(`/api/incidents/groups?status=${status}`)
+
+// 批量结案上限，与后端一致
+export const BATCH_RESOLVE_MAX = 200
+
+// 批量结案：一个事务内整批成功或整批不动；含 AI 判恶意的按误报关须 confirmMalicious
+export async function resolveIncidents(ids: string[], status: 'closed' | 'false_positive', note: string, confirmMalicious = false): Promise<number> {
+  const r = await post('/api/incidents/batch-status', { ids, status, note, confirmMalicious })
+  if (!r.ok) await fail(r)
+  return (await r.json()).resolved
+}
+
 // 运维待办：巡检 AI 登记与复查；人标已处理或忽略（须写原因，忽略原因会告诉 AI）
 export interface FindingRow {
   id: string
