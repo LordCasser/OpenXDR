@@ -143,9 +143,11 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 	return mux
 }
 
-// mapIncidents 事件列表、详情、结案与忽略结案建议。
+// mapIncidents 事件列表、按规则归并、详情、单个与批量结案、忽略结案建议。
 func mapIncidents(mux *http.ServeMux, db *ent.Client, rules sigma.Catalog) {
 	mux.HandleFunc("GET /api/incidents", listIncidents(db))
+	mux.HandleFunc("GET /api/incidents/groups", listIncidentGroups(db, rules))
+	mux.HandleFunc("POST /api/incidents/batch-status", resolveIncidents(db))
 	mux.HandleFunc("GET /api/incidents/{id}", getIncident(db, rules))
 	mux.HandleFunc("POST /api/incidents/{id}/status", setIncidentStatus(db))
 	mux.HandleFunc("DELETE /api/incidents/{id}/closure-proposal", dismissClosureProposal(db))
