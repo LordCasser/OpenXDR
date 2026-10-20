@@ -53,11 +53,13 @@ UDP/TCP 健康检查，或者部署独立 syslog gateway；HAProxy 只承载 HTT
 | `openxdr_events_published_total` | gateway 成功发布事件 |
 | `openxdr_events_processed_total{duplicate}` | 处理完成与幂等丢弃数 |
 | `openxdr_queue_pending_messages{shard}` | 每个 durable consumer 的积压+待 ACK |
+| `openxdr_queue_replicas_unhealthy` | 事件流不同步或离线的副本数；取不到流信息（没有 leader）时等于副本总数 |
 | `openxdr_event_processing_seconds` | 单事件处理耗时直方图 |
 | `openxdr_pipeline_failures_total{stage}` | 发布、解码或处理失败 |
 | `openxdr_alerts_created_total` | 新建告警数 |
 
-Prometheus 预置节点离线、队列积压、处理失败和 P95 延迟规则；Grafana 预置
+Prometheus 预置节点离线、队列积压、副本不同步、处理失败和 P95 延迟规则（规则只负责判定，
+模板没有配 Alertmanager，要把这些告警接到外部监控才有人收到）；Grafana 预置
 “OpenXDR 集群处理链”面板。NATS 自身的 JetStream、存储、连接和路由状态由
 `prometheus-nats-exporter` 提供。
 
