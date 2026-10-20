@@ -4,8 +4,10 @@ package ueba
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -139,5 +141,50 @@ func TestUsrMergedPathsShareBaseline(t *testing.T) {
 	}
 	if n, _ := client.ProcessBaseline.Query().Count(ctx); n != 2 {
 		t.Errorf("基线应为旧 /bin/rm 与新 /usr/bin/awk 两条，实际 %d", n)
+	}
+}
+
+// 可信自动化来源的会话里跑出的新程序：照常学进基线，告警挂到来源上（不进关联）
+func TestFirstSeenFromTrustedSource(t *testing.T) {
+	ctx, client := testdb.New(t)
+	db, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	g := client.Group.Create().SetName("ops").SaveX(ctx)
+	asset := client.Asset.Create().SetHostname("h1").SetGroupID(g.ID).SaveX(ctx)
+	const fp = "SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU"
+	src := client.TrustedSource.Create().SetGroupID(g.ID).SetName("Termix").SetCreatedBy("lead").
+		SetKeyFingerprint(fp).SetExpiresAt(time.Now().Add(24 * time.Hour)).SaveX(ctx)
+	e := newEngine(client)
+	e.SQL = db
+
+	now := time.Now()
+	procEvent(t, ctx, client, asset.ID, "/usr/bin/bash", now.Add(-8*24*time.Hour))
+	if _, err := e.batch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	client.Event.Create().SetTs(now).SetClassUID(classProcess).SetSource("agent").SetAssetID(asset.ID).
+		SetRaw(json.RawMessage(`{"process":{"pid":2,"name":"probe","file":{"path":"/tmp/probe"}},
+"login_session":{"uid":"9","user":"root","src_ip":"10.1.1.35","key_fp":"` + fp + `","auth_method":"publickey"}}`)).SaveX(ctx)
+	procEvent(t, ctx, client, asset.ID, "/tmp/other", now)
+	if _, err := e.batch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	alerts := client.Alert.Query().AllX(ctx)
+	var trusted, plain int
+	for _, a := range alerts {
+		if a.AutomationID != nil && *a.AutomationID == src.ID {
+			trusted++
+		} else if a.AutomationID == nil {
+			plain++
+		}
+	}
+	if len(alerts) != 2 || trusted != 1 || plain != 1 {
+		t.Fatalf("可信会话的一条挂到来源上，另一条照常: %+v", alerts)
+	}
+	if n := client.ProcessBaseline.Query().CountX(ctx); n != 3 {
+		t.Fatalf("可信会话的新程序也要学进基线，实际 %d 条", n)
 	}
 }

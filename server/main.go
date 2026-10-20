@@ -240,6 +240,7 @@ func startAnalytics(ctx context.Context, db *sql.DB, client *ent.Client, rules s
 	// UEBA 首次出现：先学习后告警，学习期按资产从首次观测起算
 	uebaEngine := &ueba.Engine{
 		DB:             client,
+		SQL:            db,
 		Suppress:       suppressions,
 		LearningPeriod: time.Duration(getenvInt("UEBA_LEARNING_DAYS", 7)) * 24 * time.Hour,
 		Interval:       time.Duration(getenvInt("UEBA_INTERVAL_SECONDS", 30)) * time.Second,

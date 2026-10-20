@@ -126,6 +126,7 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - `eventpart`：events 按天分区——建表、ent diff hook、分区预建（单活）、退役、替代外键的触发器与在线迁移逻辑
 - `assetmap`：资产图谱与攻击面——设备清单物化、依赖边聚合、区域与暴露判定、AI 标注（单活增量扫描事件）
 - `cmdorigin`：核对事件上的平台指令标记（agent 给指令拉起的进程树打标），通过的告警挂到指令上、不进关联与研判
+- `automation`：可信自动化来源——按 agent 打的 SSH 登录归属（公钥指纹、来源、用户）认出组管理员登记的运维自动化，告警挂到来源上、不进关联与研判，高危例外（凭据窃取、清痕迹、关防护、破坏、情报命中）照常研判
 - `review`：需人工复核的统一口径（通知、总览计数、列表筛选与自动结案共用）
 - `testdb`：集成测试共享的 Postgres 连接与清表（仅 `integration` tag 编译）
 - `cmd/`：`detectcheck`（检测对拍）、`sigmacheck`（规则兼容检查）、`backtest`（用真实事件回测规则命中量）、`gencerts`（证书工具）、`sandboxd`（Pi 沙箱守护进程，见 `deploy/pi-sandbox`）、`eventpartition`（老库 events 在线迁移成分区表，见 `docs/event-partitioning.md`）

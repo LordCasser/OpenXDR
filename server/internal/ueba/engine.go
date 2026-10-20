@@ -17,6 +17,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/processbaseline"
+	"openxdr/server/internal/automation"
 	"openxdr/server/internal/cmdorigin"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
@@ -28,8 +29,10 @@ const classProcess = 1007
 const batchLimit = 1000
 
 type Engine struct {
-	DB             *ent.Client
-	Suppress       *suppress.Store
+	DB       *ent.Client
+	Suppress *suppress.Store
+	// SQL 核对可信自动化来源用；不配置时不认，照常告警
+	SQL            automation.Querier
 	LearningPeriod time.Duration
 	Interval       time.Duration
 
@@ -165,7 +168,16 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		if e.Suppress.Suppressed(sigma.RuleNewProcess, &k.asset, raw, ev.Ts) {
 			continue
 		}
+		// 可信自动化来源的会话里跑出的新程序照常学进基线，告警挂到来源上、不进关联
+		var source *uuid.UUID
+		if e.SQL != nil && ev.Source == "agent" {
+			var err error
+			if source, err = automation.Of(ctx, e.SQL, raw, &k.asset, ev.Ts); err != nil {
+				return 0, err
+			}
+		}
 		alerts = append(alerts, e.DB.Alert.Create().
+			SetNillableAutomationID(source).
 			SetTs(ev.Ts).
 			SetRuleID(sigma.RuleNewProcess).
 			SetSeverity(2).
