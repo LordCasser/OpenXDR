@@ -443,6 +443,8 @@ export interface IdentitySummary {
   hosts: number
   lastSeen: string | null
   manual: boolean
+  // 系统账号（UID 在系统范围且没登录过），只在列表里给
+  system?: boolean
 }
 export type AccountKind = 'directory' | 'windows' | 'linux'
 export type LinkBasis = 'directory_anchor' | 'ad_sid' | 'host_local' | 'manual'
@@ -504,8 +506,8 @@ export interface UnmatchedLogin {
   last: string
   sources: string[]
 }
-export const fetchIdentities = (groupId: string, q: string, kind: string, offset: number) =>
-  get<{ items: IdentitySummary[]; truncated: boolean }>(`/api/identities?${new URLSearchParams({ groupId, q, kind, offset: String(offset), limit: '100' })}`)
+export const fetchIdentities = (groupId: string, q: string, kind: string, offset: number, includeSystem = false) =>
+  get<{ items: IdentitySummary[]; truncated: boolean }>(`/api/identities?${new URLSearchParams({ groupId, q, kind, offset: String(offset), limit: '100', includeSystem: String(includeSystem) })}`)
 export const fetchIdentity = (id: string, hours: number) =>
   get<{ identity: IdentitySummary; accounts: IdentityAccount[]; truncated: boolean; history: IdentityLinkHistory[] }>(`/api/identities/${encodeURIComponent(id)}?hours=${hours}`)
 export const fetchIdentityMergeCandidates = (id: string) =>

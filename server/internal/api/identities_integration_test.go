@@ -77,12 +77,14 @@ func TestIdentityGraphAPI(t *testing.T) {
 		return id
 	}
 	now := time.Now().UTC()
-	passwd := `{"activity_id":2,"device":{"local_accounts":{"version":1,"source":"etc-passwd","state":"observed","items":[{"name":"root","uid":0,"gid":0,"shell":"/bin/sh"},{"name":"alice","uid":1000,"gid":1000,"shell":"/bin/sh"}]}}}`
+	passwd := `{"activity_id":2,"device":{"local_accounts":{"version":1,"source":"etc-passwd","state":"observed","items":[{"name":"root","uid":0,"gid":0,"shell":"/bin/sh"},{"name":"alice","uid":1000,"gid":1000,"shell":"/bin/sh"},{"name":"daemon","uid":1,"gid":1,"shell":"/usr/sbin/nologin"},{"name":"svc","uid":998,"gid":998,"shell":"/bin/sh"}]}}}`
 	for _, a := range []uuid.UUID{lin1.ID, lin2.ID, foreign.ID} {
 		event(a, now.Add(-2*time.Hour), 5001, passwd)
 	}
 	event(lin1.ID, now.Add(-time.Hour), 3002, `{"activity_id":1,"status_id":1,"user":{"name":"alice"},"src_endpoint":{"ip":"192.0.2.7"},"service":{"name":"pts/0"}}`)
 	event(lin1.ID, now.Add(-time.Hour), 3002, `{"activity_id":1,"status_id":2,"user":{"name":"mallory"},"src_endpoint":{"ip":"198.51.100.9"},"service":{"name":"ssh:notty"}}`)
+	// 系统范围的 svc 只在 lin1 登录过：lin1 上的照常显示，lin2 上的和 daemon 一样默认不显示
+	event(lin1.ID, now.Add(-time.Hour), 3002, `{"activity_id":1,"status_id":1,"user":{"name":"svc"},"src_endpoint":{"ip":"192.0.2.8"},"service":{"name":"pts/1"}}`)
 	if _, err := identity.SyncGraph(ctx, db); err != nil {
 		t.Fatal(err)
 	}
@@ -111,8 +113,21 @@ func TestIdentityGraphAPI(t *testing.T) {
 		}
 		return result
 	}
-	if n := len(list(viewer, "").Items); n != 5 {
-		t.Fatalf("应有目录 1 个与两台主机各 2 个身份: %d", n)
+	if n := len(list(viewer, "").Items); n != 6 {
+		t.Fatalf("默认应有目录 1 个、两台主机各 root 与 alice、lin1 上登录过的 svc: %d", n)
+	}
+	all := list(viewer, "&includeSystem=true").Items
+	system := 0
+	for _, item := range all {
+		if item.System {
+			system++
+			if item.Name == nil || (*item.Name != "daemon" && *item.Name != "svc") {
+				t.Errorf("不该标成系统账号: %+v", item)
+			}
+		}
+	}
+	if len(all) != 9 || system != 3 {
+		t.Fatalf("含系统账号应 9 个、其中系统账号 3 个（两台的 daemon、lin2 的 svc）: %d %d", len(all), system)
 	}
 	if n := len(list(outsider, "").Items); n != 0 {
 		t.Fatalf("组外用户看到了身份: %d", n)
@@ -237,7 +252,8 @@ func TestIdentityGraphAPI(t *testing.T) {
 	if code != 200 || json.Unmarshal(body, &assetView) != nil {
 		t.Fatalf("%d %s", code, body)
 	}
-	if len(assetView.Accounts) != 2 || *assetView.Accounts[0].Name != "alice" || assetView.Accounts[0].IdentityID == nil || assetView.Accounts[0].Logins.Success != 1 {
+	// 资产页列出这台主机全部账号（含系统账号），登录过的排前
+	if len(assetView.Accounts) != 4 || *assetView.Accounts[0].Name != "alice" || assetView.Accounts[0].IdentityID == nil || assetView.Accounts[0].Logins.Success != 1 {
 		t.Fatalf("资产账号视图不对: %s", body)
 	}
 	if len(assetView.Unmatched) != 1 || assetView.Unmatched[0].Name != "mallory" || assetView.Unmatched[0].State != "no_account" || assetView.Unmatched[0].Sources[0] != "198.51.100.9" {

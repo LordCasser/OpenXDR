@@ -28,6 +28,11 @@ const canWriteGroup = `EXISTS(SELECT 1 FROM users u WHERE u.id=$%d AND (u.role='
 // accountVisible 账号是目录账号，或其资产当前仍在账号所属组。
 const accountVisible = `(%[1]s.asset_id IS NULL OR EXISTS(SELECT 1 FROM assets vs WHERE vs.id=%[1]s.asset_id AND vs.group_id=%[1]s.group_id))`
 
+// systemAccount 系统账号：Linux 上 UID 落在系统范围（1–999 或 nobody 那样的 ≥65534）且从没登录过。
+// 每台主机都有一批 _apt、bin、daemon，列表默认不显示，免得把真正登录过的人淹没；登录过的照常显示，root 永远显示
+const systemAccount = `(%[1]s.kind='linux' AND %[1]s.uid IS NOT NULL AND %[1]s.uid<>0 AND (%[1]s.uid<1000 OR %[1]s.uid>=65534)
+ AND NOT EXISTS(SELECT 1 FROM identity_login_matches sm WHERE sm.asset_id=%[1]s.asset_id AND sm.uid=%[1]s.uid AND sm.account_name=%[1]s.name))`
+
 type identitySummary struct {
 	ID         uuid.UUID  `json:"id"`
 	GroupID    uuid.UUID  `json:"groupId"`
@@ -44,6 +49,8 @@ type identitySummary struct {
 	Hosts      int        `json:"hosts"`
 	LastSeen   *time.Time `json:"lastSeen"`
 	Manual     bool       `json:"manual"`
+	// 系统账号（只在列表里给）：见 systemAccount
+	System bool `json:"system,omitempty"`
 }
 
 type loginStat struct {
@@ -156,6 +163,7 @@ func listIdentities(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "kind 只能是 directory 或 host", http.StatusBadRequest)
 		return
 	}
+	includeSystem := p.Get("includeSystem") == "true"
 	q := p.Get("q")
 	if len(q) > 256 {
 		http.Error(w, "q 过长", http.StatusBadRequest)
@@ -175,7 +183,7 @@ func listIdentities(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	rows, err := db.QueryContext(r.Context(), `SELECT i.id,i.group_id,i.kind,anchor.kind,anchor.name,anchor.sid,anchor.uid,anchor.asset_id,s.hostname,src.authority,i.created_at,
- count(*),count(DISTINCT a.asset_id),max(a.last_seen),bool_or(l.basis='manual')
+ count(*),count(DISTINCT a.asset_id),max(a.last_seen),bool_or(l.basis='manual'),`+fmt.Sprintf(systemAccount, "anchor")+`
  FROM identities i JOIN identity_accounts anchor ON anchor.id=i.anchor_account_id
  LEFT JOIN assets s ON s.id=anchor.asset_id
  LEFT JOIN identity_directory_accounts da ON da.id=anchor.directory_account_id LEFT JOIN identity_directory_sources src ON src.id=da.source_id
@@ -183,10 +191,11 @@ func listIdentities(db *sql.DB, w http.ResponseWriter, r *http.Request) {
  JOIN identity_accounts a ON a.id=l.account_id
  WHERE i.group_id=$1 AND `+fmt.Sprintf(canReadGroup, 2, "i.group_id")+` AND `+fmt.Sprintf(accountVisible, "anchor")+` AND `+fmt.Sprintf(accountVisible, "a")+`
  AND ($3='' OR i.kind=$3)
+ AND ($7 OR NOT `+fmt.Sprintf(systemAccount, "anchor")+`)
  AND ($4='' OR EXISTS(SELECT 1 FROM identity_links l2 JOIN identity_accounts a2 ON a2.id=l2.account_id LEFT JOIN assets s2 ON s2.id=a2.asset_id
   WHERE l2.identity_id=i.id AND l2.revoked_at IS NULL AND (strpos(lower(a2.name),lower($4))>0 OR a2.sid=$4 OR strpos(lower(s2.hostname),lower($4))>0)))
  GROUP BY i.id,anchor.id,s.hostname,src.authority
- ORDER BY lower(anchor.name) NULLS LAST,anchor.sid,i.id LIMIT $5 OFFSET $6`, group, u.ID, kind, q, limit+1, offset)
+ ORDER BY lower(anchor.name) NULLS LAST,anchor.sid,i.id LIMIT $5 OFFSET $6`, group, u.ID, kind, q, limit+1, offset, includeSystem)
 	if err != nil {
 		http.Error(w, "身份列表查询失败", http.StatusInternalServerError)
 		return
@@ -196,7 +205,7 @@ func listIdentities(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item identitySummary
 		if err := rows.Scan(&item.ID, &item.GroupID, &item.Kind, &item.AnchorKind, &item.Name, &item.SID, &item.UID, &item.AssetID, &item.Hostname, &item.Authority,
-			&item.CreatedAt, &item.Accounts, &item.Hosts, &item.LastSeen, &item.Manual); err != nil {
+			&item.CreatedAt, &item.Accounts, &item.Hosts, &item.LastSeen, &item.Manual, &item.System); err != nil {
 			http.Error(w, "身份列表读取失败", http.StatusInternalServerError)
 			return
 		}
