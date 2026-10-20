@@ -301,17 +301,20 @@ Windows persistwatch（`persistwatch.rs`）：
 ```json
 {
   "activity_id": 1,
-  "reg_key": { "path": "HKLM\\SOFTWARE\\...\\Run" },
-  "reg_value": { "data": "C:\\evil.exe" }
+  "reg_key": { "path": "HKCU\\SOFTWARE\\...\\Run\\Updater" },
+  "reg_value": { "data": "C:\\evil.exe" },
+  "user": { "uid": "S-1-5-21-…-1001", "name": "HOST\\alice" }
 }
 ```
 
 - activity_id：1=Create、3=Modify、4=Delete（删除事件带旧值内容）
-- 覆盖：Run/RunOnce/Winlogon 自启动键（HKLM+HKCU）、**Windows 服务快照**
+- 覆盖：Run/RunOnce/Winlogon 自启动键（HKLM + 每个已加载的用户配置单元）、**Windows 服务快照**
   （`HKLM\SYSTEM\CurrentControlSet\Services`，值为 ImagePath+启动类型+运行状态，
   EventLog 等安全服务被停止会产生 Modify）、`CurrentVersion\Windows`
   （AppInit_DLLs）、Defender Exclusions、IFEO 各子键 Debugger 值、
-  `HKCU\Software\Classes\CLSID`（InprocServer32/LocalServer32）
+  用户的 `HKCU\Software\Classes\CLSID`（InprocServer32/LocalServer32）
+- 用户配置单元的路径统一写 `HKCU\...`，`user` 记配置单元属主：`uid` 为 SID，`name` 为 `DOMAIN\user`（解析不到省略）；
+  HKLM 事件没有 `user`。属主不等于写入者（管理员也能写已加载的别人的配置单元），所以不放 `actor.user`
 - 无进程上下文
 
 ## 100001 应用日志（syslog）

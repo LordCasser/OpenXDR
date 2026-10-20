@@ -38,7 +38,7 @@ where ts > now() - interval '15 minutes' group by 1;
 | 进程退出 | ✅ ETW Stop，复用启动 GUID | ⚠️ 轮询消失检测 | 未验证 | ✅ netlink EXIT，复用启动 GUID |
 | 短命进程 cmdline | ✅（极快进程有竞争，见下注） | ❌ 多为空（轮询固有） | 未验证 | ✅ uname/whoami/cat/sh/timeout 完整 |
 | 文件监控（RDCW / fanotify / inotify） | ✅ RDCW 增改删 | ✅ fanotify 全生命周期+肇事进程 | — | ✅ fanotify 增改删+肇事进程 |
-| 持久化点（注册表/Startup/服务/计划任务） | ✅ 增删，删除带旧值 | ✅（经 fanotify 覆盖 systemd/cron/.ssh） | — | — |
+| 持久化点（注册表/Startup/服务/计划任务） | ✅ 增删，删除带旧值；Win10 测试机：交互用户（非 SYSTEM）自己 HKCU 的 Run 与 CLSID 增删带属主 SID，登录/登出不报增删（第六轮） | ✅（经 fanotify 覆盖 systemd/cron/.ssh） | — | — |
 | 网络（ETW / eBPF 出站） | ✅ ETW TcpConnect + 进程 GUID | ✅ eBPF 捕获 10.0.0.1:4444 | — | ✅ eBPF 完整五元组+进程 GUID |
 | 网络入站 / UDP 出站（eBPF SYN_RECV→ESTABLISHED、kprobe udp_sendmsg；ETW TcpAccept / UDP 发送） | ✅ Win10 测试机：入站归属到监听进程、UDP 出站带进程、nslookup 直发 UDP 53 按进程上报（第五轮） | ✅ 入站归属到监听进程（python3 :8000）、UDP 出站 1.1.1.1:123 带进程（docker 特权容器 `--pid=host --cgroupns=host`，6.6 内核，2026-10-18） | — | 未验证 |
 | DNS（AF_PACKET + 经典 BPF；Windows ETW DNS-Client 3008） | ✅ Win10 测试机：问答、NXDOMAIN（rcode 3 + SOA）、CNAME 链入库，按发起进程归属，出站连接回填域名（curl → www.baidu.com）（第五轮） | ✅ 问答配对、rcode / 应答入库，按源端口归属到发起 pid，出站连接回填域名（curl → example.org） | — | 未验证 |
@@ -172,11 +172,33 @@ agent 为 v0.2.0 musl 静态 / mingw 构建。
 - 测试机上 persistwatch 每 30 秒拉起一次 WMI 查询的 powershell，进程通道在 Windows 上不会静默到触发自检；
   自检进程不外发由单测与 Linux 测试机验证。
 
+## 第六轮：用户配置单元的持久化点（2026-10-21）
+
+环境：pve1 Windows 10 22H2 测试机（本地管理员 kei 自动登录），接入生产 HA 控制台。测试版 agent 为当前分支构建，
+同第五轮临时去掉二进制哈希上报，测完换回生产分发版。
+
+前几轮的 HKCU 回放之所以命中，是因为回放脚本经 qemu-ga 以 SYSTEM 执行、写进了 SYSTEM 自己的 HKCU（S-1-5-18）；
+agent 也以 SYSTEM 运行，读的正是这一份，真实用户自己 HKCU 下的写入它一直看不到。本轮改为枚举 `HKEY_USERS` 下已加载的
+用户配置单元后实测：
+
+- 以 kei 交互身份（一次性计划任务，`LogonType Interactive`）写 HKCU Run 值与 `CLSID\{…}\InprocServer32` 默认值，
+  确认写进 `HKU\<kei 的 SID>` 而 SYSTEM 的配置单元没有；下一轮快照报出两条 201002 Create，路径 `HKCU\...`、
+  `user` 为 kei 的 SID 与 `OPENXDR-TESTWIN\kei`，实机命中 Registry Run Key Persistence 与 User-Level COM Hijack；
+  删除后两条 Delete，命中 Autostart Registry Entry or Service Deleted。
+- `logoff` 注销 kei（配置单元卸载，其 Run 下的 OneDrive 与 22 个 CLSID 从快照里整组消失）：不产生任何 HKCU 删除事件。
+- 抓到的缺陷：注销时系统删掉每用户服务实例（`CDPUserSvc_33fa3` 等 20 个，Type 带 0x80），旧版服务快照把它们报成
+  一批「服务被删除」并命中 Autostart Registry Entry or Service Deleted，登录时又报一批新增。改为实例不进快照
+  （须有带用户服务位的同名模板、ImagePath 展开后一致），模板仍在快照里；复测注销不再有服务删除事件。
+- 测试机上注销控制台会话后，ACPI 关机与 `shutdown /r` 都卡在「系统正在关机」，agent 等进程已退出仍不前进，
+  只能 `qm reset`；卡住时 agent 进程已退出，未见与 agent 相关的迹象，但没查到根因，记在这里供以后在这台机上做注销测试时参考。
+
 ## 已知边界
 
 - ~~agent 异常退出会泄漏 ETW 会话~~：已修（2026-10-20），会话改用固定名 `OpenXDR-Process` / `OpenXDR-Network`（后加的 DNS 采集同样固定为 `OpenXDR-DNS`），
   启动前先停同名旧会话。旧版本漏下的 `n4r1b-trace-*` 要重启一次主机或手动 `logman stop <name> -ets` 清掉——
   不自动清，因为那是 ferrisetw 的默认命名，别的软件也可能在用。
+- 用户配置单元只覆盖已加载的：未登录用户的 NTUSER.DAT 不去挂载，离线期间对其配置单元的篡改看不到，
+  登录加载后以那时为基线。
 - WSL2 不能验证：netlink proc connector（命名空间，agent 正确降级）、wtmp
   登录（无写入）、短命进程 cmdline（轮询固有）；这些格子已由真 Linux 双机补验。
 - ~~server 热重载偶现不及时~~：已确认元数据指纹与 watcher 启动竞态两个根因，

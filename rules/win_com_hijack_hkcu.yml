@@ -18,7 +18,8 @@ description: |
   AppData 下的排除按「目录 + 文件名」收窄，同目录换个文件名照样报。System32 下的系统 DLL 不排除：
   把 CLSID 指向 scrobj.dll 等系统组件本身就是已知的劫持变体。
   仍会误报：其他装在 AppData 的按用户安装软件（Zoom Outlook 插件、部分输入法与云盘），确认后按主机与路径窄抑制。
-  注意 agent 以服务运行时 HKCU 是服务账户自己的配置单元，交互用户的 HKCU 不在快照内。
+  采集端快照所有已加载的用户配置单元（已登录用户），路径统一写 HKCU\…，属主 SID 与账户名在事件的 user 里；
+  未登录用户的配置单元不在快照内。
 tags:
   - attack.persistence
   - attack.privilege_escalation

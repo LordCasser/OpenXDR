@@ -270,16 +270,26 @@ region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实�
 
 | 监控对象 | 事件类别 | 说明 |
 |---|---|---|
-| 注册表 Run/RunOnce/Winlogon（HKLM+HKCU） | 201002 | 增(1)/改(3)/删(4)，删除带旧值内容 |
+| 注册表 Run/RunOnce/Winlogon（HKLM + 每个已加载的用户配置单元） | 201002 | 增(1)/改(3)/删(4)，删除带旧值内容 |
 | Startup 目录（全局+每用户） | 1001 | 增(1)/删(4)，修改不报 |
-| **Windows 服务**（`HKLM\SYSTEM\CurrentControlSet\Services`） | 201002 | `services_snapshot`：ImagePath+启动类型+**运行状态**（SCM 枚举，EventLog 等安全服务被停止产生 Modify；枚举失败整轮跳过防误报） |
+| **Windows 服务**（`HKLM\SYSTEM\CurrentControlSet\Services`） | 201002 | `services_snapshot`：ImagePath+启动类型+**运行状态**（SCM 枚举，EventLog 等安全服务被停止产生 Modify；枚举失败整轮跳过防误报）；每用户服务实例（`<模板>_<后缀>`，登录建、登出删）不进快照 |
 | **计划任务**（`C:\Windows\System32\Tasks` 递归） | 1001 | `tasks_snapshot`：快照 路径→(mtime,size)，增/改/删全报 |
-| **Defender Exclusions / AppInit_DLLs / IFEO Debugger / HKCU CLSID** | 201002 | `WATCH_TREES` 递归枚举（键不存在静默跳过）：T1562.001 排除项篡改、T1546.010/012、T1546.015 COM 劫持 |
+| **Defender Exclusions / AppInit_DLLs / IFEO Debugger / 用户 CLSID** | 201002 | `MACHINE_TREES` / `USER_TREES` 递归枚举（键不存在静默跳过）：T1562.001 排除项篡改、T1546.010/012、T1546.015 COM 劫持 |
 | **WMI 事件订阅**（`root\subscription` 的 __EventFilter/__EventConsumer） | 1001 | powershell 子进程查询快照（30s），file.path 用 `wmi:...` 伪路径；T1546.003 |
 
 - 事件无进程上下文（快照 diff 不知道谁写的），设计上不用注册表通知
   （`persistwatch.rs:3-6`）
 - 非 REG_SZ/REG_EXPAND_SZ 的注册表值记为 `<type N, M bytes>` 占位
+- **用户配置单元**：agent 以 SYSTEM 运行，HKCU 是 SYSTEM 自己的（S-1-5-18），看不到交互用户的 HKCU。
+  所以每轮枚举 `HKEY_USERS`，对已加载的用户配置单元（`S-1-5-21-…` 本地/域账户、`S-1-12-1-…` Entra ID 账户，
+  外加 S-1-5-18）各读一遍 Run/RunOnce/Winlogon/`CurrentVersion\Windows` 与 `Software\Classes\CLSID`。
+  用户的 `Software\Classes` 实体是 `HKU\<SID>_Classes`（UsrClass.dat），经 `HKU\<SID>\Software\Classes` 链接读，
+  `_Classes` 不单独当用户；`.DEFAULT`、LocalService / NetworkService 不看。HKLM 与用户注册的合并视图是 HKCR，不在快照内
+- 事件路径仍写成 `HKCU\...`（规则按这个前缀匹配），属主记在 `user.uid`（SID）与 `user.name`（`DOMAIN\user`，解析不到省略）
+- 边界：**只覆盖已加载的配置单元**（用户已登录，或被以该用户身份运行的服务/任务载入）。不调用 RegLoadKey 挂载
+  离线用户的 NTUSER.DAT（会和该用户登录抢文件锁），用户离线期间对其配置单元的离线篡改看不到
+- 配置单元按 SID 分组各自 diff：新加载的（登录）当轮静默建基线，卸载的（登出）直接从基线移除，**都不产生增删事件**；
+  读每个配置单元前先拿住其根键句柄，持有期间不会被卸载，不会读到一半赶上登出把读不到的值当成删除
 
 ### 文件监控（fswatch_win，ReadDirectoryChangesW）
 

@@ -57,9 +57,15 @@
 - Windows DNS 采集：ETW DNS-Client 的查询完成事件（3008）按发起进程归属，归一化成与 Linux 同构的 4003 事件，
   出站连接按本机见过的应答回填域名。看到的是系统解析器 API 层（含缓存命中），没有服务器地址与 TTL。
 - Windows 短命进程的连接 / DNS 事件先于它的启动事件到达时，启动事件沿用先到事件占位的进程 GUID，血缘不再断开。
+- Windows 持久化快照覆盖所有已加载的用户配置单元：以前 agent 以 SYSTEM 运行，读到的 HKCU 是 SYSTEM 自己的，
+  交互用户在自己 HKCU 下写的 Run 键、COM 劫持（CLSID InprocServer32）都看不到。现在枚举 `HKEY_USERS` 下的用户 SID
+  逐个读同一组持久化点，事件路径仍写 `HKCU\...`（规则不用改），新增 `user.uid`（SID）与 `user.name`（`DOMAIN\user`）记配置单元属主。
+  只覆盖已加载的（已登录用户），不挂载离线用户的 NTUSER.DAT；用户登录/登出导致的配置单元加载卸载不产生增删事件。
 
 ### 修复
 
+- Windows 用户登录/登出时，系统按模板增删的每用户服务实例（`CDPUserSvc_xxxxx` 等）被服务快照报成服务新增与删除，
+  每次注销都会命中 Autostart Registry Entry or Service Deleted。实例不再进快照（须有同名用户服务模板且 ImagePath 一致），模板照常监控。
 - 资产图谱出现 `0.0.0.0` / `::` 节点：agent 在 `udp_sendmsg` 采样时，未连接的 UDP 套接字（tailscaled 之类的 sendto）
   源地址还是未指定地址，原样上报后成了依赖边的一端。agent 改为在同一网络命名空间里按路由查出口地址，查不到就省略源地址、
   `conn_tuple` 源地址留空；server 把缺省或未指定的源地址记到上报资产自己的地址上，不成节点。
