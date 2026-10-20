@@ -334,6 +334,12 @@ var readOnlyPrograms = map[string]func(args []string) bool{
 	"chronyc":     subcommand(false, "tracking", "sources", "sourcestats", "activity"),
 	"sshd":        sshdTest,
 	"sed":         sedRead,
+	"smartctl":    smartctlRead,
+	"storcli":     raidShow,
+	"storcli64":   raidShow,
+	"perccli":     raidShow,
+	"perccli64":   raidShow,
+	"arcconf":     arcconfGet,
 	"swapon":      swaponShow,
 	"command":     onlyFlagPrefix("-v", "-V"), // command 不带 -v 就是执行后面的命令
 	"loginctl":    subcommand(true, "list-sessions", "list-users", "list-seats", "show-session", "show-user", "session-status", "user-status"),
@@ -599,4 +605,43 @@ func sedCommand(c string) bool {
 		}
 	}
 	return parts == 2 && strings.Trim(c[i:], "gpiIm0123456789") == ""
+}
+
+// smartctl 只认查看：-s/-t/-X/-o/-S 会开关 SMART、启动或中止自检，一律不认
+func smartctlRead(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-a" || a == "--all" || a == "-x" || a == "--xall" || a == "-i" || a == "--info" || a == "-H" || a == "--health" ||
+			a == "-A" || a == "--attributes" || a == "-c" || a == "--capabilities" || a == "--scan" || a == "--scan-open" || a == "-j" || a == "--json":
+		case a == "-l" || a == "--log" || a == "-d" || a == "--device":
+			i++ // 日志类型、设备类型是数据
+		case strings.HasPrefix(a, "--log=") || strings.HasPrefix(a, "--device=") || strings.HasPrefix(a, "-d"):
+		case strings.HasPrefix(a, "-"):
+			return false
+		}
+	}
+	return true
+}
+
+// raidShow storcli / perccli 的查看都带 show；带设置、删除、启动这类动词的一律不认
+var raidVerbs = map[string]bool{"set": true, "add": true, "del": true, "delete": true, "start": true, "stop": true, "pause": true, "resume": true,
+	"suspend": true, "flash": true, "download": true, "erase": true, "import": true, "reset": true, "clear": true, "restart": true,
+	"expand": true, "migrate": true, "compress": true, "secureerase": true, "insert": true, "offline": true, "online": true, "spinup": true, "spindown": true}
+
+func raidShow(args []string) bool {
+	show := false
+	for _, a := range args {
+		w := strings.ToLower(a)
+		if raidVerbs[w] {
+			return false
+		}
+		show = show || w == "show"
+	}
+	return show
+}
+
+// arcconfGet arcconf 只认 GET 开头的查询子命令
+func arcconfGet(args []string) bool {
+	return len(args) > 0 && strings.HasPrefix(strings.ToUpper(args[0]), "GET")
 }

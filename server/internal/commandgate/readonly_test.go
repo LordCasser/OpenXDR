@@ -33,6 +33,8 @@ func TestReadOnlyAccepts(t *testing.T) {
 		`which storcli storcli64 perccli arcconf 2>/dev/null; dmesg 2>/dev/null | grep -iE 'megasas|BBU|battery' | tail -5`,
 		`sed -n '1,20p' /etc/hosts; sed -E 's#/+#/#g' x; sed '/^#/d;/^$/d' /etc/fstab; command -v zpool`,
 		`echo "today is $(date +%F)"`,
+		`smartctl --all /dev/sda 2>/dev/null | grep -iE 'BBU|battery' | head; storcli /c0 show all 2>/dev/null | grep -iA2 'BBU\|Battery' | head -12; arcconf GETCONFIG 1 AD 2>/dev/null | grep -i battery | head -5`,
+		`smartctl -H -d megaraid,0 /dev/sda; storcli64 /c0/bbu show; perccli /c0/cv show all`,
 	} {
 		if !ReadOnly(cmd) {
 			t.Errorf("应判为只读：%s", cmd)
@@ -127,6 +129,18 @@ func TestReadOnlyRejects(t *testing.T) {
 		`swapon -a`,
 		`swapon /dev/sda2`,
 		`command rm -rf /tmp/x`,
+		// RAID / 磁盘工具的改动与自检
+		`smartctl -s off /dev/sda`,
+		`smartctl -t long /dev/sda`,
+		`smartctl -X /dev/sda`,
+		`storcli /c0 set bbu=off`,
+		`storcli /c0/v0 delete`,
+		`storcli /c0/e8/s1 start rebuild`,
+		`storcli /c0 show all; storcli /c0 flash file=fw.rom`,
+		`arcconf SETCACHE 1 LOGICALDRIVE 0 RON`,
+		`arcconf DELETE 1 LOGICALDRIVE 0`,
+		// 读密钥内容，即便遮了哈希
+		`diff /etc/shadow- /etc/shadow 2>/dev/null | sed 's/:.*\$[^:]*/:***HASH***/' | head -10`,
 		`sshd -D -p 2222`,
 		`sshd -T -o PermitRootLogin=yes`,
 		`rpm -e pkg`,
