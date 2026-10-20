@@ -107,6 +107,9 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 - `DATABASE_URL=<只读副本> TEMPORAL_RULES_PATH=<时序规则目录> go run ./cmd/backtest -from <RFC3339> -to <RFC3339> <基础规则目录>`：
   时序规则回测，按事件时间顺序回放基础匹配与时序求值（纯内存，只读事务），输出每条时序规则的命中次数、
   按资产 / 账号的分布与样例证据事件 ID，以及未参与求值的覆盖缺口计数，见 [时序检测](temporal-detection.md#回测)
+- 信号规则：`rules/signals/` 下带 `openxdr_signal: true`（级别必须 informational）的规则只作时序规则的输入，
+  命中不单独告警、不进去重 / 关联 / 研判 / 通知，未启用时序检测时不生效；detectcheck 用 `expect: signal` 表达，
+  回测单列其命中量与候选量，见 [时序检测 · 信号规则](temporal-detection.md#信号规则)
 - SigmaHQ 社区规则：`rules/sigmahq/` 收录 Linux 进程 / 文件 / 网络与 DNS 规则（131 条，DRL 1.1），
   引入前在生产数据上回测，低价值高频与误报的列在 `excluded.txt` 不引入；同步方式见该目录 README。
   社区规则的许可要求基于命中的消息保留作者：告警、事件、报告、通知、规则页都带规则作者

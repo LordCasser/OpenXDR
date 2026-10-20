@@ -1,0 +1,25 @@
+title: Download Tool Executed (时序信号)
+id: 9fbc3a0d-eb13-4ffa-a540-e9587ecdaa18
+status: experimental
+description: |
+  时序信号，不单独告警：curl / wget 启动。单独看几乎全是监控探活与运维脚本，
+  只供时序规则关联（如与读 stdin 的 shell 几乎同时出现，即管道 `curl … | bash` 的两个兄弟进程）。
+author: OpenXDR
+openxdr_signal: true
+tags:
+  - attack.command_and_control
+  - attack.t1105
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  image:
+    Image|endswith:
+      - '/curl'
+      - '/wget'
+  command:
+    CommandLine|startswith:
+      - 'curl '
+      - 'wget '
+  condition: image or command
+level: informational

@@ -1,0 +1,20 @@
+title: Shell Reading Script From Stdin (时序信号)
+id: fa68888c-1f59-4c51-8409-48c6e0614860
+status: experimental
+description: |
+  时序信号，不单独告警：不带脚本参数启动的 shell（`bash`、`sh -s`、`sh -s - server` 等），即从 stdin 读命令。
+  管道 `curl … | bash` 里接收端就是这种形态；单独看也可能是交互式子 shell 或运维脚本，只供时序规则关联。
+  登录 shell（`-bash`）与 `bash -c` / `bash script.sh` 不算。
+author: OpenXDR
+openxdr_signal: true
+tags:
+  - attack.execution
+  - attack.t1059.004
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|re: '^((/usr)?/bin/)?(ba|da|z|k|a)?sh( -s( .*)?| -)?$'
+  condition: selection
+level: informational

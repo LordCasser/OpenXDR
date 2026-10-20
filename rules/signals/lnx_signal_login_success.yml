@@ -1,0 +1,20 @@
+title: Successful Login (时序信号)
+id: 2f49ad83-e959-4d21-ba18-5469f31801a0
+status: experimental
+description: |
+  时序信号，不单独告警：Linux 成功登录（wtmp / sshd 日志）。每次登录都告警没有意义，
+  只供时序规则关联（如同账号失败集中之后的那次成功）。
+author: OpenXDR
+openxdr_signal: true
+tags:
+  - attack.initial_access
+  - attack.t1078
+logsource:
+  category: authentication
+  product: linux
+detection:
+  selection:
+    activity_id: 1
+    status_id: 1
+  condition: selection
+level: informational

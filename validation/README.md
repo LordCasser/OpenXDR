@@ -40,12 +40,16 @@ cases:
         file:
           path: "C:\\Windows\\System32\\vssadmin.exe"
         cmd_line: "vssadmin.exe delete shadows /all /quiet"
-    expect: detected      # 默认 detected；undetected = 已知缺口，显式记录
+    expect: detected      # 默认 detected；undetected = 已知缺口，显式记录；signal = 仅信号规则命中
 ```
 
 `expect: undetected` 有两个用途：记录尚未覆盖的手法，
 以及**良性对照**——`sh -c 'echo hello'` 这类正常命令必须不告警，
 它变成"命中"同样是回归。
+
+`expect: signal`：没有告警规则命中，但有标了该技术的**信号规则**（`rules/signals/`，`openxdr_signal: true`）命中。
+信号规则不单独告警，只供时序规则关联（如脚本内 `curl … | bash` 的两个兄弟进程，见 `temporal-rules/README.md`）；
+链路本身由 `validation/temporal/` 回放验证。实际结果与 expect 三选一不符都算不符合预期。
 
 ## 加用例的原则
 

@@ -25,9 +25,17 @@
   删除与 ThreadingModel 等附属值不报。
 - 新增 Windows 规则「Windows Audit Policy Disabled」（T1562.002）：4719 的审计变更含成功移除（%%8448）或失败移除（%%8450）报 high，
   只开启审计不报。两条都在生产 7 天数据上回测，只命中第四轮实机回放的两次测试，无误报（生产只有一台 Windows 测试机）。
-- 脚本内 `curl … | bash`（兄弟进程）仍不覆盖：时序链路本身在生产 7 天只命中回放那一次，但两步各需一条会单独出告警的基础规则
-  （每天合计约 100 次），按父进程关联也解决不了这一点，理由与数据见 [temporal-rules/README.md](temporal-rules/README.md#当前格式做不到留待引擎扩展的链路)；
-  语料以已知缺口记录。
+- 信号规则：Sigma 规则顶层加 `openxdr_signal: true`（级别必须 informational，放 `rules/signals/`）即只作时序规则的输入，
+  命中不单独告警、不进去重 / 关联 / 研判 / 通知，未启用时序检测时不生效；只有被时序规则引用的信号才写候选。
+  规则页标「时序信号」，ATT&CK 覆盖不计；detectcheck 新增 `expect: signal`；backtest 单事件模式统计信号命中，
+  时序模式报告每条基础规则的候选量与单实体窗口峰值。
+- 时序规则新增 `temporal` 类型：窗口内多条基础规则各由不同事件命中、不论先后（同一时刻也算），只在凑齐那一刻出命中。
+- 新增时序规则 `temporal:linux-download-pipe-shell`：脚本或交互式 shell 里 `curl … | bash` 的两个兄弟进程（curl / wget 启动、
+  不带脚本参数的 shell，两条都是信号规则）5 秒内共现。生产 7 天回测命中 2 次：实机回放与一次平台一行命令安装流量探针。
+- 新增时序规则 `temporal:linux-bruteforce-success-recon`：同账号失败 ×5 → 成功登录（信号规则）→ 侦察命令，与原「失败集中 → 侦察」并存
+  （成功登录不可见时后者兜底）。生产 7 天无一次失败登录，回测 0 次。三条信号 7 天共写候选 1854 条，单实体窗口峰值 122 条，
+  离候选上限很远。按父进程分组评估后仍不做，数据见 [temporal-rules/README.md](temporal-rules/README.md)。
+- backtest 时序模式先提交只读事务再喂入回放状态：副本冲突在提交时才报时，整段重试会重复喂入并误报「未按 (时间, ID) 递增」。
 
 ### 资产图谱
 

