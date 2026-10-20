@@ -165,7 +165,10 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 `query` 参数为 `{sql}`；返回 columns、rows、truncated。每次只读事务，5 秒超时、
 最多 200 行和 8 KiB 序列化结果（含列名和元数据）。大行在数据库端拦截后才传输，
 超限显式截断，不把部分结果当作完整覆盖；零行或首行超限时 columns 可能为空。
-SQL 出错时把 PostgreSQL 报错原文（只取 message）返回给模型，便于它自行改正。
+SQL 出错时把 PostgreSQL 报错原文（只取 message）返回给模型，便于它自行改正；超时单独报「查询超过 5 秒被取消」并提示收窄范围，
+不混成语法错误（本地期限与角色 statement_timeout 同时到点，先到的报错不同，两种都按超时报）。
+跨视图 `alerts JOIN events` 会让 events 全表扫描（security_barrier 视图不能把连接条件下推成主键查找），
+所以另有 `alert_events` 视图在视图内部按主键回查告警对应的事件，按 incident_id / rule_id 过滤在生产实测为毫秒级。
 视图只有 rule_id，规则名由平台在系统提示数据的 `rule_titles` 里给出（本组近 7 天命中过的规则）。
 
 每个组使用**独立登录角色**，只能 SELECT 该组固定过滤条件的视图，读不到其他组视图、业务基表，
@@ -181,9 +184,10 @@ SQL 出错时把 PostgreSQL 报错原文（只取 message）返回给模型，�
 
 **手工开通**：平台账号没有 CREATEROLE 时（启动日志会提示），用 `deploy/pi-query/group-views.sql`
 （psql 变量传组 UUID、schema、角色与密码，可重复执行）建视图与角色，再写进
-`PI_QUERY_DATABASE_URLS`（JSON：组 UUID → DSN）。手工配置的身份始终优先于自动开通。
+`PI_QUERY_DATABASE_URLS`（JSON：组 UUID → DSN）。手工配置的身份始终优先于自动开通，
+**而且不会随版本刷新**：升级后要重跑一遍脚本，否则模型拿到的视图与 skill 文档对不上；能自动开通就不要手工配置。
 两种方式建的视图相同，都按组固化过滤：assets（含 agent 版本、失联时间、AI 画像、监听端口、云环境与服务 / 外联调查结论）、
-events、alerts、incidents、commands、findings（运维待办）、suppressions（本组主机上的抑制，不含全局抑制）、
+events、alerts、alert_events（告警连同原始事件）、incidents、commands、findings（运维待办）、suppressions（本组主机上的抑制，不含全局抑制）、
 memories（长期记忆）、asset_links（本组主机发起的连接聚合）、ip_infos（只含本组主机连过的地址）、
 reports（历史报告，供定时任务与上一轮对比）。incident 与 REST 同口径（全部告警都在本组才可见），
 角色只读、5 秒超时、最多 5 个连接。

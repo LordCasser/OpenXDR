@@ -22,7 +22,14 @@ description: OpenXDR 运维与安全助手的工作手册。处理安全事件�
 xdr hosts                                   # 主机名 角色 重要程度 区域 系统
 xdr context > ctx.json                      # 资产、规则名、待办、交给你的事件（subjects）——先存文件再按需取
 xdr exec pve1 'ss -tlnp'                    # 主机用主机名；第三个参数是超时秒数，默认 60
-xdr sql "SELECT ... FROM alerts ..." > a.tsv # 只读查询本组视图，TSV 输出
+xdr exec pve1 - 120 <<'EOF'                 # 命令里有引号、awk、多行时用 - 从 heredoc 读，不要在单引号里再套单引号
+awk -F: '$3==0 || $3>=1000 {print $1}' /etc/passwd
+grep -hvE '^#|^$' /etc/sudoers /etc/sudoers.d/* 2>/dev/null
+EOF
+xdr sql "SELECT ... FROM alerts ..." > a.tsv # 只读查询本组视图，TSV 输出（首行列名）
+xdr sql --json - > ev.jsonl <<'EOF'          # --json 每行一个 JSON 对象，jsonb 列原样保留，交给 jq；SQL 同样可以从 heredoc 读
+SELECT alert_id, event_ts, raw FROM alert_events WHERE incident_id = '<事件 id>'
+EOF
 xdr track pve1 disk-full medium open '根分区 93%' '/dev/sda1 93%，journal 占 11G'
 xdr identify pve1 udp/5405 low 'Corosync 集群通信' '进程 corosync，PVE 集群心跳，仅集群内访问'
 xdr egress pve2 208.111.34.178 low 'Tailscale 中继' 'tailscaled 连 DERP 中继，组网正常业务'
@@ -45,7 +52,8 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
 |---|---|
 | assets | id, hostname, os, ip_addrs, agent_id, first_seen, last_seen, agent_version, silent_since, role, criticality, summary, listening(jsonb), cloud(jsonb), service_notes(jsonb), egress_notes(jsonb), zone_id, inventory_at |
 | events | id, ts, class_uid, source, asset_id, username, conn_tuple, raw(jsonb) |
-| alerts | id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id |
+| alerts | id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id, detail |
+| alert_events | alert_id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id, event_id, event_ts, class_uid, username, conn_tuple, raw（告警连同触发它的原始事件） |
 | incidents | id, created_at, status, title, ai_verdict(jsonb), graph(jsonb) |
 | commands | id, created_at, completed_at, kind, status, asset_id, incident_id, issued_by, detail, cmd, exit_code, stdout, stderr, truncated |
 | findings | id, asset_id, key, title, detail, severity, status(open/resolved/ignored), first_seen, last_seen, resolved_at, resolved_by, note |
@@ -55,9 +63,15 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
 | ip_infos | ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at（本组主机连过的公网地址） |
 | reports | id, created_at, title, level(ok/attention/urgent), markdown（本组历史报告，可与上一轮对比） |
 
-- **events 查询必须带 ts 范围**，表很大。
+- **events 查询必须带 ts 范围**，表很大，尽量再带 asset_id。
+- **要告警对应的原始事件就查 alert_events**（按 incident_id / rule_id / alert_id 过滤）。不要自己 `alerts JOIN events`，
+  也不要 `events WHERE id IN (SELECT event_id ...)`：这两种写法都会扫全表、超时。已知单个事件 id 时直接 `WHERE id = '...'` 也可以。
+- 报「查询超过 5 秒被取消」是范围太大，不是语法错：收窄 ts、加 asset_id 或换 alert_events，不要反复改写同一条查询。
+- 带 raw 等 jsonb 列的结果要进一步处理时用 `xdr sql --json`：TSV 会把 JSON 里的反斜杠再转义一层，解析不回来。
 - `raw` 是 jsonb，用路径取字段，**不要**对 `raw::text` 做截取或 LIKE 切片：
-  - 进程（class_uid 1007）：`raw->'process'->>'name'`、`->>'cmd_line'`、`->'file'->>'path'`、`->'parent_process'->>'pid'`；
+  - 进程（class_uid 1007）：`raw->'process'->>'name'`、`raw->'process'->>'cmd_line'`、`raw->'process'->'file'->>'path'`、
+    父进程 `raw->'process'->'parent_process'->>'name'`（同样有 pid、cmd_line）；`->>` 取出的是文本，后面不能再接 `->` 或 `->>`，
+    要往下走的每一层都用 `->`，只有最后一层用 `->>`；
     退出事件（`raw->>'activity_id'='2'`）有 `raw->'process'->>'exit_code'`、`raw->>'duration_ms'`
   - 网络（4001）：`raw->'dst_endpoint'->>'ip'`、`->>'port'`、`->>'hostname'`（agent 解析过的域名）、`raw->'process'->>'name'`；
     `raw->'connection_info'->>'direction'`（outbound / inbound，入站时 src 是对端、进程是本机服务）、`->>'protocol_name'`（tcp / udp）
@@ -66,6 +80,8 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
     拉起的进程触发的——来源已知，统计威胁时排除（`AND command_id IS NULL`），不要把自己的巡检命令当成可疑活动报告
   - 容器：任何事件都可能带 `raw->'container'`（`->>'runtime'` docker / lxc / qemu…、`->>'uid'`、`->>'name'`），说明进程在哪个容器或虚拟机里
   - 文件（1001）：`raw->'file'->>'path'`；认证（3002）：`raw->>'status_id'`（1 成功 2 失败）
+  - 内核模块（1005）：`raw->'module'->'file'->>'name'`、`raw->'module'->'file'->>'path'`，`raw->>'activity_id'` 1 加载 4 卸载；没有进程与用户字段
+- `assets.ip_addrs` 是 jsonb 字符串数组：按地址找主机用 `ip_addrs ? '10.1.1.3'`，展开用 `jsonb_array_elements_text(ip_addrs)`，不是 PostgreSQL 数组。
   - 不确定结构时先 `SELECT raw FROM events WHERE ... LIMIT 1` 看一条，再写正式查询。
 - 规则名：`xdr context | jq '.rule_titles'`，rule_id 对应的中文标题在这里，不要猜。
 - incidents.status：triaged 表示 AI 已研判、尚未人工结案。
@@ -76,8 +92,11 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
 -- 某主机 24 小时内命中的规则
 SELECT a.rule_id, a.severity, sum(a.count) hits FROM alerts a JOIN assets h ON h.id=a.asset_id
 WHERE h.hostname='pve1' AND a.last_ts > now()-interval '24 hours' AND a.command_id IS NULL GROUP BY 1,2 ORDER BY 3 DESC;
--- 某告警对应的原始事件
-SELECT e.ts, e.raw->'process'->>'cmd_line' FROM alerts a JOIN events e ON e.id=a.event_id WHERE a.incident_id='<id>';
+-- 某事件下各告警对应的原始事件
+SELECT alert_id, rule_id, event_ts, raw->'process'->>'cmd_line' FROM alert_events WHERE incident_id='<id>';
+-- 某条规则 7 天内命中的事件
+SELECT event_ts, raw->'process'->>'cmd_line' FROM alert_events
+WHERE rule_id='<规则 id>' AND last_ts > now()-interval '7 days' AND command_id IS NULL;
 ```
 
 ## 工作流程

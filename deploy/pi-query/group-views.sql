@@ -58,9 +58,16 @@ CREATE OR REPLACE VIEW :"schema".events WITH (security_barrier) AS
 
 -- 告警：只含本组资产
 CREATE OR REPLACE VIEW :"schema".alerts WITH (security_barrier) AS
-  SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id
+  SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id, detail
   FROM public.alerts
   WHERE asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id');
+
+-- 告警连同它的原始事件：在视图里按主键回查，跨视图 JOIN events 会全表扫描、必然超时
+CREATE OR REPLACE VIEW :"schema".alert_events WITH (security_barrier) AS
+  SELECT a.id AS alert_id, a.ts, a.last_ts, a.count, a.rule_id, a.severity, a.asset_id, a.incident_id, a.command_id,
+         e.id AS event_id, e.ts AS event_ts, e.class_uid, e.username, e.conn_tuple, e.raw
+  FROM public.alerts a JOIN public.events e ON e.id = a.event_id AND e.asset_id = a.asset_id
+  WHERE a.asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id');
 
 -- incident：与 REST 接口同一口径，全部告警都落在本组资产上才可见，跨组的不给
 CREATE OR REPLACE VIEW :"schema".incidents WITH (security_barrier) AS
@@ -85,6 +92,7 @@ COMMENT ON SCHEMA :"schema" IS 'OpenXDR 单组只读视图，供 Pi query 工具
 COMMENT ON VIEW :"schema".assets IS '本组资产';
 COMMENT ON VIEW :"schema".events IS '本组原始事件（OCSF 风格，raw 为 JSON）；查询务必带 ts 范围';
 COMMENT ON VIEW :"schema".alerts IS '本组告警（去重后，count 为累计次数）';
+COMMENT ON VIEW :"schema".alert_events IS '本组告警连同触发它的原始事件（event_ts、class_uid、raw）；按 incident_id、rule_id、alert_id 过滤';
 COMMENT ON VIEW :"schema".incidents IS '本组 incident（全部告警都在本组）';
 COMMENT ON VIEW :"schema".commands IS '本组处置与命令执行记录';
 COMMENT ON VIEW :"schema".findings IS '本组运维待办（track 登记的问题，status 为 open / resolved / ignored）';

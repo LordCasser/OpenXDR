@@ -4,6 +4,7 @@ package queryrole
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -44,6 +45,14 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 		client.Report.Create().SetSessionID(uuid.New()).SetGroupID(x.group).SetTitle("r").SetMarkdown("m").SaveX(ctx)
 	}
 	client.Suppression.Create().SetRuleID("global").SaveX(ctx) // 全局抑制谁的视图里都不该有
+	// 告警连同事件：各组一条；再造一条挂在 a1 上、却指向 b1 事件的告警，事件不属于同一主机就不能带出来
+	events := map[uuid.UUID]*ent.Event{}
+	for _, x := range []*ent.Asset{a1, b1} {
+		events[x.ID] = client.Event.Create().SetTs(now).SetClassUID(1007).SetSource("agent").SetAssetID(x.ID).
+			SetRaw(json.RawMessage(`{"process":{"name":"` + x.Hostname + `"}}`)).SaveX(ctx)
+		client.Alert.Create().SetTs(now).SetRuleID("r").SetSeverity(3).SetAssetID(x.ID).SetEventID(events[x.ID].ID).SaveX(ctx)
+	}
+	client.Alert.Create().SetTs(now).SetRuleID("cross").SetSeverity(3).SetAssetID(a1.ID).SetEventID(events[b1.ID].ID).SaveX(ctx)
 
 	static := uuid.New()
 	p := &Provisioner{DB: db, Client: client, BaseDSN: dsn, Static: map[uuid.UUID]string{static: "postgres://manual"}}
@@ -89,6 +98,10 @@ func TestEnsureIsolatesGroupAndDrops(t *testing.T) {
 		if err := ro.QueryRowContext(ctx, q).Scan(&got); err != nil || got != want {
 			t.Errorf("%s 只应看到本组的数据：得到 %q，%v", view, got, err)
 		}
+	}
+	var proc string
+	if err := ro.QueryRowContext(ctx, `SELECT count(*), min(raw->'process'->>'name') FROM alert_events`).Scan(&n, &proc); err != nil || n != 1 || proc != "a1" {
+		t.Errorf("alert_events 只应带出本组主机自己的事件：%d 条 %q，%v", n, proc, err)
 	}
 	if err := ro.QueryRowContext(ctx, `SELECT count(*) FROM public.assets`).Scan(&n); err == nil {
 		t.Error("不应能读业务基表")

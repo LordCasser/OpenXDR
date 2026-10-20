@@ -5,6 +5,7 @@ package agentchat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -119,5 +120,46 @@ func TestRunTaskWrapUp(t *testing.T) {
 				t.Errorf("报告应保存 1 份，得到 %d", n)
 			}
 		})
+	}
+}
+
+// 调查阶段到点被截停：半截的工具调用补上结果，留出的收尾时间里交了报告就算成功，不再整轮失败
+func TestRunTaskTimeoutWrapUp(t *testing.T) {
+	ctx, db := testdb.New(t)
+	group := db.Group.Create().SetName("g").SaveX(ctx)
+	db.Asset.Create().SetHostname("h").SetGroupID(group.ID).SaveX(ctx)
+	session := db.AgentSession.Create().SetKind("task").SetGroupID(group.ID).
+		SetInitiator(commandgate.SystemActor).SetModel("m").SaveX(ctx)
+	calls := 0
+	service := &Service{DB: db, Timeout: 2 * time.Second, Runtime: fakeRunner{func(ctx context.Context, r piruntime.Request, h piruntime.Handler, o piruntime.Observer) (*piruntime.Result, error) {
+		calls++
+		if calls == 1 {
+			msg := `{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"c1","name":"bash","arguments":{"command":"sleep 999"}}]}}`
+			if err := o(ctx, piruntime.Event{Type: "event", Event: json.RawMessage(msg)}); err != nil {
+				return nil, err
+			}
+			<-ctx.Done()
+			return nil, fmt.Errorf("记录 Pi 事件失败: %w", ctx.Err())
+		}
+		if ctx.Err() != nil {
+			t.Errorf("收尾时应还有剩余时间：%v", ctx.Err())
+		}
+		if !strings.Contains(r.Prompt, "运行时间已用完") || len(r.Tools) != 1 || r.Tools[0].Name != "report" || len(r.Messages) != 2 {
+			t.Errorf("收尾请求不符：提示 %q 工具 %v 历史 %d", r.Prompt, r.Tools, len(r.Messages))
+		}
+		if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 超时，部分未验证"}`)); err != nil {
+			return nil, err
+		}
+		return &piruntime.Result{StopReason: "stop"}, nil
+	}}}
+	if err := service.RunTask(ctx, schedule.Job{Session: session, Prompt: "巡检", ApprovalTimeout: time.Minute}); err != nil || calls != 2 {
+		t.Fatalf("超时应收尾成功：%v，调用 %d 次", err, calls)
+	}
+	if got := db.AgentSession.GetX(ctx, session.ID); got.Status != "succeeded" {
+		t.Errorf("会话状态应为 succeeded，得到 %s", got.Status)
+	}
+	roles := db.SessionMessage.Query().Where(sessionmessage.SessionIDEQ(session.ID)).Order(ent.Asc(sessionmessage.FieldSeq)).Select(sessionmessage.FieldRole).StringsX(ctx)
+	if len(roles) != 2 || roles[1] != "toolResult" {
+		t.Errorf("被截停的工具调用应补上结果：%v", roles)
 	}
 }

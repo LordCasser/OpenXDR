@@ -238,11 +238,7 @@ func (s *Service) run(ctx context.Context, session *ent.AgentSession, u *ent.Use
 		return s.tool(ctx, current, commandgate.Request{UserID: u.ID, ApprovalTimeout: time.Until(deadline)}, name, args)
 	}
 	record := s.recorder(session, &seq, emit)
-	result, err = s.Runtime.Run(ctx, request, handle, record)
-	if err != nil {
-		return nil, err
-	}
-	return s.wrapUp(ctx, session, request, result, handle, record)
+	return s.investigate(ctx, session, request, handle, record, &seq)
 }
 
 // watchCancel 每 2 秒看一眼库里有没有停止请求，有就取消本轮；返回值告诉终态处理是不是人停的。
@@ -358,12 +354,45 @@ const sandboxPrompt = "你是 OpenXDR 运维与安全助手，在隔离沙箱里
 // wrapUpTurns 收尾只给几次调用：写总结或交报告用不了更多
 const wrapUpTurns = 4
 
-const wrapUpPrompt = "本轮模型调用次数已用完。不要再调用 exec、query、track，也不要继续调查；立即基于已经拿到的证据收尾，没有覆盖到的检查项逐条明确标注为「未验证」。"
+// stopTimeout 调查阶段到点被截停，和轮数用完（max_turns）一样进入收尾
+const stopTimeout = "timeout"
 
-// wrapUp 轮数耗尽时在同一会话上续一次收尾：带上已入库的全部消息，任务会话只留 report，
+var wrapUpPrompts = map[string]string{
+	"max_turns": "本轮模型调用次数已用完。",
+	stopTimeout: "本轮运行时间已用完。",
+}
+
+const wrapUpPrompt = "不要再调用 exec、query、track，也不要继续调查；立即基于已经拿到的证据收尾，没有覆盖到的检查项逐条明确标注为「未验证」。"
+
+// wrapUpReserve 从运行期限里留给收尾的时间：调查到点就截停，否则期限一到连报告都交不出来
+func wrapUpReserve(timeout time.Duration) time.Duration {
+	return min(3*time.Minute, timeout/5)
+}
+
+// investigate 跑调查阶段并按需收尾。调查只能用到期限前 wrapUpReserve 为止；到点截停时补齐半截的工具调用，
+// 按超时收尾。人点停止、进程退出取消的是外层 ctx，不在这里收尾。
+func (s *Service) investigate(ctx context.Context, session *ent.AgentSession, request piruntime.Request, handle piruntime.Handler, record piruntime.Observer, seq *int) (*piruntime.Result, error) {
+	deadline, _ := ctx.Deadline()
+	work, cancel := context.WithDeadline(ctx, deadline.Add(-wrapUpReserve(s.timeout())))
+	defer cancel()
+	result, err := s.Runtime.Run(work, request, handle, record)
+	if err != nil && ctx.Err() == nil && errors.Is(work.Err(), context.DeadlineExceeded) {
+		if err := s.closeDangling(ctx, session.ID, seq); err != nil {
+			return nil, err
+		}
+		result, err = &piruntime.Result{StopReason: stopTimeout}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.wrapUp(ctx, session, request, result, handle, record)
+}
+
+// wrapUp 轮数或时间耗尽时在同一会话上续一次收尾：带上已入库的全部消息，任务会话只留 report，
 // 对话会话不给工具。收尾消息照常经 record 入库；收尾本身的结果原样交给调用方判定。
 func (s *Service) wrapUp(ctx context.Context, session *ent.AgentSession, request piruntime.Request, result *piruntime.Result, handle piruntime.Handler, record piruntime.Observer) (*piruntime.Result, error) {
-	if result.StopReason != "max_turns" {
+	reason, ok := wrapUpPrompts[result.StopReason]
+	if !ok {
 		return result, nil
 	}
 	messages, _, err := s.history(ctx, session.ID)
@@ -372,9 +401,9 @@ func (s *Service) wrapUp(ctx context.Context, session *ent.AgentSession, request
 	}
 	// 两种会话都只留 report：pi-ai 在历史有工具调用时会发空的 tools 数组，vLLM 直接 400，所以不能一个都不给
 	request.Messages, request.MaxTurns, request.Tools = messages, wrapUpTurns, []piruntime.Tool{reportTool}
-	request.Prompt = wrapUpPrompt + "直接用文字给出最终总结，不要再调用工具。"
+	request.Prompt = reason + wrapUpPrompt + "直接用文字给出最终总结，不要再调用工具。"
 	if session.Kind == "task" {
-		request.Prompt = wrapUpPrompt + "必须调用 report 提交最终报告。"
+		request.Prompt = reason + wrapUpPrompt + "必须调用 report 提交最终报告。"
 	}
 	return s.Runtime.Run(ctx, request, handle, record)
 }
@@ -552,6 +581,8 @@ const queryDescription = "通过当前组专属只读数据库身份查询授权
 	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id, detail：合成检测如外联心跳 xdr:beacon 的间隔统计依据)；" +
 	"incidents(id, created_at, status, title, ai_verdict)；" +
 	"events(id, ts, class_uid, source, asset_id, username, conn_tuple, raw)；" +
+	"alert_events(alert_id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id, event_id, event_ts, class_uid, username, conn_tuple, raw)：告警连同触发它的事件，" +
+	"要告警对应的事件就查它，不要自己 JOIN events（会超时）；" +
 	"commands(id, created_at, asset_id, cmd, status, exit_code, stdout)。" +
 	"rule_id 的规则名见系统提示数据里的 rule_titles，不要去 JSON 字段里找；incidents.title 只是首条告警的标题，不等于规则名。" +
 	"alerts.command_id 不为空的是平台下发的指令（包括你自己执行的命令）触发的，来源已知，统计威胁时排除（AND a.command_id IS NULL）。" +
