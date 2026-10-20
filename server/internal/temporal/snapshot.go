@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -42,9 +43,15 @@ func (s *Snapshot) EvaluateBase(class int, os string, raw map[string]any) []*sig
 	}
 	return out
 }
-func (s *Snapshot) Evaluate(events []Event) ([]Match, error) {
+
+// Evaluate 只求值 group_by 为 groupBy 的规则；events 的 Scope 由调用方按同一维度构造
+// （资产维度 Entity 为资产 ID，账号维度为 AccountEntity）。
+func (s *Snapshot) Evaluate(groupBy string, events []Event) ([]Match, error) {
 	var result []Match
 	for _, rule := range s.rules {
+		if rule.groupBy != groupBy {
+			continue
+		}
 		matches, err := rule.Evaluate(events)
 		if err != nil {
 			return nil, err
@@ -55,6 +62,21 @@ func (s *Snapshot) Evaluate(events []Event) ([]Match, error) {
 		result = append(result, matches...)
 	}
 	return result, nil
+}
+
+// Relevant 报告 groupBy 维度是否有规则引用这些基础命中；无关维度不加锁、不回查。
+func (s *Snapshot) Relevant(groupBy string, ruleIDs []string) bool {
+	for _, rule := range s.rules {
+		if rule.groupBy != groupBy {
+			continue
+		}
+		for _, id := range ruleIDs {
+			if slices.Contains(rule.references, id) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // LoadSnapshot 只读取每份文件一次，版本使用实际参与编译的原文。

@@ -32,11 +32,11 @@ func TestArchiveRestoresOldRulesAfterFilesChange(t *testing.T) {
 		t.Fatal("恢复依赖了当前文件而非归档")
 	}
 	events := []Event{event(1, 0, "base"), event(2, 1, "base")}
-	want, err := original.Evaluate(events)
+	want, err := original.Evaluate(GroupByAsset, events)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := restored.Evaluate(events)
+	got, err := restored.Evaluate(GroupByAsset, events)
 	if err != nil || !reflect.DeepEqual(want, got) {
 		t.Fatalf("恢复改变检测结果: %+v %+v %v", want, got, err)
 	}

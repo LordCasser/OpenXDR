@@ -169,3 +169,60 @@ func TestSeverityConfiguration(t *testing.T) {
 		t.Fatal("非法等级不能静默回退")
 	}
 }
+
+func TestGroupByConfiguration(t *testing.T) {
+	refs := map[string]bool{"a": true}
+	for value, want := range map[string]string{"": GroupByAsset, "asset": GroupByAsset, "account": GroupByAccount} {
+		text := "id: x\nkind: event_count\nwithin: 1m\nrules: [a]\nthreshold: 2\n"
+		if value != "" {
+			text += "group_by: " + value + "\n"
+		}
+		r, err := Compile([]byte(text), refs)
+		if err != nil || r.groupBy != want {
+			t.Fatalf("group_by=%q: %v %v", value, r, err)
+		}
+	}
+	for _, value := range []string{"user", "Account", "host", "[asset]"} {
+		if _, err := Compile([]byte("id: x\nkind: event_count\nwithin: 1m\nrules: [a]\nthreshold: 2\ngroup_by: "+value+"\n"), refs); err == nil {
+			t.Fatalf("未知 group_by 必须拒绝: %s", value)
+		}
+	}
+}
+
+func TestAccountEntityNormalization(t *testing.T) {
+	if AccountEntity("  Admin ") != AccountEntity("admin") || AccountEntity("admin") == "" {
+		t.Fatal("同一账号大小写/空白不同应归为同一实体")
+	}
+	if AccountEntity("") != "" || AccountEntity("   ") != "" {
+		t.Fatal("空用户名不能归到某个默认账号")
+	}
+	if AccountEntity(`CORP\admin`) == AccountEntity("admin") {
+		t.Fatal("不做域前缀互认")
+	}
+	if !IsAccountEntity(AccountEntity("admin")) || IsAccountEntity(uuid.NewString()) {
+		t.Fatal("账号实体与资产 ID 必须可区分")
+	}
+}
+
+// 快照只用对应维度的规则求值，资产维度候选不会被账号规则误用，反之亦然。
+func TestSnapshotEvaluatesByDimension(t *testing.T) {
+	asset, err := Compile([]byte("id: by-asset\nkind: event_count\nwithin: 1m\nrules: [a]\nthreshold: 2\n"), map[string]bool{"a": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	account, err := Compile([]byte("id: by-account\nkind: event_count\nwithin: 1m\nrules: [a]\nthreshold: 3\ngroup_by: account\n"), map[string]bool{"a": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Snapshot{rules: []*Rule{asset, account}, revision: "r"}
+	events := []Event{event(1, 0, "a"), event(2, 1, "a"), event(3, 2, "a")}
+	for groupBy, want := range map[string]string{GroupByAsset: "by-asset", GroupByAccount: "by-account"} {
+		matches, err := s.Evaluate(groupBy, events)
+		if err != nil || len(matches) != 1 || matches[0].RuleID != want || matches[0].Revision != "r" {
+			t.Fatalf("%s: %+v %v", groupBy, matches, err)
+		}
+		if !s.Relevant(groupBy, []string{"a"}) || s.Relevant(groupBy, []string{"b"}) {
+			t.Fatalf("%s 维度相关性判断错误", groupBy)
+		}
+	}
+}

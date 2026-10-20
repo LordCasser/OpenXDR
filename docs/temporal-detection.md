@@ -26,7 +26,18 @@ within: 15m
 rules: [discovery-rule-id, persistence-rule-id]
 ```
 
-加载拒绝未知字段、多 YAML 文档、不存在的基础规则、与基础规则冲突的 ID 和不支持的类型。
+可选 `group_by` 决定关联实体：`asset`（默认，同组同资产）或 `account`（同组同账号，跨同组多台主机累计）：
+
+```yaml
+id: account-auth-failure-burst
+kind: event_count
+group_by: account
+within: 10m
+rules: [authentication-failure-rule-id]
+threshold: 5
+```
+
+加载拒绝未知字段、未知 `group_by` 取值、多 YAML 文档、不存在的基础规则、与基础规则冲突的 ID 和不支持的类型。
 窗口限定为 1 秒至 24 小时；计数阈值为 2 至 10000；序列为 2 至 8 步，不允许 threshold。
 `level` 支持 informational、low、medium、high、critical，省略时默认 medium；未知值拒绝加载，等级跟随同一快照传入告警。
 格式是 OpenXDR 自有时序规则契约，不宣称兼容 Sigma correlation 标准。
@@ -37,6 +48,9 @@ rules: [discovery-rule-id, persistence-rule-id]
   归组必须由后端授权上下文提供；不能直接采纳原始日志或模型自报的组。
 - 同一 ID 重投只计一次。同 ID 的时间、归属或基础规则命中不同则拒绝求值，避免接受冲突副本。
 - 关联只发生在相同 `(Group, Entity)` 内；缺失身份、时间或归属时拒绝。
+  `group_by: asset` 的实体是资产 ID；`group_by: account` 的实体是 `account:<规范化用户名>`，
+  用户名只取事件 `username` 列（入库信封字段），规范化为去首尾空白、转小写，不做 `DOMAIN\user`、UPN 等格式互认，
+  也不从原文或模型输出推断账号。`username` 为空的事件不参与账号规则，计入 `no_account` 缺口；资产维度规则照常。
 - 窗口包含两端，按 `[终点时间−within, 终点时间]` 取候选。
 - 计数是不同事件的数量。同时间戳的不同 ID 仍可计数；按时间、UUID 排序确定终点。
   只在窗口内计数恰好达到阈值的终点产生命中（越过阈值那一刻）：持续爆破时窗口一直在阈值之上，不逐条出命中，
@@ -103,8 +117,12 @@ rules: [discovery-rule-id, persistence-rule-id]
 同版本同事件的重投内容不一致时拒绝，未知基础命中也拒绝。持久处理路径的候选超限记录为检测缺口，不返回部分结果。
 
 资产 group_id 改变时，数据库触发器删除该资产候选，防止 A→B→A 重新复用早先 A 的序列。
-这只重置候选，不重新生成已经消费的命中。当前实体是资产 ID，尚不支持可配置账号维度或跨资产聚合。
-没有资产或没有组时返回显式 `Unscoped`，调用方需要记录该覆盖缺口。
+这只重置候选，不重新生成已经消费的命中；账号维度同样受此约束——资产换组后，它此前的事件不再计入任何组的账号窗口。
+候选额外保存规范化账号（`account` 列，无用户名为 NULL），账号维度按 `(版本, 组, 账号)` 回查窗口。
+处理时先取资产锁、再取 `(版本, 组, 账号)` 锁：不同资产落在不同队列分片也会在同一账号上串行，
+后提交的事务一定看到先提交的候选；每个事务至多持有一个资产锁和一个账号锁，顺序固定，不会成环。
+账号维度命中的告警绑定终点事件及其资产，去重指纹使用账号实体，同组同账号在去重窗口内合并为一条告警。
+没有资产或没有组时在 `Observation.Skipped` 显式记 `unscoped`，调用方需要记录该覆盖缺口。
 
 此入口要求调用方只处理本事务首次成功插入的事件，并与告警写入共用事务；重投已入库事件不能在换组后重新解释归属。
 目前 Processor 设置 Temporal Store 后，会在首次事件插入的同一事务中调用 Observe 并生成时序告警；
@@ -130,9 +148,9 @@ rules: [discovery-rule-id, persistence-rule-id]
 
 ## 仓库实验规则与回放
 
-[`temporal-rules/`](../temporal-rules/README.md) 提供同主机认证失败计数、下载执行后敏感文件变更序列，
-需显式配置后启用。规则仅作时间关联，不推断跨账号身份或进程因果链。
-[`validation/temporal/`](../validation/temporal/README.md) 包含 20 个原文回放用例，并配套两条规则的
+[`temporal-rules/`](../temporal-rules/README.md) 提供同主机认证失败计数、同账号跨主机认证失败计数、
+下载执行后敏感文件变更序列，需显式配置后启用。规则仅作时间关联，不推断跨账号身份或进程因果链。
+[`validation/temporal/`](../validation/temporal/README.md) 包含 27 个原文回放用例，并配套三条规则的
 真实 PostgreSQL 迟到/重投/处理器恢复测试；不声称完成实机或生产误报率验收。
 
 ## 候选容量缺口

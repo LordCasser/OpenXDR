@@ -21,7 +21,14 @@ type Rule struct {
 	references []string
 	threshold  int
 	severity   int16
+	groupBy    string
 }
+
+// 聚合实体维度：asset 按资产（默认），account 按同组规范化用户名跨资产累计。
+const (
+	GroupByAsset   = "asset"
+	GroupByAccount = "account"
+)
 
 type definition struct {
 	ID        string   `yaml:"id"`
@@ -32,6 +39,7 @@ type definition struct {
 	Within    string   `yaml:"within"`
 	Rules     []string `yaml:"rules"`
 	Threshold int      `yaml:"threshold"`
+	GroupBy   string   `yaml:"group_by"`
 }
 
 // Compile 使用 OpenXDR 的时序规则格式，不解释 Sigma 单事件 condition 中的聚合语法。
@@ -59,6 +67,13 @@ func Compile(data []byte, references map[string]bool) (*Rule, error) {
 	if !ok {
 		return nil, fmt.Errorf("无效时序规则 level: %q", d.Level)
 	}
+	switch d.GroupBy {
+	case "":
+		d.GroupBy = GroupByAsset
+	case GroupByAsset, GroupByAccount:
+	default:
+		return nil, fmt.Errorf("无效时序规则 group_by: %q", d.GroupBy)
+	}
 	switch d.Kind {
 	case "event_count":
 		if len(d.Rules) != 1 || d.Threshold < 2 || d.Threshold > 10000 {
@@ -79,5 +94,5 @@ func Compile(data []byte, references map[string]bool) (*Rule, error) {
 	if strings.TrimSpace(d.Title) == "" {
 		d.Title = d.ID
 	}
-	return &Rule{title: d.Title, author: strings.TrimSpace(d.Author), severity: severity, id: d.ID, kind: d.Kind, window: window, references: append([]string(nil), d.Rules...), threshold: d.Threshold}, nil
+	return &Rule{title: d.Title, author: strings.TrimSpace(d.Author), severity: severity, id: d.ID, kind: d.Kind, window: window, references: append([]string(nil), d.Rules...), threshold: d.Threshold, groupBy: d.GroupBy}, nil
 }

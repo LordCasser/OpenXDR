@@ -4,10 +4,26 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+const accountPrefix = "account:"
+
+// AccountEntity 把事件 username 列规范化成账号维度实体：去首尾空白、转小写。
+// 不做域前缀/UPN 等格式互认；空用户名返回空串，调用方必须计入 no_account 缺口而不是归到某个默认账号。
+func AccountEntity(username string) string {
+	name := strings.ToLower(strings.TrimSpace(username))
+	if name == "" {
+		return ""
+	}
+	return accountPrefix + name
+}
+
+// IsAccountEntity 区分账号维度实体与资产 ID。
+func IsAccountEntity(entity string) bool { return strings.HasPrefix(entity, accountPrefix) }
 
 // Scope 必须由可信入库上下文构造，不能直接采用模型或原始日志自报的归组。
 // Group 及 Entity 均不可为空；没有授权归属的事件不能参与关联。

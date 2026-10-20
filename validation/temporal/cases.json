@@ -7,6 +7,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -25,6 +26,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -43,6 +45,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -61,6 +64,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -79,6 +83,7 @@
         "seconds": 50,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -104,6 +109,17 @@
           "4",
           "5"
         ]
+      },
+      {
+        "rule": "temporal:linux-account-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
       }
     ]
   },
@@ -115,6 +131,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -133,6 +150,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -151,6 +169,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -169,6 +188,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -193,6 +213,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -211,6 +232,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -229,6 +251,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -247,6 +270,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -265,6 +289,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -283,6 +308,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -307,6 +333,7 @@
         "seconds": 50,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -325,6 +352,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -343,6 +371,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -361,6 +390,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -379,6 +409,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -396,6 +427,17 @@
     "matches": [
       {
         "rule": "temporal:linux-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "rule": "temporal:linux-account-auth-burst",
         "anchor": "5",
         "evidence": [
           "1",
@@ -415,6 +457,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -433,6 +476,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -451,6 +495,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -469,6 +514,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -487,6 +533,7 @@
         "seconds": 311,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -501,7 +548,19 @@
         }
       }
     ],
-    "matches": []
+    "matches": [
+      {
+        "rule": "temporal:linux-account-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      }
+    ]
   },
   {
     "name": "五分钟闭区间边界",
@@ -511,6 +570,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -529,6 +589,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -547,6 +608,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -565,6 +627,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -583,6 +646,7 @@
         "seconds": 310,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -608,6 +672,17 @@
           "4",
           "5"
         ]
+      },
+      {
+        "rule": "temporal:linux-account-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
       }
     ]
   },
@@ -619,6 +694,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -637,6 +713,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -655,6 +732,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -673,6 +751,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -691,6 +770,7 @@
         "seconds": 50,
         "group": "B",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -715,6 +795,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -733,6 +814,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -751,6 +833,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -769,6 +852,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -787,6 +871,7 @@
         "seconds": 50,
         "group": "A",
         "asset": "host-2",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -801,7 +886,19 @@
         }
       }
     ],
-    "matches": []
+    "matches": [
+      {
+        "rule": "temporal:linux-account-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      }
+    ]
   },
   {
     "name": "成功登录不计入失败阈值",
@@ -811,6 +908,7 @@
         "seconds": 10,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -829,6 +927,7 @@
         "seconds": 20,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -847,6 +946,7 @@
         "seconds": 30,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -865,6 +965,7 @@
         "seconds": 40,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -883,6 +984,7 @@
         "seconds": 50,
         "group": "A",
         "asset": "host-1",
+        "username": "operator",
         "os": "linux",
         "classUid": 3002,
         "raw": {
@@ -1322,6 +1424,733 @@
           "activity_id": 3,
           "file": {
             "path": "/etc/cron.d/update"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "同账号跨主机五次认证失败",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "Admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "Admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 120,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 240,
+        "group": "A",
+        "asset": "host-3",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 360,
+        "group": "A",
+        "asset": "host-1",
+        "username": " ADMIN",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "ADMIN"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 480,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-account-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "账号计数乱序迟到仍按事件时间命中",
+    "events": [
+      {
+        "id": "5",
+        "seconds": 480,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 240,
+        "group": "A",
+        "asset": "host-3",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 360,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 120,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-account-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "账号计数超过十分钟窗口",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 150,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 300,
+        "group": "A",
+        "asset": "host-3",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 450,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 601,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "账号计数不跨组",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 120,
+        "group": "A",
+        "asset": "host-3",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 180,
+        "group": "B",
+        "asset": "host-4",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 240,
+        "group": "B",
+        "asset": "host-5",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "不同账号跨主机不累计",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "alice",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "alice"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-2",
+        "username": "bob",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "bob"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 120,
+        "group": "A",
+        "asset": "host-3",
+        "username": "carol",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "carol"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 180,
+        "group": "A",
+        "asset": "host-1",
+        "username": "dave",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "dave"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 240,
+        "group": "A",
+        "asset": "host-2",
+        "username": "erin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "erin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "无用户名事件不计入账号",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 120,
+        "group": "A",
+        "asset": "host-3",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 180,
+        "group": "A",
+        "asset": "host-4",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 240,
+        "group": "A",
+        "asset": "host-5",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "账号成功登录不计入失败阈值",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-2",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 120,
+        "group": "A",
+        "asset": "host-3",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 180,
+        "group": "A",
+        "asset": "host-4",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 240,
+        "group": "A",
+        "asset": "host-5",
+        "username": "admin",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 1,
+          "user": {
+            "name": "admin"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
           }
         }
       }

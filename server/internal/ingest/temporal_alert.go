@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 	"openxdr/server/internal/cmdorigin"
@@ -12,17 +13,18 @@ import (
 	"openxdr/server/internal/temporal"
 )
 
+// temporalAlert 告警绑定终点事件及其资产。账号维度命中可能跨资产，去重指纹按账号实体而非资产区分。
 func (p *Processor) temporalAlert(ctx context.Context, tx *sql.Tx, match temporal.Match) (bool, error) {
-	asset, err := uuid.Parse(match.Scope.Entity)
-	if err != nil {
-		return false, err
-	}
+	var asset uuid.UUID
 	e := Envelope{ID: match.Anchor, AssetID: &asset, PartitionKey: match.Scope.Entity,
 		FingerprintSuffix: "|temporal:" + match.Revision + "|group:" + match.Scope.Group.String()}
 	var username sql.NullString
-	if err := tx.QueryRowContext(ctx, `SELECT ts,class_uid,source,username,raw FROM events WHERE id=$1 AND asset_id=$2`, match.Anchor, asset).
-		Scan(&e.Timestamp, &e.ClassUID, &e.Source, &username, &e.Raw); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT ts,class_uid,source,asset_id,username,raw FROM events WHERE id=$1 AND asset_id IS NOT NULL`, match.Anchor).
+		Scan(&e.Timestamp, &e.ClassUID, &e.Source, &asset, &username, &e.Raw); err != nil {
 		return false, err
+	}
+	if !temporal.IsAccountEntity(match.Scope.Entity) && match.Scope.Entity != asset.String() {
+		return false, fmt.Errorf("时序终点 %s 不属于命中资产 %s", match.Anchor, match.Scope.Entity)
 	}
 	e.Username = username.String
 	var raw map[string]any

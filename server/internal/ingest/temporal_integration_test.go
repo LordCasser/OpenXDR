@@ -5,8 +5,10 @@ package ingest
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -18,7 +20,7 @@ func temporalStoreFixture(t *testing.T) *temporal.Store {
 	return temporalStoreFixtureWithRule(t, "id: burst\nkind: event_count\nwithin: 1m\nrules: [base]\nthreshold: 2\nlevel: critical\n")
 }
 
-func temporalStoreFixtureWithRule(t *testing.T, rule string) *temporal.Store {
+func temporalStoreFixtureWithRule(t *testing.T, rules ...string) *temporal.Store {
 	t.Helper()
 	base, seq := t.TempDir(), t.TempDir()
 	if err := os.WriteFile(filepath.Join(base, "base.yml"), []byte(`id: base
@@ -32,8 +34,10 @@ detection:
 `), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(seq, "count.yml"), []byte(rule), 0600); err != nil {
-		t.Fatal(err)
+	for i, rule := range rules {
+		if err := os.WriteFile(filepath.Join(seq, fmt.Sprintf("count-%d.yml", i)), []byte(rule), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.WriteFile(filepath.Join(base, "unrelated.yml"), []byte(`id: unrelated
 title: Unrelated single event
@@ -88,7 +92,7 @@ func TestTemporalPersistentLateReplayAndRollback(t *testing.T) {
 		}
 		return result
 	}
-	if got := observe(event, true); len(got.Matches) != 0 || got.Unscoped {
+	if got := observe(event, true); len(got.Matches) != 0 || len(got.Skipped) != 0 {
 		t.Fatalf("第一条不应命中: %+v", got)
 	}
 	late := event
@@ -177,7 +181,7 @@ func TestTemporalAssetGroupRoundTripClearsCandidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.ID = uuid.New()
-	if got := observe(); !got.Unscoped || len(got.Matches) != 0 {
+	if got := observe(); !slices.Equal(got.Skipped, []string{"unscoped"}) || len(got.Matches) != 0 {
 		t.Fatalf("未分组必须显式跳过: %+v", got)
 	}
 }

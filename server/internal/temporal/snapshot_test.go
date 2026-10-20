@@ -88,7 +88,7 @@ func TestSnapshotContentRevisionAndAtomicReload(t *testing.T) {
 	if store.Current() != next {
 		t.Fatal("失败重载替换了有效快照")
 	}
-	matches, err := old.Evaluate([]Event{event(1, 0, "base"), event(2, 1, "base")})
+	matches, err := old.Evaluate(GroupByAsset, []Event{event(1, 0, "base"), event(2, 1, "base")})
 	if err != nil || len(matches) != 1 || matches[0].Revision != old.Revision() {
 		t.Fatalf("命中未绑定版本: %+v %v", matches, err)
 	}
@@ -132,7 +132,7 @@ func TestSnapshotConcurrentReaders(t *testing.T) {
 				if snapshot == nil || len(snapshot.Revision()) != 64 {
 					t.Error("半成品快照")
 				}
-				_, err := snapshot.Evaluate([]Event{event(1, 0, "base"), event(2, 1, "base")})
+				_, err := snapshot.Evaluate(GroupByAsset, []Event{event(1, 0, "base"), event(2, 1, "base")})
 				if err != nil {
 					t.Error(err)
 				}
