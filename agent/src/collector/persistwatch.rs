@@ -266,25 +266,101 @@ fn snapshot_tree(
 fn services_snapshot() -> Option<HashMap<String, String>> {
     let names = winreg::subkeys(winreg::LOCAL_MACHINE, SERVICES_KEY)?;
     let states = service_states()?;
+    let services: Vec<Service> = names.into_iter().map(read_service).collect();
+    let by_name: HashMap<String, &Service> = services
+        .iter()
+        .map(|s| (s.name.to_lowercase(), s))
+        .collect();
     let mut snap = HashMap::new();
-    for name in names {
-        let key = format!(r"{SERVICES_KEY}\{name}");
-        let image_path = winreg::values(winreg::LOCAL_MACHINE, &key)
-            .into_iter()
-            .find(|(n, _)| n.eq_ignore_ascii_case("ImagePath"))
-            .map(|(_, data)| data)
-            .unwrap_or_default();
-        let start = winreg::dword(winreg::LOCAL_MACHINE, &key, "Start")
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| "?".to_string());
+    for svc in services
+        .iter()
+        .filter(|s| !is_user_service_instance(s, &by_name))
+    {
         // 注册表里有键但 SCM 没有对应服务（卸载残留等）时状态记 "?"
-        let state = states.get(&name.to_lowercase()).copied().unwrap_or("?");
+        let state = states.get(&svc.name.to_lowercase()).copied().unwrap_or("?");
         snap.insert(
-            format!(r"HKLM\{SERVICES_KEY}\{name}"),
-            format!("ImagePath={image_path}; Start={start}; State={state}"),
+            format!(r"HKLM\{SERVICES_KEY}\{}", svc.name),
+            format!(
+                "ImagePath={}; Start={}; State={state}",
+                svc.image_path, svc.start
+            ),
         );
     }
     Some(snap)
+}
+
+/// 服务键里快照关心的字段。
+struct Service {
+    name: String,
+    /// Type 值，读不到记 0
+    kind: u32,
+    image_path: String,
+    start: String,
+}
+
+fn read_service(name: String) -> Service {
+    let key = format!(r"{SERVICES_KEY}\{name}");
+    let image_path = winreg::values(winreg::LOCAL_MACHINE, &key)
+        .into_iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case("ImagePath"))
+        .map(|(_, data)| data)
+        .unwrap_or_default();
+    let start = winreg::dword(winreg::LOCAL_MACHINE, &key, "Start")
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "?".to_string());
+    let kind = winreg::dword(winreg::LOCAL_MACHINE, &key, "Type").unwrap_or(0);
+    Service {
+        name,
+        kind,
+        image_path,
+        start,
+    }
+}
+
+/// 每用户服务实例：用户登录时系统按模板服务（Type 带 SERVICE_USER_SERVICE）复制出
+/// `<模板名>_<会话后缀>`，登出时删掉。它们随登录登出增删，不是持久化动作，不进快照——
+/// 否则每次登出都报一批「服务被删除」。模板本身仍在快照里，改模板照报。
+/// 只认 ImagePath 与模板一致的实例：自己造个实例位、换了 ImagePath 的照样进快照。
+/// 模板的 ImagePath 常写成 `%SystemRoot%\...`，实例里是展开后的路径，比较前两边都展开、忽略大小写。
+fn is_user_service_instance(svc: &Service, by_name: &HashMap<String, &Service>) -> bool {
+    /// windows-sys 未导出这两个服务类型位
+    const SERVICE_USER_SERVICE: u32 = 0x40;
+    const SERVICE_USERSERVICE_INSTANCE: u32 = 0x80;
+    if svc.kind & SERVICE_USERSERVICE_INSTANCE == 0 {
+        return false;
+    }
+    let Some((template, _)) = svc.name.rsplit_once('_') else {
+        return false;
+    };
+    by_name.get(&template.to_lowercase()).is_some_and(|t| {
+        t.kind & SERVICE_USER_SERVICE != 0
+            && expand_env(&t.image_path, env_var)
+                .eq_ignore_ascii_case(&expand_env(&svc.image_path, env_var))
+    })
+}
+
+fn env_var(name: &str) -> Option<String> {
+    std::env::var(name).ok()
+}
+
+/// 展开 `%变量%`（REG_EXPAND_SZ 的写法），查不到的变量原样保留。
+fn expand_env(s: &str, var: impl Fn(&str) -> Option<String>) -> String {
+    let mut out = String::new();
+    let mut rest = s;
+    while let Some(start) = rest.find('%') {
+        let Some(len) = rest[start + 1..].find('%') else {
+            break;
+        };
+        let end = start + len + 2;
+        out.push_str(&rest[..start]);
+        match var(&rest[start + 1..end - 1]) {
+            Some(value) => out.push_str(&value),
+            None => out.push_str(&rest[start..end]),
+        }
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// 服务运行状态：服务名（小写）-> 状态串。
@@ -879,6 +955,65 @@ mod tests {
                 "{sid:?} 下有不以 {prefix} 开头的路径"
             );
         }
+    }
+
+    fn service(name: &str, kind: u32, image_path: &str) -> Service {
+        Service {
+            name: name.to_string(),
+            kind,
+            image_path: image_path.to_string(),
+            start: "3".to_string(),
+        }
+    }
+
+    #[test]
+    fn user_service_instance_is_skipped_only_when_it_matches_template() {
+        // 模板写 %SystemRoot%，实例是展开后的路径（大小写也可能不同）
+        let template = service(
+            "CDPUserSvc",
+            0x60,
+            r"%SystemRoot%\system32\svchost.exe -k UnistackSvcGroup",
+        );
+        let root = std::env::var("SystemRoot").unwrap();
+        let image = &format!(r"{root}\System32\svchost.exe -k UnistackSvcGroup");
+        let plain = service("Spooler", 0x10, r"C:\Windows\System32\spoolsv.exe");
+        let by_name: HashMap<String, &Service> = [&template, &plain]
+            .into_iter()
+            .map(|s| (s.name.to_lowercase(), s))
+            .collect();
+        // 登录时复制出的实例：随登出删除，不进快照
+        assert!(is_user_service_instance(
+            &service("CDPUserSvc_33fa3", 0xE0, image),
+            &by_name
+        ));
+        // 模板本身、普通服务都留在快照里
+        assert!(!is_user_service_instance(&template, &by_name));
+        assert!(!is_user_service_instance(&plain, &by_name));
+        // 冒充实例：换了 ImagePath、或没有对应的用户服务模板，都照样进快照
+        assert!(!is_user_service_instance(
+            &service("CDPUserSvc_evil", 0xE0, r"C:\evil.exe"),
+            &by_name
+        ));
+        assert!(!is_user_service_instance(
+            &service("Spooler_33fa3", 0xE0, r"C:\Windows\System32\spoolsv.exe"),
+            &by_name
+        ));
+        assert!(!is_user_service_instance(
+            &service("Nothing_33fa3", 0xE0, image),
+            &by_name
+        ));
+    }
+
+    #[test]
+    fn expand_env_replaces_known_vars_only() {
+        let var = |name: &str| (name == "SystemRoot").then(|| r"C:\Windows".to_string());
+        assert_eq!(
+            expand_env(r"%SystemRoot%\system32\svchost.exe -k x", var),
+            r"C:\Windows\system32\svchost.exe -k x"
+        );
+        // 查不到的变量与落单的 % 原样保留
+        assert_eq!(expand_env(r"%Nope%\a %b", var), r"%Nope%\a %b");
+        assert_eq!(expand_env("plain", var), "plain");
     }
 
     #[test]
