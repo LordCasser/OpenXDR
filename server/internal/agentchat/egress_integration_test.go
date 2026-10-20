@@ -37,6 +37,10 @@ func TestEgressConclusion(t *testing.T) {
 			t.Fatalf("应拒绝 %v", bad)
 		}
 	}
+	// 没连过的地址：把真正连过的公网地址带回去（内网地址不列），别让模型照着相邻网段猜
+	if _, err := egress(host.ID.String(), "208.111.34.179"); err == nil || !strings.Contains(err.Error(), "208.111.34.178") || strings.Contains(err.Error(), "10.1.1.170") {
+		t.Fatalf("应列出最近连过的公网地址：%v", err)
+	}
 	if out, err := egress(host.ID.String(), "208.111.34.178"); err != nil || !strings.Contains(out, "recorded") {
 		t.Fatalf("应写入: %s %v", out, err)
 	}

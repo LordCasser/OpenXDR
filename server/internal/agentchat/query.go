@@ -17,6 +17,8 @@ func query(ctx context.Context, dsn, statement string) (string, error) {
 	if dsn == "" {
 		return "", errors.New("当前组未配置只读查询身份")
 	}
+	// 结尾的分号是写 SQL 的习惯，原样包进限额外壳就成了语法错；中间的分号（多语句）仍由预解析拒绝
+	statement = strings.TrimRight(statement, "; \t\r\n")
 	if len(statement) == 0 || len(statement) > 16384 {
 		return "", errors.New("SQL 长度须为 1–16384")
 	}

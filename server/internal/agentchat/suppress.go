@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -92,7 +94,8 @@ func (s *Service) suppress(ctx context.Context, session *ent.AgentSession, args 
 		}
 	}
 	if !matched {
-		return "", errors.New("conditions 对不上这条规则在这台主机上的任何一次命中，先用 xdr sql 查清告警事件里的实际字段值")
+		// 把实际值带回去：只说「对不上」，模型只能猜下一个值
+		return "", fmt.Errorf("conditions 对不上这条规则在这台主机上的任何一次命中。各字段在近 30 天命中里的实际值：%s", observed(body.Conditions, hits))
 	}
 	existing, err := s.DB.Suppression.Query().
 		Where(suppression.RuleIDEQ(body.RuleID), suppression.Or(suppression.AssetIDEQ(body.Host), suppression.AssetIDIsNil())).
@@ -139,4 +142,36 @@ func sameConditions(a, b []suppress.Condition) bool {
 		left[key(c)]--
 	}
 	return true
+}
+
+// observed 各条件字段在命中事件里出现过的值，每个字段最多 5 个，每个值截到 120 字
+func observed(conds []suppress.Condition, hits []*ent.Alert) string {
+	parts := make([]string, 0, len(conds))
+	for _, c := range conds {
+		var values []string
+		seen := map[string]bool{}
+		for _, a := range hits {
+			var raw map[string]any
+			if a.Edges.Event == nil || json.Unmarshal(a.Edges.Event.Raw, &raw) != nil {
+				continue
+			}
+			v, ok := suppress.Lookup(raw, c.Field)
+			if !ok || seen[v] {
+				continue
+			}
+			seen[v] = true
+			if r := []rune(v); len(r) > 120 {
+				v = string(r[:120]) + "…"
+			}
+			if values = append(values, strconv.Quote(v)); len(values) == 5 {
+				break
+			}
+		}
+		if len(values) == 0 {
+			parts = append(parts, c.Field+" 在这些事件里不存在（字段路径写错了？）")
+			continue
+		}
+		parts = append(parts, c.Field+" = "+strings.Join(values, ", "))
+	}
+	return strings.Join(parts, "；")
 }
