@@ -23,8 +23,9 @@ Or ask your AI agent: *"Install OpenXDR __OPENXDR_VERSION__ on this server follo
 |---|---|
 | `install.sh` / `docker-compose.yml` | 一行安装脚本与它使用的编排文件 |
 | `openxdr-agent-linux-amd64` | 端点 agent，静态链接带 eBPF，新老发行版通用（控制台接入会自动下发，一般不用手动下载） |
+| `openxdr-agent-linux-arm64` | 同上，arm64（ARM 云主机、国产 ARM 服务器、树莓派等） |
 | `openxdr-agent-windows-amd64.exe` | Windows 端点 agent |
-| `openxdr-sensor-linux-amd64` | 全流量探针 |
+| `openxdr-sensor-linux-amd64` / `openxdr-sensor-linux-arm64` | 全流量探针 |
 | `SHA256SUMS` | 校验和 |
 
 镜像：`ghcr.io/yaklang/openxdr-server:__OPENXDR_VERSION__`、`ghcr.io/yaklang/openxdr-web:__OPENXDR_VERSION__`（amd64 / arm64），server 镜像已内置默认规则、预设任务与 agent 安装包。

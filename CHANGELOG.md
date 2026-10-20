@@ -44,6 +44,8 @@
 
 ### 采集
 
+- 发版新增 arm64 的 Linux agent（静态链接，带 eBPF）与流量探针：`openxdr-agent-linux-arm64`、`openxdr-sensor-linux-arm64`
+  随 server 镜像与 Release 附件分发，arm64 主机一行接入不再 404。CI 增加 arm64 的构建、clippy 与测试。
 - 采集活性检测：进程（ETW / eBPF / netlink）、网络（ETW / eBPF）、文件（fanotify / inotify / RDCW）三条通道记录最近一次收到原始事件的时刻，
   静默久了先自检（拉起一个立即退出的系统程序、回环自连一次 TCP、改写状态目录下的自检文件），自检也看不到就把能力降为 degraded
   并带原因（进程 5 分钟、网络 10 分钟、文件 30 分钟），事件恢复后自动回到 active。自检事件在 agent 内认出并丢弃，不进库、不触发规则。

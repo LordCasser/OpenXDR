@@ -100,7 +100,7 @@ server 侧需要三样东西才会开放在线接入（缺哪样控制台会直�
   原 CA 私钥丢失时另起一张接入 CA 追加进信任包即可，已有证书不受影响
 - `AGENT_DIST_DIR`（compose 已挂 `./dist`）里放采集端安装包：
   `openxdr-agent-linux-amd64`、`openxdr-agent-linux-arm64`、`openxdr-agent-windows-amd64.exe`，
-  以及流量探针 `openxdr-sensor-linux-amd64`、`openxdr-sensor-linux-arm64`（官方镜像已内置 amd64）
+  以及流量探针 `openxdr-sensor-linux-amd64`、`openxdr-sensor-linux-arm64`（官方镜像已内置以上全部）
 
 流量探针（sensor）走同一套在线接入：平台管理员在「添加主机」切到「流量探针」签发令牌（组 admin 签不了——
 探针的会话会按地址归到任何组的资产上），在探针主机上执行

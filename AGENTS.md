@@ -91,13 +91,13 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 
 - server：gofmt、build、vet、单测、集成测试（带 Postgres service）、
   `sigmacheck --strict`、`detectcheck --strict`。
-- agent / sensor：默认特性下 fmt / build / clippy(-D warnings) / test；
+- agent / sensor：默认特性下 fmt / build / clippy(-D warnings) / test，arm64 原生 runner 上再跑一遍 build / clippy / test；
   另有 ebpf/xdp 特性的单独构建项，以及 agent 交叉编译到
   `x86_64-pc-windows-gnu` 的 clippy（Windows 侧 ETW 代码平时编不到，改
   `windows.rs`、`registry.rs` 等文件时注意 cfg 分支别破编译）。
 - web：`npm run build`。容器镜像：server 与 web 的 Dockerfile 都要能构建。
 
-发版（.github/workflows/release.yml）：推 `v*` 标签即编 agent（Linux musl 静态 + eBPF、Windows）与 sensor，
+发版（.github/workflows/release.yml）：推 `v*` 标签即编 agent（Linux amd64 / arm64 musl 静态 + eBPF、Windows）与 sensor（amd64 / arm64；arm64 在原生 arm runner 上编），
 把 agent 安装包、默认规则与预设任务打进 server 镜像，推 `ghcr.io/yaklang/openxdr-{server,web}`（amd64 / arm64），
 再建 GitHub Release（附 `deploy/install/` 的一行安装脚本与编排文件，说明取 `deploy/install/RELEASE_NOTES.md`
 加 CHANGELOG 对应版本）。改安装流程时同步 `docs/install.md`，它也是给用户 AI agent 的安装说明。

@@ -8,6 +8,7 @@
 | 项 | 要求 |
 |---|---|
 | 系统 | Linux，x86_64 或 arm64 |
+| 被纳管主机 | agent：Linux x86_64 / arm64（静态链接，新老发行版通用）、Windows x86_64；流量探针：Linux x86_64 / arm64 |
 | 资源 | 2 核 4 GB 内存、20 GB 磁盘起步；主机多、保留期长时加磁盘 |
 | Docker | 24 以上，带 Compose v2（`docker compose version` 能输出版本）。没有就 `curl -fsSL https://get.docker.com \| sh` |
 | 端口 | 80、443（控制台 HTTPS）、8081（agent / sensor 的 mTLS 接入），本机空闲且防火墙放行 |
