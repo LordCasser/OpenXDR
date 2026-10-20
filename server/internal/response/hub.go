@@ -28,6 +28,10 @@ const pendingPerAgent = 32
 // ErrDeliveryUnknown 表示已尝试投递，调用方不能将其当作未执行并重试。
 var ErrDeliveryUnknown = errors.New("指令投递结果未知")
 
+// errConnGone 指令没进通道：agent 连接已断或已被重连挤掉。跨节点回复里原样带回，
+// 投递方据此认定这条指令肯定没下发
+var errConnGone = errors.New("agent 指令连接已失效")
+
 // ErrReceiptRejected 回执对不上本 agent 名下的指令：重传不会改变结果，agent 应当丢弃
 var ErrReceiptRejected = errors.New("指令不存在或不属于当前 agent")
 
@@ -170,7 +174,8 @@ func (h *Hub) issue(ctx context.Context, req Request) (*ent.Command, error) {
 		return h.finish(ctx, cmd.ID, "failed", "agent 未连接指令通道")
 	}
 	if err := h.Router.Deliver(ctx, *a.AgentID, req.toProto(cmd.ID)); err != nil {
-		// 投递响应丢失不能证明远端没有执行；所有动作都不能据此自动重试。
+		// 能证明没下发的瞬断 Router 内部已经重试过；走到这里的要么可能已下发（响应丢失不能证明
+		// 远端没有执行），要么重试超限，一律记 unknown，所有动作都不能据此自动重试。
 		status := "unknown"
 		out, finishErr := h.finish(ctx, cmd.ID, status, err.Error())
 		if finishErr != nil {
@@ -187,7 +192,7 @@ func (h *Hub) enqueue(agentID uuid.UUID, expected chan *pb.Command, cmd *pb.Comm
 	defer h.mu.RUnlock()
 	ch, ok := h.conns[agentID]
 	if !ok || (expected != nil && ch != expected) {
-		return false, fmt.Errorf("agent 指令连接已失效")
+		return false, errConnGone
 	}
 	select {
 	case ch <- cmd:

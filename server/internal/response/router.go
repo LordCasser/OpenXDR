@@ -2,6 +2,7 @@ package response
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 
+	"openxdr/server/internal/natsretry"
 	"openxdr/server/pb"
 )
 
@@ -20,14 +22,17 @@ type Router interface {
 	Close()
 }
 
-type NATSRouter struct{ nc *nats.Conn }
+type NATSRouter struct {
+	nc    *nats.Conn
+	retry natsretry.Policy
+}
 
 func NewNATSRouter(url, instance string) (*NATSRouter, error) {
 	nc, err := nats.Connect(url, nats.Name("openxdr-command-"+instance), nats.MaxReconnects(-1), nats.ReconnectWait(time.Second))
 	if err != nil {
 		return nil, err
 	}
-	return &NATSRouter{nc: nc}, nil
+	return &NATSRouter{nc: nc, retry: natsretry.Default}, nil
 }
 
 func (r *NATSRouter) Attach(agentID uuid.UUID, deliver func(*pb.Command) error) func() {
@@ -63,22 +68,41 @@ func (r *NATSRouter) Online(ctx context.Context, agentID uuid.UUID) bool {
 	return err == nil && string(reply.Data) == "ok"
 }
 
+// Deliver 选主或 agent 重连换节点的空档里，只对能证明没下发的失败（undelivered）有界重试；
+// 超时、连接中断等可能已经下发的失败立即返回，由 Hub 记 unknown，绝不重发。
 func (r *NATSRouter) Deliver(ctx context.Context, agentID uuid.UUID, cmd *pb.Command) error {
 	body, err := proto.Marshal(cmd)
 	if err != nil {
 		return err
 	}
-	reply, err := r.nc.RequestWithContext(ctx, "openxdr.commands."+agentID.String(), body)
+	subject := "openxdr.commands." + agentID.String()
+	return r.retry.Do(ctx, func() error { return r.request(ctx, subject, body) }, undelivered)
+}
+
+func (r *NATSRouter) request(ctx context.Context, subject string, body []byte) error {
+	reply, err := r.nc.RequestWithContext(ctx, subject, body)
+	if errors.Is(err, nats.ErrNoResponders) {
+		return fmt.Errorf("agent 未连接任何集群节点: %w", err)
+	}
 	if err != nil {
-		if err == nats.ErrNoResponders {
-			return fmt.Errorf("agent 未连接任何集群节点: %w", err)
-		}
 		return fmt.Errorf("跨节点指令投递失败: %w", err)
 	}
-	if string(reply.Data) != "ok" {
-		return fmt.Errorf("跨节点指令被拒绝: %s", reply.Data)
+	switch string(reply.Data) {
+	case "ok":
+		return nil
+	case errConnGone.Error():
+		return fmt.Errorf("跨节点指令被拒绝: %w", errConnGone)
 	}
-	return nil
+	return fmt.Errorf("跨节点指令被拒绝: %s", reply.Data)
+}
+
+// undelivered 能证明指令没有进任何 agent 通道的失败：
+//   - no responders：NATS 服务端查不到订阅才直接回这个状态，消息没有交给任何订阅者
+//   - 持有订阅的节点回 errConnGone：同一队列组只投一个成员，这个成员没把指令放进通道
+//
+// 其它拒绝（队列已满、解码失败）同样没下发，但重试改变不了结果，维持原口径。
+func undelivered(err error) bool {
+	return errors.Is(err, nats.ErrNoResponders) || errors.Is(err, errConnGone)
 }
 
 func (r *NATSRouter) Close() { r.nc.Close() }
