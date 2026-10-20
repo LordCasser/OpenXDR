@@ -141,7 +141,10 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
   递归/强制删除、格式化与分区、`dd of=`、关机重启、停用服务、结束进程、防火墙改动、账户变更、
   卸载软件包、zfs/zpool destroy|rollback、Proxmox 停机销毁与集群变更、`crontab -r`、
   下载脚本直接交给 shell、重定向或 `tee` 写入 `/etc` `/boot` `/usr` `/bin` `/sbin` `/lib`、
-  读取 `/etc/shadow` 与 SSH 私钥；Windows 侧覆盖关机重启、递归删除、格式化磁盘、停止/禁用服务、
+  读取 `/etc/shadow` 与 SSH 私钥，容器重建与拉镜像（`docker compose` / `docker-compose` / `podman compose` 的
+  up、down、restart、rm、stop 等，`docker` / `podman` 的 run、create、start、pull、rm、rmi、restart、stop、kill、prune
+  及 `container` / `image` 等管理命令写法，重定向或 `tee` 写 compose 文件；套在 `pct exec`、`docker exec`、
+  `lxc-attach`、`sh -c` 里同样命中，`docker ps/inspect/logs` 不受影响）；Windows 侧覆盖关机重启、递归删除、格式化磁盘、停止/禁用服务、
   禁用网卡、本地账户与管理员组变更、Defender 设置、结束进程与防火墙改动。只读巡检命令不受影响。
   删组时名单一并清掉。
 - **名单不交给模型。** 系统提示只告诉模型：命令直接执行，少数高风险操作会暂停等组管理员批准、
@@ -152,6 +155,9 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
   正文含组、主机、发起人和截断到 300 字的命令，链接 `/approvals`）；发送失败只记日志。
 - 升级时启动迁移：删掉全部旧版 AI 免审批（ai/allow）条目，只给这次删到条目的组补一份默认高风险名单。
   再次启动没有 allow 条目可删，管理员主动清空的名单不会被补回。
+- 默认名单上线后再加的条目按版本补（`defaultsAdded`，版本记在 settings 表 `commandgate.defaults_version`）：
+  启动时给还留着 AI 高风险名单的组补上新版本的条目，组里已有同样写法的跳过，AI 名单整个清空的组不补；
+  每个版本只补一次，管理员之后删掉新条目不会被补回。管理员改过写法的旧条目同样不动。
 - 名单之外照样受组权限与 `RESPONSE_ENABLED` 约束。审批只批准原始资产、命令与超时的组合，
   批准后按原样真执行。
 - 审批状态：pending → approved/rejected；approved 只能原子消费一次变为 consumed；

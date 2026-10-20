@@ -88,6 +88,39 @@ var denySamples = []struct {
 		[]string{"netsh advfirewall show allprofiles", "netsh advfirewall firewall show rule name=all"}},
 	{[]string{"New-NetFirewallRule -DisplayName x -Action Allow", "Set-NetFirewallProfile -Enabled False", "Remove-NetFirewallRule -Name x"},
 		[]string{"Get-NetFirewallRule", "Get-NetFirewallProfile"}},
+	// 容器：生产上 AI 在网关 LXC 里重建 authentik、写 compose override、从公网拉 busybox 跑测试容器
+	{containerHits[0], []string{"docker compose ps", "docker compose logs --tail 200 server", "docker-compose config", "docker compose -f /opt/up/docker-compose.yml ps", "docker compose ls"}},
+	{containerHits[1], []string{"docker ps -a", "docker inspect authentik-server-1", "docker logs --tail 100 authentik-server-1", "docker images", "docker container ls", "docker image ls", "systemctl status docker", "journalctl -u docker --no-pager | grep -i restart"}},
+	{containerHits[2], []string{"cat /opt/authentik/docker-compose.yml", "grep image docker-compose.override.yml", "ls compose.yaml > /tmp/x"}},
+}
+
+// containerHits 容器条目的正例，嵌在 pct exec / docker exec / lxc-attach / sh -c 里同样要命中
+var containerHits = [][]string{
+	{"docker compose up -d --force-recreate", "cd /opt/authentik && docker compose -f docker-compose.yml up -d", "docker-compose down", "docker compose restart server",
+		"docker compose rm -f", "podman compose up -d", "podman-compose up", "docker compose --project-directory /opt/x pull",
+		"pct exec 203 -- bash -c 'cd /opt/authentik && docker compose up -d --force-recreate'", "lxc-attach -n 203 -- docker-compose restart"},
+	{"docker run --rm busybox nslookup x", "docker pull busybox", "docker rm -f x", "docker restart authentik-server-1", "docker stop x", "docker start x",
+		"docker container rm x", "docker image pull alpine", "docker system prune -af", "docker -H unix:///run/docker.sock run x", "docker --context prod stop x",
+		"podman run --rm alpine", "podman pull alpine", "podman rm x", "podman restart x", "/usr/bin/docker run x",
+		"pct exec 203 -- docker run --rm busybox", "docker exec dind docker stop x", "lxc-attach -n 203 -- docker pull busybox", `pct exec 203 -- sh -c "docker restart x"`},
+	{"cat > /opt/authentik/docker-compose.override.yml <<EOF", "echo x >> docker-compose.yml", "tee /opt/authentik/compose.override.yaml", "printf x | tee -a docker-compose.override.yml"},
+}
+
+// 容器条目要挂起的写法都不能被定时任务当只读放行；docker 的查看子命令仍判只读
+func TestContainerDenyReadOnly(t *testing.T) {
+	for _, hits := range containerHits {
+		for _, cmd := range hits {
+			if ReadOnly(cmd) {
+				t.Errorf("容器高风险写法被判为只读：%s", cmd)
+			}
+		}
+	}
+	for _, cmd := range []string{"docker ps -a", "docker inspect authentik-server-1", "docker logs --tail 100 authentik-server-1", "docker images",
+		"pct exec 203 -- docker ps", "pct exec 203 -- docker logs --tail 50 authentik-server-1"} {
+		if !ReadOnly(cmd) {
+			t.Errorf("docker 只读子命令应判只读：%s", cmd)
+		}
+	}
 }
 
 var inspection = []string{

@@ -2,6 +2,8 @@ package commandgate
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -23,7 +25,7 @@ const legacyCmdPos = `(?:^|[;&|(\x60'"\n]|\b(?:sudo|doas|nohup|exec|xargs)\s)\s*
 // DefaultAIDeny 新建组自带的 AI 高风险命令名单：在整条命令里非锚定搜索，任一段命中即挂起等组管理员批准，
 // 其余命令直接执行。只覆盖破坏性、改配置、停服务与读密钥的操作，只读巡检不受影响。
 // Linux 经 sh -c、Windows 经 PowerShell 执行，Windows 的条目不区分大小写。
-var DefaultAIDeny = []string{
+var DefaultAIDeny = append([]string{
 	// Linux：删除、格式化与写盘
 	`\brm\s+(?:[^\s;&|]+\s+)*(?:-[a-zA-Z]*[rRf]|--recursive|--force)`,
 	`\b(?:mkfs(?:\.\w+)?|mke2fs|wipefs|fdisk|sfdisk|parted|sgdisk)\b`,
@@ -73,7 +75,22 @@ var DefaultAIDeny = []string{
 	`(?i)\b(?:Stop-Process|taskkill)\b`,
 	`(?i)\bnetsh(?:\.exe)?\s+advfirewall\s+(?:firewall\s+)?(?:set|add|delete|reset|import)\b`,
 	`(?i)\b(?:New|Set|Remove|Disable|Enable)-NetFirewall\w+`,
+}, containerDeny...)
+
+// containerDeny 容器重建、拉起与删除：compose 编排、docker / podman 的容器与镜像生命周期、写 compose 文件。
+// 非锚定搜索，套在 pct exec、docker exec、lxc-attach、sh -c 里照样命中；ps、logs、inspect 这类查看不命中
+var containerDeny = []string{
+	`\b(?:docker|podman)(?:-compose\s+|\s+(?:[^;&|]*\s)?compose\s+)(?:[^;&|]*\s)?(?:up|down|restart|rm|stop|kill|start|create|run|pull)(?:$|[\s;&|)'"])`,
+	`\b(?:docker|podman)\s+(?:-\S+\s+(?:[^-\s;&|]\S*\s+)?)*(?:(?:container|image|system|volume|network)\s+)?(?:run|create|start|pull|rm|rmi|restart|stop|kill|prune)(?:$|[\s;&|)'"])`,
+	`(?:>|\btee\s+(?:-\S+\s+)*)\s*["']?[^\s;&|'"<>]*compose[^\s;&|'"<>]*\.ya?ml\b`,
 }
+
+// defaultsAdded 已上线后才加进默认名单的条目，下标 + 1 是默认名单版本号，只许往后追加。
+// 老库里已有默认名单的组由 UpgradeDefaults 按版本补上，每个版本只补一次
+var defaultsAdded = [][]string{containerDeny}
+
+// defaultsVersionKey settings 表里记已补到第几版默认名单
+const defaultsVersionKey = "commandgate.defaults_version"
 
 // SeedDefaults 给组写入默认 AI 高风险命令名单。
 func SeedDefaults(ctx context.Context, db *ent.Client, groupID uuid.UUID) error {
@@ -85,7 +102,8 @@ func SeedDefaults(ctx context.Context, db *ent.Client, groupID uuid.UUID) error 
 	return db.CommandPolicy.CreateBulk(creates...).Exec(ctx)
 }
 
-// UpgradeDefaults 把各组里仍是旧版默认写法的条目换成新版：只动与旧默认逐字相同的行，管理员改过的不碰；再跑一次没有可换的
+// UpgradeDefaults 把各组里仍是旧版默认写法的条目换成新版：只动与旧默认逐字相同的行，管理员改过的不碰；再跑一次没有可换的。
+// 之后按版本补上新加的默认条目
 func UpgradeDefaults(ctx context.Context, db *ent.Client) error {
 	total := 0
 	for _, pattern := range DefaultAIDeny {
@@ -102,6 +120,71 @@ func UpgradeDefaults(ctx context.Context, db *ent.Client) error {
 	if total > 0 {
 		slog.Info("默认高风险名单已升级到新写法", "rows", total)
 	}
+	return addDefaults(ctx, db)
+}
+
+// addDefaults 给还留着 AI 高风险名单的组补上库里版本之后新加的默认条目，组里已有同样写法的跳过；
+// 把 AI 名单整个清空的组不补。补完记下版本，管理员之后删掉新条目也不会再被补回来
+func addDefaults(ctx context.Context, db *ent.Client) error {
+	tx, err := db.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	version := 0
+	row, err := tx.Setting.Get(ctx, defaultsVersionKey)
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(row.Value, &version); err != nil {
+			return fmt.Errorf("默认名单版本无法解析: %w", err)
+		}
+	case !ent.IsNotFound(err):
+		return err
+	}
+	if version >= len(defaultsAdded) {
+		return nil
+	}
+	aiDeny := []predicate.CommandPolicy{commandpolicy.OriginEQ(commandpolicy.OriginAi), commandpolicy.ModeEQ(commandpolicy.ModeDeny)}
+	rows, err := tx.CommandPolicy.Query().Where(aiDeny...).All(ctx)
+	if err != nil {
+		return err
+	}
+	have := map[uuid.UUID]map[string]bool{}
+	for _, r := range rows {
+		if have[r.GroupID] == nil {
+			have[r.GroupID] = map[string]bool{}
+		}
+		have[r.GroupID][r.Pattern] = true
+	}
+	var creates []*ent.CommandPolicyCreate
+	for _, added := range defaultsAdded[version:] {
+		for groupID, patterns := range have {
+			for _, pattern := range added {
+				if !patterns[pattern] {
+					creates = append(creates, tx.CommandPolicy.Create().SetGroupID(groupID).SetOrigin(commandpolicy.OriginAi).
+						SetMode(commandpolicy.ModeDeny).SetPattern(pattern))
+				}
+			}
+		}
+	}
+	if len(creates) > 0 {
+		if err := tx.CommandPolicy.CreateBulk(creates...).Exec(ctx); err != nil {
+			return err
+		}
+	}
+	value, _ := json.Marshal(len(defaultsAdded))
+	if row != nil {
+		err = tx.Setting.UpdateOneID(defaultsVersionKey).SetValue(value).Exec(ctx)
+	} else {
+		err = tx.Setting.Create().SetID(defaultsVersionKey).SetValue(value).Exec(ctx)
+	}
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	slog.Info("默认高风险名单已补上新条目", "from_version", version, "to_version", len(defaultsAdded), "rows", len(creates), "groups", len(have))
 	return nil
 }
 

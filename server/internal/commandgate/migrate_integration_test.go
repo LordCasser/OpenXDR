@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"openxdr/server/ent"
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/internal/testdb"
 )
@@ -67,13 +68,55 @@ func TestUpgradeDefaults(t *testing.T) {
 		if err := UpgradeDefaults(ctx, db); err != nil {
 			t.Fatal(err)
 		}
-		// 在 Go 里排序再比：库里的排序随 collation 变（CI 的 en_US 与本地的 C 对标点排法不同）
-		got := db.CommandPolicy.Query().Select(commandpolicy.FieldPattern).StringsX(ctx)
+		// 在 Go 里排序再比：库里的排序随 collation 变（CI 的 en_US 与本地的 C 对标点排法不同）；按版本补上的新条目另测
+		got := db.CommandPolicy.Query().Where(commandpolicy.PatternNotIn(containerDeny...)).Select(commandpolicy.FieldPattern).StringsX(ctx)
 		want := []string{pattern, old + "x"}
 		slices.Sort(got)
 		slices.Sort(want)
 		if !slices.Equal(got, want) {
 			t.Fatalf("升级结果不对：%q", got)
 		}
+	}
+}
+
+// 老库按版本补上新加的默认条目：留着 AI 名单的组补齐，已有同写法的不重复，清空名单的组不补；
+// 补过一次后管理员删掉新条目，再启动也不补回来
+func TestUpgradeDefaultsAddsNewEntries(t *testing.T) {
+	ctx, db := testdb.New(t)
+	kept := db.Group.Create().SetName("kept").SaveX(ctx)
+	partial := db.Group.Create().SetName("partial").SaveX(ctx)
+	cleared := db.Group.Create().SetName("cleared").SaveX(ctx)
+	for _, p := range DefaultAIDeny[:3] {
+		db.CommandPolicy.Create().SetGroupID(kept.ID).SetOrigin(commandpolicy.OriginAi).SetMode(commandpolicy.ModeDeny).SetPattern(p).SaveX(ctx)
+	}
+	db.CommandPolicy.Create().SetGroupID(partial.ID).SetOrigin(commandpolicy.OriginAi).SetMode(commandpolicy.ModeDeny).SetPattern(containerDeny[0]).SaveX(ctx)
+	db.CommandPolicy.Create().SetGroupID(partial.ID).SetOrigin(commandpolicy.OriginHuman).SetMode(commandpolicy.ModeDeny).SetPattern("reboot").SaveX(ctx)
+
+	aiDeny := func(g *ent.Group) int {
+		return db.CommandPolicy.Query().Where(commandpolicy.GroupIDEQ(g.ID), commandpolicy.OriginEQ(commandpolicy.OriginAi)).CountX(ctx)
+	}
+	for range 2 {
+		if err := UpgradeDefaults(ctx, db); err != nil {
+			t.Fatal(err)
+		}
+		if n := aiDeny(kept); n != 3+len(containerDeny) {
+			t.Fatalf("kept 应补上容器条目：%d 条", n)
+		}
+		if n := aiDeny(partial); n != len(containerDeny) {
+			t.Fatalf("partial 已有的条目不应重复：%d 条", n)
+		}
+		if n := aiDeny(cleared); n != 0 {
+			t.Fatalf("清空名单的组不应补：%d 条", n)
+		}
+		if n := db.CommandPolicy.Query().Where(commandpolicy.OriginEQ(commandpolicy.OriginHuman)).CountX(ctx); n != 1 {
+			t.Fatalf("人工名单不应变动：%d", n)
+		}
+	}
+	db.CommandPolicy.Delete().Where(commandpolicy.GroupIDEQ(kept.ID), commandpolicy.PatternIn(containerDeny...)).ExecX(ctx)
+	if err := UpgradeDefaults(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if n := aiDeny(kept); n != 3 {
+		t.Fatalf("管理员删掉的新条目被补回：%d 条", n)
 	}
 }
