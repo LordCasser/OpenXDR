@@ -84,7 +84,7 @@ func (b *temporalBacktest) candidateOf(class int, osName string, doc map[string]
 // apply 按排序依次喂入候选；顺序倒退说明读取有误，直接报错而不是给出错误的命中数。
 func (b *temporalBacktest) apply(c candidate) error {
 	if !b.last.ts.IsZero() && (c.ts.Before(b.last.ts) || (c.ts.Equal(b.last.ts) && c.id.String() <= b.last.id.String())) {
-		return fmt.Errorf("事件未按 (时间, ID) 递增读取: %s", c.id)
+		return fmt.Errorf("事件未按 (时间, ID) 递增读取: %s %s 排在 %s %s 之后", c.id, c.ts.Format(time.RFC3339Nano), b.last.id, b.last.ts.Format(time.RFC3339Nano))
 	}
 	b.last = c
 	b.candidates++
@@ -185,12 +185,16 @@ WHERE e.ts >= $1 AND e.ts < $2`+filter+` ORDER BY e.ts, e.id`, from, to)
 	if err := rows.Err(); err != nil {
 		return 0, 0, err
 	}
+	// 先提交再喂入：副本冲突也可能在提交时才报（40001），整段重试前不能已经改了回放状态
+	if err := tx.Commit(); err != nil {
+		return 0, 0, err
+	}
 	for _, c := range found {
 		if err := b.apply(c); err != nil {
 			return 0, 0, err
 		}
 	}
-	return events, commanded, tx.Commit()
+	return events, commanded, nil
 }
 
 // temporalMain 严格加载基础 + 时序规则快照并解析时间范围；拿不准的输入直接拒绝。
