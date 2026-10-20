@@ -123,10 +123,34 @@ Defender 排除项（第三方杀毒在管，Defender 未运行，Add-MpPreferen
   1005 事件和 Linux Kernel Module Loaded 规则均命中。
 - 回放结束后 agent/server/数据库、测试文件和内核模块全部撤销，无常驻产物。
 
+## 第四轮：PVE 测试机回放（2026-10-20）
+
+环境：pve2 上的 Debian 12 云镜像 VM（内核 6.1，eBPF + AF_PACKET + fanotify）、pve1 上的 Windows 10 Pro 22H2 VM
+（无人值守安装，Defender 实时防护回放期间临时关闭、结束后恢复），均由生产 HA 控制台的「采集验证测试」组接入，
+agent 为 v0.2.0 musl 静态 / mingw 构建。
+
+- Linux：14 条规则实机命中，含两条新时序规则（读影子口令库后打包 `linux-shadow-read-archive`、
+  凭据读取后外联 4444 `credential-dump-suspicious-outbound`）；1001 / 1005 / 1007 / 4001 事件齐全。
+- Linux 缺口：脚本里的 `curl … | bash` 没命中 Download and Pipe to Shell——管道两端是同一父进程下的两个兄弟进程，
+  两条命令行里都没有 `|`，规则按命令行匹配看不到。交互 shell 与 `sh -c 'curl … | sh'` 形态不受影响。
+- Windows：17 条规则实机命中（含 Windows Recon、Suspicious PowerShell Invocation、IFEO、Defender 排除项、WMI 订阅、
+  账户管理），两条新时序规则（LOLBin 下载后写自启动 / 建计划任务）同样命中；临时关闭 Defender 也被 Security Service Stopped 报出。
+- Windows 缺口：COM 劫持（HKCU CLSID InprocServer32）与审计策略变更（4719，activity_id 15）**已采集、没有规则**；
+  网络只有 TCP 出站（`etw-tcp-out` 报 degraded 是设计如此），DNS 未采集。
+- 本轮抓到的真实缺陷：
+  1. **Windows 进程采集静默停止**：ETW 会话随机命名，agent 被强杀或升级退出时会话泄漏；Kernel-Process provider 可挂的会话数有限，
+     测试机漏到 7 个后新会话收不到任何进程事件，健康状态却仍报 `etw/active`。改为固定会话名并在启动前停掉同名旧会话（894bbc7）。
+  2. 分发目录里的 Linux agent 是 glibc 动态链接（在 Debian 12 上报 `GLIBC_2.39` 弱符号警告），换成与发版一致的 musl 静态构建。
+  3. 回放脚本：Linux 版会覆盖 `/root/.ssh/id_rsa`、删 `authorized_keys`，与「全部可逆」不符，改为先备份、退出时还原；
+     Windows 版 Defender 排除路径里混进了响铃字符（`\a` 被转义），排除项写的是乱码路径，改回 `C:\atomic-test`。
+  4. 生产 JetStream 的一个消费者（`ingest-0a`）leader 漂到公网 witness 且其流副本落后，该分片停止投递约 10 分钟、积压 2 万条；
+     挪回内网节点后几分钟内追平。中心 Grafana 的队列积压告警覆盖了这种情况。
+
 ## 已知边界
 
-- agent 异常退出会泄漏 ETW 会话（`logman query -ets` 里的 `n4r1b-trace-*`），
-  攒多了新会话创建报"系统资源不足"→ 手动 `logman stop <name> -ets` 清理。
+- ~~agent 异常退出会泄漏 ETW 会话~~：已修（2026-10-20），会话改用固定名 `OpenXDR-Process` / `OpenXDR-Network`，
+  启动前先停同名旧会话。旧版本漏下的 `n4r1b-trace-*` 要重启一次主机或手动 `logman stop <name> -ets` 清掉——
+  不自动清，因为那是 ferrisetw 的默认命名，别的软件也可能在用。
 - WSL2 不能验证：netlink proc connector（命名空间，agent 正确降级）、wtmp
   登录（无写入）、短命进程 cmdline（轮询固有）；这些格子已由真 Linux 双机补验。
 - ~~server 热重载偶现不及时~~：已确认元数据指纹与 watcher 启动竞态两个根因，
