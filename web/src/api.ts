@@ -420,6 +420,103 @@ export function fetchIdentityObservations(assetId: string, hours: number) {
   return get<{ items: IdentityObservation[]; truncated: boolean }>(`/api/identity-observations?${params}`)
 }
 
+// 全局身份图：目录账号为锚点，强证据自动链接，其余人工确认
+export interface LoginStat {
+  success: number
+  failure: number
+  last: string | null
+  sources: string[]
+}
+export interface IdentitySummary {
+  id: string
+  groupId: string
+  kind: 'directory' | 'host'
+  anchorKind: AccountKind
+  name: string | null
+  sid: string | null
+  uid: number | null
+  assetId: string | null
+  hostname: string | null
+  authority: string | null
+  createdAt: string
+  accounts: number
+  hosts: number
+  lastSeen: string | null
+  manual: boolean
+}
+export type AccountKind = 'directory' | 'windows' | 'linux'
+export type LinkBasis = 'directory_anchor' | 'ad_sid' | 'host_local' | 'manual'
+export interface IdentityAccount {
+  id: string
+  kind: AccountKind
+  name: string | null
+  domain: string | null
+  sid: string | null
+  uid: number | null
+  assetId: string | null
+  hostname: string | null
+  authority: string | null
+  firstSeen: string
+  lastSeen: string
+  linkId: string | null
+  identityId: string | null
+  basis: LinkBasis | null
+  confidence: string | null
+  evidence: Record<string, unknown> | null
+  source: string | null
+  linkedAt: string | null
+  logins: LoginStat | null
+}
+export interface IdentityLinkHistory {
+  id: string
+  accountId: string
+  accountKind: AccountKind
+  accountName: string | null
+  assetId: string | null
+  basis: LinkBasis
+  confidence: string
+  evidence: Record<string, unknown>
+  source: string
+  createdAt: string
+  revokedAt: string | null
+  revokedBy: string | null
+  revokeReason: string | null
+}
+export interface IdentityMergeCandidate {
+  account: IdentityAccount
+  fromIdentityId: string
+  toIdentityId: string
+  toName: string | null
+  toKind: 'directory' | 'host'
+  toHostname: string | null
+  matchedAccountId: string
+  matchedName: string | null
+  matchedKind: AccountKind
+  reason: 'same_name' | 'similar_name' | 'sid_ambiguous'
+  direction: 'incoming' | 'outgoing'
+  rejectionId: string | null
+}
+export interface UnmatchedLogin {
+  name: string
+  state: 'no_account' | 'no_snapshot' | 'snapshot_unavailable'
+  success: number
+  failure: number
+  last: string
+  sources: string[]
+}
+export const fetchIdentities = (groupId: string, q: string, kind: string, offset: number) =>
+  get<{ items: IdentitySummary[]; truncated: boolean }>(`/api/identities?${new URLSearchParams({ groupId, q, kind, offset: String(offset), limit: '100' })}`)
+export const fetchIdentity = (id: string, hours: number) =>
+  get<{ identity: IdentitySummary; accounts: IdentityAccount[]; truncated: boolean; history: IdentityLinkHistory[] }>(`/api/identities/${encodeURIComponent(id)}?hours=${hours}`)
+export const fetchIdentityMergeCandidates = (id: string) =>
+  get<{ items: IdentityMergeCandidate[]; truncated: boolean }>(`/api/identities/${encodeURIComponent(id)}/candidates`)
+export const confirmIdentityLink = async (identityId: string, accountId: string) => { await send('POST', `/api/identities/${encodeURIComponent(identityId)}/links`, { accountId }) }
+export const rejectIdentityCandidate = async (identityId: string, accountId: string) => { await send('POST', `/api/identities/${encodeURIComponent(identityId)}/rejections`, { accountId }) }
+export const revokeIdentityLink = async (linkId: string) => { await send('DELETE', `/api/identity-links/${encodeURIComponent(linkId)}`) }
+export const revokeIdentityRejection = async (id: string) => { await send('DELETE', `/api/identity-rejections/${encodeURIComponent(id)}`) }
+export const fetchAssetIdentityAccounts = (assetId: string, hours: number) =>
+  get<{ accounts: IdentityAccount[]; unmatched: UnmatchedLogin[]; pending: number; truncated: boolean }>(`/api/assets/${encodeURIComponent(assetId)}/identity-accounts?hours=${hours}`)
+
 export const fetchSuppressions = () => get<Suppression[]>('/api/suppressions')
 
 export async function createSuppression(body: {

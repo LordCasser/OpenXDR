@@ -1,5 +1,5 @@
 import {
-  AimOutlined, AlertOutlined, AuditOutlined, BulbOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined, DashboardOutlined, DeploymentUnitOutlined, FileSearchOutlined, FileTextOutlined, RobotOutlined, SafetyOutlined, SearchOutlined, SettingOutlined, StopOutlined, TeamOutlined, ToolOutlined, UserOutlined,
+  AimOutlined, AlertOutlined, AuditOutlined, BulbOutlined, CheckCircleOutlined, ClockCircleOutlined, CloudServerOutlined, DashboardOutlined, DeploymentUnitOutlined, FileSearchOutlined, FileTextOutlined, IdcardOutlined, RobotOutlined, SafetyOutlined, SearchOutlined, SettingOutlined, StopOutlined, TeamOutlined, ToolOutlined, UserOutlined,
 } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import type { MsgKey } from '../i18n'
@@ -37,6 +37,7 @@ export const NAV: (NavItem | NavGroup)[] = [
     key: 'navGroupAssets',
     items: [
       { path: '/assets', key: 'navAssets', icon: <CloudServerOutlined />, hotkey: 'a' },
+      { path: '/identities', key: 'navIdentities', icon: <IdcardOutlined /> },
       { path: '/asset-map', key: 'navAssetMap', icon: <DeploymentUnitOutlined /> },
       { path: '/decoys', key: 'navDecoys', icon: <SafetyOutlined /> },
       { path: '/attack-surface', key: 'navAttackSurface', icon: <AimOutlined /> },
