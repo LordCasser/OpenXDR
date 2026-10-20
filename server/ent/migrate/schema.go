@@ -777,6 +777,7 @@ var (
 		{Name: "title", Type: field.TypeString, Size: 200},
 		{Name: "markdown", Type: field.TypeString, Size: 2147483647},
 		{Name: "level", Type: field.TypeString, Default: "attention"},
+		{Name: "summary", Type: field.TypeString, Default: ""},
 	}
 	// ReportsTable holds the schema information for the "reports" table.
 	ReportsTable = &schema.Table{
@@ -793,6 +794,31 @@ var (
 				Name:    "report_session_id",
 				Unique:  false,
 				Columns: []*schema.Column{ReportsColumns[2]},
+			},
+		},
+	}
+	// ReportReadsColumns holds the columns for the "report_reads" table.
+	ReportReadsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "report_id", Type: field.TypeUUID},
+		{Name: "user_id", Type: field.TypeUUID},
+		{Name: "read_at", Type: field.TypeTime},
+	}
+	// ReportReadsTable holds the schema information for the "report_reads" table.
+	ReportReadsTable = &schema.Table{
+		Name:       "report_reads",
+		Columns:    ReportReadsColumns,
+		PrimaryKey: []*schema.Column{ReportReadsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "reportread_report_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{ReportReadsColumns[1], ReportReadsColumns[2]},
+			},
+			{
+				Name:    "reportread_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{ReportReadsColumns[2]},
 			},
 		},
 	}
@@ -1032,6 +1058,7 @@ var (
 		MemoriesTable,
 		ProcessBaselinesTable,
 		ReportsTable,
+		ReportReadsTable,
 		SessionsTable,
 		SessionMessagesTable,
 		SettingsTable,

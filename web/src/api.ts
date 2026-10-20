@@ -846,11 +846,25 @@ export interface AgentReport {
   markdown: string
   // ok 无需处理（只存档不推送）/ attention 有需要人处理的事项 / urgent 需要立即处理
   level: 'ok' | 'attention' | 'urgent'
+  // 一句话结论；旧报告为空
+  summary?: string
+  // 当前用户是否看过：打开预览、HTML 或 PDF 都算
+  read?: boolean
 }
 
 export const fetchAgentReports = (groupId: string) =>
   get<AgentReport[]>(`/api/agent-reports?groupId=${groupId}`)
 export const reportHtmlUrl = (id: string) => `/api/agent-reports/${id}/html`
+
+export async function markReportRead(id: string): Promise<void> {
+  const r = await post(`/api/agent-reports/${id}/read`)
+  if (!r.ok) await fail(r)
+}
+
+export async function markAllReportsRead(groupId: string): Promise<void> {
+  const r = await post(`/api/agent-reports/read?groupId=${groupId}`)
+  if (!r.ok) await fail(r)
+}
 
 // 走 fetch 而不是直接跳转：没装 Chromium 时后端回 503，要能在界面上报错
 export async function downloadAgentPdf(r: AgentReport): Promise<void> {

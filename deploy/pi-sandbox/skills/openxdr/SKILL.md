@@ -40,8 +40,11 @@ xdr forget <记忆 id>                         # 删掉被现场证据推翻的 
 xdr suppress pve1 8f1d3b56-7a29-4e03-b5c8-1d4f9e2a7b60 'VM100 vpn-proxy 每天 10:58 解析订阅域名，例行业务' 30 'query.hostname$=.doggygo.top'
 xdr suppress pve1 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90 'Termix 面板每分钟 SSH 健康检查' 30 'process.cmd_line~=__TERMIX_EXIT' 'dst_endpoint.port=22'
 xdr propose-close <事件 id> false_positive '误报/良性：……（定性、关键证据、依据）' <报告 id>
-xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件）；级别 ok 只存档不推送 / attention（默认）/ urgent
-xdr report '标题' - attention <<'EOF'        # 正文也可以从 heredoc 读；标题有空格或括号时整个用引号括起来
+xdr report 'pve1 磁盘排查' '根分区 93%，journal 占 11G，可清理' report.md [级别]   # 标题、一句话结论、正文；级别 ok 只存档不推送 / attention（默认）/ urgent
+xdr report 'pve1/pve2 端口核查' '两台均无异常监听' - ok <<'EOF'                      # 正文也可以从 heredoc 读；带空格或括号的参数整个用引号括起来
+## 结论
+……
+EOF'        # 正文也可以从 heredoc 读；标题有空格或括号时整个用引号括起来
 # 结论
 EOF
 ```
@@ -64,7 +67,7 @@ EOF
 | memories | id, created_at, updated_at, asset_id, content, source(human/ai), author |
 | asset_links | src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen（本组主机发起的连接聚合） |
 | ip_infos | ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at（本组主机连过的公网地址） |
-| reports | id, created_at, title, level(ok/attention/urgent), markdown（本组历史报告，可与上一轮对比） |
+| reports | id, created_at, title, level(ok/attention/urgent), markdown, summary（本组历史报告，可与上一轮对比；定时任务的标题就是任务名） |
 
 - **events 查询必须带 ts 范围**，表很大，尽量再带 asset_id。
 - **要告警对应的原始事件就查 alert_events**（按 incident_id / rule_id / alert_id 过滤）。不要自己 `alerts JOIN events`，
@@ -134,4 +137,26 @@ closed 属实且已处置；说明写成人能直接采纳的结案说明，可�
 不能整条规则压掉：比如 DNS 服务器上的可疑后缀规则管着全网的查询，只能压具体域名。一次性的误报写进结论即可，不要提；
 被拒绝过的不要再提。平台指令（包括你自己的命令）触发的告警本来就不进事件，不需要抑制。
 
-最后用 `xdr report` 交一份报告：结论在前，证据在后，未验证事项单独列出。
+最后用 `xdr report` 交一份报告，所有报告同一个格式：
+
+- **标题**：「对象 + 主题」，最多 50 字，不写结论（定时任务的标题由平台固定成任务名，写什么都行）。
+- **一句话结论**：最多 120 字、不换行，读的人只看这一句也知道要不要处理，比如「pve2 RAID 电池故障待更换，其余正常」。
+- **正文**：不写一级标题（平台会渲染标题、级别、时间与结论），按下面的二级标题分节、按这个顺序；
+  结论、需要人处理、未验证三节必须有，没有内容就写「无」，其余可省略：
+
+```markdown
+## 结论
+定性与关键理由，一两段。
+## 需要人处理
+逐条写事项、主机、严重程度与建议；巡检分「### 新增」「### 仍未解决」「### 本轮已修复」。
+## 证据
+已观察到的事实，标明主机与来源命令或查询；多台主机按主机分三级标题。
+## 推断
+基于证据的判断与把握程度。
+## 未验证
+没覆盖到、等待批准或执行失败的检查项。
+## 已执行的操作
+改动、登记的待办、提交的抑制或结案建议。
+```
+
+级别：没有需要人处理的事项写 ok（只存档不推送），有就写 attention，疑似入侵或服务即将中断写 urgent。对话里也照这个分。

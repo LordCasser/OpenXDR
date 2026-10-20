@@ -47,7 +47,7 @@ CREATE OR REPLACE VIEW :"schema".ip_infos WITH (security_barrier) AS
     WHERE src_asset_id IN (SELECT id FROM public.assets WHERE group_id = :'group_id'));
 
 CREATE OR REPLACE VIEW :"schema".reports WITH (security_barrier) AS
-  SELECT id, created_at, title, level, markdown
+  SELECT id, created_at, title, level, markdown, summary
   FROM public.reports WHERE group_id = :'group_id';
 
 -- 原始事件：只含本组资产，查询务必带 ts 时间范围（按 asset_id, ts 建有索引）

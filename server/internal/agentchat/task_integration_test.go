@@ -51,10 +51,10 @@ func TestRunTask(t *testing.T) {
 				}
 				if c.report {
 					// 级别只收 ok / attention / urgent；无异常的巡检交 ok，只存档不推送
-					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 正常","level":"info"}`)); err == nil {
+					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","summary":"正常","markdown":"## 结论\n正常\n## 需要人处理\n无\n## 未验证\n无","level":"info"}`)); err == nil {
 						t.Error("未知级别应被拒绝")
 					}
-					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 正常","level":"ok"}`)); err != nil {
+					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","summary":"正常","markdown":"## 结论\n正常\n## 需要人处理\n无\n## 未验证\n无","level":"ok"}`)); err != nil {
 						return nil, err
 					}
 				}
@@ -103,7 +103,7 @@ func TestRunTaskWrapUp(t *testing.T) {
 					t.Errorf("收尾请求不符：工具 %v 轮数 %d 历史 %d 提示 %q", r.Tools, r.MaxTurns, len(r.Messages), r.Prompt)
 				}
 				if c.report {
-					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 部分未验证"}`)); err != nil {
+					if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","summary":"正常","markdown":"## 结论\n正常\n## 需要人处理\n无\n## 未验证\n无"}`)); err != nil {
 						return nil, err
 					}
 				}
@@ -151,7 +151,7 @@ func TestRunTaskTimeoutWrapUp(t *testing.T) {
 		if !strings.Contains(r.Prompt, "运行时间已用完") || len(r.Tools) != 1 || r.Tools[0].Name != "report" || len(r.Messages) != 2 {
 			t.Errorf("收尾请求不符：提示 %q 工具 %v 历史 %d", r.Prompt, r.Tools, len(r.Messages))
 		}
-		if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","markdown":"# 超时，部分未验证"}`)); err != nil {
+		if _, err := h(ctx, "report", json.RawMessage(`{"title":"日报","summary":"正常","markdown":"## 结论\n正常\n## 需要人处理\n无\n## 未验证\n无"}`)); err != nil {
 			return nil, err
 		}
 		return &piruntime.Result{StopReason: "stop"}, nil

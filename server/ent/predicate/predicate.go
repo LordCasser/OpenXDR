@@ -81,6 +81,9 @@ type ProcessBaseline func(*sql.Selector)
 // Report is the predicate function for report builders.
 type Report func(*sql.Selector)
 
+// ReportRead is the predicate function for reportread builders.
+type ReportRead func(*sql.Selector)
+
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)
 

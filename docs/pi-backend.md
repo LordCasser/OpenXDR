@@ -97,8 +97,10 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 | `GET /api/agent-sessions/{id}/messages?afterSeq=0` | — | 组 viewer；seq 升序，每页最多 1000 条，下一页传最后一条 seq |
 | `POST /api/agent-sessions/{id}/messages` | `{prompt}` | 发起人且仍为组 analyst，会话须为 idle；在后台开跑，返回 202 + `{id}` |
 | `POST /api/agent-sessions/{id}/cancel` | — | 发起人或组 admin；写入停止请求，返回 204 |
-| `GET /api/agent-reports?groupId=...` | — | 组 viewer；最近 100 个原始 Markdown 报告 |
+| `GET /api/agent-reports?groupId=...` | — | 组 viewer；最近 100 个原始 Markdown 报告，每份带 `summary` 与当前用户的 `read` |
 | `GET /api/agent-reports/{id}` | — | 组 viewer；报告实体 |
+| `POST /api/agent-reports/{id}/read` | — | 组 viewer；标为当前用户已读（重复无害），返回 204 |
+| `POST /api/agent-reports/read?groupId=...` | — | 组 viewer；列表里的最近 100 份全部标为当前用户已读 |
 | `GET /api/commands/{id}` | — | 资产所属组 viewer；未分组资产仅全局 admin，可查询迟到回执 |
 | `GET /api/command-policies?groupId=...` | — | 组 admin；名单 |
 | `POST /api/command-policies` | `{groupId,origin,pattern}` | 组 admin；创建名单，返回 201 |
@@ -197,7 +199,11 @@ reports（历史报告，供定时任务与上一轮对比）。incident 与 RES
 不得填写平台的 `DATABASE_URL`，也不要让不同组共用可读全部组的账号。
 
 组未开通时完全不注册 query，不回退到平台数据库账号。SQL 不能用于写入报告；报告走
-`report({title,markdown,level})`，平台强制绑定当前组和会话。`level` 取 `ok`（没有需要人处理的事项，只存档）、
+`report({title,summary,markdown,level})`，平台强制绑定当前组和会话。所有报告同一格式（`internal/report/format.go`）：
+标题最多 50 字（定时任务的标题由平台固定为任务名，周期报告标题一致、下一轮按标题找得到上一份）；`summary` 是一句话结论，
+最多 120 字、不换行，列表、推送与页头都用它；正文去掉模型自写的一级标题，按二级标题
+「结论 / 需要人处理 / 证据 / 推断 / 未验证 / 已执行的操作」分节，结论、需要人处理、未验证三节必须有，缺了带骨架退回。
+页头（标题、级别、来源、时间、结论）由平台渲染，控制台预览、HTML、PDF 一致。`level` 取 `ok`（没有需要人处理的事项，只存档）、
 `attention`（默认，有需要人处理的事项）或 `urgent`（需要立即处理）；定时任务的报告只有 attention 与 urgent 会推送通知，
 urgent 的标题加「【紧急】」。报告中心可只看需处理的报告。
 
@@ -293,8 +299,10 @@ prompt: |
 | `PUT /api/tasks/{id}/groups/{groupId}` | 组 admin | `{enabled: true / false / null}`：该组单独开关，null 恢复跟随全局默认；写审计 |
 | `POST /api/tasks/{id}/run` | admin | 立即运行：记下请求时间，调度器下一次检查时对每个开启的组各跑一轮；所有组都未开启时返回 409 |
 | `GET /api/tasks/{id}/runs` | viewer | 最近 100 次运行，按组裁剪 |
-| `GET /api/agent-reports/{id}/html` | 组 viewer | goldmark 渲染，原始 HTML 与危险链接被丢弃，带 CSP |
-| `GET /api/agent-reports/{id}/pdf` | 组 viewer | headless Chromium 打印，禁外网；找不到 Chromium 返回 503 |
+| `GET /api/agent-reports/{id}/html` | 组 viewer | goldmark 渲染，原始 HTML 与危险链接被丢弃，带 CSP；打开即标为已读 |
+| `GET /api/agent-reports/{id}/pdf` | 组 viewer | headless Chromium 打印，禁外网；找不到 Chromium 返回 503；下载即标为已读 |
+
+已读按人记（`report_reads`，报告 × 用户唯一）：一个人看过不影响别人。侧栏「报告」的计数是当前组未读、且级别不是 ok 的份数。
 
 ## 验证与后续
 

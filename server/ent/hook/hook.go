@@ -308,6 +308,18 @@ func (f ReportFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ReportMutation", m)
 }
 
+// The ReportReadFunc type is an adapter to allow the use of ordinary
+// function as ReportRead mutator.
+type ReportReadFunc func(context.Context, *ent.ReportReadMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ReportReadFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ReportReadMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ReportReadMutation", m)
+}
+
 // The SessionFunc type is an adapter to allow the use of ordinary
 // function as Session mutator.
 type SessionFunc func(context.Context, *ent.SessionMutation) (ent.Value, error)

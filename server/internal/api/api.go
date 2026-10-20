@@ -136,6 +136,7 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 	mapFindings(mux, db)
 	mapMemories(mux, db)
 	mapReportRender(mux, db)
+	mapReportReads(mux, db)
 
 	mapIncidents(mux, db, rules)
 	mux.HandleFunc("GET /api/assets", listAssets(db))

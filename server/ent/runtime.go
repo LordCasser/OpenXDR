@@ -28,6 +28,7 @@ import (
 	"openxdr/server/ent/memory"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
+	"openxdr/server/ent/reportread"
 	"openxdr/server/ent/schema"
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
@@ -437,10 +438,24 @@ func init() {
 	reportDescLevel := reportFields[6].Descriptor()
 	// report.DefaultLevel holds the default value on creation for the level field.
 	report.DefaultLevel = reportDescLevel.Default.(string)
+	// reportDescSummary is the schema descriptor for summary field.
+	reportDescSummary := reportFields[7].Descriptor()
+	// report.DefaultSummary holds the default value on creation for the summary field.
+	report.DefaultSummary = reportDescSummary.Default.(string)
 	// reportDescID is the schema descriptor for id field.
 	reportDescID := reportFields[0].Descriptor()
 	// report.DefaultID holds the default value on creation for the id field.
 	report.DefaultID = reportDescID.Default.(func() uuid.UUID)
+	reportreadFields := schema.ReportRead{}.Fields()
+	_ = reportreadFields
+	// reportreadDescReadAt is the schema descriptor for read_at field.
+	reportreadDescReadAt := reportreadFields[3].Descriptor()
+	// reportread.DefaultReadAt holds the default value on creation for the read_at field.
+	reportread.DefaultReadAt = reportreadDescReadAt.Default.(func() time.Time)
+	// reportreadDescID is the schema descriptor for id field.
+	reportreadDescID := reportreadFields[0].Descriptor()
+	// reportread.DefaultID holds the default value on creation for the id field.
+	reportread.DefaultID = reportreadDescID.Default.(func() uuid.UUID)
 	sessionFields := schema.Session{}.Fields()
 	_ = sessionFields
 	// sessionDescCreatedAt is the schema descriptor for created_at field.

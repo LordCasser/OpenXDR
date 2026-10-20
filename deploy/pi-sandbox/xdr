@@ -45,8 +45,9 @@ usage() {
                                          字段=值（等于）、字段~=值（包含）、字段$=值（结尾），字段为事件体 dot path
   xdr propose-close <事件 id> <false_positive|closed> <结案说明> [报告 id]
                                          给事件提结案建议，人在事件页一键采纳
-  xdr report <标题> <Markdown 文件|-> [级别]
-                                         保存最终报告；- 表示从 stdin 读正文；级别 ok（无需处理，只存档）/ attention（默认）/ urgent
+  xdr report <标题> <一句话结论> <Markdown 文件|-> [级别]
+                                         保存最终报告；- 表示从 stdin 读正文；正文按 ## 结论 / ## 需要人处理 / ## 未验证 等节写；
+                                         级别 ok（无需处理，只存档）/ attention（默认）/ urgent
 U
 }
 
@@ -108,8 +109,8 @@ case "$cmd" in
     [ $# -ge 3 ] || { usage; exit 2; }
     call propose_close "$(jq -cn --arg i "$1" --arg s "$2" --arg n "$3" --arg r "${4:-}" '{incident:$i,status:$s,note:$n} + (if $r == "" then {} else {report:$r} end)')" ;;
   report)
-    [ $# -ge 2 ] && { [ "$2" = - ] || [ -f "$2" ]; } || { usage; exit 2; }
-    if [ "$2" = - ]; then body=$(jq -Rs . ); else body=$(jq -Rs . <"$2"); fi # 正文来自文件，或 - 表示 stdin
-    call report "$(jq -cn --arg t "$1" --argjson m "$body" --arg l "${3:-}" '{title:$t,markdown:$m} + (if $l == "" then {} else {level:$l} end)')" ;;
+    [ $# -ge 3 ] && { [ "$3" = - ] || [ -f "$3" ]; } || { usage; exit 2; }
+    if [ "$3" = - ]; then body=$(jq -Rs . ); else body=$(jq -Rs . <"$3"); fi # 正文来自文件，或 - 表示 stdin
+    call report "$(jq -cn --arg t "$1" --arg s "$2" --argjson m "$body" --arg l "${4:-}" '{title:$t,summary:$s,markdown:$m} + (if $l == "" then {} else {level:$l} end)')" ;;
   *) usage; [ -z "$cmd" ] || exit 2 ;;
 esac

@@ -31,6 +31,7 @@ import (
 	"openxdr/server/ent/memory"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
+	"openxdr/server/ent/reportread"
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/setting"
@@ -131,6 +132,7 @@ func checkColumn(t, c string) error {
 			memory.Table:           memory.ValidColumn,
 			processbaseline.Table:  processbaseline.ValidColumn,
 			report.Table:           report.ValidColumn,
+			reportread.Table:       reportread.ValidColumn,
 			session.Table:          session.ValidColumn,
 			sessionmessage.Table:   sessionmessage.ValidColumn,
 			setting.Table:          setting.ValidColumn,

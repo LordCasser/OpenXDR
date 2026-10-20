@@ -66,6 +66,7 @@ func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 		func(ctx context.Context) (int, error) { return c.Approval.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.CommandPolicy.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Report.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.ReportRead.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.SessionMessage.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AgentSession.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.GroupMember.Delete().Exec(ctx) },

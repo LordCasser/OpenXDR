@@ -25,6 +25,7 @@ import (
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/memories"
 	"openxdr/server/internal/piruntime"
+	reportfmt "openxdr/server/internal/report"
 	"openxdr/server/internal/response"
 )
 
@@ -577,7 +578,7 @@ const queryDescription = "通过当前组专属只读数据库身份查询授权
 	"findings(id, asset_id, key, title, severity, status, first_seen, last_seen, resolved_at, note)；" +
 	"suppressions(id, rule_id, asset_id, reason, status, conditions, expires_at, matched_count, last_matched_at)；" +
 	"memories(id, asset_id, content, source, author, updated_at)；asset_links(src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen)；" +
-	"ip_infos(ip, ptr, as_owner, country, malicious, suspicious, domains)；reports(id, created_at, title, level, markdown)；" +
+	"ip_infos(ip, ptr, as_owner, country, malicious, suspicious, domains)；reports(id, created_at, title, level, markdown, summary：一句话结论)；" +
 	"alerts(id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id, detail：合成检测如外联心跳 xdr:beacon 的间隔统计依据)；" +
 	"incidents(id, created_at, status, title, ai_verdict)；" +
 	"events(id, ts, class_uid, source, asset_id, username, conn_tuple, raw)；" +
@@ -591,7 +592,10 @@ const queryDescription = "通过当前组专属只读数据库身份查询授权
 	"status 为 triaged 表示 AI 已研判、尚未人工结案。不确定列名时先查 information_schema.columns，不猜测；" +
 	"优先聚合与字段投影，避免 SELECT *、graph、raw 等大字段；events 查询务必带 ts 范围。"
 
-var reportTool = piruntime.Tool{Name: "report", Description: "保存当前会话的 Markdown 报告。level：ok 本轮没有需要人处理的事项（只存档，不推送通知）；attention 有新增或仍未解决、需要人处理的事项（默认）；urgent 需要立即处理，如疑似入侵、服务即将中断。", Parameters: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":200},"markdown":{"type":"string","minLength":1,"maxLength":262144},"level":{"type":"string","enum":["ok","attention","urgent"]}},"required":["title","markdown"],"additionalProperties":false}`)}
+var reportTool = piruntime.Tool{Name: "report", Description: "保存当前会话的报告。title 是「对象 + 主题」的短标题；summary 是一句话结论；markdown 正文按二级标题分节，" +
+	"必须有「## 结论」「## 需要人处理」「## 未验证」（没有就写「无」），可选「## 证据」「## 推断」「## 已执行的操作」，按这个顺序，不要再写一级标题。" +
+	"level：ok 本轮没有需要人处理的事项（只存档，不推送通知）；attention 有新增或仍未解决、需要人处理的事项（默认）；urgent 需要立即处理，如疑似入侵、服务即将中断。",
+	Parameters: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":50},"summary":{"type":"string","minLength":1,"maxLength":120},"markdown":{"type":"string","minLength":1,"maxLength":262144},"level":{"type":"string","enum":["ok","attention","urgent"]}},"required":["title","summary","markdown"],"additionalProperties":false}`)}
 
 func (s *Service) tools(ctx context.Context, group uuid.UUID) []piruntime.Tool {
 	tools := []piruntime.Tool{
@@ -640,14 +644,21 @@ func (s *Service) tool(ctx context.Context, session *ent.AgentSession, who comma
 	case "report":
 		var body struct {
 			Title    string `json:"title"`
+			Summary  string `json:"summary"`
 			Markdown string `json:"markdown"`
 			Level    string `json:"level"`
 		}
 		if err := json.Unmarshal(args, &body); err != nil {
 			return "", err
 		}
-		if body.Title == "" || len(body.Title) > 200 || body.Markdown == "" || len(body.Markdown) > 262144 {
-			return "", errors.New("报告长度无效")
+		// 统一格式：标题短、一句话结论单列、正文按固定的节分；不合格带骨架退回让模型改。
+		// 定时任务的报告标题固定用任务名：周期报告标题一致，下一轮按标题找上一份也找得准
+		if session.Kind == "task" && session.Title != nil {
+			body.Title = *session.Title
+		}
+		var err error
+		if body.Title, body.Summary, body.Markdown, err = reportfmt.Normalize(body.Title, body.Summary, body.Markdown); err != nil {
+			return "", err
 		}
 		switch body.Level {
 		case "":
@@ -656,7 +667,7 @@ func (s *Service) tool(ctx context.Context, session *ent.AgentSession, who comma
 		default:
 			return "", errors.New("level 只能是 ok / attention / urgent")
 		}
-		report, err := s.DB.Report.Create().SetSessionID(session.ID).SetGroupID(session.GroupID).SetTitle(body.Title).SetMarkdown(body.Markdown).SetLevel(body.Level).Save(ctx)
+		report, err := s.DB.Report.Create().SetSessionID(session.ID).SetGroupID(session.GroupID).SetTitle(body.Title).SetSummary(body.Summary).SetMarkdown(body.Markdown).SetLevel(body.Level).Save(ctx)
 		if err != nil {
 			return "", err
 		}

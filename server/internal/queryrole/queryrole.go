@@ -202,7 +202,7 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
   FROM public.ip_infos WHERE ip IN (SELECT dst_ip FROM public.asset_links
     WHERE src_asset_id IN (SELECT id FROM public.assets WHERE group_id = ` + gid + `))`,
 		`CREATE OR REPLACE VIEW ` + schema + `.reports WITH (security_barrier) AS
-  SELECT id, created_at, title, level, markdown
+  SELECT id, created_at, title, level, markdown, summary
   FROM public.reports WHERE group_id = ` + gid,
 		`CREATE OR REPLACE VIEW ` + schema + `.events WITH (security_barrier) AS
   SELECT id, ts, class_uid, source, asset_id, username, conn_tuple, raw

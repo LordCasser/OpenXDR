@@ -381,7 +381,12 @@ func (s *Scheduler) pushReports(ctx context.Context, g *ent.Group, session *ent.
 		if r.Level == "urgent" {
 			title = "【紧急】" + title
 		}
-		text := fmt.Sprintf("组「%s」\n%s", g.Name, excerpt(r.Markdown, 300))
+		// 一句话结论就是推送正文；旧报告没有结论时退回正文摘录
+		summary := r.Summary
+		if summary == "" {
+			summary = excerpt(r.Markdown, 300)
+		}
+		text := fmt.Sprintf("组「%s」\n%s", g.Name, summary)
 		if err := s.Notify(ctx, title, text, "/api/agent-reports/"+r.ID.String()+"/html"); err != nil {
 			slog.Error("报告推送失败", "report", r.ID, "err", err)
 		}

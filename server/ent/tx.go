@@ -62,6 +62,8 @@ type Tx struct {
 	ProcessBaseline *ProcessBaselineClient
 	// Report is the client for interacting with the Report builders.
 	Report *ReportClient
+	// ReportRead is the client for interacting with the ReportRead builders.
+	ReportRead *ReportReadClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
 	// SessionMessage is the client for interacting with the SessionMessage builders.
@@ -236,6 +238,7 @@ func (tx *Tx) init() {
 	tx.Memory = NewMemoryClient(tx.config)
 	tx.ProcessBaseline = NewProcessBaselineClient(tx.config)
 	tx.Report = NewReportClient(tx.config)
+	tx.ReportRead = NewReportReadClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
 	tx.SessionMessage = NewSessionMessageClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
