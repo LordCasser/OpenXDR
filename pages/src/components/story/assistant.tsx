@@ -9,7 +9,7 @@ type Item =
   | { kind: "exec"; host: string; cmd: string; out: string }
   | { kind: "gate"; host: string; cmd: string }
   | { kind: "track"; done: boolean; text: string }
-  | { kind: "report"; text: string };
+  | { kind: "report"; title: string; summary: string };
 
 type Decision = "approve" | "reject";
 
@@ -28,6 +28,7 @@ const COPY = {
       "寻常命令，直接执行，不用每条都点批准",
       "高风险命令先暂停，再通知管理员。不是拒绝，所以它不必绕路",
       "对话在服务端运行。关掉浏览器，它也不会停",
+      "它在隔离沙箱里干活：手里没有任何凭据，只能经平台受控的命令操作，查数据也只用本组的只读视图",
     ],
     hint: "试试「拒绝」，看它如何收场。",
     empty: "按下发送，看它巡检生产组。",
@@ -56,12 +57,12 @@ const COPY = {
     approveTail: [
       { kind: "ai", text: "已删除 tmpadmin，待办标为已解决。事件结案仍由你来拍板。" },
       { kind: "track", done: true, text: "db-01 可疑 sudo 账户 tmpadmin 已删除" },
-      { kind: "report", text: "生产组巡检报告 · 2 项已处理 · 0 项待办" },
+      { kind: "report", title: "巡检生产组", summary: "web-01 磁盘已清理，可疑账户 tmpadmin 已删除，没有遗留待办" },
     ],
     rejectTail: [
       { kind: "ai", text: "好，不删。先保留账户，登记成待办，请确认它是不是合法的运维账号。" },
       { kind: "track", done: false, text: "db-01 可疑 sudo 账户 tmpadmin 待确认" },
-      { kind: "report", text: "生产组巡检报告 · 1 项已处理 · 1 项待办" },
+      { kind: "report", title: "巡检生产组", summary: "web-01 磁盘已清理；db-01 的 tmpadmin 待确认是否为合法账号" },
     ],
   },
   en: {
@@ -78,6 +79,7 @@ const COPY = {
       "Routine commands just run. No approving every line",
       "High-risk commands pause and notify an admin. Not denied, so there's nothing to work around",
       "Conversations run on the server. Close the browser; the work goes on",
+      "It works in an isolated sandbox: no credentials of its own, only platform-controlled commands, and read-only views of its own group's data",
     ],
     hint: "Try “Reject” and see how it wraps up.",
     empty: "Press send and watch it check the prod group.",
@@ -106,12 +108,12 @@ const COPY = {
     approveTail: [
       { kind: "ai", text: "tmpadmin removed and the finding marked resolved. Closing the incident is still your call." },
       { kind: "track", done: true, text: "Suspicious sudo account tmpadmin on db-01 removed" },
-      { kind: "report", text: "prod inspection report · 2 handled · 0 open" },
+      { kind: "report", title: "Inspect the prod group", summary: "web-01 disk trimmed, suspicious account tmpadmin removed, nothing left open" },
     ],
     rejectTail: [
       { kind: "ai", text: "Understood, keeping it. Logged a finding so someone confirms whether it's a legitimate ops account." },
       { kind: "track", done: false, text: "Suspicious sudo account tmpadmin on db-01 to confirm" },
-      { kind: "report", text: "prod inspection report · 1 handled · 1 open" },
+      { kind: "report", title: "Inspect the prod group", summary: "web-01 disk trimmed; tmpadmin on db-01 awaits confirmation that it's legitimate" },
     ],
   },
 } satisfies Record<string, { main: Item[]; approveTail: Item[]; rejectTail: Item[] } & Record<string, unknown>>;
@@ -326,10 +328,13 @@ function Row({
       );
     case "report":
       return (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-400/25 bg-emerald-400/[0.06] px-3 py-2.5 text-sm text-emerald-100">
-          <FileText className="h-4 w-4 text-emerald-300" />
-          {item.text}
-          <span className="ml-auto text-xs text-emerald-300/70">HTML · PDF</span>
+        <div className="flex items-start gap-2 rounded-lg border border-emerald-400/25 bg-emerald-400/[0.06] px-3 py-2.5 text-sm text-emerald-100">
+          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+          <div className="min-w-0">
+            <p className="font-medium">{item.title}</p>
+            <p className="mt-0.5 text-xs text-emerald-100/70">{item.summary}</p>
+          </div>
+          <span className="ml-auto shrink-0 text-xs text-emerald-300/70">HTML · PDF</span>
         </div>
       );
   }

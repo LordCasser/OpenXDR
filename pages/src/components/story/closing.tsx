@@ -1,13 +1,15 @@
-import { ArrowRight, Check, Copy } from "lucide-react";
+import { ArrowRight, BellRing, Check, Copy } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { useCopy } from "@/i18n";
 import { ChapterHead, EASE } from "./chapter";
 
 const REPO = "https://github.com/yaklang/OpenXDR";
-const quickstart = (comment: string) => `git clone ${REPO}.git && cd OpenXDR
-docker compose up -d
-# ${comment} http://localhost:5173`;
+// 一行安装：脚本生成口令与证书、配好 HTTPS，拉起后打印控制台地址与 admin 口令
+const quickstart = (host: string, comment: string) => `curl -fsSL \\
+  ${REPO}/releases/latest/download/install.sh \\
+  | sudo sh -s -- ${host}
+# ${comment} https://${host}`;
 
 const COPY = {
   "zh-CN": {
@@ -21,9 +23,13 @@ const COPY = {
     ),
     body: "预设任务每天巡检全组：复查待办，登记新问题，写成一份报告。\n只有需要你拍板的，才会来打扰你。",
     demo: "示例",
+    tasksTitle: "20 个预设任务，按组开关",
+    tasks: ["每日主机巡检", "备份验证", "证书到期检查", "容量趋势预测", "补丁与重启", "账户与权限审计", "暴露面周检", "外联复核", "容器审计", "安全周报", "还有 10 个"],
+    notify: "有事才推送：钉钉、飞书、企业微信或通用 Webhook；无异常的报告只存档。每份报告都能导出 HTML、PDF。",
     report: {
-      title: "生产组 · 每日主机巡检",
-      time: "10:00 · 自动运行",
+      title: "每日主机巡检",
+      time: "生产组 · 10:00 · 自动运行",
+      summary: "web-01 磁盘已清理、可疑账户已删除；gw-01 证书 21 天后到期，已登记待办",
       stats: [
         ["3", "主机"],
         ["2", "已处理"],
@@ -38,11 +44,12 @@ const COPY = {
       ],
     },
     startTitle: "五分钟，跑起来。",
-    consoleAt: "控制台",
+    host: "<域名或IP>",
+    consoleAt: "装好后打开",
     copy: "复制",
     copied: "已复制",
     github: "在 GitHub 查看",
-    docs: "部署文档",
+    docs: "安装说明",
     motto: ["纳管即运维，", "纳管即安全。"],
     license: "Apache-2.0 开源",
   },
@@ -57,9 +64,13 @@ const COPY = {
     ),
     body: "Preset tasks check every host in the group, every day: revisit open findings, log new ones, write it all up.\nOnly what needs your call comes to you.",
     demo: "Sample",
+    tasksTitle: "20 preset tasks, switchable per group",
+    tasks: ["Daily host inspection", "Backup verification", "Certificate expiry", "Capacity forecast", "Patches and reboots", "Account and privilege audit", "Weekly exposure review", "Egress review", "Container audit", "Weekly security report", "and 10 more"],
+    notify: "Pushed only when something needs you — DingTalk, Feishu, WeCom or a generic webhook; all-clear reports are just archived. Every report exports to HTML and PDF.",
     report: {
-      title: "prod · Daily host inspection",
-      time: "10:00 · scheduled",
+      title: "Daily host inspection",
+      time: "prod · 10:00 · scheduled",
+      summary: "web-01 disk trimmed and a suspicious account removed; gw-01 certificate expires in 21 days, finding logged",
       stats: [
         ["3", "hosts"],
         ["2", "handled"],
@@ -74,11 +85,12 @@ const COPY = {
       ],
     },
     startTitle: "Up and running in five minutes.",
-    consoleAt: "console at",
+    host: "<domain-or-ip>",
+    consoleAt: "then open",
     copy: "Copy",
     copied: "Copied",
     github: "View on GitHub",
-    docs: "Deployment guide",
+    docs: "Install guide",
     motto: ["Onboarded means operated,", "onboarded means secured."],
     license: "Open source · Apache-2.0",
   },
@@ -87,7 +99,7 @@ const COPY = {
 export function Closing() {
   const t = useCopy(COPY);
   const [copied, setCopied] = useState(false);
-  const commands = quickstart(t.consoleAt);
+  const commands = quickstart(t.host, t.consoleAt);
   const copy = async () => {
     await navigator.clipboard.writeText(commands);
     setCopied(true);
@@ -98,7 +110,34 @@ export function Closing() {
     <section id="start" className="relative scroll-mt-20 px-4 py-28 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1400px]">
         <div className="grid gap-14 lg:grid-cols-2 lg:items-center">
-          <ChapterHead index="06" kicker={t.kicker} title={t.title} body={t.body} />
+          <div>
+            <ChapterHead index="06" kicker={t.kicker} title={t.title} body={t.body} />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.8, ease: EASE, delay: 0.15 }}
+              className="mt-10 max-w-2xl"
+            >
+              <p className="text-xs text-neutral-500">{t.tasksTitle}</p>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {t.tasks.map((task, i) => (
+                  <li
+                    key={task}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      i === t.tasks.length - 1 ? "border-dashed border-white/15 text-neutral-500" : "border-white/10 bg-white/[0.03] text-neutral-300"
+                    }`}
+                  >
+                    {task}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-6 flex gap-2.5 text-sm leading-relaxed text-neutral-400">
+                <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" aria-hidden />
+                {t.notify}
+              </p>
+            </motion.div>
+          </div>
 
           <motion.article
             initial={{ opacity: 0, y: 30, rotate: 1.5 }}
@@ -116,7 +155,8 @@ export function Closing() {
                 {t.demo}
               </span>
             </div>
-            <dl className="mt-6 grid grid-cols-4 gap-2 border-y border-neutral-300 py-4">
+            <p className="mt-5 border-l-4 border-sky-500 bg-sky-50 px-3 py-2 text-sm font-medium leading-relaxed">{t.report.summary}</p>
+            <dl className="mt-5 grid grid-cols-4 gap-2 border-y border-neutral-300 py-4">
               {t.report.stats.map(([n, label]) => (
                 <div key={label}>
                   <dt className="sr-only">{label}</dt>
@@ -164,7 +204,7 @@ export function Closing() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </a>
               <a
-                href={`${REPO}/blob/master/docs/deployment.md`}
+                href={`${REPO}/blob/master/docs/install.md`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center justify-center rounded-full border border-white/20 px-7 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
@@ -187,10 +227,11 @@ export function Closing() {
                 {copied ? t.copied : t.copy}
               </button>
             </div>
-            <pre className="overflow-x-auto p-5 font-mono text-sm leading-7 text-neutral-300">
+            <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-7 text-neutral-300">
               {commands.split("\n").map((line) => (
-                <div key={line} className={line.startsWith("#") ? "text-neutral-600" : ""}>
-                  {!line.startsWith("#") && <span className="select-none text-emerald-400">$ </span>}
+                <div key={line} className={`whitespace-pre ${line.startsWith("#") ? "text-neutral-600" : ""}`}>
+                  {/* 注释与续行不加提示符 */}
+                  {!line.startsWith("#") && !line.startsWith(" ") && <span className="select-none text-emerald-400">$ </span>}
                   {line}
                 </div>
               ))}

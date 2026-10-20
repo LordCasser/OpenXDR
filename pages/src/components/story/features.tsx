@@ -1,4 +1,4 @@
-import { Cpu, Fingerprint, Globe2, Layers, MessageSquareText, ScrollText, ServerCog, Zap } from "lucide-react";
+import { Bug, Cpu, Fingerprint, Globe2, HeartPulse, Layers, MessageSquareText, ScrollText, ServerCog, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import { useCopy, useLocale } from "@/i18n";
@@ -21,6 +21,8 @@ const COPY = {
       egress: { title: "每个外连地址，都有来历。", desc: "反向解析与 VirusTotal 自动补全归属。足够多的引擎判恶意，直接进情报。" },
       sensor: { title: "不存包，也看得清。", desc: "流量探针只留会话元数据：DNS、TLS 指纹与证书、HTTP 头。" },
       collapse: { title: "例行公事，自动收起。", desc: "同一个父进程反复执行同一条命令，折成一条汇总。一旦它做了别的事，完整的进程血缘立刻补上。" },
+      vulns: { title: "漏洞，按暴露面排。", desc: "agent 报上已装的软件包，平台对着 OSV 漏洞库、按发行版自己的版本规则比对。升级就能修的和暂无补丁的分开，对外服务上的排在最前；内网离线也能用。" },
+      health: { title: "采集掉了，会喊你。", desc: "采集器降级、本地缓存写不进去、丢了事件，主动推送；恢复了再推一次。" },
       respond: { title: "处置，一键到位。", desc: "结束进程、隔离主机。总开关与放行清单兜底，每一步都留痕。" },
       anywhere: { title: "哪里都能装，自己会升级。", desc: "Linux、Windows、容器。eBPF、ETW 不可用就自动降级；新版本放进分发目录，在线 agent 自己换上。" },
       prod: { title: "为生产而生。", desc: "mTLS 主机证书、三档权限、分片队列、Patroni 高可用。" },
@@ -32,6 +34,14 @@ const COPY = {
       vt: "AS64500 · NL · 5 家引擎判恶意",
       intel: "已加入情报",
       folded: "×128 · 10 分钟",
+      vulns: [
+        { pkg: "openssh-server", n: "3 个", score: "8.1", fixable: true, exposed: "对外 :22" },
+        { pkg: "libxml2", n: "2 个", score: "7.5", fixable: true, exposed: "" },
+        { pkg: "linux-image", n: "5 个", score: "6.4", fixable: false, exposed: "" },
+      ],
+      fix: ["暂无修复", "升级可修"],
+      degraded: "pve2 · 网络采集 eBPF → 轮询",
+      recovered: "已恢复 · 12 分钟后",
     },
   },
   en: {
@@ -48,6 +58,8 @@ const COPY = {
       egress: { title: "Every outbound address, explained.", desc: "Reverse DNS and VirusTotal fill in who owns it. Flagged by enough engines, it becomes intel." },
       sensor: { title: "No packet capture. Full picture.", desc: "The sensor keeps session metadata only: DNS, TLS fingerprints and certificates, HTTP headers." },
       collapse: { title: "Routine work, folded away.", desc: "When a parent runs the same command over and over, it folds into one summary. The moment it does anything else, the full lineage comes back." },
+      vulns: { title: "Vulnerabilities, ranked by exposure.", desc: "Agents report installed packages; the platform matches them against OSV using the distro's own version rules. Fixable-by-upgrade is kept apart from no-fix-yet, and packages behind exposed services come first. Works offline too." },
+      health: { title: "Collection drops? You'll hear.", desc: "A degraded collector, a local buffer that can't be written, dropped events — pushed to you as it happens, and once more when it recovers." },
       respond: { title: "Respond in one click.", desc: "Kill a process, isolate a host. A global switch and an allowlist guard it, and every step is on record." },
       anywhere: { title: "Runs anywhere. Updates itself.", desc: "Linux, Windows, containers. Falls back gracefully without eBPF or ETW; drop in a new build and online agents update themselves." },
       prod: { title: "Built for production.", desc: "mTLS host certificates, role-based access, sharded queues, Patroni high availability." },
@@ -59,6 +71,14 @@ const COPY = {
       vt: "AS64500 · NL · 5 engines flag it",
       intel: "Added to intel",
       folded: "×128 · 10 min",
+      vulns: [
+        { pkg: "openssh-server", n: "3", score: "8.1", fixable: true, exposed: "exposed :22" },
+        { pkg: "libxml2", n: "2", score: "7.5", fixable: true, exposed: "" },
+        { pkg: "linux-image", n: "5", score: "6.4", fixable: false, exposed: "" },
+      ],
+      fix: ["No fix yet", "Upgrade fixes"],
+      degraded: "pve2 · network collection eBPF → polling",
+      recovered: "Recovered · 12 min later",
     },
   },
 };
@@ -134,6 +154,39 @@ function Visuals({ id }: { id: string }) {
           </p>
         </div>
       );
+    case "vulns":
+      return (
+        <div className="space-y-1.5 text-xs">
+          {v.vulns.map((r) => (
+            <div key={r.pkg} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2">
+              <span className="min-w-0 truncate font-mono text-neutral-200">{r.pkg}</span>
+              <span className="shrink-0 text-neutral-500">CVE {r.n}</span>
+              <span className={`shrink-0 tabular-nums ${Number(r.score) >= 7 ? "text-rose-300" : "text-amber-200"}`}>{r.score}</span>
+              {r.exposed && <span className="shrink-0 rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">{r.exposed}</span>}
+              <span
+                className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] ${
+                  r.fixable ? "bg-emerald-400/15 text-emerald-200" : "bg-white/[0.06] text-neutral-400"
+                }`}
+              >
+                {v.fix[Number(r.fixable)]}
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    case "health":
+      return (
+        <div className="space-y-2 text-xs">
+          <p className="flex items-center gap-2 rounded-lg border border-amber-300/25 bg-amber-400/[0.06] px-3 py-2 text-amber-100">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+            <span className="truncate">{v.degraded}</span>
+          </p>
+          <p className="flex items-center gap-2 rounded-lg border border-emerald-300/25 bg-emerald-400/[0.06] px-3 py-2 text-emerald-100">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+            <span className="truncate">{v.recovered}</span>
+          </p>
+        </div>
+      );
     default:
       return null;
   }
@@ -145,6 +198,8 @@ const LAYOUT: { id: keyof (typeof COPY)["en"]["tiles"]; icon: ReactNode; wide?: 
   { id: "egress", icon: <Globe2 /> },
   { id: "sensor", icon: <Fingerprint /> },
   { id: "collapse", icon: <ScrollText /> },
+  { id: "vulns", icon: <Bug />, wide: true },
+  { id: "health", icon: <HeartPulse /> },
   { id: "respond", icon: <Zap /> },
   { id: "anywhere", icon: <Cpu /> },
   { id: "prod", icon: <ServerCog /> },
