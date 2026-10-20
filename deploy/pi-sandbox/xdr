@@ -52,17 +52,27 @@ usage() {
 U
 }
 
+need() { # 子命令 最少参数个数 实际参数...：不够时只打印这个子命令那一行用法，并指出缺的是哪个参数
+  local sub=$1 min=$2 line params; shift 2
+  [ $# -ge "$min" ] && return
+  line=$(usage | grep -E "^  xdr $sub( |\$)" | sed -E 's/^ +//; s/ {2,}.*//')
+  mapfile -t params < <(grep -oE '<[^>]+>' <<<"$line")
+  echo "用法：$line" >&2
+  echo "缺少参数 ${params[$#]:-}：需要至少 $min 个，收到 $# 个（带空格的参数整个用引号括起来）" >&2
+  exit 2
+}
+
 cmd=${1:-}; shift || true
 case "$cmd" in
   hosts) context | jq -r '.assets[] | [.hostname, (.role // "-"), (.criticality // "-" | tostring), (.zone.name // .zone.kind), (.os // "-")] | @tsv' | column -t -s $'\t' ;;
   context) context | jq . ;;
   exec)
-    [ $# -ge 2 ] || { usage; exit 2; }
+    need "$cmd" 2 "$@"
     out=$(call exec "$(jq -cn --arg h "$(host_id "$1")" --arg c "$(text "$2")" --argjson t "${3:-60}" '{host:$h,cmd:$c,timeout:$t}')")
     jq -r '"[status=\(.status) exit=\(.exit_code // "-")\(if .truncated then " truncated" else "" end)]", (.stdout // ""), (if (.stderr // "") != "" then "[stderr]\n" + .stderr else empty end)' <<<"$out" ;;
   sql)
     json=; [ "${1:-}" = --json ] && { json=1; shift; }
-    [ $# -ge 1 ] || { usage; exit 2; }
+    need "$cmd" 1 "$@"
     out=$(call query "$(jq -cn --arg s "$(text "$1")" '{sql:$s}')")
     if [ -n "$json" ]; then
       # TSV 会把反斜杠再转义一层，jsonb 列就解析不回来了；JSON 行原样保留嵌套结构
@@ -72,16 +82,16 @@ case "$cmd" in
       jq -r '(.columns | @tsv), (.rows[] | map(if type == "object" or type == "array" then tojson else (. // "" | tostring) end) | @tsv), (if .truncated then "[truncated]" else empty end)' <<<"$out"
     fi ;;
   track)
-    [ $# -ge 6 ] || { usage; exit 2; }
+    need "$cmd" 6 "$@"
     call track "$(jq -cn --arg h "$(host_id "$1")" --arg k "$2" --arg sv "$3" --arg st "$4" --arg t "$5" --arg d "$6" '{host:$h,key:$k,severity:$sv,status:$st,title:$t,detail:$d}')" ;;
   ignore)
-    [ $# -ge 3 ] || { usage; exit 2; }
+    need "$cmd" 3 "$@"
     call ignore "$(jq -cn --arg h "$(host_id "$1")" --arg k "$2" --arg r "$3" '{host:$h,key:$k,reason:$r}')" ;;
   identify)
-    [ $# -ge 5 ] || { usage; exit 2; }
+    need "$cmd" 5 "$@"
     call identify "$(jq -cn --arg h "$(host_id "$1")" --arg p "$2" --arg r "$3" --arg n "$4" --arg note "$5" '{host:$h,port:$p,risk:$r,name:$n,note:$note}')" ;;
   egress)
-    [ $# -ge 5 ] || { usage; exit 2; }
+    need "$cmd" 5 "$@"
     call egress "$(jq -cn --arg h "$(host_id "$1")" --arg ip "$2" --arg r "$3" --arg n "$4" --arg note "$5" '{host:$h,ip:$ip,risk:$r,name:$n,note:$note}')" ;;
   memories) call memories '{}' | jq -r '.memories[] | [.id, .source, (.host // "-"), .content] | @tsv' ;;
   remember)
@@ -91,13 +101,13 @@ case "$cmd" in
     elif [ $# -eq 1 ]; then
       call remember "$(jq -cn --arg c "$1" '{content:$c}')"
     else
-      usage; exit 2
+      need "$cmd" 1 "$@"
     fi ;;
   forget)
-    [ $# -ge 1 ] || { usage; exit 2; }
+    need "$cmd" 1 "$@"
     call forget "$(jq -cn --arg i "$1" '{id:$i}')" ;;
   suppress)
-    [ $# -ge 5 ] || { usage; exit 2; }
+    need "$cmd" 5 "$@"
     host=$(host_id "$1"); rule=$2; why=$3; days=$4; shift 4
     conds='[]'
     for c in "$@"; do
@@ -110,10 +120,11 @@ case "$cmd" in
     done
     call suppress "$(jq -cn --arg h "$host" --arg r "$rule" --arg why "$why" --argjson d "$days" --argjson c "$conds" '{host:$h,rule_id:$r,reason:$why,days:$d,conditions:$c}')" ;;
   propose-close)
-    [ $# -ge 3 ] || { usage; exit 2; }
+    need "$cmd" 3 "$@"
     call propose_close "$(jq -cn --arg i "$1" --arg s "$2" --arg n "$3" --arg r "${4:-}" '{incident:$i,status:$s,note:$n} + (if $r == "" then {} else {report:$r} end)')" ;;
   report)
-    [ $# -ge 3 ] && { [ "$3" = - ] || [ -f "$3" ]; } || { usage; exit 2; }
+    need "$cmd" 3 "$@"
+    [ "$3" = - ] || [ -f "$3" ] || { echo "正文文件不存在：$3（正文写进文件，或用 - 从 stdin 读）" >&2; exit 2; }
     if [ "$3" = - ]; then body=$(jq -Rs . ); else body=$(jq -Rs . <"$3"); fi # 正文来自文件，或 - 表示 stdin
     call report "$(jq -cn --arg t "$1" --arg s "$2" --argjson m "$body" --arg l "${4:-}" '{title:$t,summary:$s,markdown:$m} + (if $l == "" then {} else {level:$l} end)')" ;;
   *) usage; [ -z "$cmd" ] || exit 2 ;;
