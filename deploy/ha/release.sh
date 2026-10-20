@@ -12,6 +12,7 @@
 #   NPM_REGISTRY 构建 web 时的 npm 源，如 https://registry.npmmirror.com
 #   ALPINE_MIRROR 构建 server 镜像时的 alpine 软件源，如 https://mirrors.ustc.edu.cn
 #   ALLOW_DIRTY  设为 1 才允许工作区有未提交改动（镜像会带上它们，标签加 -dirty）
+#   SKIP_IPDB    设为 1 不下载离线 IP 归属库，镜像里库为空、归属字段留空（下不到 DB-IP 时用）
 #
 # 同步内容：两个镜像，rules/ 与 tasks/（节点上 bind mount，逐个文件原地覆盖，
 # 不整体替换目录——容器挂的是目录本身，换掉目录它会继续看旧的）；temporal-rules/ 按内容哈希发布成
@@ -38,11 +39,20 @@ first=$1 second=$2
 if remote "$first" "ip -4 -o addr | grep -qw '$VIP'"; then first=$2 second=$1; fi
 
 echo "== 构建 $TAG"
-docker build -q -f "$ROOT/server/Dockerfile" ${GOPROXY:+--build-arg GOPROXY="$GOPROXY"} ${ALPINE_MIRROR:+--build-arg ALPINE_MIRROR="$ALPINE_MIRROR"} -t "openxdr-ha-server:$TAG" "$ROOT"
+# 离线 IP 归属库与 release.yml 同口径：下载当月 DB-IP Lite 并校验后打进镜像；下不到就停下，别悄悄发一个缺库的镜像
+ipdb=$(mktemp -d)
+trap 'rm -rf "$ipdb"' EXIT
+mkdir "$ipdb/ipdb"
+if [ "${SKIP_IPDB:-}" != 1 ]; then
+  (cd "$ROOT/server" && go run ./cmd/ipdb -dir "$ipdb/ipdb") ||
+    { echo "离线 IP 归属库下载或校验失败；确认不要它就设 SKIP_IPDB=1" >&2; exit 1; }
+fi
+docker build -q -f "$ROOT/server/Dockerfile" ${GOPROXY:+--build-arg GOPROXY="$GOPROXY"} ${ALPINE_MIRROR:+--build-arg ALPINE_MIRROR="$ALPINE_MIRROR"} \
+  --build-context ipdb="$ipdb" -t "openxdr-ha-server:$TAG" "$ROOT"
 docker build -q -f "$ROOT/web/Dockerfile" ${NPM_REGISTRY:+--build-arg NPM_REGISTRY="$NPM_REGISTRY"} -t "openxdr-ha-web:$TAG" "$ROOT/web"
 
 bundle=$(mktemp)
-trap 'rm -f "$bundle"' EXIT
+trap 'rm -rf "$bundle" "$ipdb"' EXIT
 tar -C "$ROOT" -czf "$bundle" rules tasks temporal-rules
 
 for node in "$first" "$second"; do
