@@ -92,9 +92,9 @@ Start-Sleep 35
 reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\notepad.exe" /v Debugger /f
 
 Mark 'T1562.001 Defender 排除项（Defender 未运行时无注册表落点，跳过不报错）'
-Add-MpPreference -ExclusionPath 'C:tomic-test' -ErrorAction SilentlyContinue
+Add-MpPreference -ExclusionPath 'C:\atomic-test' -ErrorAction SilentlyContinue
 Start-Sleep 35
-Remove-MpPreference -ExclusionPath 'C:tomic-test' -ErrorAction SilentlyContinue
+Remove-MpPreference -ExclusionPath 'C:\atomic-test' -ErrorAction SilentlyContinue
 
 Mark 'T1546.015 COM 劫持 HKCU CLSID（35s 后删）'
 $clsid = '{11111111-2222-3333-4444-555555555555}'

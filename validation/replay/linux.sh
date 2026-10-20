@@ -6,6 +6,18 @@
 #       进程类规则的实机命中已在真 Linux 验证，WSL2 仍只能覆盖轮询兜底。
 mark() { echo "=== [$1] $(date +%T) ==="; }
 
+# 下面会改写 /root/.ssh（私钥、authorized_keys）与 /root/.bash_history：先备份，退出时原样还原，免得把自己锁在门外
+BAK=$(mktemp -d)
+cp -a /root/.ssh "$BAK/ssh" 2>/dev/null
+cp -a /root/.bash_history "$BAK/bash_history" 2>/dev/null
+restore() {
+  rm -rf /root/.ssh /root/.bash_history
+  [ -e "$BAK/ssh" ] && cp -a "$BAK/ssh" /root/.ssh
+  [ -e "$BAK/bash_history" ] && cp -a "$BAK/bash_history" /root/.bash_history
+  rm -rf "$BAK"
+}
+trap restore EXIT
+
 mark 'T1082/T1033/T1087.001/T1003.008 发现与读取'
 uname -a
 whoami
