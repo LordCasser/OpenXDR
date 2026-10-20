@@ -73,6 +73,11 @@
   以前 ETW 会话还在、事件全无时健康状态照报 active。降级原因进「主机采集异常」通知与资产页采集状态；新增 Prometheus 指标
   `openxdr_collector_capability_problem_hosts{capability,state,silent}` 与告警规则 `OpenXDRCollectorSilent`。
   **先升级 server 再升级 agent**：旧 server 会拒收带降级原因的采集状态。
+- 采集失明后自动重建：活性检测判为降级后，agent 在进程内重建该采集器——Windows 停掉并重建固定名 ETW 会话，
+  Linux eBPF 重新载入并挂载对应那组程序（进程、网络各一组，互不牵连），netlink 重新订阅，fanotify / inotify / RDCW 重新挂上监控目标。
+  降级 1 分钟后试第一次，再隔 5、15 分钟各一次，之后每小时一次；先停旧实例再起新的，不重复上报，进程注册表与连接采样表跨重建保留
+  （退出事件照样复用启动 GUID），文件监控重建不补报已有文件。采集状态新增 `rebuilds`（降级期间已重建几次）与 `recoveries`
+  （自动恢复几次），控制台显示，重建次数写进通知文字但不进签名。同样须**先升级 server**：旧 server 会拒收带这两个字段的采集状态。
 - Windows 网络采集补齐 TCP 入站（TcpAccept，归属到监听进程）、UDP 出站与 IPv6 的 TCP 出站，能力改报 `network: etw / active`；
   发往 UDP 53 的出站按进程采样，绕过系统解析器自己发 DNS 报文的程序（nslookup 等）不再被 Dnscache 服务的查询压掉。
 - Windows DNS 采集：ETW DNS-Client 的查询完成事件（3008）按发起进程归属，归一化成与 Linux 同构的 4003 事件，
