@@ -92,3 +92,91 @@ cases:
         path: "wmi:root\\subscription\\__EventConsumer.EvilConsumer"
       wmi:
         data: '{"CommandLineTemplate":"C:\\Users\\Public\\evil.exe","Name":"EvilConsumer"}'
+
+  - name: COM 劫持 HKCU CLSID InprocServer32（实机回放第四轮的原始事件）
+    technique: T1546.015
+    source: atomic T1546.015
+    class: 201002
+    os: windows
+    event:
+      activity_id: 1
+      reg_key:
+        path: "HKCU\\Software\\Classes\\CLSID\\{11111111-2222-3333-4444-555555555555}\\InprocServer32\\"
+      reg_value:
+        data: "C:\\evil.dll"
+
+  - name: COM 劫持改写已有 HKCU CLSID 的 LocalServer32 指向 AppData 下的 EXE
+    technique: T1546.015
+    source: atomic T1546.015
+    class: 201002
+    os: windows
+    event:
+      activity_id: 3
+      reg_key:
+        path: "HKCU\\Software\\Classes\\CLSID\\{b5f8350b-0548-48b1-a6ee-88bd00b4a5e7}\\LocalServer32\\"
+      reg_value:
+        data: "C:\\Users\\alice\\AppData\\Roaming\\Microsoft\\update.exe"
+
+  - name: COM 劫持指向 OneDrive 目录但文件名不对（排除按目录+文件名收窄）
+    technique: T1546.015
+    source: atomic T1546.015 变体
+    class: 201002
+    os: windows
+    event:
+      activity_id: 1
+      reg_key:
+        path: "HKCU\\Software\\Classes\\CLSID\\{BCDE0395-E52F-467C-8E3D-C4579291692E}\\InprocServer32\\"
+      reg_value:
+        data: "C:\\Users\\alice\\AppData\\Local\\Microsoft\\OneDrive\\evil.dll"
+
+  - name: OneDrive 按用户安装注册外壳扩展（良性对照）
+    technique: T1546.015
+    source: OneDrive 按用户安装
+    class: 201002
+    os: windows
+    expect: undetected
+    event:
+      activity_id: 1
+      reg_key:
+        path: "HKCU\\Software\\Classes\\CLSID\\{CB3D0F55-BC2C-4C1A-85ED-23ED75B5106B}\\InprocServer32\\"
+      reg_value:
+        data: "C:\\Users\\alice\\AppData\\Local\\Microsoft\\OneDrive\\24.201.1006.0005\\FileSyncShell64.dll"
+
+  - name: Office 在 HKCU 注册指向 Program Files 的 COM 服务器（良性对照）
+    technique: T1546.015
+    source: Office 按用户注册
+    class: 201002
+    os: windows
+    expect: undetected
+    event:
+      activity_id: 1
+      reg_key:
+        path: "HKCU\\Software\\Classes\\CLSID\\{2DF8D04C-5BFA-101B-BDE5-00AA0044DE52}\\LocalServer32\\"
+      reg_value:
+        data: "\"C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE\" /Automation"
+
+  - name: COM 注册的 ThreadingModel 附属值（不重复告警）
+    technique: T1546.015
+    source: atomic T1546.015 附属值
+    class: 201002
+    os: windows
+    expect: undetected
+    event:
+      activity_id: 1
+      reg_key:
+        path: "HKCU\\Software\\Classes\\CLSID\\{11111111-2222-3333-4444-555555555555}\\InprocServer32\\ThreadingModel"
+      reg_value:
+        data: "Apartment"
+
+  - name: 删除 HKCU CLSID 注册（清理，不按劫持报）
+    technique: T1546.015
+    source: 实机回放第四轮的删除事件
+    class: 201002
+    os: windows
+    expect: undetected
+    event:
+      activity_id: 4
+      reg_key:
+        path: "HKCU\\Software\\Classes\\CLSID\\{11111111-2222-3333-4444-555555555555}\\InprocServer32\\"
+      reg_value:
+        data: "C:\\evil.dll"

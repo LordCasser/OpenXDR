@@ -1,0 +1,60 @@
+title: User-Level COM Hijack (HKCU CLSID Server)
+id: 856706ac-b7e2-4aff-8a89-6b84ef4f098f
+status: experimental
+description: |
+  检测用户级 COM 劫持：在 HKCU\Software\Classes\CLSID\{…}\InprocServer32 或 LocalServer32
+  写入默认值（服务器路径）。HKCR 是 HKLM 与 HKCU 的合并视图，同一 CLSID 以 HKCU 为准，
+  普通用户权限就能让 Explorer、Office、计划任务里的 COM 处理程序在加载该 CLSID 时改走攻击者的
+  DLL / EXE，无需管理员。
+  采集端只快照 HKCU 侧，没有 HKLM 全量 CLSID 可比，规则不核对「是否覆盖了已有的系统 CLSID」，
+  所有用户级注册都在范围内；只看默认值，ThreadingModel 等附属值不报，删除不报。
+  排除（合法软件按用户注册 COM 的常见形态）：
+  - 服务器在 Program Files 下（含带引号与 %ProgramFiles% 写法）：Office、Edge、按机器安装的 Teams / OneDrive 等，
+    这些目录普通用户写不进去，指向它们不构成劫持；
+  - OneDrive 按用户安装：%LOCALAPPDATA%\Microsoft\OneDrive\ 下的 FileSyncShell64.dll /
+    FileCoAuthLib64.dll / OneDrive.exe；
+  - 经典 Teams 的 Outlook 会议插件：%LOCALAPPDATA%\Microsoft\TeamsMeetingAddin\ 下的
+    Microsoft.Teams.AddinLoader.dll。
+  AppData 下的排除按「目录 + 文件名」收窄，同目录换个文件名照样报。System32 下的系统 DLL 不排除：
+  把 CLSID 指向 scrobj.dll 等系统组件本身就是已知的劫持变体。
+  仍会误报：其他装在 AppData 的按用户安装软件（Zoom Outlook 插件、部分输入法与云盘），确认后按主机与路径窄抑制。
+  注意 agent 以服务运行时 HKCU 是服务账户自己的配置单元，交互用户的 HKCU 不在快照内。
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1546.015
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  com_server:
+    TargetObject|startswith: 'HKCU\Software\Classes\CLSID\'
+    TargetObject|endswith:
+      - '\InprocServer32\'
+      - '\LocalServer32\'
+  written:
+    activity_id:
+      - 1
+      - 3
+  program_files:
+    Details|startswith:
+      - 'C:\Program Files\'
+      - 'C:\Program Files (x86)\'
+      - '"C:\Program Files\'
+      - '"C:\Program Files (x86)\'
+      - '%ProgramFiles%\'
+      - '%ProgramFiles(x86)%\'
+      - '"%ProgramFiles%\'
+      - '"%ProgramFiles(x86)%\'
+  onedrive:
+    Details|contains: '\AppData\Local\Microsoft\OneDrive\'
+    Details|endswith:
+      - '\FileSyncShell64.dll'
+      - '\FileCoAuthLib64.dll'
+      - '\OneDrive.exe'
+      - '\OneDrive.exe"'
+  teams_addin:
+    Details|contains: '\AppData\Local\Microsoft\TeamsMeetingAddin\'
+    Details|endswith: '\Microsoft.Teams.AddinLoader.dll'
+  condition: com_server and written and not (program_files or onedrive or teams_addin)
+level: high
