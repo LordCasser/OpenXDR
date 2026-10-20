@@ -3,6 +3,13 @@
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 0.x 期间接口、配置与数据库结构仍可能不兼容变更，升级前请看对应条目。
 
+## [未发布]
+
+### 存储
+
+- events 按 UTC 日分区：新库直接建分区表，保留期改为整分区退役（被引用的证据并入月归档分区）；指向 events 的外键改由触发器维护。
+  老库照旧运行，用 `cmd/eventpartition` 在线迁移（镜像触发器同步、分批回填可续跑、逐日核对、短锁切换、可回滚），步骤见 [事件表分区](docs/event-partitioning.md)。
+
 ## [0.2.0] - 2026-10-20
 
 ### 身份关联
