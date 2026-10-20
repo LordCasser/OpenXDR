@@ -362,6 +362,18 @@ func init() {
 	ipinfoDescSuspicious := ipinfoFields[8].Descriptor()
 	// ipinfo.DefaultSuspicious holds the default value on creation for the suspicious field.
 	ipinfo.DefaultSuspicious = ipinfoDescSuspicious.Default.(int)
+	// ipinfoDescIpdbAsn is the schema descriptor for ipdb_asn field.
+	ipinfoDescIpdbAsn := ipinfoFields[11].Descriptor()
+	// ipinfo.DefaultIpdbAsn holds the default value on creation for the ipdb_asn field.
+	ipinfo.DefaultIpdbAsn = ipinfoDescIpdbAsn.Default.(int)
+	// ipinfoDescIpdbOrg is the schema descriptor for ipdb_org field.
+	ipinfoDescIpdbOrg := ipinfoFields[12].Descriptor()
+	// ipinfo.DefaultIpdbOrg holds the default value on creation for the ipdb_org field.
+	ipinfo.DefaultIpdbOrg = ipinfoDescIpdbOrg.Default.(string)
+	// ipinfoDescIpdbCountry is the schema descriptor for ipdb_country field.
+	ipinfoDescIpdbCountry := ipinfoFields[13].Descriptor()
+	// ipinfo.DefaultIpdbCountry holds the default value on creation for the ipdb_country field.
+	ipinfo.DefaultIpdbCountry = ipinfoDescIpdbCountry.Default.(string)
 	// ipinfoDescID is the schema descriptor for id field.
 	ipinfoDescID := ipinfoFields[0].Descriptor()
 	// ipinfo.DefaultID holds the default value on creation for the id field.

@@ -18689,6 +18689,11 @@ type IPInfoMutation struct {
 	domains       *[]string
 	appenddomains []string
 	vt_at         *time.Time
+	ipdb_asn      *int
+	addipdb_asn   *int
+	ipdb_org      *string
+	ipdb_country  *string
+	ipdb_at       *time.Time
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*IPInfo, error)
@@ -19274,6 +19279,183 @@ func (m *IPInfoMutation) ResetVtAt() {
 	delete(m.clearedFields, ipinfo.FieldVtAt)
 }
 
+// SetIpdbAsn sets the "ipdb_asn" field.
+func (m *IPInfoMutation) SetIpdbAsn(i int) {
+	m.ipdb_asn = &i
+	m.addipdb_asn = nil
+}
+
+// IpdbAsn returns the value of the "ipdb_asn" field in the mutation.
+func (m *IPInfoMutation) IpdbAsn() (r int, exists bool) {
+	v := m.ipdb_asn
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIpdbAsn returns the old "ipdb_asn" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldIpdbAsn(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIpdbAsn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIpdbAsn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIpdbAsn: %w", err)
+	}
+	return oldValue.IpdbAsn, nil
+}
+
+// AddIpdbAsn adds i to the "ipdb_asn" field.
+func (m *IPInfoMutation) AddIpdbAsn(i int) {
+	if m.addipdb_asn != nil {
+		*m.addipdb_asn += i
+	} else {
+		m.addipdb_asn = &i
+	}
+}
+
+// AddedIpdbAsn returns the value that was added to the "ipdb_asn" field in this mutation.
+func (m *IPInfoMutation) AddedIpdbAsn() (r int, exists bool) {
+	v := m.addipdb_asn
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetIpdbAsn resets all changes to the "ipdb_asn" field.
+func (m *IPInfoMutation) ResetIpdbAsn() {
+	m.ipdb_asn = nil
+	m.addipdb_asn = nil
+}
+
+// SetIpdbOrg sets the "ipdb_org" field.
+func (m *IPInfoMutation) SetIpdbOrg(s string) {
+	m.ipdb_org = &s
+}
+
+// IpdbOrg returns the value of the "ipdb_org" field in the mutation.
+func (m *IPInfoMutation) IpdbOrg() (r string, exists bool) {
+	v := m.ipdb_org
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIpdbOrg returns the old "ipdb_org" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldIpdbOrg(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIpdbOrg is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIpdbOrg requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIpdbOrg: %w", err)
+	}
+	return oldValue.IpdbOrg, nil
+}
+
+// ResetIpdbOrg resets all changes to the "ipdb_org" field.
+func (m *IPInfoMutation) ResetIpdbOrg() {
+	m.ipdb_org = nil
+}
+
+// SetIpdbCountry sets the "ipdb_country" field.
+func (m *IPInfoMutation) SetIpdbCountry(s string) {
+	m.ipdb_country = &s
+}
+
+// IpdbCountry returns the value of the "ipdb_country" field in the mutation.
+func (m *IPInfoMutation) IpdbCountry() (r string, exists bool) {
+	v := m.ipdb_country
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIpdbCountry returns the old "ipdb_country" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldIpdbCountry(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIpdbCountry is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIpdbCountry requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIpdbCountry: %w", err)
+	}
+	return oldValue.IpdbCountry, nil
+}
+
+// ResetIpdbCountry resets all changes to the "ipdb_country" field.
+func (m *IPInfoMutation) ResetIpdbCountry() {
+	m.ipdb_country = nil
+}
+
+// SetIpdbAt sets the "ipdb_at" field.
+func (m *IPInfoMutation) SetIpdbAt(t time.Time) {
+	m.ipdb_at = &t
+}
+
+// IpdbAt returns the value of the "ipdb_at" field in the mutation.
+func (m *IPInfoMutation) IpdbAt() (r time.Time, exists bool) {
+	v := m.ipdb_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIpdbAt returns the old "ipdb_at" field's value of the IPInfo entity.
+// If the IPInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IPInfoMutation) OldIpdbAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIpdbAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIpdbAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIpdbAt: %w", err)
+	}
+	return oldValue.IpdbAt, nil
+}
+
+// ClearIpdbAt clears the value of the "ipdb_at" field.
+func (m *IPInfoMutation) ClearIpdbAt() {
+	m.ipdb_at = nil
+	m.clearedFields[ipinfo.FieldIpdbAt] = struct{}{}
+}
+
+// IpdbAtCleared returns if the "ipdb_at" field was cleared in this mutation.
+func (m *IPInfoMutation) IpdbAtCleared() bool {
+	_, ok := m.clearedFields[ipinfo.FieldIpdbAt]
+	return ok
+}
+
+// ResetIpdbAt resets all changes to the "ipdb_at" field.
+func (m *IPInfoMutation) ResetIpdbAt() {
+	m.ipdb_at = nil
+	delete(m.clearedFields, ipinfo.FieldIpdbAt)
+}
+
 // Where appends a list predicates to the IPInfoMutation builder.
 func (m *IPInfoMutation) Where(ps ...predicate.IPInfo) {
 	m.predicates = append(m.predicates, ps...)
@@ -19308,7 +19490,7 @@ func (m *IPInfoMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IPInfoMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 14)
 	if m.ip != nil {
 		fields = append(fields, ipinfo.FieldIP)
 	}
@@ -19339,6 +19521,18 @@ func (m *IPInfoMutation) Fields() []string {
 	if m.vt_at != nil {
 		fields = append(fields, ipinfo.FieldVtAt)
 	}
+	if m.ipdb_asn != nil {
+		fields = append(fields, ipinfo.FieldIpdbAsn)
+	}
+	if m.ipdb_org != nil {
+		fields = append(fields, ipinfo.FieldIpdbOrg)
+	}
+	if m.ipdb_country != nil {
+		fields = append(fields, ipinfo.FieldIpdbCountry)
+	}
+	if m.ipdb_at != nil {
+		fields = append(fields, ipinfo.FieldIpdbAt)
+	}
 	return fields
 }
 
@@ -19367,6 +19561,14 @@ func (m *IPInfoMutation) Field(name string) (ent.Value, bool) {
 		return m.Domains()
 	case ipinfo.FieldVtAt:
 		return m.VtAt()
+	case ipinfo.FieldIpdbAsn:
+		return m.IpdbAsn()
+	case ipinfo.FieldIpdbOrg:
+		return m.IpdbOrg()
+	case ipinfo.FieldIpdbCountry:
+		return m.IpdbCountry()
+	case ipinfo.FieldIpdbAt:
+		return m.IpdbAt()
 	}
 	return nil, false
 }
@@ -19396,6 +19598,14 @@ func (m *IPInfoMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldDomains(ctx)
 	case ipinfo.FieldVtAt:
 		return m.OldVtAt(ctx)
+	case ipinfo.FieldIpdbAsn:
+		return m.OldIpdbAsn(ctx)
+	case ipinfo.FieldIpdbOrg:
+		return m.OldIpdbOrg(ctx)
+	case ipinfo.FieldIpdbCountry:
+		return m.OldIpdbCountry(ctx)
+	case ipinfo.FieldIpdbAt:
+		return m.OldIpdbAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown IPInfo field %s", name)
 }
@@ -19475,6 +19685,34 @@ func (m *IPInfoMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetVtAt(v)
 		return nil
+	case ipinfo.FieldIpdbAsn:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIpdbAsn(v)
+		return nil
+	case ipinfo.FieldIpdbOrg:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIpdbOrg(v)
+		return nil
+	case ipinfo.FieldIpdbCountry:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIpdbCountry(v)
+		return nil
+	case ipinfo.FieldIpdbAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIpdbAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown IPInfo field %s", name)
 }
@@ -19492,6 +19730,9 @@ func (m *IPInfoMutation) AddedFields() []string {
 	if m.addsuspicious != nil {
 		fields = append(fields, ipinfo.FieldSuspicious)
 	}
+	if m.addipdb_asn != nil {
+		fields = append(fields, ipinfo.FieldIpdbAsn)
+	}
 	return fields
 }
 
@@ -19506,6 +19747,8 @@ func (m *IPInfoMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedMalicious()
 	case ipinfo.FieldSuspicious:
 		return m.AddedSuspicious()
+	case ipinfo.FieldIpdbAsn:
+		return m.AddedIpdbAsn()
 	}
 	return nil, false
 }
@@ -19536,6 +19779,13 @@ func (m *IPInfoMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddSuspicious(v)
 		return nil
+	case ipinfo.FieldIpdbAsn:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddIpdbAsn(v)
+		return nil
 	}
 	return fmt.Errorf("unknown IPInfo numeric field %s", name)
 }
@@ -19552,6 +19802,9 @@ func (m *IPInfoMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(ipinfo.FieldVtAt) {
 		fields = append(fields, ipinfo.FieldVtAt)
+	}
+	if m.FieldCleared(ipinfo.FieldIpdbAt) {
+		fields = append(fields, ipinfo.FieldIpdbAt)
 	}
 	return fields
 }
@@ -19575,6 +19828,9 @@ func (m *IPInfoMutation) ClearField(name string) error {
 		return nil
 	case ipinfo.FieldVtAt:
 		m.ClearVtAt()
+		return nil
+	case ipinfo.FieldIpdbAt:
+		m.ClearIpdbAt()
 		return nil
 	}
 	return fmt.Errorf("unknown IPInfo nullable field %s", name)
@@ -19613,6 +19869,18 @@ func (m *IPInfoMutation) ResetField(name string) error {
 		return nil
 	case ipinfo.FieldVtAt:
 		m.ResetVtAt()
+		return nil
+	case ipinfo.FieldIpdbAsn:
+		m.ResetIpdbAsn()
+		return nil
+	case ipinfo.FieldIpdbOrg:
+		m.ResetIpdbOrg()
+		return nil
+	case ipinfo.FieldIpdbCountry:
+		m.ResetIpdbCountry()
+		return nil
+	case ipinfo.FieldIpdbAt:
+		m.ResetIpdbAt()
 		return nil
 	}
 	return fmt.Errorf("unknown IPInfo field %s", name)

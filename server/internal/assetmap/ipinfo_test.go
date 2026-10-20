@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/ipdb"
 )
 
 func TestPublicDests(t *testing.T) {
@@ -33,6 +34,48 @@ func TestPublicDests(t *testing.T) {
 	}
 	if d.PTR != "one.one.one.one" || d.Owner != "CLOUDFLARENET" || d.Malicious != 1 || !d.Checked || got[0].Checked {
 		t.Fatalf("背景信息没带上: %+v", got)
+	}
+}
+
+// 归属字段 VirusTotal 优先、离线库补缺；用到离线库的标出来供控制台署名
+func TestPublicDestsMergeIPDB(t *testing.T) {
+	now := time.Now()
+	hits := []hit{{ip: "1.1.1.1", port: "tcp/443", count: 2, last: now}, {ip: "8.8.8.8", port: "udp/53", count: 1, last: now}, {ip: "9.9.9.9", port: "udp/53", count: 0, last: now}}
+	info := map[string]*ent.IPInfo{
+		"1.1.1.1": {IP: "1.1.1.1", IpdbAsn: 13335, IpdbOrg: "Cloudflare, Inc.", IpdbCountry: "AU", IpdbAt: &now},
+		"8.8.8.8": {IP: "8.8.8.8", AsOwner: "GOOGLE", Asn: 15169, Country: "US", VtAt: &now, IpdbAsn: 15169, IpdbOrg: "Google LLC", IpdbCountry: "US", IpdbAt: &now},
+	}
+	got := publicDests(hits, info, 3)
+	if d := got[0]; d.Owner != "Cloudflare, Inc." || d.ASN != 13335 || d.Country != "AU" || !d.IPDB {
+		t.Fatalf("只有离线库时应用它并标出: %+v", d)
+	}
+	if d := got[1]; d.Owner != "GOOGLE" || d.ASN != 15169 || d.Country != "US" || d.IPDB {
+		t.Fatalf("VirusTotal 齐全时用它的: %+v", d)
+	}
+	if d := got[2]; d.Owner != "" || d.IPDB {
+		t.Fatalf("没有信息的地址不该有归属: %+v", d)
+	}
+}
+
+// 离线库只查公网地址：私网、保留、CGNAT 即使库里有也不查；库缺失时一律空
+func TestGeoOf(t *testing.T) {
+	db := &ipdb.DB{Dir: "../ipdb/testdata"}
+	db.Refresh()
+	defer db.Close()
+	e := &Enricher{IPDB: db}
+	if g := e.geoOf("203.0.113.9"); g.ASN != 64500 || g.Org != "Example Net A" || g.Country != "AU" {
+		t.Fatalf("公网地址应查到: %+v", g)
+	}
+	if g := e.geoOf("2001:db8:1::5"); g.ASN != 64502 || g.Country != "JP" {
+		t.Fatalf("IPv6 应查到: %+v", g)
+	}
+	for _, ip := range []string{"10.1.2.3", "127.0.0.1", "100.64.0.1", "fe80::1", "not-an-ip"} {
+		if g := e.geoOf(ip); g != (ipdb.Info{}) {
+			t.Fatalf("%s 不该查: %+v", ip, g)
+		}
+	}
+	if g := (&Enricher{}).geoOf("203.0.113.9"); g != (ipdb.Info{}) {
+		t.Fatalf("没有库时应为空: %+v", g)
 	}
 }
 

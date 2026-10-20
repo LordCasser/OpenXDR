@@ -145,6 +145,62 @@ func (_c *IPInfoCreate) SetNillableVtAt(v *time.Time) *IPInfoCreate {
 	return _c
 }
 
+// SetIpdbAsn sets the "ipdb_asn" field.
+func (_c *IPInfoCreate) SetIpdbAsn(v int) *IPInfoCreate {
+	_c.mutation.SetIpdbAsn(v)
+	return _c
+}
+
+// SetNillableIpdbAsn sets the "ipdb_asn" field if the given value is not nil.
+func (_c *IPInfoCreate) SetNillableIpdbAsn(v *int) *IPInfoCreate {
+	if v != nil {
+		_c.SetIpdbAsn(*v)
+	}
+	return _c
+}
+
+// SetIpdbOrg sets the "ipdb_org" field.
+func (_c *IPInfoCreate) SetIpdbOrg(v string) *IPInfoCreate {
+	_c.mutation.SetIpdbOrg(v)
+	return _c
+}
+
+// SetNillableIpdbOrg sets the "ipdb_org" field if the given value is not nil.
+func (_c *IPInfoCreate) SetNillableIpdbOrg(v *string) *IPInfoCreate {
+	if v != nil {
+		_c.SetIpdbOrg(*v)
+	}
+	return _c
+}
+
+// SetIpdbCountry sets the "ipdb_country" field.
+func (_c *IPInfoCreate) SetIpdbCountry(v string) *IPInfoCreate {
+	_c.mutation.SetIpdbCountry(v)
+	return _c
+}
+
+// SetNillableIpdbCountry sets the "ipdb_country" field if the given value is not nil.
+func (_c *IPInfoCreate) SetNillableIpdbCountry(v *string) *IPInfoCreate {
+	if v != nil {
+		_c.SetIpdbCountry(*v)
+	}
+	return _c
+}
+
+// SetIpdbAt sets the "ipdb_at" field.
+func (_c *IPInfoCreate) SetIpdbAt(v time.Time) *IPInfoCreate {
+	_c.mutation.SetIpdbAt(v)
+	return _c
+}
+
+// SetNillableIpdbAt sets the "ipdb_at" field if the given value is not nil.
+func (_c *IPInfoCreate) SetNillableIpdbAt(v *time.Time) *IPInfoCreate {
+	if v != nil {
+		_c.SetIpdbAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *IPInfoCreate) SetID(v uuid.UUID) *IPInfoCreate {
 	_c.mutation.SetID(v)
@@ -218,6 +274,18 @@ func (_c *IPInfoCreate) defaults() {
 		v := ipinfo.DefaultSuspicious
 		_c.mutation.SetSuspicious(v)
 	}
+	if _, ok := _c.mutation.IpdbAsn(); !ok {
+		v := ipinfo.DefaultIpdbAsn
+		_c.mutation.SetIpdbAsn(v)
+	}
+	if _, ok := _c.mutation.IpdbOrg(); !ok {
+		v := ipinfo.DefaultIpdbOrg
+		_c.mutation.SetIpdbOrg(v)
+	}
+	if _, ok := _c.mutation.IpdbCountry(); !ok {
+		v := ipinfo.DefaultIpdbCountry
+		_c.mutation.SetIpdbCountry(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := ipinfo.DefaultID()
 		_c.mutation.SetID(v)
@@ -246,6 +314,15 @@ func (_c *IPInfoCreate) check() error {
 	}
 	if _, ok := _c.mutation.Suspicious(); !ok {
 		return &ValidationError{Name: "suspicious", err: errors.New(`ent: missing required field "IPInfo.suspicious"`)}
+	}
+	if _, ok := _c.mutation.IpdbAsn(); !ok {
+		return &ValidationError{Name: "ipdb_asn", err: errors.New(`ent: missing required field "IPInfo.ipdb_asn"`)}
+	}
+	if _, ok := _c.mutation.IpdbOrg(); !ok {
+		return &ValidationError{Name: "ipdb_org", err: errors.New(`ent: missing required field "IPInfo.ipdb_org"`)}
+	}
+	if _, ok := _c.mutation.IpdbCountry(); !ok {
+		return &ValidationError{Name: "ipdb_country", err: errors.New(`ent: missing required field "IPInfo.ipdb_country"`)}
 	}
 	return nil
 }
@@ -321,6 +398,22 @@ func (_c *IPInfoCreate) createSpec() (*IPInfo, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.VtAt(); ok {
 		_spec.SetField(ipinfo.FieldVtAt, field.TypeTime, value)
 		_node.VtAt = &value
+	}
+	if value, ok := _c.mutation.IpdbAsn(); ok {
+		_spec.SetField(ipinfo.FieldIpdbAsn, field.TypeInt, value)
+		_node.IpdbAsn = value
+	}
+	if value, ok := _c.mutation.IpdbOrg(); ok {
+		_spec.SetField(ipinfo.FieldIpdbOrg, field.TypeString, value)
+		_node.IpdbOrg = value
+	}
+	if value, ok := _c.mutation.IpdbCountry(); ok {
+		_spec.SetField(ipinfo.FieldIpdbCountry, field.TypeString, value)
+		_node.IpdbCountry = value
+	}
+	if value, ok := _c.mutation.IpdbAt(); ok {
+		_spec.SetField(ipinfo.FieldIpdbAt, field.TypeTime, value)
+		_node.IpdbAt = &value
 	}
 	return _node, _spec
 }

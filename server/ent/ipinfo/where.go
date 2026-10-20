@@ -100,6 +100,26 @@ func VtAt(v time.Time) predicate.IPInfo {
 	return predicate.IPInfo(sql.FieldEQ(FieldVtAt, v))
 }
 
+// IpdbAsn applies equality check predicate on the "ipdb_asn" field. It's identical to IpdbAsnEQ.
+func IpdbAsn(v int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEQ(FieldIpdbAsn, v))
+}
+
+// IpdbOrg applies equality check predicate on the "ipdb_org" field. It's identical to IpdbOrgEQ.
+func IpdbOrg(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEQ(FieldIpdbOrg, v))
+}
+
+// IpdbCountry applies equality check predicate on the "ipdb_country" field. It's identical to IpdbCountryEQ.
+func IpdbCountry(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEQ(FieldIpdbCountry, v))
+}
+
+// IpdbAt applies equality check predicate on the "ipdb_at" field. It's identical to IpdbAtEQ.
+func IpdbAt(v time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEQ(FieldIpdbAt, v))
+}
+
 // IPEQ applies the EQ predicate on the "ip" field.
 func IPEQ(v string) predicate.IPInfo {
 	return predicate.IPInfo(sql.FieldEQ(FieldIP, v))
@@ -588,6 +608,226 @@ func VtAtIsNil() predicate.IPInfo {
 // VtAtNotNil applies the NotNil predicate on the "vt_at" field.
 func VtAtNotNil() predicate.IPInfo {
 	return predicate.IPInfo(sql.FieldNotNull(FieldVtAt))
+}
+
+// IpdbAsnEQ applies the EQ predicate on the "ipdb_asn" field.
+func IpdbAsnEQ(v int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEQ(FieldIpdbAsn, v))
+}
+
+// IpdbAsnNEQ applies the NEQ predicate on the "ipdb_asn" field.
+func IpdbAsnNEQ(v int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNEQ(FieldIpdbAsn, v))
+}
+
+// IpdbAsnIn applies the In predicate on the "ipdb_asn" field.
+func IpdbAsnIn(vs ...int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldIn(FieldIpdbAsn, vs...))
+}
+
+// IpdbAsnNotIn applies the NotIn predicate on the "ipdb_asn" field.
+func IpdbAsnNotIn(vs ...int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNotIn(FieldIpdbAsn, vs...))
+}
+
+// IpdbAsnGT applies the GT predicate on the "ipdb_asn" field.
+func IpdbAsnGT(v int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldGT(FieldIpdbAsn, v))
+}
+
+// IpdbAsnGTE applies the GTE predicate on the "ipdb_asn" field.
+func IpdbAsnGTE(v int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldGTE(FieldIpdbAsn, v))
+}
+
+// IpdbAsnLT applies the LT predicate on the "ipdb_asn" field.
+func IpdbAsnLT(v int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldLT(FieldIpdbAsn, v))
+}
+
+// IpdbAsnLTE applies the LTE predicate on the "ipdb_asn" field.
+func IpdbAsnLTE(v int) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldLTE(FieldIpdbAsn, v))
+}
+
+// IpdbOrgEQ applies the EQ predicate on the "ipdb_org" field.
+func IpdbOrgEQ(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEQ(FieldIpdbOrg, v))
+}
+
+// IpdbOrgNEQ applies the NEQ predicate on the "ipdb_org" field.
+func IpdbOrgNEQ(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNEQ(FieldIpdbOrg, v))
+}
+
+// IpdbOrgIn applies the In predicate on the "ipdb_org" field.
+func IpdbOrgIn(vs ...string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldIn(FieldIpdbOrg, vs...))
+}
+
+// IpdbOrgNotIn applies the NotIn predicate on the "ipdb_org" field.
+func IpdbOrgNotIn(vs ...string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNotIn(FieldIpdbOrg, vs...))
+}
+
+// IpdbOrgGT applies the GT predicate on the "ipdb_org" field.
+func IpdbOrgGT(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldGT(FieldIpdbOrg, v))
+}
+
+// IpdbOrgGTE applies the GTE predicate on the "ipdb_org" field.
+func IpdbOrgGTE(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldGTE(FieldIpdbOrg, v))
+}
+
+// IpdbOrgLT applies the LT predicate on the "ipdb_org" field.
+func IpdbOrgLT(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldLT(FieldIpdbOrg, v))
+}
+
+// IpdbOrgLTE applies the LTE predicate on the "ipdb_org" field.
+func IpdbOrgLTE(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldLTE(FieldIpdbOrg, v))
+}
+
+// IpdbOrgContains applies the Contains predicate on the "ipdb_org" field.
+func IpdbOrgContains(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldContains(FieldIpdbOrg, v))
+}
+
+// IpdbOrgHasPrefix applies the HasPrefix predicate on the "ipdb_org" field.
+func IpdbOrgHasPrefix(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldHasPrefix(FieldIpdbOrg, v))
+}
+
+// IpdbOrgHasSuffix applies the HasSuffix predicate on the "ipdb_org" field.
+func IpdbOrgHasSuffix(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldHasSuffix(FieldIpdbOrg, v))
+}
+
+// IpdbOrgEqualFold applies the EqualFold predicate on the "ipdb_org" field.
+func IpdbOrgEqualFold(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEqualFold(FieldIpdbOrg, v))
+}
+
+// IpdbOrgContainsFold applies the ContainsFold predicate on the "ipdb_org" field.
+func IpdbOrgContainsFold(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldContainsFold(FieldIpdbOrg, v))
+}
+
+// IpdbCountryEQ applies the EQ predicate on the "ipdb_country" field.
+func IpdbCountryEQ(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEQ(FieldIpdbCountry, v))
+}
+
+// IpdbCountryNEQ applies the NEQ predicate on the "ipdb_country" field.
+func IpdbCountryNEQ(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNEQ(FieldIpdbCountry, v))
+}
+
+// IpdbCountryIn applies the In predicate on the "ipdb_country" field.
+func IpdbCountryIn(vs ...string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldIn(FieldIpdbCountry, vs...))
+}
+
+// IpdbCountryNotIn applies the NotIn predicate on the "ipdb_country" field.
+func IpdbCountryNotIn(vs ...string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNotIn(FieldIpdbCountry, vs...))
+}
+
+// IpdbCountryGT applies the GT predicate on the "ipdb_country" field.
+func IpdbCountryGT(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldGT(FieldIpdbCountry, v))
+}
+
+// IpdbCountryGTE applies the GTE predicate on the "ipdb_country" field.
+func IpdbCountryGTE(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldGTE(FieldIpdbCountry, v))
+}
+
+// IpdbCountryLT applies the LT predicate on the "ipdb_country" field.
+func IpdbCountryLT(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldLT(FieldIpdbCountry, v))
+}
+
+// IpdbCountryLTE applies the LTE predicate on the "ipdb_country" field.
+func IpdbCountryLTE(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldLTE(FieldIpdbCountry, v))
+}
+
+// IpdbCountryContains applies the Contains predicate on the "ipdb_country" field.
+func IpdbCountryContains(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldContains(FieldIpdbCountry, v))
+}
+
+// IpdbCountryHasPrefix applies the HasPrefix predicate on the "ipdb_country" field.
+func IpdbCountryHasPrefix(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldHasPrefix(FieldIpdbCountry, v))
+}
+
+// IpdbCountryHasSuffix applies the HasSuffix predicate on the "ipdb_country" field.
+func IpdbCountryHasSuffix(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldHasSuffix(FieldIpdbCountry, v))
+}
+
+// IpdbCountryEqualFold applies the EqualFold predicate on the "ipdb_country" field.
+func IpdbCountryEqualFold(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEqualFold(FieldIpdbCountry, v))
+}
+
+// IpdbCountryContainsFold applies the ContainsFold predicate on the "ipdb_country" field.
+func IpdbCountryContainsFold(v string) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldContainsFold(FieldIpdbCountry, v))
+}
+
+// IpdbAtEQ applies the EQ predicate on the "ipdb_at" field.
+func IpdbAtEQ(v time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldEQ(FieldIpdbAt, v))
+}
+
+// IpdbAtNEQ applies the NEQ predicate on the "ipdb_at" field.
+func IpdbAtNEQ(v time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNEQ(FieldIpdbAt, v))
+}
+
+// IpdbAtIn applies the In predicate on the "ipdb_at" field.
+func IpdbAtIn(vs ...time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldIn(FieldIpdbAt, vs...))
+}
+
+// IpdbAtNotIn applies the NotIn predicate on the "ipdb_at" field.
+func IpdbAtNotIn(vs ...time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNotIn(FieldIpdbAt, vs...))
+}
+
+// IpdbAtGT applies the GT predicate on the "ipdb_at" field.
+func IpdbAtGT(v time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldGT(FieldIpdbAt, v))
+}
+
+// IpdbAtGTE applies the GTE predicate on the "ipdb_at" field.
+func IpdbAtGTE(v time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldGTE(FieldIpdbAt, v))
+}
+
+// IpdbAtLT applies the LT predicate on the "ipdb_at" field.
+func IpdbAtLT(v time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldLT(FieldIpdbAt, v))
+}
+
+// IpdbAtLTE applies the LTE predicate on the "ipdb_at" field.
+func IpdbAtLTE(v time.Time) predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldLTE(FieldIpdbAt, v))
+}
+
+// IpdbAtIsNil applies the IsNil predicate on the "ipdb_at" field.
+func IpdbAtIsNil() predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldIsNull(FieldIpdbAt))
+}
+
+// IpdbAtNotNil applies the NotNil predicate on the "ipdb_at" field.
+func IpdbAtNotNil() predicate.IPInfo {
+	return predicate.IPInfo(sql.FieldNotNull(FieldIpdbAt))
 }
 
 // And groups predicates with the AND operator between them.

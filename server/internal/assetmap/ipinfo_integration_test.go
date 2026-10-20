@@ -18,6 +18,7 @@ import (
 
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
+	"openxdr/server/internal/ipdb"
 	"openxdr/server/internal/testdb"
 )
 
@@ -111,6 +112,74 @@ func TestEnricherRound(t *testing.T) {
 	}
 	if f.PublicDestinations != 4 || len(f.Public) != 4 || f.Public[0].Owner == "" || f.Public[0].Purpose != "" {
 		t.Fatalf("画像公网事实不对: %d %+v", f.PublicDestinations, f.Public)
+	}
+}
+
+// 只有离线库（不开反向解析、不配 VirusTotal）也补：公网地址（含 IPv6）都写上 ipdb_* 字段，库里没有的记成查过；
+// 私网不查不落库；之后 VirusTotal 补的写自己的字段，不覆盖离线库的；图谱归属 VirusTotal 优先、离线库补缺
+func TestEnricherIPDB(t *testing.T) {
+	ctx, client := testdb.New(t)
+	group := client.Group.Create().SetName("prod").SaveX(ctx)
+	web := client.Asset.Create().SetHostname("web-01").SetIPAddrs([]string{"10.0.0.1"}).SetGroupID(group.ID).SaveX(ctx)
+	now := time.Now()
+	for i, dst := range []string{"203.0.113.10", "2001:db8:1::5", "203.0.113.200", "10.0.0.2"} {
+		client.AssetLink.Create().SetSrcIP("10.0.0.1").SetSrcAssetID(web.ID).SetDstIP(dst).SetDstPort(443).SetProto("tcp").
+			SetCount(int64(10 - i)).SetFirstSeen(now).SetLastSeen(now).ExecX(ctx)
+	}
+	db := &ipdb.DB{Dir: "../ipdb/testdata"}
+	defer db.Close()
+	e := &Enricher{DB: client, IPDB: db, VTPerMin: 4, VTPerDay: 500, TTL: 7 * 24 * time.Hour}
+	if err := e.round(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	rows := client.IPInfo.Query().Order(ipinfo.ByIP()).AllX(ctx)
+	if len(rows) != 3 {
+		t.Fatalf("三个公网地址应落库，私网不查: %+v", rows)
+	}
+	got, firstAt := map[string]string{}, map[string]time.Time{}
+	for _, r := range rows {
+		if r.IpdbAt == nil || r.VtAt != nil || r.PtrAt != nil {
+			t.Fatalf("只该有离线库结果: %+v", r)
+		}
+		got[r.IP], firstAt[r.IP] = fmt.Sprintf("%d|%s|%s", r.IpdbAsn, r.IpdbOrg, r.IpdbCountry), *r.IpdbAt
+	}
+	want := map[string]string{"203.0.113.10": "64500|Example Net A|AU", "2001:db8:1::5": "64502|Example Net V6|JP", "203.0.113.200": "0||AU"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("离线库结果不对: %v", got)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"attributes":{"as_owner":"VT Owner","asn":64999,"country":"NL"}}}`))
+	}))
+	defer srv.Close()
+	e.VTKey, e.VTBase, e.HTTP, e.VTPerMin = "k", srv.URL, srv.Client(), 1
+	if err := e.round(ctx, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	r := client.IPInfo.Query().Where(ipinfo.IP("203.0.113.10")).OnlyX(ctx)
+	if r.AsOwner != "VT Owner" || r.Asn != 64999 || r.IpdbOrg != "Example Net A" || r.IpdbAsn != 64500 || !r.IpdbAt.Equal(firstAt[r.IP]) {
+		t.Fatalf("VirusTotal 不该覆盖离线库字段，离线库未到期不重查: %+v", r)
+	}
+
+	g, err := LoadGroup(ctx, client, group.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var targets []PublicDest
+	for _, edge := range g.Graph(now).Edges {
+		if edge.To == "internet" {
+			targets = edge.Targets
+		}
+	}
+	byIP := map[string]PublicDest{}
+	for _, d := range targets {
+		byIP[d.IP] = d
+	}
+	if d := byIP["203.0.113.10"]; d.Owner != "VT Owner" || d.ASN != 64999 || d.Country != "NL" || d.IPDB {
+		t.Fatalf("VirusTotal 有的归属用它的: %+v", d)
+	}
+	if d := byIP["2001:db8:1::5"]; d.Owner != "Example Net V6" || d.ASN != 64502 || d.Country != "JP" || !d.IPDB {
+		t.Fatalf("没有 VirusTotal 的用离线库并标出: %+v", d)
 	}
 }
 

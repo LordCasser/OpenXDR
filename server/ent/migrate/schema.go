@@ -663,6 +663,10 @@ var (
 		{Name: "suspicious", Type: field.TypeInt, Default: 0},
 		{Name: "domains", Type: field.TypeJSON, Nullable: true},
 		{Name: "vt_at", Type: field.TypeTime, Nullable: true},
+		{Name: "ipdb_asn", Type: field.TypeInt, Default: 0},
+		{Name: "ipdb_org", Type: field.TypeString, Default: ""},
+		{Name: "ipdb_country", Type: field.TypeString, Default: ""},
+		{Name: "ipdb_at", Type: field.TypeTime, Nullable: true},
 	}
 	// IPInfosTable holds the schema information for the "ip_infos" table.
 	IPInfosTable = &schema.Table{

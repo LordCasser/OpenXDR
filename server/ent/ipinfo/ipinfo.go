@@ -32,6 +32,14 @@ const (
 	FieldDomains = "domains"
 	// FieldVtAt holds the string denoting the vt_at field in the database.
 	FieldVtAt = "vt_at"
+	// FieldIpdbAsn holds the string denoting the ipdb_asn field in the database.
+	FieldIpdbAsn = "ipdb_asn"
+	// FieldIpdbOrg holds the string denoting the ipdb_org field in the database.
+	FieldIpdbOrg = "ipdb_org"
+	// FieldIpdbCountry holds the string denoting the ipdb_country field in the database.
+	FieldIpdbCountry = "ipdb_country"
+	// FieldIpdbAt holds the string denoting the ipdb_at field in the database.
+	FieldIpdbAt = "ipdb_at"
 	// Table holds the table name of the ipinfo in the database.
 	Table = "ip_infos"
 )
@@ -49,6 +57,10 @@ var Columns = []string{
 	FieldSuspicious,
 	FieldDomains,
 	FieldVtAt,
+	FieldIpdbAsn,
+	FieldIpdbOrg,
+	FieldIpdbCountry,
+	FieldIpdbAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -74,6 +86,12 @@ var (
 	DefaultMalicious int
 	// DefaultSuspicious holds the default value on creation for the "suspicious" field.
 	DefaultSuspicious int
+	// DefaultIpdbAsn holds the default value on creation for the "ipdb_asn" field.
+	DefaultIpdbAsn int
+	// DefaultIpdbOrg holds the default value on creation for the "ipdb_org" field.
+	DefaultIpdbOrg string
+	// DefaultIpdbCountry holds the default value on creation for the "ipdb_country" field.
+	DefaultIpdbCountry string
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -129,4 +147,24 @@ func BySuspicious(opts ...sql.OrderTermOption) OrderOption {
 // ByVtAt orders the results by the vt_at field.
 func ByVtAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVtAt, opts...).ToFunc()
+}
+
+// ByIpdbAsn orders the results by the ipdb_asn field.
+func ByIpdbAsn(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIpdbAsn, opts...).ToFunc()
+}
+
+// ByIpdbOrg orders the results by the ipdb_org field.
+func ByIpdbOrg(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIpdbOrg, opts...).ToFunc()
+}
+
+// ByIpdbCountry orders the results by the ipdb_country field.
+func ByIpdbCountry(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIpdbCountry, opts...).ToFunc()
+}
+
+// ByIpdbAt orders the results by the ipdb_at field.
+func ByIpdbAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIpdbAt, opts...).ToFunc()
 }

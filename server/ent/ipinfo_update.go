@@ -206,6 +206,75 @@ func (_u *IPInfoUpdate) ClearVtAt() *IPInfoUpdate {
 	return _u
 }
 
+// SetIpdbAsn sets the "ipdb_asn" field.
+func (_u *IPInfoUpdate) SetIpdbAsn(v int) *IPInfoUpdate {
+	_u.mutation.ResetIpdbAsn()
+	_u.mutation.SetIpdbAsn(v)
+	return _u
+}
+
+// SetNillableIpdbAsn sets the "ipdb_asn" field if the given value is not nil.
+func (_u *IPInfoUpdate) SetNillableIpdbAsn(v *int) *IPInfoUpdate {
+	if v != nil {
+		_u.SetIpdbAsn(*v)
+	}
+	return _u
+}
+
+// AddIpdbAsn adds value to the "ipdb_asn" field.
+func (_u *IPInfoUpdate) AddIpdbAsn(v int) *IPInfoUpdate {
+	_u.mutation.AddIpdbAsn(v)
+	return _u
+}
+
+// SetIpdbOrg sets the "ipdb_org" field.
+func (_u *IPInfoUpdate) SetIpdbOrg(v string) *IPInfoUpdate {
+	_u.mutation.SetIpdbOrg(v)
+	return _u
+}
+
+// SetNillableIpdbOrg sets the "ipdb_org" field if the given value is not nil.
+func (_u *IPInfoUpdate) SetNillableIpdbOrg(v *string) *IPInfoUpdate {
+	if v != nil {
+		_u.SetIpdbOrg(*v)
+	}
+	return _u
+}
+
+// SetIpdbCountry sets the "ipdb_country" field.
+func (_u *IPInfoUpdate) SetIpdbCountry(v string) *IPInfoUpdate {
+	_u.mutation.SetIpdbCountry(v)
+	return _u
+}
+
+// SetNillableIpdbCountry sets the "ipdb_country" field if the given value is not nil.
+func (_u *IPInfoUpdate) SetNillableIpdbCountry(v *string) *IPInfoUpdate {
+	if v != nil {
+		_u.SetIpdbCountry(*v)
+	}
+	return _u
+}
+
+// SetIpdbAt sets the "ipdb_at" field.
+func (_u *IPInfoUpdate) SetIpdbAt(v time.Time) *IPInfoUpdate {
+	_u.mutation.SetIpdbAt(v)
+	return _u
+}
+
+// SetNillableIpdbAt sets the "ipdb_at" field if the given value is not nil.
+func (_u *IPInfoUpdate) SetNillableIpdbAt(v *time.Time) *IPInfoUpdate {
+	if v != nil {
+		_u.SetIpdbAt(*v)
+	}
+	return _u
+}
+
+// ClearIpdbAt clears the value of the "ipdb_at" field.
+func (_u *IPInfoUpdate) ClearIpdbAt() *IPInfoUpdate {
+	_u.mutation.ClearIpdbAt()
+	return _u
+}
+
 // Mutation returns the IPInfoMutation object of the builder.
 func (_u *IPInfoUpdate) Mutation() *IPInfoMutation {
 	return _u.mutation
@@ -299,6 +368,24 @@ func (_u *IPInfoUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.VtAtCleared() {
 		_spec.ClearField(ipinfo.FieldVtAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.IpdbAsn(); ok {
+		_spec.SetField(ipinfo.FieldIpdbAsn, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedIpdbAsn(); ok {
+		_spec.AddField(ipinfo.FieldIpdbAsn, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.IpdbOrg(); ok {
+		_spec.SetField(ipinfo.FieldIpdbOrg, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IpdbCountry(); ok {
+		_spec.SetField(ipinfo.FieldIpdbCountry, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IpdbAt(); ok {
+		_spec.SetField(ipinfo.FieldIpdbAt, field.TypeTime, value)
+	}
+	if _u.mutation.IpdbAtCleared() {
+		_spec.ClearField(ipinfo.FieldIpdbAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -497,6 +584,75 @@ func (_u *IPInfoUpdateOne) ClearVtAt() *IPInfoUpdateOne {
 	return _u
 }
 
+// SetIpdbAsn sets the "ipdb_asn" field.
+func (_u *IPInfoUpdateOne) SetIpdbAsn(v int) *IPInfoUpdateOne {
+	_u.mutation.ResetIpdbAsn()
+	_u.mutation.SetIpdbAsn(v)
+	return _u
+}
+
+// SetNillableIpdbAsn sets the "ipdb_asn" field if the given value is not nil.
+func (_u *IPInfoUpdateOne) SetNillableIpdbAsn(v *int) *IPInfoUpdateOne {
+	if v != nil {
+		_u.SetIpdbAsn(*v)
+	}
+	return _u
+}
+
+// AddIpdbAsn adds value to the "ipdb_asn" field.
+func (_u *IPInfoUpdateOne) AddIpdbAsn(v int) *IPInfoUpdateOne {
+	_u.mutation.AddIpdbAsn(v)
+	return _u
+}
+
+// SetIpdbOrg sets the "ipdb_org" field.
+func (_u *IPInfoUpdateOne) SetIpdbOrg(v string) *IPInfoUpdateOne {
+	_u.mutation.SetIpdbOrg(v)
+	return _u
+}
+
+// SetNillableIpdbOrg sets the "ipdb_org" field if the given value is not nil.
+func (_u *IPInfoUpdateOne) SetNillableIpdbOrg(v *string) *IPInfoUpdateOne {
+	if v != nil {
+		_u.SetIpdbOrg(*v)
+	}
+	return _u
+}
+
+// SetIpdbCountry sets the "ipdb_country" field.
+func (_u *IPInfoUpdateOne) SetIpdbCountry(v string) *IPInfoUpdateOne {
+	_u.mutation.SetIpdbCountry(v)
+	return _u
+}
+
+// SetNillableIpdbCountry sets the "ipdb_country" field if the given value is not nil.
+func (_u *IPInfoUpdateOne) SetNillableIpdbCountry(v *string) *IPInfoUpdateOne {
+	if v != nil {
+		_u.SetIpdbCountry(*v)
+	}
+	return _u
+}
+
+// SetIpdbAt sets the "ipdb_at" field.
+func (_u *IPInfoUpdateOne) SetIpdbAt(v time.Time) *IPInfoUpdateOne {
+	_u.mutation.SetIpdbAt(v)
+	return _u
+}
+
+// SetNillableIpdbAt sets the "ipdb_at" field if the given value is not nil.
+func (_u *IPInfoUpdateOne) SetNillableIpdbAt(v *time.Time) *IPInfoUpdateOne {
+	if v != nil {
+		_u.SetIpdbAt(*v)
+	}
+	return _u
+}
+
+// ClearIpdbAt clears the value of the "ipdb_at" field.
+func (_u *IPInfoUpdateOne) ClearIpdbAt() *IPInfoUpdateOne {
+	_u.mutation.ClearIpdbAt()
+	return _u
+}
+
 // Mutation returns the IPInfoMutation object of the builder.
 func (_u *IPInfoUpdateOne) Mutation() *IPInfoMutation {
 	return _u.mutation
@@ -620,6 +776,24 @@ func (_u *IPInfoUpdateOne) sqlSave(ctx context.Context) (_node *IPInfo, err erro
 	}
 	if _u.mutation.VtAtCleared() {
 		_spec.ClearField(ipinfo.FieldVtAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.IpdbAsn(); ok {
+		_spec.SetField(ipinfo.FieldIpdbAsn, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedIpdbAsn(); ok {
+		_spec.AddField(ipinfo.FieldIpdbAsn, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.IpdbOrg(); ok {
+		_spec.SetField(ipinfo.FieldIpdbOrg, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IpdbCountry(); ok {
+		_spec.SetField(ipinfo.FieldIpdbCountry, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IpdbAt(); ok {
+		_spec.SetField(ipinfo.FieldIpdbAt, field.TypeTime, value)
+	}
+	if _u.mutation.IpdbAtCleared() {
+		_spec.ClearField(ipinfo.FieldIpdbAt, field.TypeTime)
 	}
 	_node = &IPInfo{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -45,6 +45,7 @@ import (
 	"openxdr/server/internal/identity/directory"
 	"openxdr/server/internal/ingest"
 	"openxdr/server/internal/intel"
+	"openxdr/server/internal/ipdb"
 	"openxdr/server/internal/janitor"
 	"openxdr/server/internal/liveness"
 	"openxdr/server/internal/notify"
@@ -326,9 +327,12 @@ func startAssetMap(ctx context.Context, db *sql.DB, client *ent.Client, llmFor f
 	// 标注是后台批量调用：关掉 GLM 隐式思考、限住输出，耗时才稳定（实测 pve1 默认模式波动到 120 秒超时）
 	assetEngine.LLM.NoThinking, assetEngine.LLM.MaxTokens = true, 2048
 	go cluster.RunLeader(ctx, db, "assetmap", assetEngine.Run)
-	// 公网目的地址的背景信息：反向解析默认开；配了 VirusTotal key 才查（会把外联的公网地址发给它）。开关与 key 每轮取
+	// 公网目的地址的背景信息：离线归属库（IPDB_DIR，本地查）放了库就查；反向解析默认开；
+	// 配了 VirusTotal key 才查（会把外联的公网地址发给它）。开关与 key 每轮取。启动时先打开一次离线库，库缺失在日志里说明
+	ipDB := &ipdb.DB{Dir: os.Getenv("IPDB_DIR")}
+	ipDB.Refresh()
 	ipEnricher := &assetmap.Enricher{
-		DB: client, Settings: func() (bool, string, int) { c := conf(); return c.PTR, c.VTKey, c.VTAlertMin },
+		DB: client, IPDB: ipDB, Settings: func() (bool, string, int) { c := conf(); return c.PTR, c.VTKey, c.VTAlertMin },
 		VTPerMin: getenvInt("VT_PER_MINUTE", 4), VTPerDay: getenvInt("VT_PER_DAY", 500),
 		TTL: time.Duration(getenvInt("IPINFO_TTL_DAYS", 7)) * 24 * time.Hour, Interval: time.Minute,
 		HTTP: &http.Client{Timeout: 15 * time.Second},

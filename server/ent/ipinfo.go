@@ -38,7 +38,15 @@ type IPInfo struct {
 	// Domains holds the value of the "domains" field.
 	Domains []string `json:"domains,omitempty"`
 	// VtAt holds the value of the "vt_at" field.
-	VtAt         *time.Time `json:"vt_at,omitempty"`
+	VtAt *time.Time `json:"vt_at,omitempty"`
+	// IpdbAsn holds the value of the "ipdb_asn" field.
+	IpdbAsn int `json:"ipdb_asn,omitempty"`
+	// IpdbOrg holds the value of the "ipdb_org" field.
+	IpdbOrg string `json:"ipdb_org,omitempty"`
+	// IpdbCountry holds the value of the "ipdb_country" field.
+	IpdbCountry string `json:"ipdb_country,omitempty"`
+	// IpdbAt holds the value of the "ipdb_at" field.
+	IpdbAt       *time.Time `json:"ipdb_at,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -49,11 +57,11 @@ func (*IPInfo) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case ipinfo.FieldDomains:
 			values[i] = new([]byte)
-		case ipinfo.FieldAsn, ipinfo.FieldMalicious, ipinfo.FieldSuspicious:
+		case ipinfo.FieldAsn, ipinfo.FieldMalicious, ipinfo.FieldSuspicious, ipinfo.FieldIpdbAsn:
 			values[i] = new(sql.NullInt64)
-		case ipinfo.FieldIP, ipinfo.FieldPtr, ipinfo.FieldAsOwner, ipinfo.FieldCountry:
+		case ipinfo.FieldIP, ipinfo.FieldPtr, ipinfo.FieldAsOwner, ipinfo.FieldCountry, ipinfo.FieldIpdbOrg, ipinfo.FieldIpdbCountry:
 			values[i] = new(sql.NullString)
-		case ipinfo.FieldPtrAt, ipinfo.FieldVtAt:
+		case ipinfo.FieldPtrAt, ipinfo.FieldVtAt, ipinfo.FieldIpdbAt:
 			values[i] = new(sql.NullTime)
 		case ipinfo.FieldID:
 			values[i] = new(uuid.UUID)
@@ -142,6 +150,31 @@ func (_m *IPInfo) assignValues(columns []string, values []any) error {
 				_m.VtAt = new(time.Time)
 				*_m.VtAt = value.Time
 			}
+		case ipinfo.FieldIpdbAsn:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field ipdb_asn", values[i])
+			} else if value.Valid {
+				_m.IpdbAsn = int(value.Int64)
+			}
+		case ipinfo.FieldIpdbOrg:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field ipdb_org", values[i])
+			} else if value.Valid {
+				_m.IpdbOrg = value.String
+			}
+		case ipinfo.FieldIpdbCountry:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field ipdb_country", values[i])
+			} else if value.Valid {
+				_m.IpdbCountry = value.String
+			}
+		case ipinfo.FieldIpdbAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field ipdb_at", values[i])
+			} else if value.Valid {
+				_m.IpdbAt = new(time.Time)
+				*_m.IpdbAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -209,6 +242,20 @@ func (_m *IPInfo) String() string {
 	builder.WriteString(", ")
 	if v := _m.VtAt; v != nil {
 		builder.WriteString("vt_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("ipdb_asn=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IpdbAsn))
+	builder.WriteString(", ")
+	builder.WriteString("ipdb_org=")
+	builder.WriteString(_m.IpdbOrg)
+	builder.WriteString(", ")
+	builder.WriteString("ipdb_country=")
+	builder.WriteString(_m.IpdbCountry)
+	builder.WriteString(", ")
+	if v := _m.IpdbAt; v != nil {
+		builder.WriteString("ipdb_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')

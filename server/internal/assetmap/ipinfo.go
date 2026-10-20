@@ -25,11 +25,14 @@ import (
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
+	"openxdr/server/internal/ipdb"
 )
 
 const (
 	// 只给最近一周还在连的公网地址补信息，陈年地址不浪费额度
 	enrichWindow = 7 * 24 * time.Hour
+	// 每轮离线库查询的上限：本地查很快，限的是逐条写库
+	ipdbPerRound = 1000
 	// 每轮反向解析的上限：解析是串行的，单个最多等 ptrTimeout
 	ptrPerRound = 20
 	ptrTimeout  = 3 * time.Second
@@ -43,7 +46,8 @@ var (
 	errVTAuth  = errors.New("VirusTotal 拒绝了 API key")
 )
 
-// Enricher 给公网目的地址补背景信息，供人和 AI 认地址：反向解析（PTR），配置了 VT_API_KEY 再查 VirusTotal。
+// Enricher 给公网目的地址补背景信息，供人和 AI 认地址：离线库（AS / 国家，本地查、不外发地址）、
+// 反向解析（PTR），配置了 VT_API_KEY 再查 VirusTotal。
 // 按最近一周的连接量从多到少查，结果缓存 TTL 后重查。VirusTotal 免费额度很紧（4 次/分钟、500 次/天），
 // 按分钟与天两道限额走；撞到 429 停到下一轮，key 被拒停一小时，都不影响图谱与标注本身。
 type Enricher struct {
@@ -61,6 +65,8 @@ type Enricher struct {
 	// 测试替换；空为官方地址
 	VTBase   string
 	Resolver *net.Resolver
+	// 离线 IP 归属库；为空或库缺失时不填 ipdb_* 字段
+	IPDB *ipdb.DB
 
 	day       string
 	usedToday int
@@ -84,12 +90,13 @@ func (e *Enricher) Run(ctx context.Context) {
 	}
 }
 
-// round 一轮：挑出到期的地址，反向解析与 VirusTotal 各按自己的额度查，查到多少写多少
+// round 一轮：挑出到期的地址，离线库、反向解析与 VirusTotal 各按自己的额度查，查到多少写多少
 func (e *Enricher) round(ctx context.Context, now time.Time) error {
 	if e.Settings != nil {
 		e.PTR, e.VTKey, e.VTAlertMin = e.Settings()
 	}
-	if !e.PTR && e.VTKey == "" {
+	e.IPDB.Refresh()
+	if !e.PTR && e.VTKey == "" && !e.IPDB.Ready() {
 		return nil
 	}
 	ips, err := e.candidates(ctx, now)
@@ -105,21 +112,30 @@ func (e *Enricher) round(ctx context.Context, now time.Time) error {
 		known[r.IP] = r
 	}
 	stale := func(at *time.Time) bool { return at == nil || now.Sub(*at) > e.TTL }
-	ptrLeft, vtLeft := 0, e.vtBudget(now)
+	ptrLeft, vtLeft, geoLeft := 0, e.vtBudget(now), 0
 	if e.PTR {
 		ptrLeft = ptrPerRound
 	}
+	if e.IPDB.Ready() {
+		geoLeft = ipdbPerRound
+	}
 	for _, ip := range ips {
-		if ptrLeft == 0 && vtLeft == 0 {
+		if ptrLeft == 0 && vtLeft == 0 && geoLeft == 0 {
 			break
 		}
 		info := known[ip]
+		doGeo := geoLeft > 0 && (info == nil || stale(info.IpdbAt))
 		doPTR := ptrLeft > 0 && (info == nil || stale(info.PtrAt)) && !now.Before(e.ptrRetry[ip])
 		doVT := vtLeft > 0 && (info == nil || stale(info.VtAt))
-		if !doPTR && !doVT {
+		if !doGeo && !doPTR && !doVT {
 			continue
 		}
 		upd := ipUpdate{}
+		if doGeo {
+			geoLeft--
+			g := e.geoOf(ip)
+			upd.geo = &g
+		}
 		if doPTR {
 			ptrLeft--
 			// 临时失败不落库，过一阵再试；不然记成「查过、没有」要等缓存到期才重查
@@ -397,9 +413,20 @@ func (e *Enricher) syncIntel(ctx context.Context, ip string, v vtResult, now tim
 
 const intelSource = "virustotal"
 
+// geoOf 离线库里查一个地址；只查公网地址，私网与保留地址一律空。库数据也截断清洗
+func (e *Enricher) geoOf(ip string) ipdb.Info {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !Public(addr) {
+		return ipdb.Info{}
+	}
+	g := e.IPDB.Lookup(addr)
+	return ipdb.Info{ASN: g.ASN, Org: clean(g.Org, 120), Country: clean(g.Country, 8)}
+}
+
 type ipUpdate struct {
 	ptr *string
 	vt  *vtResult
+	geo *ipdb.Info
 }
 
 func (e *Enricher) save(ctx context.Context, ip string, info *ent.IPInfo, u ipUpdate, now time.Time) error {
@@ -410,6 +437,9 @@ func (e *Enricher) save(ctx context.Context, ip string, info *ent.IPInfo, u ipUp
 		}
 		if v := u.vt; v != nil {
 			c.SetAsOwner(v.owner).SetAsn(v.asn).SetCountry(v.country).SetMalicious(v.malicious).SetSuspicious(v.suspicious).SetDomains(v.domains).SetVtAt(now)
+		}
+		if g := u.geo; g != nil {
+			c.SetIpdbAsn(g.ASN).SetIpdbOrg(g.Org).SetIpdbCountry(g.Country).SetIpdbAt(now)
 		}
 		// 别的节点抢先写了同一个地址：下一轮按已有记录更新即可
 		if err := c.Exec(ctx); err != nil && !ent.IsConstraintError(err) {
@@ -424,6 +454,9 @@ func (e *Enricher) save(ctx context.Context, ip string, info *ent.IPInfo, u ipUp
 	if v := u.vt; v != nil {
 		upd.SetAsOwner(v.owner).SetAsn(v.asn).SetCountry(v.country).SetMalicious(v.malicious).SetSuspicious(v.suspicious).SetDomains(v.domains).SetVtAt(now)
 	}
+	if g := u.geo; g != nil {
+		upd.SetIpdbAsn(g.ASN).SetIpdbOrg(g.Org).SetIpdbCountry(g.Country).SetIpdbAt(now)
+	}
 	return upd.Exec(ctx)
 }
 
@@ -436,12 +469,15 @@ type PublicDest struct {
 	LastSeen   time.Time `json:"lastSeen"`
 	PTR        string    `json:"ptr,omitempty"`
 	Owner      string    `json:"owner,omitempty"`
+	ASN        int       `json:"asn,omitempty"`
 	Country    string    `json:"country,omitempty"`
 	Malicious  int       `json:"malicious,omitempty"`
 	Suspicious int       `json:"suspicious,omitempty"`
 	Domains    []string  `json:"domains,omitempty"`
 	// VirusTotal 查过（哪怕没有记录）
 	Checked bool `json:"checked,omitempty"`
+	// 展示的归属里有离线库（DB-IP）的数据：控制台据此署名，CC BY 4.0 的要求
+	IPDB bool `json:"ipdb,omitempty"`
 	// AI 标注给的用途，只在接口里填，不回灌给模型
 	Purpose string `json:"purpose,omitempty"`
 	// 上机调查或人工给的结论，优先于 Purpose
@@ -499,7 +535,10 @@ func publicDests(hits []hit, info map[string]*ent.IPInfo, n int) []PublicDest {
 		slices.Sort(d.Ports)
 		slices.Sort(d.Processes)
 		if i := info[d.IP]; i != nil {
-			d.PTR, d.Owner, d.Country, d.Malicious, d.Suspicious, d.Domains, d.Checked = i.Ptr, i.AsOwner, i.Country, i.Malicious, i.Suspicious, i.Domains, i.VtAt != nil
+			d.PTR, d.Malicious, d.Suspicious, d.Domains, d.Checked = i.Ptr, i.Malicious, i.Suspicious, i.Domains, i.VtAt != nil
+			// 归属：VirusTotal 有的用它的，没有的用离线库补
+			d.Owner, d.ASN, d.Country = cmp.Or(i.AsOwner, i.IpdbOrg), cmp.Or(i.Asn, i.IpdbAsn), cmp.Or(i.Country, i.IpdbCountry)
+			d.IPDB = d.Owner != i.AsOwner || d.ASN != i.Asn || d.Country != i.Country
 		}
 		out = append(out, *d)
 	}
