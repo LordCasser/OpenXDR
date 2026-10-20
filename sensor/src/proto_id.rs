@@ -5,8 +5,8 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use md5::{Digest, Md5};
 
-use crate::decode::Packet;
-use crate::flow::{Flow, Metadata};
+use crate::decode::{IPPROTO_TCP, Packet};
+use crate::flow::{Flow, Metadata, TlsClient};
 use crate::x509;
 
 const DNS_PORT: u16 = 53;
@@ -20,6 +20,11 @@ const MAX_HEADER_LEN: usize = 512;
 /// TLS 服务端 handshake 重组缓冲上限：证书链再大也不会超过这个量级，
 /// 超限视为异常流，直接放弃等待而不是无限攒内存
 const MAX_TLS_HS_BUF: usize = 16 * 1024;
+/// TLS record 长度上限（明文 16KB，加密后最多再多 2KB），超过即不是 TLS record
+const MAX_TLS_RECORD: usize = 16 * 1024 + 2048;
+/// 应用数据 record 至少要这么长才算带了载荷：TLS 1.3 加密的 alert（close_notify）是
+/// 2 字节明文 + 1 字节类型 + 16 字节认证标签 = 19，装不下任何请求
+const MIN_DATA_RECORD: usize = 20;
 
 pub fn probe(flow: &mut Flow, pkt: &Packet) {
     if pkt.payload.is_empty() {
@@ -148,6 +153,7 @@ fn scan_handshakes(body: &[u8], meta: &mut Metadata) -> bool {
             0x02 if meta.ja3s.is_none() => {
                 if let Some(sh) = parse_server_hello_hs(hs) {
                     meta.ja3s = Some(sh.ja3s);
+                    meta.tls13 = sh.tls13;
                     if sh.tls13 || meta.cert_not_after != 0 || meta.cert_subject.is_some() {
                         return true;
                     }
@@ -173,6 +179,56 @@ fn scan_handshakes(body: &[u8], meta: &mut Metadata) -> bool {
         pos += 4 + hlen;
     }
     false
+}
+
+/// 客户端方向跟 TLS record，判断握手之后有没有发请求（见 `TlsClient`）。
+/// 第一段客户端载荷必须是 ClientHello 才开始跟；已经数到两条应用数据就不必再看。
+pub fn track_tls_client(flow: &mut Flow, pkt: &Packet, from_client: bool) {
+    let t = &mut flow.tls_client;
+    if !from_client
+        || pkt.proto != IPPROTO_TCP
+        || pkt.payload.is_empty()
+        || t.lost
+        || t.data_records >= 2
+    {
+        return;
+    }
+    if !t.tracking {
+        // record 类型 22（handshake）且第一条握手消息是 ClientHello(1)
+        if pkt.payload.first() != Some(&0x16) || pkt.payload.get(5) != Some(&1) {
+            t.lost = true;
+            return;
+        }
+        t.tracking = true;
+    }
+    advance_records(t, pkt.payload);
+}
+
+/// 逐 record 前进：先过完上一段没走完的 record，再读新的 record 头。
+/// 头对不上或跨了段（少见）就判跟丢——跟丢只会让结论变成「不知道」，不会编出「只握手」。
+fn advance_records(t: &mut TlsClient, mut p: &[u8]) {
+    while !p.is_empty() {
+        if t.pending > 0 {
+            let n = t.pending.min(p.len());
+            t.pending -= n;
+            p = &p[n..];
+            continue;
+        }
+        let Some(&[rtype, major, _, hi, lo]) = p.get(..5) else {
+            t.lost = true;
+            return;
+        };
+        let len = u16::from_be_bytes([hi, lo]) as usize;
+        if !(20..=24).contains(&rtype) || major != 3 || len > MAX_TLS_RECORD {
+            t.lost = true;
+            return;
+        }
+        if rtype == 23 && len >= MIN_DATA_RECORD {
+            t.data_records = t.data_records.saturating_add(1);
+        }
+        t.pending = len;
+        p = &p[5..];
+    }
 }
 
 /// Certificate 消息体：certificate_list = 3字节总长 + 重复(3字节证书长度 + DER)，
@@ -568,6 +624,7 @@ mod tests {
             probed_server: false,
             client_is_a: true,
             tls_hs_buf: Vec::new(),
+            tls_client: TlsClient::default(),
         }
     }
 
@@ -1092,5 +1149,61 @@ mod tests {
         assert!(!is_grease(0x0a0b));
         assert!(!is_grease(0x1301));
         assert!(!is_grease(0x0a00));
+    }
+
+    /// 客户端方向的 TLS record：类型 + 指定长度的占位载荷
+    fn record(rtype: u8, len: usize) -> Vec<u8> {
+        let mut r = vec![rtype, 0x03, 0x03];
+        r.extend_from_slice(&(len as u16).to_be_bytes());
+        r.extend(std::iter::repeat_n(0xCC, len));
+        r
+    }
+
+    fn handshake_only(segments: &[&[u8]], tls13: bool) -> bool {
+        let mut flow = default_flow();
+        flow.meta.tls13 = tls13;
+        for seg in segments {
+            track_tls_client(&mut flow, &pkt(52000, 443, seg), true);
+        }
+        flow.tls_client.handshake_only(flow.meta.tls13)
+    }
+
+    #[test]
+    fn tls_handshake_only_tracking() {
+        let hello = client_hello("gw.example", false);
+        // TLS 1.2 扫描器：ClientHello，再发 ClientKeyExchange / CCS / Finished、alert 后关连接
+        let tail12 = [record(22, 70), record(20, 1), record(22, 40), record(21, 2)].concat();
+        assert!(handshake_only(&[&hello, &tail12], false));
+        // 1.2 正常客户端：握手后发了请求
+        assert!(!handshake_only(&[&hello, &tail12, &record(23, 120)], false));
+        // 只发 ClientHello 就断开（证书 / JA3S 探测）
+        assert!(handshake_only(&[&hello], false));
+        // TLS 1.3：CCS + 加密的 Finished + 加密的 close_notify，仍是只握手
+        let tail13 = [record(20, 1), record(23, 53), record(23, 19)].concat();
+        assert!(handshake_only(&[&hello, &tail13], true));
+        // 1.3 发了请求
+        assert!(!handshake_only(&[&hello, &tail13, &record(23, 90)], true));
+        // 没见过 ServerHello、不知道是 1.3：Finished 当请求算，宁可漏报
+        assert!(!handshake_only(&[&hello, &tail13], false));
+    }
+
+    #[test]
+    fn tls_tracking_spans_segments_and_fails_closed() {
+        let hello = client_hello("gw.example", false);
+        // ClientHello 跨两段：第二段整段都是 hello 的剩余部分，不能当新 record 头读
+        let (a, b) = hello.split_at(20);
+        assert!(handshake_only(&[a, b], false));
+        let data = record(23, 300);
+        let (c, d) = data.split_at(100);
+        assert!(!handshake_only(&[&hello, c, d], false));
+        // 第一段客户端载荷不是 ClientHello：不是 TLS 或没看到开头，不下结论
+        assert!(!handshake_only(&[b"GET / HTTP/1.1\r\n\r\n"], false));
+        // record 头对不上（抓包丢段后错位）：判跟丢
+        assert!(!handshake_only(&[&hello, b"\x99garbage"], false));
+        // 服务端方向的载荷不参与
+        let mut flow = default_flow();
+        track_tls_client(&mut flow, &pkt(443, 52000, &record(23, 500)), false);
+        track_tls_client(&mut flow, &pkt(52000, 443, &hello), true);
+        assert!(flow.tls_client.handshake_only(false));
     }
 }

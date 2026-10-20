@@ -5,7 +5,7 @@
 
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint, Identity};
 
-pub async fn connect(server: &str) -> Result<Channel, Box<dyn std::error::Error>> {
+pub async fn connect(server: &str) -> Result<Channel, Box<dyn std::error::Error + Send + Sync>> {
     let endpoint = Endpoint::from_shared(server.to_string())?;
     let ca = std::env::var("OPENXDR_CA").ok();
     let cert = std::env::var("OPENXDR_CERT").ok();

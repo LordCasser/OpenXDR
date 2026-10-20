@@ -64,6 +64,30 @@ pub struct Metadata {
     pub cert_not_before: i64,
     /// 证书有效期止（unix 秒），无则 0
     pub cert_not_after: i64,
+    /// ServerHello 选了 TLS 1.3（supported_versions = 0x0304）
+    pub tls13: bool,
+}
+
+/// 客户端方向 TLS record 跟踪：从 ClientHello 起逐个 record 往前走，数带载荷的应用数据，
+/// 用来判断握手之后客户端有没有发过请求。只看 record 头，不重组、不解密。
+#[derive(Default, Clone)]
+pub struct TlsClient {
+    /// 见过 ClientHello 才开始跟
+    pub tracking: bool,
+    /// 跟丢了（第一段载荷不是 ClientHello、record 头对不上或跨段）：不再下结论
+    pub lost: bool,
+    /// 当前 record 还差多少字节没过完
+    pub pending: usize,
+    /// 带载荷的应用数据 record 数（TLS 1.3 加密后的 Finished 也算一条）
+    pub data_records: u32,
+}
+
+impl TlsClient {
+    /// 只握手不发请求：跟得上、且应用数据 record 不超过 TLS 1.3 的 Finished 那一条。
+    /// 没见过 ServerHello 时按 1.2 算，1.3 的 Finished 会被当成请求——宁可漏报不误报。
+    pub fn handshake_only(&self, tls13: bool) -> bool {
+        self.tracking && !self.lost && self.data_records <= u32::from(tls13)
+    }
 }
 
 pub struct Flow {
@@ -87,6 +111,7 @@ pub struct Flow {
     /// TLS 服务端 handshake 重组缓冲：证书常跨 TCP 分段，攒到有界上限再解析。
     /// 默认空 Vec 无堆分配，只有 TLS 流才会 push。
     pub tls_hs_buf: Vec<u8>,
+    pub tls_client: TlsClient,
 }
 
 impl Flow {
@@ -168,6 +193,7 @@ impl FlowTable {
             probed_server: false,
             client_is_a,
             tls_hs_buf: Vec::new(),
+            tls_client: TlsClient::default(),
         });
 
         flow.last_ns = ts_ns;

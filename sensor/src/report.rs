@@ -1,18 +1,16 @@
-//! gRPC 批量上报：worker 通过 channel 交出结束的流，上报任务攒批推给 server。
+//! gRPC 上报：注册与升级、抓包状态；worker 通过 channel 交出结束的流，上报任务攒批推给 server。
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::flow::Flow;
+use crate::health::{Health, Stats};
 use crate::pb::{self, sensor_service_client::SensorServiceClient};
-use crate::tls;
+use crate::{enroll, tls, upgrade};
 
 /// 攒批阈值：达到条数或到时间就发一批
 const BATCH_SIZE: usize = 256;
 const BATCH_INTERVAL: Duration = Duration::from_secs(2);
-
-pub type DroppedCounter = Arc<AtomicU64>;
 
 /// 上报时按客户端→服务端摆正方向：src 恒为发起方，dst 恒为服务端。
 /// 检测规则写 dst_endpoint.port 才有意义。
@@ -75,54 +73,148 @@ pub fn to_record(flow: &Flow) -> pb::FlowRecord {
         tls_cert_self_signed: flow.meta.cert_self_signed,
         tls_cert_not_before: flow.meta.cert_not_before,
         tls_cert_not_after: flow.meta.cert_not_after,
+        tls_handshake_only: flow.tls_client.handshake_only(flow.meta.tls13),
     }
 }
 
-/// 常驻上报循环：断线自动重连。重连期间 channel 起缓冲作用，满了由 worker 侧丢弃并计数。
+/// 常驻上报循环：注册（取升级指令）→ 起状态上报 → 推会话流，断线 5 秒后重连。
+/// 重连期间 channel 起缓冲作用，满了由 worker 侧丢弃并计数。
+/// 返回 true 表示已换上新版、该退出了；返回 false 表示采集侧全部退出、队列已推空。
 ///
 /// 用 async-channel 而非 tokio mpsc：tonic 要求上行流是 'static，
 /// 可克隆的接收端让每次重连都能拿到同一队列的新流，无需在任务间转交所有权。
 pub async fn run(
     server: String,
     rx: async_channel::Receiver<pb::FlowRecord>,
-    dropped: DroppedCounter,
-) {
-    let sensor_id = gethostname::gethostname().to_string_lossy().into_owned();
-
+    health: Arc<Health>,
+) -> bool {
+    let hostname = enroll::hostname();
     loop {
         match tls::connect(&server).await.map(SensorServiceClient::new) {
             Ok(mut client) => {
-                // 攒批流：满 BATCH_SIZE 条或超过 BATCH_INTERVAL 就出一批
-                let (rx, sensor_id, dropped) = (rx.clone(), sensor_id.clone(), dropped.clone());
-                let outbound = async_stream::stream! {
-                    let mut buf = Vec::with_capacity(BATCH_SIZE);
-                    loop {
-                        let deadline = tokio::time::Instant::now() + BATCH_INTERVAL;
-                        while buf.len() < BATCH_SIZE {
-                            match tokio::time::timeout_at(deadline, rx.recv()).await {
-                                Ok(Ok(record)) => buf.push(record),
-                                Ok(Err(_)) => return, // 采集侧全部退出
-                                Err(_) => break,      // 到时间了，有多少发多少
-                            }
+                match register(&mut client, &hostname).await {
+                    // 收尾阶段（队列已关）不再升级，推完就走
+                    Ok(resp) if !resp.upgrade_sha256.is_empty() && !rx.is_closed() => {
+                        match tokio::time::timeout(
+                            Duration::from_secs(120),
+                            upgrade::apply(
+                                &mut client,
+                                &resp.upgrade_platform,
+                                &resp.upgrade_sha256,
+                            ),
+                        )
+                        .await
+                        {
+                            Ok(Ok(())) => return true,
+                            Ok(Err(e)) => eprintln!("自动升级失败，继续运行当前版本：{e}"),
+                            Err(_) => eprintln!("自动升级下载超时，继续运行当前版本"),
                         }
-                        if buf.is_empty() {
-                            continue;
-                        }
-                        yield pb::FlowBatch {
-                            sensor_id: sensor_id.clone(),
-                            flows: std::mem::take(&mut buf),
-                            dropped_packets: dropped.load(Ordering::Relaxed),
-                        };
-                        buf.reserve(BATCH_SIZE);
                     }
-                };
-                if let Err(e) = client.report_flows(outbound).await {
+                    Ok(_) => {}
+                    // 旧 server 只有会话上报：照推会话，不报状态
+                    Err(e) if e.code() == tonic::Code::Unimplemented => {
+                        eprintln!("服务端尚不支持探针注册，只上报会话")
+                    }
+                    Err(e) => {
+                        eprintln!("注册失败：{e}");
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        continue;
+                    }
+                }
+                let reporting = tokio::spawn(crate::health::report(
+                    client.clone(),
+                    hostname.clone(),
+                    health.clone(),
+                ));
+                let result = client
+                    .report_flows(batches(rx.clone(), hostname.clone(), health.stats.clone()))
+                    .await;
+                reporting.abort();
+                if let Err(e) = result {
                     eprintln!("上报中断: {e}");
+                } else if rx.is_closed() && rx.is_empty() {
+                    return false;
                 }
             }
             Err(e) => eprintln!("连接 server 失败: {e}"),
         }
         tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+}
+
+/// 升级后的收尾：采集侧已全部退出，把队列里剩下的会话推完。
+pub async fn flush(server: &str, rx: async_channel::Receiver<pb::FlowRecord>, stats: Arc<Stats>) {
+    if rx.is_empty() {
+        return;
+    }
+    let result = match tls::connect(server).await.map(SensorServiceClient::new) {
+        Ok(mut client) => client
+            .report_flows(batches(rx, enroll::hostname(), stats))
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string()),
+        Err(e) => Err(e.to_string()),
+    };
+    if let Err(e) = result {
+        eprintln!("退出前推送在途会话失败：{e}");
+    }
+}
+
+async fn register(
+    client: &mut SensorServiceClient<tonic::transport::Channel>,
+    hostname: &str,
+) -> Result<pb::SensorRegisterResponse, tonic::Status> {
+    let ip_addrs = if_addrs::get_if_addrs()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|i| !i.is_loopback())
+        .map(|i| i.ip().to_string())
+        .collect();
+    let mut request = tonic::Request::new(pb::SensorRegisterRequest {
+        hostname: hostname.into(),
+        ip_addrs,
+        version: env!("CARGO_PKG_VERSION").into(),
+        arch: std::env::consts::ARCH.into(),
+        binary_sha256: upgrade::self_sha256().into(),
+    });
+    request.set_timeout(Duration::from_secs(10));
+    Ok(client.register(request).await?.into_inner())
+}
+
+/// 攒批流：满 BATCH_SIZE 条或超过 BATCH_INTERVAL 就出一批；队列关闭时把手里的发完再结束。
+fn batches(
+    rx: async_channel::Receiver<pb::FlowRecord>,
+    sensor_id: String,
+    stats: Arc<Stats>,
+) -> impl tokio_stream::Stream<Item = pb::FlowBatch> + Send + 'static {
+    async_stream::stream! {
+        let mut buf = Vec::with_capacity(BATCH_SIZE);
+        loop {
+            let deadline = tokio::time::Instant::now() + BATCH_INTERVAL;
+            let mut closed = false;
+            while buf.len() < BATCH_SIZE {
+                match tokio::time::timeout_at(deadline, rx.recv()).await {
+                    Ok(Ok(record)) => buf.push(record),
+                    Ok(Err(_)) => {
+                        // 采集侧全部退出
+                        closed = true;
+                        break;
+                    }
+                    Err(_) => break, // 到时间了，有多少发多少
+                }
+            }
+            if !buf.is_empty() {
+                yield pb::FlowBatch {
+                    sensor_id: sensor_id.clone(),
+                    flows: std::mem::take(&mut buf),
+                    dropped_packets: stats.dropped(),
+                };
+                buf.reserve(BATCH_SIZE);
+            }
+            if closed {
+                return;
+            }
+        }
     }
 }
 
@@ -163,11 +255,13 @@ mod tests {
                 cert_self_signed: false,
                 cert_not_before: 1_700_000_000,
                 cert_not_after: 1_800_000_000,
+                tls13: false,
             },
             probed: true,
             probed_server: true,
             client_is_a,
             tls_hs_buf: Vec::new(),
+            tls_client: Default::default(),
         }
     }
 

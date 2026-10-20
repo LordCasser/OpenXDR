@@ -95,6 +95,8 @@ pub struct AfPacket {
     block_size: usize,
     block_count: usize,
     next_block: usize,
+    /// PACKET_STATISTICS 读一次清零一次，这里累加成累计值
+    drops: std::cell::Cell<u64>,
 }
 
 // SAFETY: ring 指针指向本 fd 私有的 mmap 区域，随结构体一起移动到 worker 线程。
@@ -158,6 +160,7 @@ impl AfPacket {
             block_size: cfg.block_size as usize,
             block_count: cfg.block_count as usize,
             next_block: 0,
+            drops: std::cell::Cell::new(0),
         };
 
         bind_iface(fd, iface)?;
@@ -259,7 +262,10 @@ impl Capture for AfPacket {
                 &mut len,
             )
         };
-        if rc < 0 { 0 } else { stats.tp_drops as u64 }
+        if rc == 0 {
+            self.drops.set(self.drops.get() + stats.tp_drops as u64);
+        }
+        self.drops.get()
     }
 }
 
@@ -543,6 +549,7 @@ mod tests {
             block_size: BLOCK,
             block_count: blocks,
             next_block: 0,
+            drops: std::cell::Cell::new(0),
         })
     }
 
