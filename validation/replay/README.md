@@ -46,7 +46,8 @@ where ts > now() - interval '15 minutes' group by 1;
 | 退出码与运行时长（eBPF exit_group） | — | ✅ `sh -c "sleep 2; exit 7"` → 退出码 7、2001 ms | — | 未验证 |
 | 容器归属（cgroup） | — | ✅ docker 容器 ID（需 `--cgroupns=host`，否则看到相对路径） | — | 未验证（PVE LXC / QEMU） |
 | 登录（4624/4625 / wtmp-btmp） | ✅ 4625 含失败原因码 | 不适用（WSL 无 wtmp 写入） | 未验证 | ✅ wtmp SSH 登录 |
-| sensor TLS 证书元数据（跨段重组 + x509 解析） | —（sensor 仅 Linux） | ✅ lo 抓自签 TLS1.2 握手，`tls.cert` 全字段入库并触发自签证书告警 | — | 未验证 |
+| sensor TLS 证书元数据（跨段重组 + x509 解析） | —（sensor 仅 Linux） | ✅ lo 抓自签 TLS1.2 握手，`tls.cert` 全字段入库并触发自签证书告警 | — | ✅ Debian 12 测试机 eth0 在线接入（2026-10-21）：证书主体/签发者、JA3/JA3S、DNS 问答入库 |
+| sensor 只握手标注（`tls.handshake_only`） | — | — | — | ✅ 同机实测：TLS1.3、TLS1.2 只握手不发请求均标注，正常 HTTPS 请求不标；会话归到资产 |
 
 注：Windows 上秒退进程（如 `reg add`）的 cmdline 靠 ETW 事件触发后回读，
 进程已退场则读不到（cmd_line 为空）——已知竞态，注册表/文件类事件不受影响。
