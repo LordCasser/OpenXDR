@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"openxdr/server/ent/memory"
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/memories"
 	"openxdr/server/internal/testdb"
@@ -55,6 +56,21 @@ func TestRememberAndForget(t *testing.T) {
 	data, _, _, err := s.contextData(ctx, session)
 	if err != nil || len(data["memories"].([]map[string]any)) != 2 {
 		t.Fatalf("上下文应带记忆: %v", err)
+	}
+
+	// 少一位的 ID：按前缀唯一对上本组 AI 记忆时提示完整 ID，但不替它删；人工记忆不提示
+	ai := db.Memory.Query().Where(memory.SourceEQ("ai")).OnlyX(ctx)
+	if _, err := call("forget", `{"id":"`+ai.ID.String()[:35]+`"}`); err == nil || !strings.Contains(err.Error(), ai.ID.String()) {
+		t.Fatalf("截断的 ID 应提示完整 ID: %v", err)
+	}
+	if !db.Memory.Query().Where(memory.IDEQ(ai.ID)).ExistX(ctx) {
+		t.Fatal("只提示，不能替它删")
+	}
+	if _, err := call("forget", `{"id":"`+human.ID.String()[:35]+`"}`); err == nil || strings.Contains(err.Error(), human.ID.String()) || !strings.Contains(err.Error(), "36 位") {
+		t.Fatalf("人工记忆不在可删范围，应只说明格式: %v", err)
+	}
+	if _, err := call("forget", `{"id":"not-a-uuid"}`); err == nil || !strings.Contains(err.Error(), "36 位") {
+		t.Fatalf("对不上的应说明格式: %v", err)
 	}
 
 	for _, m := range db.Memory.Query().AllX(ctx) {

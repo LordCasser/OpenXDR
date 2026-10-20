@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -104,12 +106,16 @@ func (s *Service) remember(ctx context.Context, session *ent.AgentSession, args 
 
 func (s *Service) forget(ctx context.Context, session *ent.AgentSession, args json.RawMessage) (string, error) {
 	var body struct {
-		ID uuid.UUID `json:"id"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(args, &body); err != nil {
 		return "", err
 	}
-	m, err := s.DB.Memory.Query().Where(memory.IDEQ(body.ID), memory.GroupIDEQ(session.GroupID)).Only(ctx)
+	id, err := uuid.Parse(body.ID)
+	if err != nil {
+		return "", s.badMemoryID(ctx, session, body.ID)
+	}
+	m, err := s.DB.Memory.Query().Where(memory.IDEQ(id), memory.GroupIDEQ(session.GroupID)).Only(ctx)
 	if ent.IsNotFound(err) {
 		return "", errors.New("本组没有这条记忆")
 	}
@@ -123,4 +129,27 @@ func (s *Service) forget(ctx context.Context, session *ent.AgentSession, args js
 		return "", err
 	}
 	return marshal(map[string]any{"status": "forgotten", "id": m.ID})
+}
+
+// badMemoryID 给的 ID 不是合法 UUID：能按前缀唯一对上本组可删的 AI 记忆就把完整 ID 告诉模型，
+// 只提示、不替它删——少一位的 ID 也可能是另一条的前缀
+func (s *Service) badMemoryID(ctx context.Context, session *ent.AgentSession, given string) error {
+	prefix := strings.ToLower(strings.TrimSpace(given))
+	if prefix != "" {
+		rows, err := s.DB.Memory.Query().Where(memory.GroupIDEQ(session.GroupID), memory.SourceEQ("ai")).All(ctx)
+		if err != nil {
+			return err
+		}
+		var hit []*ent.Memory
+		for _, m := range rows {
+			if strings.HasPrefix(m.ID.String(), prefix) {
+				hit = append(hit, m)
+			}
+		}
+		if len(hit) == 1 {
+			return fmt.Errorf("%q 不是完整的记忆 ID；本组以它开头的 AI 记忆只有 %s（%s），确认是这条就用完整 ID 重新执行",
+				given, hit[0].ID, hit[0].Content)
+		}
+	}
+	return fmt.Errorf("%q 不是合法的记忆 ID：要 36 位 UUID（如 0192f3a4-5b6c-7d8e-9f01-23456789abcd），用 memories 查看完整 ID 后原样复制", given)
 }
