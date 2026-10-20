@@ -3,6 +3,47 @@
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 0.x 期间接口、配置与数据库结构仍可能不兼容变更，升级前请看对应条目。
 
+## [0.2.0] - 2026-10-20
+
+### 身份关联
+
+- 全局身份图：账号登记、目录账号作锚点、Windows SID 强证据链接、Linux 登录关联当时的设备清单，后台单活增量更新。
+- 控制台身份页：身份列表（默认不列系统账号）与详情、合并候选的确认 / 拒绝 / 撤销（落审计）；资产页本地账号显示近期登录并可跳到身份。
+- 目录来源新增 Authentik（只读 API 令牌读用户列表），与 Keycloak / Entra / AD / LDAP 同一套 `IDENTITY_SOURCES_JSON` 配置。
+  compose 透传 `AUTHENTIK_TOKEN`；用别的变量名时需自行在 compose 里加一行。
+- Pi 组只读视图加身份、账号、链接与登录关联。
+
+### 时序检测
+
+- 时序规则库从 3 条扩到 20 条（新规则先在生产 7 天数据上回测，Linux 侦察集中命中全是运维自动化，未收录）：爆破后侦察、Windows 侦察集中、下载执行后建持久化、凭据读取后打包 / 外传 / 可疑外联、
+  防御削弱后可疑执行，以及 Windows 对应链路；每条在 `temporal-rules/README.md` 写明窗口、阈值理由与已知误报。
+- 新增基础规则：SSH 私钥读取（只认读取 / 拷贝 / 编码工具与按私钥名搜索）。
+- `group_by: account` 按同组规范化用户名跨主机累计；`event_count` 支持 `min_assets`。
+- 时序规则按不可变版本目录发布（`SHA256SUMS` 校验、`current` 链接原子切换），告警可查看命中时的规则原文。
+- `cmd/backtest` 支持时序规则：按事件时间在内存回放。
+
+### 降噪与复核
+
+- 事件页「按规则归并」视图：按最高级别告警的规则 + 主机分组，显示组内数量与研判分布，可整组结案。
+- 批量结案接口 `POST /api/incidents/batch-status`：一个事务全部成功或全部不动；含 AI 判恶意的事件按误报关需二次确认；逐条审计，人工结论照常回喂研判。
+
+### AI 巡检
+
+- 定时任务里只读命令自动批准；只读判定覆盖 RAID / SMART 查看、`pct exec` / `docker exec` 容器内只读命令、`visudo -c`、`vtysh show` 等巡检常用写法。
+- 报告格式统一（一句话结论、固定分节、平台渲染页头），按人记已读。
+- 停机时等定时任务收尾，被发版打断的巡检记为 interrupted 并由接手节点重跑。
+- AI 工具报错带上可直接改对的信息。
+
+### 资产
+
+- 设备清单上报系统显示名（Linux `PRETTY_NAME`、Windows 注册表）与监听进程所属软件包。
+
+### 平台与运维
+
+- HA 发布脚本带上时序规则版本目录；事件流副本健康度进指标并加告警，NATS 显式通告路由地址。
+- 采集端加固：Windows 读命令行按本地缓冲长度读、inotify 事件头非对齐读取、AF_XDP 环计数器 acquire/release、打开失败不泄漏映射与 fd。
+- 前端走查修正：情报命中可读标题、事件操作列不再被裁、报告页适配窄屏。
+
 ## [0.1.0] - 2026-10-19
 
 第一个公开版本。
@@ -93,4 +134,5 @@
 - 跨宿主机高可用部署（Patroni + 三节点 JetStream + Keepalived VIP）与滚动发布脚本。
 - Web 控制台：中英双语，AI 助手为主入口，命令面板。
 
+[0.2.0]: https://github.com/yaklang/OpenXDR/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yaklang/OpenXDR/releases/tag/v0.1.0
