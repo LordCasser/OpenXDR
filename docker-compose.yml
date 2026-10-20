@@ -42,6 +42,8 @@ services:
       RULES_PATH: /rules
       TEMPORAL_RULES_PATH: ${TEMPORAL_RULES_PATH:-}
       IDENTITY_SOURCES_JSON: ${IDENTITY_SOURCES_JSON:-}
+      # 目录来源的 tokenEnv 引用的变量要在这里透传进容器；用别的变量名时照此加一行
+      AUTHENTIK_TOKEN: ${AUTHENTIK_TOKEN:-}
       IDENTITY_RUN_RETENTION_DAYS: ${IDENTITY_RUN_RETENTION_DAYS:-30}
       TASKS_PATH: /tasks
       # AI 研判：留空则不启用。接本地 Ollama 时用 host.docker.internal
