@@ -29,6 +29,9 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | GET | `/api/stats` | 概览：24h 降噪漏斗、告警趋势、按级别的告警分布（`alertsBySeverity`）、Top 规则、资产在线率；`reviewIncidents` 为需人工复核的事件数（口径同 `status=review`） |
 | GET | `/api/rules` | 引擎当前加载的规则（热重载后即时反映），含数据源覆盖标记与 ATT&CK 标签 |
 | GET | `/api/attack` | ATT&CK 覆盖矩阵：按杀伤链顺序的战术列与技术格，含未打标签、无数据源的规则数 |
+| GET | `/api/temporal-gaps?assetId=&from=&to=&limit=` | 该资产的时序检测缺口（`candidate_limit` / `late`），详见 [时序检测](temporal-detection.md#缺口查询接口) |
+| GET | `/api/temporal-rule-snapshots?limit=&alertId=` | 已归档的时序规则版本（**全局 admin / analyst**，角色每次从库里取），按首次使用时间倒序：`{items:[{revision,createdAt,format,baseRuleCount,temporalRules}],truncated}`；`limit` 默认 20、范围 1..100。带 `alertId` 时只返回该告警命中时的版本（单事件告警、旧版本告警或调用者看不到的告警返回空列表） |
+| GET | `/api/temporal-rule-snapshots/{revision}?rule=` | 按版本哈希取当时的时序规则：`{revision,createdAt,rules:[{id,title,author,kind,groupBy,severity,windowSeconds,threshold,minAssets,references,source,base}]}`，`base` 为该规则引用的基础规则原文；`rule` 只取一条（不存在 404）。按原文重算版本哈希，归档被改动或格式不支持时 500 拒绝展示。权限同上 |
 
 `GET /api/events` 参数：`from`/`to`（RFC3339，默认近 24h）、`assetId`、
 `classUid`（1001 文件 / 1007 进程 / 3002 认证 / 4001 网络 / 4003 DNS /
@@ -115,6 +118,24 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | DELETE | `/api/groups/{id}/assets/{assetId}` | 资产移出该组；不在此组返回 409（admin） |
 
 建组自带 AI 高风险命令名单并自动开通组查询身份；删组一并回收（见 `docs/pi-backend.md`）。
+
+## 身份
+
+全局身份图（合并规则与边界见 [身份来源与关联](identity-correlation.md#全局身份图)）。读按组成员（viewer 起），
+确认/拒绝/撤销要求组内 analyst 以上；不可见与不存在统一 404，列表组外返回空。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/identities?groupId=&q=&kind=&limit=&offset=` | 组内身份列表 `{items,truncated}`；`q` 匹配账号名 / SID / 主机名，`kind` 为 `directory` / `host`，`limit` 1–200 |
+| GET | `/api/identities/{id}?hours=` | 身份详情：`identity`、链接的 `accounts`（依据、置信度、证据、来源、近期登录）、`history`（最近 50 条撤销记录）；`hours` 默认 168，1–720 |
+| GET | `/api/identities/{id}/candidates` | 合并候选（同名、相似名、SID 对应多个目录账号），最多 50 条，带方向与拒绝记录 |
+| POST | `/api/identities/{id}/links` | `{"accountId"}` 确认把账号并入该身份；候选已不成立或已被拒绝时 409；落审计 `identity_link_confirmed` |
+| POST | `/api/identities/{id}/rejections` | `{"accountId"}` 判定不是同一人；落审计 `identity_candidate_rejected` |
+| DELETE | `/api/identity-links/{id}` | 撤销人工链接，账号回到默认归属；系统链接 409；落审计 `identity_link_revoked` |
+| DELETE | `/api/identity-rejections/{id}` | 撤销拒绝；落审计 `identity_candidate_rejection_revoked` |
+| GET | `/api/assets/{id}/identity-accounts?hours=` | 资产账号视图：`accounts`（近期登录与所属身份）、`unmatched`（未关联到账号的 Linux 登录）、`pending`（待后台关联数）；`hours` 默认 24 |
+
+登录观察、本地账号快照与目录状态等只读接口见 [身份来源与关联](identity-correlation.md)。
 
 ## 主机接入
 

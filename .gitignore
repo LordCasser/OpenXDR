@@ -8,6 +8,15 @@ dist/
 .env.local
 .env.*.local
 /server/server
+# 在 server/ 下 go build ./cmd/<工具> 的本地产物
+/server/backtest
+/server/sigmacheck
+/server/detectcheck
+/server/gencerts
+/server/sandboxd
+/server/decoyhost
+/server/decoyunit
+/server/sshdecoy
 # HA 渲染产物与证书只留在节点，见 deploy/ha/README.md
 /runtime/
 /certs/

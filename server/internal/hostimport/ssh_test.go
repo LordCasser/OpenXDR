@@ -42,15 +42,20 @@ func TestSSHEnrollmentChecksFingerprintAndHostname(t *testing.T) {
 			go func() {
 				installed := false
 				defer func() { result <- installed }()
-				conn, err := listener.Accept()
-				if err != nil {
-					return
-				}
-				defer conn.Close()
-				conn.SetDeadline(time.Now().Add(5 * time.Second))
-				sc, channels, requests, err := ssh.NewServerConn(conn, config)
-				if err != nil {
-					return
+				// 指纹不符时客户端会换主机密钥算法重新握手，握手失败的连接跳过、继续等下一条。
+				var sc *ssh.ServerConn
+				var channels <-chan ssh.NewChannel
+				var requests <-chan *ssh.Request
+				for sc == nil {
+					conn, err := listener.Accept()
+					if err != nil {
+						return
+					}
+					defer conn.Close()
+					conn.SetDeadline(time.Now().Add(5 * time.Second))
+					if sc, channels, requests, err = ssh.NewServerConn(conn, config); err != nil {
+						sc = nil
+					}
 				}
 				defer sc.Close()
 				go ssh.DiscardRequests(requests)
@@ -93,6 +98,7 @@ func TestSSHEnrollmentChecksFingerprintAndHostname(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			err = Install(ctx, c, Secret{Password: "password-marker"}, tc.hostname, "linux", "https://xdr.example.test", "short-token", "echo fixed-installer", fingerprint)
+			listener.Close()
 			if (err == nil) != tc.installed {
 				t.Fatalf("结果不符: %v", err)
 			}

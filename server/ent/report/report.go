@@ -26,6 +26,8 @@ const (
 	FieldMarkdown = "markdown"
 	// FieldLevel holds the string denoting the level field in the database.
 	FieldLevel = "level"
+	// FieldSummary holds the string denoting the summary field in the database.
+	FieldSummary = "summary"
 	// Table holds the table name of the report in the database.
 	Table = "reports"
 )
@@ -39,6 +41,7 @@ var Columns = []string{
 	FieldTitle,
 	FieldMarkdown,
 	FieldLevel,
+	FieldSummary,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -58,6 +61,8 @@ var (
 	TitleValidator func(string) error
 	// DefaultLevel holds the default value on creation for the "level" field.
 	DefaultLevel string
+	// DefaultSummary holds the default value on creation for the "summary" field.
+	DefaultSummary string
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -98,4 +103,9 @@ func ByMarkdown(opts ...sql.OrderTermOption) OrderOption {
 // ByLevel orders the results by the level field.
 func ByLevel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLevel, opts...).ToFunc()
+}
+
+// BySummary orders the results by the summary field.
+func BySummary(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSummary, opts...).ToFunc()
 }

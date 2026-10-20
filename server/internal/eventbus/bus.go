@@ -24,6 +24,7 @@ type Metrics interface {
 	PublishFailed()
 	Failed(stage string)
 	SetQueuePending(shard string, count uint64)
+	SetQueueReplicasUnhealthy(count int)
 }
 
 type Processor interface {
@@ -60,6 +61,7 @@ type JetStream struct {
 	nc         *nats.Conn
 	js         nats.JetStreamContext
 	shards     int
+	replicas   int
 	metrics    Metrics
 	subs       []*nats.Subscription
 	monitorEnd chan struct{}
@@ -119,7 +121,7 @@ func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, ma
 		nc.Close()
 		return nil, err
 	}
-	b := &JetStream{nc: nc, js: js, shards: shards, metrics: metrics, monitorEnd: make(chan struct{})}
+	b := &JetStream{nc: nc, js: js, shards: shards, replicas: replicas, metrics: metrics, monitorEnd: make(chan struct{})}
 	for i := 0; i < shards; i++ {
 		shard := fmt.Sprintf("%02x", i)
 		subject := "openxdr.events." + shard
@@ -208,8 +210,27 @@ func (b *JetStream) monitor() {
 					b.metrics.SetQueuePending(shard, info.NumPending+uint64(info.NumAckPending))
 				}
 			}
+			info, err := b.js.StreamInfo(streamName)
+			b.metrics.SetQueueReplicasUnhealthy(unhealthyReplicas(info, err, b.replicas))
 		}
 	}
+}
+
+// unhealthyReplicas 不在同步状态的副本数。StreamInfo 由流 leader 应答，答得上来就算 leader 健康；
+// 答不上来（没有 leader、失去多数）按全部副本不健康计——副本静默掉队正是需要告警的情形。
+func unhealthyReplicas(info *nats.StreamInfo, err error, replicas int) int {
+	if err != nil || info == nil {
+		return replicas
+	}
+	healthy := 1
+	if info.Cluster != nil {
+		for _, peer := range info.Cluster.Replicas {
+			if peer.Current && !peer.Offline {
+				healthy++
+			}
+		}
+	}
+	return max(replicas-healthy, 0)
 }
 
 func shardOf(key string, shards int) int {

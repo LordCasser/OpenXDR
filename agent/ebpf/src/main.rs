@@ -51,8 +51,13 @@ fn try_exec(ctx: &TracePointContext) -> Result<(), i64> {
     }
 
     // __data_loc 低 16 位是 filename 相对事件起始的偏移
+    // SAFETY: 偏移 8、宽 4 字节与 sched_process_exec 的 format（__data_loc char[] filename）一致；
+    // read_at 走 bpf_probe_read，地址不可读时返回 Err 而不是崩溃，验证器也会拒绝越界访问。
     let data_loc: u32 = unsafe { ctx.read_at(FILENAME_DATA_LOC_OFFSET)? };
     let offset = (data_loc & 0xffff) as usize;
+    // SAFETY: offset 取自 __data_loc 低 16 位，是 filename 相对本条 tracepoint 记录起点的偏移，
+    // 指针算术不越出这条记录；bpf_probe_read_kernel_str_bytes 最多写 event.filename 的 256 字节，
+    // 源地址不可读时只返回错误。
     unsafe {
         let src = (ctx.as_ptr() as *const u8).add(offset);
         let _ = bpf_probe_read_kernel_str_bytes(src, &mut event.filename);
@@ -85,6 +90,8 @@ const EXIT_GROUP_CODE_OFFSET: usize = 16;
 #[tracepoint]
 pub fn sys_enter_exit_group(ctx: TracePointContext) -> u32 {
     let tgid = (bpf_get_current_pid_tgid() >> 32) as u32;
+    // SAFETY: 偏移 16、宽 8 字节与 sys_enter_exit_group 的 format（long error_code）一致；
+    // 读失败返回 Err，由下面的 let-else 处理。
     let Ok(code) = (unsafe { ctx.read_at::<i64>(EXIT_GROUP_CODE_OFFSET) }) else {
         return 1;
     };
@@ -109,6 +116,8 @@ fn try_exit(ctx: &TracePointContext) -> Result<(), i64> {
         return Ok(());
     }
     // 退出事件只需 pid 与退出码：血缘与进程细节由用户态注册表补全
+    // SAFETY: get 返回的是 map 值的引用，可能被别的 CPU 同时改写或删除；这里立即 copied() 拷出
+    // i32，引用不跨越任何辅助函数调用，元素内存在本程序运行期间由 RCU 保活。
     let code = unsafe { EXIT_CODES.get(&tgid).copied() };
     let _ = EXIT_CODES.remove(&tgid);
     let event = ExitEvent {
@@ -177,11 +186,14 @@ pub fn inet_sock_set_state(ctx: TracePointContext) -> u32 {
 fn try_conn(ctx: &TracePointContext) -> Result<(), i64> {
     // SYN_SENT 必然在发起进程上下文，但此时源端口尚未写入 tracepoint。
     // 用 skaddr 关联到后续 ESTABLISHED/CLOSE，再输出完整五元组。
+    // SAFETY: 偏移与类型对照 inet_sock_set_state 的 format（int newstate @20）；读失败返回 Err。
     let newstate: i32 = unsafe { ctx.read_at(NEWSTATE_OFFSET)? };
+    // SAFETY: 同上：__u16 protocol @30。
     let protocol: u16 = unsafe { ctx.read_at(PROTOCOL_OFFSET)? };
     if protocol != IPPROTO_TCP {
         return Ok(());
     }
+    // SAFETY: 同上：const void *skaddr @8，只当作 map 键用，不解引用。
     let skaddr: u64 = unsafe { ctx.read_at(SKADDR_OFFSET)? };
     if newstate == TCP_SYN_SENT {
         let pid = (bpf_get_current_pid_tgid() >> 32) as u32;
@@ -192,33 +204,42 @@ fn try_conn(ctx: &TracePointContext) -> Result<(), i64> {
         return Ok(());
     }
     // 被动打开：子套接字从 SYN_RECV 进入 ESTABLISHED，就是一条建立成功的入站连接
+    // SAFETY: 同上：int oldstate @16。
     let oldstate: i32 = unsafe { ctx.read_at(OLDSTATE_OFFSET)? };
     let (pid, kind) = if newstate == TCP_ESTABLISHED && oldstate == TCP_SYN_RECV {
         (0, CONN_TCP_IN)
     } else {
+        // SAFETY: 同 EXIT_CODES：取到 map 值的引用后立即 copied() 拷出 u32，不长期持有。
         let Some(pid) = (unsafe { CONNECTING.get(&skaddr).copied() }) else {
             return Ok(());
         };
         (pid, CONN_TCP_OUT)
     };
 
+    // SAFETY: 同上：__u16 family @28。
     let family: u16 = unsafe { ctx.read_at(FAMILY_OFFSET)? };
     let mut event = ConnEvent {
         pid,
         family,
+        // SAFETY: 同上：__u16 sport @24（内核已转主机序）。
         sport: unsafe { ctx.read_at(SPORT_OFFSET)? },
+        // SAFETY: 同上：__u16 dport @26（内核已转主机序）。
         dport: unsafe { ctx.read_at(DPORT_OFFSET)? },
         kind,
         saddr: [0; 16],
         daddr: [0; 16],
     };
     if family == AF_INET {
+        // SAFETY: 同上：__u8 saddr[4] @32，IPv4 时有效。
         let s: [u8; 4] = unsafe { ctx.read_at(SADDR_OFFSET)? };
+        // SAFETY: 同上：__u8 daddr[4] @36。
         let d: [u8; 4] = unsafe { ctx.read_at(DADDR_OFFSET)? };
         event.saddr[..4].copy_from_slice(&s);
         event.daddr[..4].copy_from_slice(&d);
     } else {
+        // SAFETY: 同上：__u8 saddr_v6[16] @40。
         event.saddr = unsafe { ctx.read_at(SADDR6_OFFSET)? };
+        // SAFETY: 同上：__u8 daddr_v6[16] @56。
         event.daddr = unsafe { ctx.read_at(DADDR6_OFFSET)? };
     }
 
@@ -256,7 +277,15 @@ const SK_V6_DADDR: usize = 56;
 const SK_V6_RCV_SADDR: usize = 72;
 const AF_INET6: u16 = 10;
 
+/// 从内核地址 base + offset 读一个 T。
+///
+/// # Safety
+/// base + offset 必须是一个类型为 T 的内核对象字段的地址（偏移与类型要对得上内核布局），
+/// 否则读到的是错位的垃圾数据；地址不可读时只返回 Err，不会崩溃。
 unsafe fn read<T>(base: *const u8, offset: usize) -> Result<T, i64> {
+    // SAFETY: 调用方保证 base + offset 处是一个 T 大小的内核对象字段；bpf_probe_read_kernel 对不可读
+    // 地址只返回错误，不会让内核崩溃。base.add 在这里只是内核地址的整数运算（BPF 下编成一条加法），
+    // 不指向 Rust 意义上的分配。
     unsafe { bpf_probe_read_kernel(base.add(offset) as *const T) }
 }
 
@@ -277,36 +306,49 @@ fn try_udp(ctx: &ProbeContext) -> Result<(), i64> {
     let msg: *const u8 = ctx.arg(1).ok_or(1i64)?;
     let mut event = ConnEvent {
         pid: (bpf_get_current_pid_tgid() >> 32) as u32,
+        // SAFETY: sk 是 kprobe 第一个参数 struct sock *；偏移取自上方 sock_common 布局常量；读失败返回 Err。
         family: unsafe { read(sk, SK_FAMILY)? },
+        // SAFETY: 同上：skc_num（u16，主机序）。
         sport: unsafe { read(sk, SK_NUM)? },
+        // SAFETY: 同上：skc_dport（u16，网络序，随后 from_be）。
         dport: u16::from_be(unsafe { read(sk, SK_DPORT)? }),
         kind: CONN_UDP_OUT,
         saddr: [0; 16],
         daddr: [0; 16],
     };
     if event.family == AF_INET {
+        // SAFETY: 同上：skc_rcv_saddr，IPv4 时有效。
         let s: [u8; 4] = unsafe { read(sk, SK_RCV_SADDR)? };
+        // SAFETY: 同上：skc_daddr。
         let d: [u8; 4] = unsafe { read(sk, SK_DADDR)? };
         event.saddr[..4].copy_from_slice(&s);
         event.daddr[..4].copy_from_slice(&d);
     } else if event.family == AF_INET6 {
+        // SAFETY: 同上：skc_v6_rcv_saddr，family 已确认为 AF_INET6。
         event.saddr = unsafe { read(sk, SK_V6_RCV_SADDR)? };
+        // SAFETY: 同上：skc_v6_daddr。
         event.daddr = unsafe { read(sk, SK_V6_DADDR)? };
     } else {
         return Ok(());
     }
     // msghdr 第一个成员就是 msg_name；sockaddr_in 端口在 2、地址在 4，sockaddr_in6 地址在 8
+    // SAFETY: msg 是 kprobe 第二个参数 struct msghdr *（内核侧副本），第一个成员是 msg_name 指针；
+    // 读失败返回 Err。
     let name: *const u8 = unsafe { read(msg, 0)? };
     if !name.is_null() {
+        // SAFETY: name 已确认非空，指向内核里由 move_addr_to_kernel 拷进来的 sockaddr，首 2 字节是 family。
         let family: u16 = unsafe { read(name, 0)? };
+        // SAFETY: 同上：sockaddr_in / sockaddr_in6 的端口都在偏移 2（网络序）。
         event.dport = u16::from_be(unsafe { read(name, 2)? });
         if family == AF_INET {
+            // SAFETY: 同上：family 为 AF_INET，sockaddr_in 的地址在偏移 4。
             let d: [u8; 4] = unsafe { read(name, 4)? };
             event.family = AF_INET;
             event.daddr = [0; 16];
             event.daddr[..4].copy_from_slice(&d);
         } else if family == AF_INET6 {
             event.family = AF_INET6;
+            // SAFETY: 同上：family 为 AF_INET6，sockaddr_in6 的地址在偏移 8。
             event.daddr = unsafe { read(name, 8)? };
         } else {
             return Ok(());
@@ -323,7 +365,10 @@ fn try_udp(ctx: &ProbeContext) -> Result<(), i64> {
             family: event.family,
             daddr: event.daddr,
         };
+        // SAFETY: bpf_ktime_get_ns 无参数、无前置条件，只返回单调时钟。
         let now = unsafe { bpf_ktime_get_ns() };
+        // SAFETY: 拿到 map 值的引用后只读一次 u64 时间戳；并发更新最多读到新旧之一，
+        // 元素内存在本程序运行期间由 RCU 保活。
         if let Some(last) = unsafe { UDP_SEEN.get(&key) }
             && now.wrapping_sub(*last) < UDP_WINDOW_NS
         {

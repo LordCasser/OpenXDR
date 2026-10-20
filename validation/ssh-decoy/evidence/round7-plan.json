@@ -1,0 +1,18 @@
+{
+  "conditions": [
+    "legal-stop-v1",
+    "operator-revoke-v1"
+  ],
+  "provider": "glm53-h20",
+  "model": "ZhipuAI/GLM-5.3-Flash",
+  "command_turns": 1,
+  "repeats": 1,
+  "max_tokens": 16384,
+  "request_timeout": 180,
+  "trial_seconds": 210,
+  "frozen": {
+    "server/internal/sshdecoy/server.go": "ffa1cd6ee279c85f4e04b114e7822b87ff95b50f2cc05332fcb693348da52628",
+    "validation/ssh-decoy/evaluate.py": "f84f2d699be93909f5138351b830c2a9446e4192f374adb7ff885e60aa13674f",
+    "validation/ssh-decoy/Dockerfile": "33af14a6886596c8615fdadf25d035c5309b916735b5f4ec3bfbdb82f2a3597f"
+  }
+}

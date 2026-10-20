@@ -202,7 +202,7 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
   FROM public.ip_infos WHERE ip IN (SELECT dst_ip FROM public.asset_links
     WHERE src_asset_id IN (SELECT id FROM public.assets WHERE group_id = ` + gid + `))`,
 		`CREATE OR REPLACE VIEW ` + schema + `.reports WITH (security_barrier) AS
-  SELECT id, created_at, title, level, markdown
+  SELECT id, created_at, title, level, markdown, summary
   FROM public.reports WHERE group_id = ` + gid,
 		`CREATE OR REPLACE VIEW ` + schema + `.events WITH (security_barrier) AS
   SELECT id, ts, class_uid, source, asset_id, username, conn_tuple, raw
@@ -210,6 +210,12 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
 		`CREATE OR REPLACE VIEW ` + schema + `.alerts WITH (security_barrier) AS
   SELECT id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id, detail
   FROM public.alerts WHERE ` + inGroup,
+		// 告警连同它的原始事件：在视图里按主键回查，跨视图 JOIN events 会全表扫描、必然超时
+		`CREATE OR REPLACE VIEW ` + schema + `.alert_events WITH (security_barrier) AS
+  SELECT a.id AS alert_id, a.ts, a.last_ts, a.count, a.rule_id, a.severity, a.asset_id, a.incident_id, a.command_id,
+         e.id AS event_id, e.ts AS event_ts, e.class_uid, e.username, e.conn_tuple, e.raw
+  FROM public.alerts a JOIN public.events e ON e.id = a.event_id AND e.asset_id = a.asset_id
+  WHERE a.` + inGroup,
 		`CREATE OR REPLACE VIEW ` + schema + `.incidents WITH (security_barrier) AS
   SELECT i.id, i.created_at, i.status, i.title, i.ai_verdict, i.graph
   FROM public.incidents i
@@ -225,9 +231,31 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
   SELECT id, created_at, completed_at, kind, status, asset_id, incident_id,
          issued_by, detail, cmd, exit_code, stdout, stderr, truncated
   FROM public.commands WHERE ` + inGroup,
+		// 身份图：账号与资产都要仍在本组，资产换组后旧组看不到其账号、身份与登录
+		`CREATE OR REPLACE VIEW ` + schema + `.identity_accounts WITH (security_barrier) AS
+  SELECT a.id, a.kind, a.asset_id, a.name, a.domain, a.sid, a.uid, a.directory_account_id, a.first_seen, a.last_seen,
+         l.identity_id, l.basis AS link_basis, l.confidence AS link_confidence, l.source AS link_source, l.created_at AS linked_at
+  FROM public.identity_accounts a LEFT JOIN public.identity_links l ON l.account_id = a.id AND l.revoked_at IS NULL
+  WHERE a.group_id = ` + gid + ` AND (a.asset_id IS NULL OR a.` + inGroup + `)`,
+		`CREATE OR REPLACE VIEW ` + schema + `.identities WITH (security_barrier) AS
+  SELECT i.id, i.kind, anchor.name, i.anchor_account_id, i.created_at
+  FROM public.identities i JOIN public.identity_accounts anchor ON anchor.id = i.anchor_account_id
+  WHERE i.group_id = ` + gid + ` AND (anchor.asset_id IS NULL OR anchor.` + inGroup + `)`,
+		`CREATE OR REPLACE VIEW ` + schema + `.identity_links WITH (security_barrier) AS
+  SELECT l.id, l.identity_id, l.account_id, l.basis, l.confidence, l.evidence, l.source, l.created_at,
+         l.revoked_at, l.revoked_by, l.revoke_reason
+  FROM public.identity_links l JOIN public.identity_accounts a ON a.id = l.account_id
+  WHERE l.group_id = ` + gid + ` AND (a.asset_id IS NULL OR a.` + inGroup + `)`,
+		`CREATE OR REPLACE VIEW ` + schema + `.identity_linux_logins WITH (security_barrier) AS
+  SELECT m.event_id, m.ts, m.asset_id, m.account_name, m.success, m.source_address, m.state,
+         m.snapshot_event_id, m.snapshot_ts, m.uid, a.id AS account_id
+  FROM public.identity_login_matches m LEFT JOIN public.identity_accounts a ON m.state = 'matched' AND a.group_id = m.group_id
+    AND a.account_key = 'linux-local:' || m.group_id || ':' || m.asset_id || ':' || m.uid || ':' || m.account_name
+  WHERE m.group_id = ` + gid + ` AND m.` + inGroup,
 		`COMMENT ON SCHEMA ` + schema + ` IS 'OpenXDR 单组只读视图，供 Pi query 工具使用'`,
 		`COMMENT ON VIEW ` + schema + `.events IS '本组原始事件（OCSF 风格，raw 为 JSON）；查询务必带 ts 范围'`,
 		`COMMENT ON VIEW ` + schema + `.alerts IS '本组告警（去重后，count 为累计次数）'`,
+		`COMMENT ON VIEW ` + schema + `.alert_events IS '本组告警连同触发它的原始事件（event_ts、class_uid、raw）；按 incident_id、rule_id、alert_id 过滤'`,
 		`COMMENT ON VIEW ` + schema + `.incidents IS '本组 incident（全部告警都在本组）'`,
 		`COMMENT ON VIEW ` + schema + `.findings IS '本组运维待办（track 登记的问题，status 为 open / resolved / ignored）'`,
 		`COMMENT ON VIEW ` + schema + `.suppressions IS '本组主机上的抑制规则（status：active 生效 / proposed 待批 / rejected 已拒绝）'`,
@@ -235,8 +263,14 @@ func ddl(group uuid.UUID, password string, fresh bool) []string {
 		`COMMENT ON VIEW ` + schema + `.asset_links IS '本组主机发起的连接聚合成的依赖边'`,
 		`COMMENT ON VIEW ` + schema + `.ip_infos IS '本组主机连过的公网地址：反向解析与 VirusTotal 结果'`,
 		`COMMENT ON VIEW ` + schema + `.reports IS '本组历史报告（level：ok / attention / urgent）'`,
+		`COMMENT ON VIEW ` + schema + `.identity_accounts IS '本组账号登记（directory 目录 / windows 组+资产+SID / linux 组+资产+UID+用户名）及当前所属身份'`,
+		`COMMENT ON VIEW ` + schema + `.identities IS '本组身份：每个目录账号一个，没有目录锚点的主机账号各自独立'`,
+		`COMMENT ON VIEW ` + schema + `.identity_links IS '账号到身份的链接与撤销历史（basis：directory_anchor / ad_sid / host_local / manual）'`,
+		`COMMENT ON VIEW ` + schema + `.identity_linux_logins IS 'Linux 登录与登录时有效本地账号清单的关联（state：matched / no_account / no_snapshot / snapshot_unavailable）'`,
 		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '` + role + `') THEN CREATE ROLE ` + role + ` LOGIN; END IF; END $$`,
-		`ALTER ROLE ` + role + ` WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 5`,
+		// PostgreSQL 16 起非超级用户连 NOSUPERUSER / NOREPLICATION / NOBYPASSRLS 都不许写（NOCREATEDB 也要求自己有 CREATEDB）；
+		// CREATE ROLE 建出来本来就没有这些属性，agentchat/query.go 每次查询前还会核对一遍
+		`ALTER ROLE ` + role + ` WITH LOGIN NOCREATEROLE CONNECTION LIMIT 5`,
 		`ALTER ROLE ` + role + ` SET search_path = ` + schema,
 		`ALTER ROLE ` + role + ` SET default_transaction_read_only = on`,
 		`ALTER ROLE ` + role + ` SET statement_timeout = '5s'`,

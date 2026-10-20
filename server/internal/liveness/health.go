@@ -1,0 +1,173 @@
+package liveness
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"slices"
+	"strings"
+	"time"
+
+	"openxdr/server/ent"
+	"openxdr/server/ent/asset"
+)
+
+// 采集健康通知：降级是悄悄发生的——eBPF 挂不上退轮询、安装包换成没编 eBPF 的构建、缓存写满，
+// 主机照样在线，资产页上能看见但没人盯着。问题集合变了才通知，恢复了说一声，同一个问题不反复推。
+// 已失联的主机交给失联通知；健康快照过期（旧 agent 或快照停了）的不评估，不拿旧状态报警。
+
+// healthStale 快照多久没更新就不再据它判断（agent 每 30 秒左右报一次）
+const healthStale = 5 * time.Minute
+
+// dropSticky 丢事件超过阈值后多久才算恢复：丢事件是一阵一阵的，不能每分钟来回报
+const dropSticky = time.Hour
+
+var capabilityNames = map[string]string{
+	"process": "进程采集", "files": "文件监控", "network": "网络采集", "dns": "DNS 采集", "auth": "登录采集",
+	"inventory": "资产清单", "local-accounts": "本地账号清单", "persist": "持久化点监控", "kmod": "内核模块监控",
+	"powershell": "PowerShell 脚本块", "software": "软件清单",
+}
+
+type healthSnapshot struct {
+	ReceivedAt    time.Time `json:"receivedAt"`
+	DroppedEvents int64     `json:"droppedEvents"`
+	WriteBlocked  bool      `json:"writeBlocked"`
+	Capabilities  map[string]struct {
+		Path  string `json:"path"`
+		State string `json:"state"`
+	} `json:"capabilities"`
+}
+
+// problem 一项采集问题：key 进签名（不含会变的计数），text 给人看
+type problem struct{ key, text string }
+
+func healthProblems(h healthSnapshot, dropping bool, dropped int64) []problem {
+	var out []problem
+	for name, c := range h.Capabilities {
+		if c.State != "degraded" && c.State != "unavailable" {
+			continue
+		}
+		label := capabilityNames[name]
+		if label == "" {
+			label = name
+		}
+		state := map[string]string{"degraded": "降级", "unavailable": "不可用"}[c.State]
+		text := label + state
+		if c.Path != "" {
+			text += "（" + c.Path + "）"
+		}
+		out = append(out, problem{"cap:" + name + ":" + c.State, text})
+	}
+	if h.WriteBlocked {
+		out = append(out, problem{"blocked", "本地缓存写不进去（磁盘满或缓存已满），断线时事件会丢"})
+	}
+	if dropping {
+		text := "近一小时有事件因上报跟不上被丢弃"
+		if dropped > 0 {
+			text = fmt.Sprintf("本轮丢弃 %d 条事件（上报跟不上）", dropped)
+		}
+		out = append(out, problem{"drops", text})
+	}
+	slices.SortFunc(out, func(a, b problem) int { return strings.Compare(a.key, b.key) })
+	return out
+}
+
+func signature(ps []problem) string {
+	keys := make([]string, len(ps))
+	for i, p := range ps {
+		keys[i] = p.key
+	}
+	return strings.Join(keys, "|")
+}
+
+func (w *Watcher) sweepHealth(ctx context.Context, now time.Time) error {
+	assets, err := w.DB.Asset.Query().
+		Where(asset.AgentIDNotNil(), asset.SilentSinceIsNil(), asset.CollectorHealthNotNil()).
+		Order(ent.Asc(asset.FieldHostname)).All(ctx)
+	if err != nil {
+		return err
+	}
+	type change struct {
+		a     *ent.Asset
+		sig   string
+		lines []string
+	}
+	var bad, good []change
+	for _, a := range assets {
+		var h healthSnapshot
+		if json.Unmarshal(a.CollectorHealth, &h) != nil || now.Sub(h.ReceivedAt) > healthStale {
+			continue
+		}
+		// 丢弃数是 agent 本次运行的累计值，重启会归零：比上轮小就从零起算
+		var delta int64
+		if a.HealthDropped != nil {
+			delta = h.DroppedEvents - *a.HealthDropped
+			if delta < 0 {
+				delta = h.DroppedEvents
+			}
+		}
+		droppedAt := a.HealthDroppedAt
+		if w.DropAlert > 0 && delta >= int64(w.DropAlert) {
+			droppedAt = &now
+		}
+		upd := a.Update().SetHealthDropped(h.DroppedEvents)
+		if droppedAt != nil {
+			upd.SetHealthDroppedAt(*droppedAt)
+		}
+		if err := upd.Exec(ctx); err != nil {
+			return err
+		}
+		dropping := droppedAt != nil && now.Sub(*droppedAt) < dropSticky
+		ps := healthProblems(h, dropping, max(delta, 0))
+		sig, old := signature(ps), ""
+		if a.HealthProblem != nil {
+			old = *a.HealthProblem
+		}
+		if sig == old {
+			continue
+		}
+		lines := make([]string, len(ps))
+		for i, p := range ps {
+			lines[i] = p.text
+		}
+		if sig == "" {
+			good = append(good, change{a, sig, nil})
+		} else {
+			bad = append(bad, change{a, sig, lines})
+		}
+	}
+	// 先通知后落标记：推送失败下轮重试
+	if len(bad) > 0 {
+		lines := make([]string, len(bad))
+		for i, c := range bad {
+			lines[i] = c.a.Hostname + "：" + strings.Join(c.lines, "；")
+		}
+		if err := w.Notify(ctx, fmt.Sprintf("%d 台主机采集异常", len(bad)),
+			strings.Join(lines, "\n")+"\n这些主机仍在线，但有可见性缺口，检测可能漏报", "/assets"); err != nil {
+			return err
+		}
+		for _, c := range bad {
+			if err := c.a.Update().SetHealthProblem(c.sig).Exec(ctx); err != nil {
+				return err
+			}
+		}
+		slog.Warn("主机采集异常", "count", len(bad))
+	}
+	if len(good) > 0 {
+		names := make([]string, len(good))
+		for i, c := range good {
+			names[i] = c.a.Hostname
+		}
+		if err := w.Notify(ctx, fmt.Sprintf("%d 台主机采集恢复正常", len(good)), strings.Join(names, "、"), "/assets"); err != nil {
+			return err
+		}
+		for _, c := range good {
+			if err := c.a.Update().ClearHealthProblem().Exec(ctx); err != nil {
+				return err
+			}
+		}
+		slog.Info("主机采集恢复", "count", len(good))
+	}
+	return nil
+}

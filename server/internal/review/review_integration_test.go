@@ -1,0 +1,89 @@
+//go:build integration
+
+package review
+
+import (
+	"encoding/json"
+	"slices"
+	"sort"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"openxdr/server/ent/predicate"
+	"openxdr/server/internal/decoy"
+	"openxdr/server/internal/testdb"
+)
+
+// 三个口径在同一批事件上的判定：哪些要人看、哪些是可以自动结案的良性噪声、哪些只有诱饵观察
+func TestPredicates(t *testing.T) {
+	ctx, db := testdb.New(t)
+	now := time.Now()
+	old := now.Add(-48 * time.Hour)
+	cutoff := now.Add(-24 * time.Hour)
+
+	names := map[uuid.UUID]string{}
+	type al struct {
+		rule string
+		sev  int16
+	}
+	mk := func(name, status, verdict string, created time.Time, alerts ...al) {
+		c := db.Incident.Create().SetStatus(status).SetGraph(json.RawMessage(`{}`)).SetCreatedAt(created)
+		if verdict != "" {
+			c.SetAiVerdict(json.RawMessage(verdict))
+		}
+		inc := c.SaveX(ctx)
+		names[inc.ID] = name
+		for _, a := range alerts {
+			db.Alert.Create().SetTs(created).SetRuleID(a.rule).SetSeverity(a.sev).SetIncidentID(inc.ID).ExecX(ctx)
+		}
+	}
+	benign := `{"verdict":"benign","summary":"运维脚本"}`
+	malicious := `{"verdict":"malicious"}`
+	dec := decoy.ObservationRulePrefix + "honeyfile"
+
+	mk("未研判", "open", "", old)
+	mk("判恶意", "open", malicious, old, al{"r1", 2})
+	mk("判良性低危旧", "open", benign, old, al{"r1", 2}, al{"r2", 3})
+	mk("判良性低危新", "triaged", benign, now, al{"r1", 1})
+	mk("判良性但高危", "triaged", benign, old, al{"r1", 2}, al{"r2", 4})
+	mk("判良性含诱饵与真实告警", "open", benign, old, al{"r1", 1}, al{dec, 1})
+	mk("判良性仅诱饵", "open", benign, old, al{dec, 1})
+	mk("未研判仅诱饵", "open", "", old, al{dec, 2})
+	mk("结论缺 verdict 字段", "open", `{"summary":"x"}`, old, al{"r1", 1})
+	mk("结论大小写不符", "open", `{"verdict":"Benign"}`, old, al{"r1", 1})
+	mk("已结案恶意高危", "closed", malicious, old, al{"r1", 5})
+	mk("误报良性", "false_positive", benign, old, al{"r1", 1})
+	mk("已结案含诱饵", "closed", "", old, al{dec, 1})
+
+	query := func(p predicate.Incident) []string {
+		var out []string
+		for _, inc := range db.Incident.Query().Where(p).AllX(ctx) {
+			out = append(out, names[inc.ID])
+		}
+		sort.Strings(out)
+		return out
+	}
+	expect := func(label string, got []string, want ...string) {
+		t.Helper()
+		sort.Strings(want)
+		if !slices.Equal(got, want) {
+			t.Errorf("%s\n got  %v\n want %v", label, got, want)
+		}
+	}
+
+	expect("Needed", query(Needed()),
+		"未研判", "判恶意", "判良性但高危", "判良性含诱饵与真实告警", "判良性仅诱饵", "未研判仅诱饵", "结论缺 verdict 字段", "结论大小写不符")
+	expect("StaleBenign", query(StaleBenign(cutoff)), "判良性低危旧")
+	// 截止时间放到未来，新创建的良性低危事件也算过期
+	expect("StaleBenign(未来)", query(StaleBenign(now.Add(time.Hour))), "判良性低危旧", "判良性低危新")
+	expect("DecoyOnly", query(DecoyOnly()), "判良性仅诱饵", "未研判仅诱饵", "已结案含诱饵")
+
+	// 自动结案与人工复核互斥：任何事件都不能同时属于两边
+	for _, n := range query(StaleBenign(now.Add(time.Hour))) {
+		if slices.Contains(query(Needed()), n) {
+			t.Errorf("%s 同时需要复核又可自动结案", n)
+		}
+	}
+}

@@ -30,6 +30,7 @@ func (testMetrics) Published(string)               {}
 func (testMetrics) PublishFailed()                 {}
 func (testMetrics) Failed(string)                  {}
 func (testMetrics) SetQueuePending(string, uint64) {}
+func (testMetrics) SetQueueReplicasUnhealthy(int)  {}
 
 func TestJetStreamPublishConsumeAndDeduplicate(t *testing.T) {
 	url := isolatedNATS(t)

@@ -1,0 +1,52 @@
+{
+  "seed": 20261019,
+  "order": [
+    {
+      "block": 1,
+      "template": "inject-en-v1"
+    },
+    {
+      "block": 1,
+      "template": "format-v1"
+    },
+    {
+      "block": 1,
+      "template": "internal-v1"
+    },
+    {
+      "block": 2,
+      "template": "format-v1"
+    },
+    {
+      "block": 2,
+      "template": "inject-en-v1"
+    },
+    {
+      "block": 2,
+      "template": "internal-v1"
+    },
+    {
+      "block": 3,
+      "template": "internal-v1"
+    },
+    {
+      "block": 3,
+      "template": "format-v1"
+    },
+    {
+      "block": 3,
+      "template": "inject-en-v1"
+    }
+  ],
+  "frozen": {
+    "server/internal/sshdecoy/server.go": "9a15991990cdb93ece7db5d18a69846ccb15daea00239eac6c8f7f3ddc6846ef",
+    "validation/ssh-decoy/evaluate.py": "f30da910c989e55a1d6a3c92cdde099771bf5b13d1d56b27616c39618a97842d",
+    "validation/ssh-decoy/Dockerfile": "33af14a6886596c8615fdadf25d035c5309b916735b5f4ec3bfbdb82f2a3597f"
+  },
+  "provider": "glm53-h20",
+  "model": "ZhipuAI/GLM-5.3-Flash",
+  "command_turns": 1,
+  "max_tokens": 16384,
+  "request_timeout": 180,
+  "trial_seconds": 210
+}

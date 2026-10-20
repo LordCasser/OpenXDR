@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,7 +37,7 @@ func SetEgressNote(ctx context.Context, db *ent.Client, assetID uuid.UUID, ip st
 		return err
 	}
 	if !seen {
-		return errors.New("这台主机最近没有连过这个地址")
+		return notSeen(ctx, db, assetID)
 	}
 	tx, err := db.Tx(ctx)
 	if err != nil {
@@ -61,4 +63,28 @@ func SetEgressNote(ctx context.Context, db *ent.Client, assetID uuid.UUID, ip st
 		return err
 	}
 	return tx.Commit()
+}
+
+// notSeen 地址对不上时把这台主机最近真正连过的公网地址带回去，免得模型照着相邻网段去猜
+func notSeen(ctx context.Context, db *ent.Client, assetID uuid.UUID) error {
+	links, err := db.AssetLink.Query().Where(assetlink.SrcAssetIDEQ(assetID), assetlink.LastSeenGT(time.Now().Add(-linkTTL))).
+		Order(ent.Desc(assetlink.FieldLastSeen)).Limit(200).All(ctx)
+	if err != nil {
+		return err
+	}
+	var recent []string
+	seen := map[string]bool{}
+	for _, l := range links {
+		if addr, err := netip.ParseAddr(l.DstIP); err != nil || !Public(addr) || seen[l.DstIP] {
+			continue
+		}
+		seen[l.DstIP] = true
+		if recent = append(recent, l.DstIP); len(recent) == 10 {
+			break
+		}
+	}
+	if len(recent) == 0 {
+		return errors.New("这台主机最近没有连过这个地址，近 30 天也没有记录到任何公网外联")
+	}
+	return fmt.Errorf("这台主机最近没有连过这个地址。它最近连过的公网地址（最多 10 个，完整的查 asset_links）：%s", strings.Join(recent, ", "))
 }

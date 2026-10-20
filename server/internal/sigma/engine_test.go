@@ -539,6 +539,19 @@ detection:
 	if got := eng.TitleOf("nope"); got != "" {
 		t.Errorf("未知 ID 的 TitleOf 应为空，得到 %q", got)
 	}
+	// 情报命中没有规则文件，按 intel:<类别>:<值> 给可读标题；认不出的类别仍为空
+	for id, want := range map[string]string{
+		"intel:ip:176.120.22.61": "Threat Intel Match: IP 176.120.22.61 (威胁情报命中)",
+		"intel:domain:evil.test": "Threat Intel Match: Domain evil.test (威胁情报命中)",
+		"intel:hash:ab12":        "Threat Intel Match: File Hash ab12 (威胁情报命中)",
+		"intel:url:http://x":     "",
+		"intel:ip:":              "",
+		"notintel:ip:1.2.3.4":    "",
+	} {
+		if got := eng.TitleOf(id); got != want {
+			t.Errorf("TitleOf(%q) = %q, want %q", id, got, want)
+		}
+	}
 }
 
 // Sigma 的 Initiated true/false 对上事件的 outbound/inbound；User 由信封上的用户名补到 actor.user.name

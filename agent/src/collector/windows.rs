@@ -111,6 +111,8 @@ fn to_win32_path(image: &str) -> String {
             let drive = format!("{}:", letter as char);
             let name_w: Vec<u16> = drive.encode_utf16().chain(std::iter::once(0)).collect();
             let mut buf = [0u16; 256];
+            // SAFETY: name_w 是以 0 结尾的 UTF-16 盘符名，buf 是栈上 256 个 u16 的可写数组，
+            // 传入的容量正是 buf.len()（按字符计），系统最多写这么多；两者在调用期间都存活。
             let n = unsafe { QueryDosDeviceW(name_w.as_ptr(), buf.as_mut_ptr(), buf.len() as u32) };
             if n == 0 {
                 continue;
@@ -191,6 +193,7 @@ mod inspect {
     pub fn describe(pid: u32) -> (Option<String>, String) {
         // PROCESS_VM_READ 给 PEB 兜底路径用；拿不到 VM_READ 的进程
         // （如受保护进程）连 QUERY 也通常拿不到，一并放弃不丢人
+        // SAFETY: OpenProcess 只接收整数参数，不涉及指针；空句柄表示失败，下面已检查。
         let handle =
             unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, 0, pid) };
         if handle.is_null() {
@@ -198,6 +201,7 @@ mod inspect {
         }
         let cmd = command_line(handle);
         let user = username(handle).unwrap_or_default();
+        // SAFETY: handle 是上面 OpenProcess 成功返回、只由本函数持有的句柄，用完关一次，之后不再使用。
         unsafe { CloseHandle(handle) };
         (cmd, user)
     }
@@ -216,6 +220,8 @@ mod inspect {
     /// 惯例两段式：先问长度再取值，拿回 UNICODE_STRING 头 + 字符串本体。
     fn command_line_nt(handle: HANDLE) -> Option<String> {
         let mut len = 0u32;
+        // SAFETY: 第一段只问长度：缓冲区传空指针、长度 0 是该 API 约定的用法，系统只写 len；
+        // handle 是 describe 持有的有效进程句柄。返回的失败状态是预期的，只看 len。
         unsafe {
             NtQueryInformationProcess(handle, COMMAND_LINE_INFO, std::ptr::null_mut(), 0, &mut len)
         };
@@ -224,6 +230,8 @@ mod inspect {
         }
         // 用 u64 撑起对齐，UNICODE_STRING 里有指针字段
         let mut buf = vec![0u64; len.div_ceil(8) as usize];
+        // SAFETY: buf 至少有 len 字节（按 8 字节向上取整），以 Vec<u64> 分配保证 UNICODE_STRING
+        // 所需的 8 字节对齐；传入的长度就是 len，系统不会写出界。
         let status = unsafe {
             NtQueryInformationProcess(
                 handle,
@@ -236,7 +244,12 @@ mod inspect {
         if status != 0 {
             return None;
         }
+        // SAFETY: status 为 0 表示系统已在 buf 开头写好 UNICODE_STRING 头（len 至少容纳它），
+        // buf 8 字节对齐，满足 UNICODE_STRING 的对齐；引用只在 buf 存活的本函数内使用。
         let us = unsafe { &*buf.as_ptr().cast::<UNICODE_STRING>() };
+        // SAFETY: ProcessCommandLineInformation 返回的 Buffer 指向同一块 buf 中紧跟头部的字符串本体，
+        // Length 是字节数且已由系统保证落在 len 之内，按 u16 读 Length / 2 个不越界；
+        // buf 在 chars 使用期间存活且未被改动。依赖系统总给出非空 Buffer（长度为 0 时也指向 buf 内）。
         let chars = unsafe { std::slice::from_raw_parts(us.Buffer, (us.Length / 2) as usize) };
         Some(String::from_utf16_lossy(chars))
     }
@@ -253,6 +266,8 @@ mod inspect {
             unique_process_id: 0,
             inherited_from_unique_process_id: 0,
         };
+        // SAFETY: pbi 是栈上已初始化的 ProcessBasicInformation（#[repr(C)]，与系统结构 x64 布局一致），
+        // 传入的长度就是它的大小，系统只在调用期间写入；返回长度出参允许为空指针。
         let status = unsafe {
             NtQueryInformationProcess(
                 handle,
@@ -265,25 +280,30 @@ mod inspect {
         if status != 0 || pbi.peb_base_address.is_null() {
             return None;
         }
-        let params: *mut core::ffi::c_void = read_mem(handle, unsafe {
-            pbi.peb_base_address.byte_add(PEB_PROCESS_PARAMETERS_OFF)
-        })?;
+        // PEB 地址属于目标进程，只做地址运算交给 ReadProcessMemory，本进程不解引用
+        let params: *mut core::ffi::c_void = read_mem(
+            handle,
+            pbi.peb_base_address
+                .wrapping_byte_add(PEB_PROCESS_PARAMETERS_OFF),
+        )?;
         if params.is_null() {
             return None;
         }
-        let us: UNICODE_STRING =
-            read_mem(handle, unsafe { params.byte_add(RUPP_COMMAND_LINE_OFF) })?;
+        let us: UNICODE_STRING = read_mem(handle, params.wrapping_byte_add(RUPP_COMMAND_LINE_OFF))?;
         if us.Buffer.is_null() || us.Length == 0 || us.Length > MAX_CMDLINE_BYTES {
             return None;
         }
+        // PEB 在目标进程手里、可被它改写成奇数 Length，读取长度按本地缓冲算，不信对方给的
         let mut buf = vec![0u16; (us.Length / 2) as usize];
         let mut got = 0usize;
+        // SAFETY: us.Buffer 是目标进程内的地址，只交给 ReadProcessMemory 跨进程读；读取长度正是
+        // 本地 buf 的字节数，系统最多写这么多；got 为栈上出参。
         let ok = unsafe {
             ReadProcessMemory(
                 handle,
                 us.Buffer.cast(),
                 buf.as_mut_ptr().cast(),
-                us.Length as usize,
+                buf.len() * 2,
                 &mut got,
             )
         };
@@ -297,6 +317,8 @@ mod inspect {
     fn read_mem<T: Copy>(handle: HANDLE, addr: *const core::ffi::c_void) -> Option<T> {
         let mut val = std::mem::MaybeUninit::<T>::uninit();
         let mut got = 0usize;
+        // SAFETY: val 是 size_of::<T>() 字节的未初始化本地存储，传入的长度正是它的大小，系统最多写这么多；
+        // addr 是目标进程内的地址，读失败只返回 0，不会触碰本进程内存。
         let ok = unsafe {
             ReadProcessMemory(
                 handle,
@@ -309,15 +331,19 @@ mod inspect {
         if ok == 0 || got != std::mem::size_of::<T>() {
             return None;
         }
+        // SAFETY: 上面已确认 got == size_of::<T>()，val 的每个字节都已被写入；调用方只用它读指针与
+        // UNICODE_STRING（整数加指针），任意字节都是这两类的合法值。
         Some(unsafe { val.assume_init() })
     }
 
     fn username(handle: HANDLE) -> Option<String> {
         let mut token: HANDLE = std::ptr::null_mut();
+        // SAFETY: handle 是 describe 持有的有效进程句柄；token 是栈上出参，成功时系统写入新句柄。
         if unsafe { OpenProcessToken(handle, TOKEN_QUERY, &mut token) } == 0 {
             return None;
         }
         let user = token_to_username(token);
+        // SAFETY: token 是上面 OpenProcessToken 成功返回、只由本函数持有的句柄，用完关一次。
         unsafe { CloseHandle(token) };
         user
     }
@@ -325,19 +351,27 @@ mod inspect {
     /// token → SID → DOMAIN\user。两个 API 都是先问长度再取值。
     fn token_to_username(token: HANDLE) -> Option<String> {
         let mut len = 0u32;
+        // SAFETY: 第一段只问长度：缓冲区传空指针、长度 0 是该 API 约定的用法，系统只写 len；
+        // token 是调用方持有的有效令牌句柄。
         unsafe { GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut len) };
         if len == 0 {
             return None;
         }
         let mut buf = vec![0u64; len.div_ceil(8) as usize];
+        // SAFETY: buf 至少 len 字节，以 Vec<u64> 分配保证 TOKEN_USER（含指针字段）的 8 字节对齐，
+        // 传入的长度就是 len，系统不会写出界。
         if unsafe { GetTokenInformation(token, TokenUser, buf.as_mut_ptr().cast(), len, &mut len) }
             == 0
         {
             return None;
         }
+        // SAFETY: GetTokenInformation 成功，buf 开头是系统写好的 TOKEN_USER，且 buf 8 字节对齐；
+        // 取出的 Sid 指向 buf 内部，buf 在本函数结束前存活且不再改动，后续使用都在此之内。
         let sid = unsafe { (*buf.as_ptr().cast::<TOKEN_USER>()).User.Sid };
 
         let (mut name_len, mut domain_len, mut sid_use) = (0u32, 0u32, 0i32);
+        // SAFETY: 第一段只问长度：名称与域缓冲传空指针是 API 约定的用法，系统只写三个长度出参；
+        // sid 指向仍存活的 buf，系统名传空表示本机。
         unsafe {
             LookupAccountSidW(
                 std::ptr::null(),
@@ -354,6 +388,8 @@ mod inspect {
         }
         let mut name = vec![0u16; name_len as usize];
         let mut domain = vec![0u16; domain_len as usize];
+        // SAFETY: name / domain 按上一步返回的长度（字符数，含结尾 NUL）分配，传入的容量与之相符；
+        // sid 仍指向存活的 buf；所有出参都指向栈上变量。
         let ok = unsafe {
             LookupAccountSidW(
                 std::ptr::null(),
@@ -387,6 +423,7 @@ mod tests {
     /// PEB 兜底路径直接读自己进程的命令行——任何 Windows 版本都成立。
     #[test]
     fn peb_fallback_reads_own_cmdline() {
+        // SAFETY: 测试里打开自己的进程：OpenProcess 只接收整数参数，空句柄下面已断言。
         let handle = unsafe {
             OpenProcess(
                 PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
@@ -396,6 +433,7 @@ mod tests {
         };
         assert!(!handle.is_null(), "应能打开自己的进程句柄");
         let cmd = super::inspect::command_line_peb(handle);
+        // SAFETY: handle 是上面成功打开、只由本测试持有的句柄，command_line_peb 只借用不关闭，这里关一次。
         unsafe { windows_sys::Win32::Foundation::CloseHandle(handle) };
         let cmd = cmd.expect("PEB 路径应能读出自己的命令行");
         assert!(!cmd.is_empty());

@@ -12,6 +12,7 @@ import (
 	"openxdr/server/internal/worklimit"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -148,11 +149,24 @@ func (r Runtime) Run(ctx context.Context, request Request, handle Handler, obser
 	stdin, stdout := ch.in, ch.out
 	defer stdin.Close()
 	defer stdout.Close()
+	// 工具请求并发处理：模型一次发出的多个调用（两台主机各一条 exec）不能排队，
+	// 一条在等审批或跑长命令时别的照常进行。退出前先取消，再等在途的处理器收手
+	var inflight sync.WaitGroup
 	defer func() {
 		cancel()
+		inflight.Wait()
 		_ = ch.wait()
 	}()
 	encoder := json.NewEncoder(stdin)
+	var encoderMu sync.Mutex
+	failed := make(chan error, 1)
+	fail := func(err error) {
+		select {
+		case failed <- err:
+		default:
+		}
+		cancel()
+	}
 	request.Type = "run"
 	if err := encoder.Encode(request); err != nil {
 		return nil, fmt.Errorf("发送 Pi 请求失败: %w", err)
@@ -194,22 +208,29 @@ func (r Runtime) Run(ctx context.Context, request Request, handle Handler, obser
 			if !allowed[event.Name] {
 				return nil, errors.New("Pi 请求了未注册工具")
 			}
-			output, toolErr := handle(ctx, event.Name, event.Args)
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			if toolErr != nil {
-				output = toolErr.Error()
-			}
-			reply := struct {
-				Type    string `json:"type"`
-				CallID  string `json:"call_id"`
-				Success bool   `json:"success"`
-				Output  string `json:"output"`
-			}{"tool_result", event.CallID, toolErr == nil, output}
-			if err := encoder.Encode(reply); err != nil {
-				return nil, fmt.Errorf("发送 Pi 工具结果失败: %w", err)
-			}
+			inflight.Add(1)
+			go func(event Event) {
+				defer inflight.Done()
+				output, toolErr := handle(ctx, event.Name, event.Args)
+				if ctx.Err() != nil {
+					return
+				}
+				if toolErr != nil {
+					output = toolErr.Error()
+				}
+				reply := struct {
+					Type    string `json:"type"`
+					CallID  string `json:"call_id"`
+					Success bool   `json:"success"`
+					Output  string `json:"output"`
+				}{"tool_result", event.CallID, toolErr == nil, output}
+				encoderMu.Lock()
+				err := encoder.Encode(reply)
+				encoderMu.Unlock()
+				if err != nil {
+					fail(fmt.Errorf("发送 Pi 工具结果失败: %w", err))
+				}
+			}(event)
 		case "result":
 			if event.StopReason == "" {
 				return nil, errors.New("Pi 结果缺少停止原因")
@@ -218,6 +239,11 @@ func (r Runtime) Run(ctx context.Context, request Request, handle Handler, obser
 		case "error":
 			return nil, fmt.Errorf("Pi 执行失败: %s", observed.Error)
 		}
+	}
+	select {
+	case err := <-failed:
+		return nil, err
+	default:
 	}
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

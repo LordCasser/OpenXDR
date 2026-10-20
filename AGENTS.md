@@ -144,6 +144,8 @@ Web（工作目录 `web/`）：`npm ci && npm run build`（`tsc -b && vite build
 - **AI 边界**：旧 triage 仍使用受限调查工具与最多 6 轮研判；Pi 会话使用
   `agentchat` / `commandgate`：exec 绑定组、名单与审批，query 仅使用组专属只读视图身份，
   report、track（运维待办）、identify（服务调查结论）与 remember / forget（组内长期记忆，人工优先、AI 只能删自己写的）绑定会话归组；suppress 只提交抑制草案，组管理员批准才生效；propose_close 只写结案建议，结案由人采纳。Pi 不注册本机 shell/文件工具，模型不能改写身份或来源。
+  定时任务里命中名单、但经 `commandgate.ReadOnly` 判定为只读的 Linux 命令自动批准（留审批记录与审计），
+  这是有意的窄例外：判定只能收紧不能放宽，会改东西或读密钥内容的命令始终等人。
   模型输出与工具结果视为不可信输入；配置和接口见 `docs/pi-backend.md`。
 - **Rust 特性**：默认构建不依赖任何外部二进制（protoc 由 crate 分发）；
   `ebpf`/`xdp` 是可选特性，CI 单独构建。写采集端代码注意 `cfg(target_os)` 分支，

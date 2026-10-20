@@ -1,0 +1,10 @@
+{
+  "round3-glm-interruption.json": {
+    "reason": "operator stopped automatic retry after a recorded upstream TimeoutError",
+    "trial": "boxpwnr-glm53-h20-clue-v1",
+    "remaining_condition": "workflow-v1 will run separately"
+  },
+  "round3-glm-workflow-budget-stop.json": {
+    "reason": "stopped after length with empty visible content at 8192 tokens; no further retries"
+  }
+}

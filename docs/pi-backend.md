@@ -55,10 +55,16 @@ AI 不能结案：人工结案会作为案例回喂研判，AI 自己结案再�
 - 协议不变：server 与容器之间仍是 runner 的 JSONL，经 sandboxd 一条全双工 HTTP 流转发。
   `xdr` 经容器内 unix socket 把调用交给桥，桥发 `tool_request` 回平台——组、发起人、
   高风险命令名单与审批、只读查询身份、审计全部照旧在 server 一侧完成。
+  模型一次发出的多个调用由 server 并发处理（各自一个 goroutine，回写结果串行），一条在等审批或跑长命令时
+  别的照常进行；本轮结束前先取消、再等在途的处理收手。
 - 容器不持有任何平台凭据，也不需要访问平台网络；模型端点与凭据随每轮请求传入。
 - 容器限制：只读根文件系统、工作目录 tmpfs、去掉全部能力、禁止提权、限内存 / CPU / 进程数，
   专用网桥。出口只放行模型端点、入口只放行 server 节点由宿主防火墙负责（`deploy/pi-sandbox/firewall.sh`）。
-- 会话历史每轮随请求带入；上下文接近上限时由 Pi 自带压缩处理。GLM 开启模板思考并跨轮保留。
+- 会话历史每轮随请求带入；GLM 开启模板思考并跨轮保留。历史超过 `PI_HISTORY_FOLD_KB`（默认 64）KB 时，
+  最近约一半预算的消息（最新一条无论多大）原样保留，更早的工具结果超过 1 KB 的只留开头 400 字与「已折叠，原文多少字节，
+  需要细节请重新查询」的说明；助手消息与思考过程不动，消息条数与工具调用配对不变（`agentchat/compact.go`）。
+  只影响发给模型的内容，库里与界面仍是原文；2 MiB 的上限按折叠后算。生产最大的 6 个会话折叠后小 43%～86%。
+  一轮运行内部 Pi 自己累积的上下文由 Pi 自带压缩处理。
 - 默认工具在沙箱里可以随意读写、写脚本处理数据，这是这条路比平台工具 schema 稳定的原因：
   对平台的一切影响仍然只能经过 `xdr`。
 
@@ -91,8 +97,10 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 | `GET /api/agent-sessions/{id}/messages?afterSeq=0` | — | 组 viewer；seq 升序，每页最多 1000 条，下一页传最后一条 seq |
 | `POST /api/agent-sessions/{id}/messages` | `{prompt}` | 发起人且仍为组 analyst，会话须为 idle；在后台开跑，返回 202 + `{id}` |
 | `POST /api/agent-sessions/{id}/cancel` | — | 发起人或组 admin；写入停止请求，返回 204 |
-| `GET /api/agent-reports?groupId=...` | — | 组 viewer；最近 100 个原始 Markdown 报告 |
+| `GET /api/agent-reports?groupId=...` | — | 组 viewer；最近 100 个原始 Markdown 报告，每份带 `summary` 与当前用户的 `read` |
 | `GET /api/agent-reports/{id}` | — | 组 viewer；报告实体 |
+| `POST /api/agent-reports/{id}/read` | — | 组 viewer；标为当前用户已读（重复无害），返回 204 |
+| `POST /api/agent-reports/read?groupId=...` | — | 组 viewer；列表里的最近 100 份全部标为当前用户已读 |
 | `GET /api/commands/{id}` | — | 资产所属组 viewer；未分组资产仅全局 admin，可查询迟到回执 |
 | `GET /api/command-policies?groupId=...` | — | 组 admin；名单 |
 | `POST /api/command-policies` | `{groupId,origin,pattern}` | 组 admin；创建名单，返回 201 |
@@ -106,7 +114,8 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 命中后取消本轮，未完成的工具调用补写结果消息，会话回到 idle 可继续追问。
 
 `StopReason=length/max_turns` 表示截断/轮数耗尽，不能展示为完整巡检成功。
-轮数耗尽（`max_turns`）时服务端先在同一会话上带全部历史续一次收尾（最多 4 次调用）：
+轮数耗尽（`max_turns`）或调查阶段到点（运行期限前留出 3 分钟，期限很短时取五分之一）时，服务端先补齐半截的工具调用，
+再在同一会话上带全部历史续一次收尾（最多 4 次调用）：
 两种会话都只留 `report`：对话会话要求直接用文字总结、不再调用工具，任务会话要求提交报告；未覆盖的检查项标「未验证」。
 不能一个工具都不给：历史里有工具调用时 pi-ai 会发空的 `tools` 数组，vLLM 等端点直接 400。收尾消息照常入库。
 停止只终止推理与审批等待，已下发的命令不会因此撤销。
@@ -161,7 +170,10 @@ Ent 实体字段采用 snake_case（例如 `group_id`、`created_at`）。
 `query` 参数为 `{sql}`；返回 columns、rows、truncated。每次只读事务，5 秒超时、
 最多 200 行和 8 KiB 序列化结果（含列名和元数据）。大行在数据库端拦截后才传输，
 超限显式截断，不把部分结果当作完整覆盖；零行或首行超限时 columns 可能为空。
-SQL 出错时把 PostgreSQL 报错原文（只取 message）返回给模型，便于它自行改正。
+SQL 出错时把 PostgreSQL 报错原文（只取 message）返回给模型，便于它自行改正；超时单独报「查询超过 5 秒被取消」并提示收窄范围，
+不混成语法错误（本地期限与角色 statement_timeout 同时到点，先到的报错不同，两种都按超时报）。
+跨视图 `alerts JOIN events` 会让 events 全表扫描（security_barrier 视图不能把连接条件下推成主键查找），
+所以另有 `alert_events` 视图在视图内部按主键回查告警对应的事件，按 incident_id / rule_id 过滤在生产实测为毫秒级。
 视图只有 rule_id，规则名由平台在系统提示数据的 `rule_titles` 里给出（本组近 7 天命中过的规则）。
 
 每个组使用**独立登录角色**，只能 SELECT 该组固定过滤条件的视图，读不到其他组视图、业务基表，
@@ -177,16 +189,21 @@ SQL 出错时把 PostgreSQL 报错原文（只取 message）返回给模型，�
 
 **手工开通**：平台账号没有 CREATEROLE 时（启动日志会提示），用 `deploy/pi-query/group-views.sql`
 （psql 变量传组 UUID、schema、角色与密码，可重复执行）建视图与角色，再写进
-`PI_QUERY_DATABASE_URLS`（JSON：组 UUID → DSN）。手工配置的身份始终优先于自动开通。
+`PI_QUERY_DATABASE_URLS`（JSON：组 UUID → DSN）。手工配置的身份始终优先于自动开通，
+**而且不会随版本刷新**：升级后要重跑一遍脚本，否则模型拿到的视图与 skill 文档对不上；能自动开通就不要手工配置。
 两种方式建的视图相同，都按组固化过滤：assets（含 agent 版本、失联时间、AI 画像、监听端口、云环境与服务 / 外联调查结论）、
-events、alerts、incidents、commands、findings（运维待办）、suppressions（本组主机上的抑制，不含全局抑制）、
+events、alerts、alert_events（告警连同原始事件）、incidents、commands、findings（运维待办）、suppressions（本组主机上的抑制，不含全局抑制）、
 memories（长期记忆）、asset_links（本组主机发起的连接聚合）、ip_infos（只含本组主机连过的地址）、
 reports（历史报告，供定时任务与上一轮对比）。incident 与 REST 同口径（全部告警都在本组才可见），
 角色只读、5 秒超时、最多 5 个连接。
 不得填写平台的 `DATABASE_URL`，也不要让不同组共用可读全部组的账号。
 
 组未开通时完全不注册 query，不回退到平台数据库账号。SQL 不能用于写入报告；报告走
-`report({title,markdown,level})`，平台强制绑定当前组和会话。`level` 取 `ok`（没有需要人处理的事项，只存档）、
+`report({title,summary,markdown,level})`，平台强制绑定当前组和会话。所有报告同一格式（`internal/report/format.go`）：
+标题最多 50 字（定时任务的标题由平台固定为任务名，周期报告标题一致、下一轮按标题找得到上一份）；`summary` 是一句话结论，
+最多 120 字、不换行，列表、推送与页头都用它；正文去掉模型自写的一级标题，按二级标题
+「结论 / 需要人处理 / 证据 / 推断 / 未验证 / 已执行的操作」分节，结论、需要人处理、未验证三节必须有，缺了带骨架退回。
+页头（标题、级别、来源、时间、结论）由平台渲染，控制台预览、HTML、PDF 一致。`level` 取 `ok`（没有需要人处理的事项，只存档）、
 `attention`（默认，有需要人处理的事项）或 `urgent`（需要立即处理）；定时任务的报告只有 attention 与 urgent 会推送通知，
 urgent 的标题加「【紧急】」。报告中心可只看需处理的报告。
 
@@ -259,7 +276,16 @@ prompt: |
 - 任务会话 `kind=task`、`initiator=system`。**系统身份不是用户**：审批闸门对它不查用户与组内角色，
   但要求会话是本组任务会话，资产作用域、名单（按 AI 来源的高风险名单）、审批与
   `RESPONSE_ENABLED` 照常生效，命令真执行；审批人看到的发起人为 `system`。用户名 `system` 保留，不能创建。
-- 截断、收尾后仍轮数耗尽或会话结束时没有提交报告，一律记为失败。失败后立即换一个新会话重跑一次
+- **定时任务的只读命令自动批准**：任务半夜跑、没人审批，名单误伤的只读巡检命令（grep 模式里的 `kill`、
+  `stat /etc/shadow` 看时间戳、`last -x shutdown`）以前只能等到过期，巡检缺项还白耗十分钟。
+  现在任务会话里命中名单的命令，若目标是 Linux 主机且通过 `commandgate.ReadOnly` 判定，直接批准执行，
+  照常留一条审批记录（状态 consumed、批准人 `system`）并写审计 `approval_auto`。判定按 shell 规则切段，
+  每段的程序都要在只读清单里且参数无副作用；命令替换、`sh -c`、`eval`、`xargs`、`find -exec`、awk 的
+  `system()`/重定向、写到 `/dev/null` 以外的重定向、清单外的程序一律不认。提到 `/etc/shadow`、SSH 私钥的段只许
+  看元数据（ls / stat / test）；密钥路径出现在 for 列表、变量赋值或输入重定向里时，整条命令都只许看元数据。
+  会改东西或读密钥内容的命令照旧等人审批；对话会话不走自动批准（有人在场）。
+- 截断、收尾出错或会话结束时没有提交报告，一律记为失败；收尾时报告已经交上、只是收尾轮数在最后一句话前用完的不算失败
+  （报告就是任务的产出，整轮重跑只会白耗半小时）。失败后立即换一个新会话重跑一次
   （同一行运行记录改挂新会话，失败那次的会话与错误留在会话历史里）；超时不重跑。
   停机（发版滚动重启）或失去租约打断的一轮记为 `interrupted`、不发失败通知，接手的 leader 下个调度周期
   用新会话重跑同一轮；只重跑最近一轮且 12 小时以内的，进程崩溃后由执行期限清理的仍按失败处理（结果未知，不重放）。
@@ -273,8 +299,10 @@ prompt: |
 | `PUT /api/tasks/{id}/groups/{groupId}` | 组 admin | `{enabled: true / false / null}`：该组单独开关，null 恢复跟随全局默认；写审计 |
 | `POST /api/tasks/{id}/run` | admin | 立即运行：记下请求时间，调度器下一次检查时对每个开启的组各跑一轮；所有组都未开启时返回 409 |
 | `GET /api/tasks/{id}/runs` | viewer | 最近 100 次运行，按组裁剪 |
-| `GET /api/agent-reports/{id}/html` | 组 viewer | goldmark 渲染，原始 HTML 与危险链接被丢弃，带 CSP |
-| `GET /api/agent-reports/{id}/pdf` | 组 viewer | headless Chromium 打印，禁外网；找不到 Chromium 返回 503 |
+| `GET /api/agent-reports/{id}/html` | 组 viewer | goldmark 渲染，原始 HTML 与危险链接被丢弃，带 CSP；打开即标为已读 |
+| `GET /api/agent-reports/{id}/pdf` | 组 viewer | headless Chromium 打印，禁外网；找不到 Chromium 返回 503；下载即标为已读 |
+
+已读按人记（`report_reads`，报告 × 用户唯一）：一个人看过不影响别人。侧栏「报告」的计数是当前组未读、且级别不是 ok 的份数。
 
 ## 验证与后续
 

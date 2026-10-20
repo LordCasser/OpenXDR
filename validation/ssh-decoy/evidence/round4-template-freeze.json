@@ -1,0 +1,5 @@
+{
+  "server/internal/sshdecoy/server.go": "9a15991990cdb93ece7db5d18a69846ccb15daea00239eac6c8f7f3ddc6846ef",
+  "validation/ssh-decoy/evaluate.py": "f30da910c989e55a1d6a3c92cdde099771bf5b13d1d56b27616c39618a97842d",
+  "validation/ssh-decoy/Dockerfile": "33af14a6886596c8615fdadf25d035c5309b916735b5f4ec3bfbdb82f2a3597f"
+}

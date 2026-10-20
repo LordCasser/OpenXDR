@@ -5,6 +5,7 @@ package agentchat
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -98,6 +99,16 @@ func TestQueryDedicatedGroupView(t *testing.T) {
 	}
 	if _, err = query(ctx, dsn, "SELECT 1 -- 合法尾部注释"); err != nil {
 		t.Fatal(err)
+	}
+	if _, err = query(ctx, dsn, "SELECT 1;\n"); err != nil {
+		t.Fatalf("结尾分号应容忍：%v", err)
+	}
+	if _, err = query(ctx, dsn, "SELECT 1; SELECT 2;"); err == nil {
+		t.Fatal("多语句仍应拒绝")
+	}
+	// 超时要说成超时：报成语法错误会让模型反复改写法，而不是收窄范围
+	if _, err = query(ctx, dsn, `SELECT pg_sleep(6)`); !errors.Is(err, errQueryTimeout) {
+		t.Fatalf("超时应单独报出: %v", err)
 	}
 	result, err = query(ctx, dsn, `SELECT 1 AS same,2 AS same`)
 	if err != nil {

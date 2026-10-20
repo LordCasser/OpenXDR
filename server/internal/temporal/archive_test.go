@@ -32,11 +32,11 @@ func TestArchiveRestoresOldRulesAfterFilesChange(t *testing.T) {
 		t.Fatal("恢复依赖了当前文件而非归档")
 	}
 	events := []Event{event(1, 0, "base"), event(2, 1, "base")}
-	want, err := original.Evaluate(events)
+	want, err := original.Evaluate(GroupByAsset, events)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := restored.Evaluate(events)
+	got, err := restored.Evaluate(GroupByAsset, events)
 	if err != nil || !reflect.DeepEqual(want, got) {
 		t.Fatalf("恢复改变检测结果: %+v %+v %v", want, got, err)
 	}
@@ -73,8 +73,43 @@ func TestArchiveRejectsTampering(t *testing.T) {
 		if _, err := RestoreArchive(data); err == nil {
 			t.Fatal("损坏归档必须拒绝")
 		}
+		if _, err := ViewArchive(data, snapshot.Revision()); err == nil {
+			t.Fatal("损坏归档不能用于展示历史规则")
+		}
 	}
 	if _, err := RestoreArchive(append(snapshot.Archive(), []byte(" {}")...)); err == nil {
 		t.Fatal("尾随文档必须拒绝")
+	}
+}
+
+// 历史规则展示只靠原文重算版本，必须与加载时的版本算法一致（用仓库全量规则校验）。
+func TestViewArchiveMatchesLoadedRevision(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	snapshot, err := LoadSnapshot(filepath.Join(root, "rules"), filepath.Join(root, "temporal-rules"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules, err := ViewArchive(snapshot.Archive(), snapshot.Revision())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) != len(snapshot.rules) {
+		t.Fatalf("归档时序规则数 %d", len(rules))
+	}
+	for i, r := range rules {
+		if r.ID != snapshot.rules[i].id || r.Source == "" || len(r.Base) != len(snapshot.rules[i].references) {
+			t.Fatalf("归档规则元数据或引用原文不完整: %+v", r)
+		}
+		for _, ref := range r.References {
+			if !strings.Contains(r.Base[ref], ref) {
+				t.Fatalf("%s 缺少基础规则 %s 原文", r.ID, ref)
+			}
+		}
+		if r.ID == "temporal:linux-account-auth-burst" && (r.GroupBy != GroupByAccount || r.WindowSeconds != 600 || r.Threshold != 5 || r.MinAssets != 2) {
+			t.Fatalf("账号规则元数据错误: %+v", r)
+		}
+	}
+	if _, err := ViewArchive(snapshot.Archive(), strings.Repeat("0", 64)); err == nil {
+		t.Fatal("库中版本与归档不符必须拒绝")
 	}
 }

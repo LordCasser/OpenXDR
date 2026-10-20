@@ -224,6 +224,7 @@ func login(db *ent.Client, w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: CookieName, Value: token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		Secure: secureCookie(r),
 		MaxAge: int(sessionTTL / time.Second),
 	})
 	audit.Log(ctx, db, r, "login", "", "")
@@ -241,10 +242,24 @@ func logout(db *ent.Client, w http.ResponseWriter, r *http.Request) {
 			_ = db.Session.DeleteOne(s).Exec(r.Context())
 		}
 	}
+	// 属性与登录时一致，浏览器才认得出是同一条 cookie
 	http.SetCookie(w, &http.Cookie{
-		Name: CookieName, Value: "", Path: "/", HttpOnly: true, MaxAge: -1,
+		Name: CookieName, Value: "", Path: "/",
+		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		Secure: secureCookie(r),
+		MaxAge: -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// secureCookie 是否给会话 cookie 加 Secure：直连 TLS，或反向代理转发的是 https。
+// 代理头的值只影响本机响应的 cookie 属性，伪造它顶多让客户端自己收不到明文 cookie。
+func secureCookie(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	proto, _, _ := strings.Cut(r.Header.Get("X-Forwarded-Proto"), ",")
+	return strings.EqualFold(strings.TrimSpace(proto), "https")
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/auth"
 	"openxdr/server/internal/report"
 )
 
@@ -19,7 +21,13 @@ func mapReportRender(api *http.ServeMux, db *ent.Client) {
 		if !ok || !requireGroup(w, r, db, row.GroupID, "viewer") {
 			return nil, nil, false
 		}
-		html, err := report.HTML(row.Title, row.Markdown, row.CreatedAt)
+		// 打开 HTML 或下载 PDF 都算看过
+		if err := markRead(r.Context(), db, row.ID, auth.From(r.Context()).ID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return nil, nil, false
+		}
+		html, err := report.HTML(report.Page{Title: row.Title, Summary: row.Summary, Level: row.Level,
+			Source: reportSource(r.Context(), db, row), Markdown: row.Markdown, CreatedAt: row.CreatedAt})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return nil, nil, false
@@ -53,4 +61,19 @@ func mapReportRender(api *http.ServeMux, db *ent.Client) {
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="report-%s.pdf"`, row.ID))
 		_, _ = w.Write(pdf)
 	})
+}
+
+// reportSource 报告出自哪：定时任务写任务名，对话写发起人
+func reportSource(ctx context.Context, db *ent.Client, row *ent.Report) string {
+	session, err := db.AgentSession.Get(ctx, row.SessionID)
+	if err != nil {
+		return ""
+	}
+	if session.Kind == "task" {
+		if session.Title != nil {
+			return "定时任务 · " + *session.Title
+		}
+		return "定时任务"
+	}
+	return "对话 · " + session.Initiator
 }

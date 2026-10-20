@@ -140,7 +140,7 @@ fn run(agent_id: &str, sink: &EventSink, mut scan: impl FnMut() -> std::io::Resu
             (value, changed)
         };
         if due {
-            let event = inventory_event(agent_id, &listeners, cloud, os.as_deref());
+            let event = inventory_event(agent_id, &listeners, cloud, os.as_deref(), package_of);
             #[cfg(target_os = "linux")]
             let event = with_local_accounts(event, accounts.as_deref());
             if !sink.send(event) {
@@ -200,7 +200,17 @@ fn fingerprint(list: &[Listener]) -> Fingerprint {
         .collect()
 }
 
-fn listener_json(l: &Listener) -> Value {
+/// 服务进程所属的包：Linux 查 dpkg，其余平台没有
+#[cfg(target_os = "linux")]
+fn package_of(path: &str) -> Option<String> {
+    super::software::package_of(path)
+}
+#[cfg(not(target_os = "linux"))]
+fn package_of(_: &str) -> Option<String> {
+    None
+}
+
+fn listener_json(l: &Listener, package: fn(&str) -> Option<String>) -> Value {
     let mut v = json!({
         "proto": l.proto.as_str(),
         "addr": l.addr.to_string(),
@@ -210,6 +220,10 @@ fn listener_json(l: &Listener) -> Value {
         let mut p = json!({ "pid": o.pid, "name": o.name });
         if let Some(path) = &o.path {
             p["file"] = json!({ "path": path });
+            // 服务进程属于哪个包：攻击面据此回答「暴露的服务有没有已知漏洞」
+            if let Some(pkg) = package(path) {
+                p["file"]["package"] = pkg.into();
+            }
         }
         v["process"] = p;
     }
@@ -234,9 +248,9 @@ fn inventory_event(
     listeners: &[Listener],
     cloud: Option<&Cloud>,
     os: Option<&str>,
+    package: fn(&str) -> Option<String>,
 ) -> AgentEvent {
-    let mut device =
-        json!({ "listening": listeners.iter().map(listener_json).collect::<Vec<_>>() });
+    let mut device = json!({ "listening": listeners.iter().map(|l| listener_json(l, package)).collect::<Vec<_>>() });
     if let Some(c) = cloud {
         device["cloud"] = cloud_json(c);
     }
@@ -269,12 +283,12 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn account_inventory_distinguishes_empty_from_unavailable() {
-        let empty = with_local_accounts(inventory_event("a", &[], None, None), Some(&[]));
+        let empty = with_local_accounts(inventory_event("a", &[], None, None, |_| None), Some(&[]));
         let value: Value = serde_json::from_str(&empty.raw_json).unwrap();
         assert_eq!(value["device"]["local_accounts"]["items"], json!([]));
         assert_eq!(value["device"]["local_accounts"]["state"], "observed");
         assert_eq!(value["device"]["listening"], json!([]));
-        let missing = with_local_accounts(inventory_event("a", &[], None, None), None);
+        let missing = with_local_accounts(inventory_event("a", &[], None, None, |_| None), None);
         let value: Value = serde_json::from_str(&missing.raw_json).unwrap();
         assert_eq!(value["device"]["local_accounts"]["state"], "unavailable");
         assert!(value["device"]["local_accounts"].get("items").is_none());
@@ -367,7 +381,7 @@ mod tests {
             region: Some("cn-hangzhou".into()),
             public_ip: Some("47.1.2.3".parse().unwrap()),
         };
-        let evt = inventory_event("agent-1", &listeners, Some(&cloud), None);
+        let evt = inventory_event("agent-1", &listeners, Some(&cloud), None, |_| None);
         assert_eq!(evt.class_uid, 5001);
         assert!(evt.process_guid.is_empty() && evt.conn_tuple.is_empty());
         let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
@@ -396,13 +410,15 @@ mod tests {
             public_ip: None,
         };
         let v: Value =
-            serde_json::from_str(&inventory_event("a", &[], Some(&bare), None).raw_json).unwrap();
+            serde_json::from_str(&inventory_event("a", &[], Some(&bare), None, |_| None).raw_json)
+                .unwrap();
         assert_eq!(
             v["device"]["cloud"],
             json!({"provider": "aws", "instance_id": "i-0123456789abcdef0"})
         );
         let v: Value =
-            serde_json::from_str(&inventory_event("a", &[], None, None).raw_json).unwrap();
+            serde_json::from_str(&inventory_event("a", &[], None, None, |_| None).raw_json)
+                .unwrap();
         assert!(v["device"].get("cloud").is_none(), "非云主机不带 cloud 键");
         assert!(v["device"].get("os").is_none(), "识别不到系统时不带 os 键");
         assert_eq!(v["device"]["listening"], json!([]));
@@ -411,10 +427,31 @@ mod tests {
     #[test]
     fn event_carries_os_display() {
         let v: Value = serde_json::from_str(
-            &inventory_event("a", &[], None, Some("Ubuntu 24.04.1 LTS")).raw_json,
+            &inventory_event("a", &[], None, Some("Ubuntu 24.04.1 LTS"), |_| None).raw_json,
         )
         .unwrap();
         assert_eq!(v["device"]["os"], json!("Ubuntu 24.04.1 LTS"));
         assert!(v["device"].get("cloud").is_none());
+    }
+
+    #[test]
+    fn listener_carries_owner_package() {
+        let listeners = vec![l(Proto::Tcp, "0.0.0.0", 22, Some("sshd"))];
+        let mut with_path = listeners.clone();
+        with_path[0].owner.as_mut().unwrap().path = Some("/usr/sbin/sshd".into());
+        let evt = inventory_event("a", &with_path, None, None, |p| {
+            (p == "/usr/sbin/sshd").then(|| "openssh-server".into())
+        });
+        let v: Value = serde_json::from_str(&evt.raw_json).unwrap();
+        assert_eq!(
+            v["device"]["listening"][0]["process"]["file"]["package"],
+            "openssh-server"
+        );
+        let none = inventory_event("a", &listeners, None, None, |_| Some("x".into()));
+        let v: Value = serde_json::from_str(&none.raw_json).unwrap();
+        assert!(
+            v["device"]["listening"][0]["process"].get("file").is_none(),
+            "没有路径就不查包"
+        );
     }
 }

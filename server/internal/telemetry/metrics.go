@@ -18,6 +18,7 @@ type Metrics struct {
 	alerts          *prometheus.CounterVec
 	duration        *prometheus.HistogramVec
 	queueDepth      *prometheus.GaugeVec
+	queueUnhealthy  prometheus.Gauge
 }
 
 func New(reg prometheus.Registerer) *Metrics {
@@ -29,8 +30,9 @@ func New(reg prometheus.Registerer) *Metrics {
 		alerts:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openxdr_alerts_created_total", Help: "新建告警数"}, []string{"source"}),
 		duration:        prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "openxdr_event_processing_seconds", Help: "单事件处理耗时", Buckets: prometheus.DefBuckets}, []string{"source"}),
 		queueDepth:      prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "openxdr_queue_pending_messages", Help: "JetStream 分片待处理消息"}, []string{"shard"}),
+		queueUnhealthy:  prometheus.NewGauge(prometheus.GaugeOpts{Name: "openxdr_queue_replicas_unhealthy", Help: "事件流不在同步状态的副本数（含流 leader 不可达）"}),
 	}
-	reg.MustRegister(m.temporalSkipped, m.published, m.processed, m.failed, m.alerts, m.duration, m.queueDepth)
+	reg.MustRegister(m.temporalSkipped, m.published, m.processed, m.failed, m.alerts, m.duration, m.queueDepth, m.queueUnhealthy)
 	return m
 }
 
@@ -47,6 +49,7 @@ func (m *Metrics) Processed(source string, duplicate bool, alerts int, elapsed t
 func (m *Metrics) SetQueuePending(shard string, count uint64) {
 	m.queueDepth.WithLabelValues(shard).Set(float64(count))
 }
+func (m *Metrics) SetQueueReplicasUnhealthy(count int) { m.queueUnhealthy.Set(float64(count)) }
 
 func Handler(reg *prometheus.Registry) http.Handler {
 	return promhttp.HandlerFor(reg, promhttp.HandlerOpts{})

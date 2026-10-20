@@ -27,6 +27,7 @@ services:
       retries: 20
 
   server:
+    stop_grace_period: 30s  # 停机时等进行中的定时任务把运行记成 interrupted，交给接手的节点重跑；Docker 默认只给 10 秒
     # 镜像自带默认规则、预设任务与 agent 安装包；升级镜像，在线 agent 跟着自动升级
     image: ghcr.io/yaklang/openxdr-server:${OPENXDR_VERSION:-latest}
     restart: unless-stopped
@@ -76,7 +77,7 @@ services:
       - server
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.7-alpine
     restart: unless-stopped
     depends_on:
       - web

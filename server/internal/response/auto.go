@@ -11,7 +11,11 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"openxdr/server/internal/decoy"
+	"openxdr/server/internal/review"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -51,6 +55,16 @@ func (a *Auto) React(ctx context.Context, incidentID uuid.UUID, verdict json.Raw
 		slog.Error("自动响应查询告警失败", "incident", incidentID, "err", err)
 		return
 	}
+	// 诱饵观察可以进入研判，但不能成为自动隔离的依据：同主机的低危噪声并进来也不算，
+	// 带诱饵观察的主机须另有达到人工复核级别的独立告警。
+	decoyed, independent := map[uuid.UUID]bool{}, map[uuid.UUID]int16{}
+	for _, al := range alerts {
+		if strings.HasPrefix(al.RuleID, decoy.ObservationRulePrefix) {
+			decoyed[*al.AssetID] = true
+		} else {
+			independent[*al.AssetID] = max(independent[*al.AssetID], al.Severity)
+		}
+	}
 	seen := map[uuid.UUID]bool{}
 	for _, al := range alerts {
 		assetID := *al.AssetID
@@ -58,6 +72,10 @@ func (a *Auto) React(ctx context.Context, incidentID uuid.UUID, verdict json.Raw
 			continue
 		}
 		seen[assetID] = true
+		if decoyed[assetID] && independent[assetID] < review.Severity {
+			audit.System(ctx, a.Hub.DB, "auto_response_skipped", incidentID.String(), al.Edges.Asset.Hostname+" 除诱饵观察外没有高危独立告警，需人工复核")
+			continue
+		}
 		a.isolate(ctx, incidentID, al.Edges.Asset, v.Confidence)
 	}
 }
@@ -82,6 +100,7 @@ func (a *Auto) isolate(ctx context.Context, incidentID uuid.UUID, asset *ent.Ass
 		return
 	}
 
+	started := time.Now()
 	cmd, err := a.Hub.Issue(ctx, Request{
 		automatic:      true,
 		AssetID:        asset.ID,
@@ -93,6 +112,11 @@ func (a *Auto) isolate(ctx context.Context, incidentID uuid.UUID, asset *ent.Ass
 	if err != nil {
 		audit.System(ctx, db, "auto_response_failed", incidentID.String(),
 			asset.Hostname+": "+err.Error())
+		return
+	}
+	// 并发研判撞上同一事件的同一条隔离：Issue 返回之前那条，已经审计过，不再重复记
+	if cmd.CreatedAt.Before(started) {
+		slog.Info("自动隔离已下发过，跳过重复审计", "incident", incidentID, "command", cmd.ID)
 		return
 	}
 	audit.System(ctx, db, "auto_response", cmd.ID.String(),

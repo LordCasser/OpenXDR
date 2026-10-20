@@ -36,26 +36,38 @@ table{border-collapse:collapse;margin:1em 0}th,td{border:1px solid #d0d7de;paddi
 code{background:#f6f8fa;padding:.1em .3em;border-radius:4px;font-size:90%}
 pre{background:#f6f8fa;padding:1em;overflow-x:auto}pre code{background:none;padding:0}
 .meta{color:#656d76;font-size:90%}
+.level{display:inline-block;padding:0 .5em;border-radius:4px;font-size:90%;color:#fff}
+.level-ok{background:#1a7f37}.level-attention{background:#9a6700}.level-urgent{background:#cf222e}
+.summary{border-left:4px solid #0969da;background:#f6f8fa;padding:.6em 1em;margin:1em 0;font-weight:600}
 @media print{body{margin:0;max-width:none}pre{white-space:pre-wrap}}
 </style></head><body>
 <h1>{{.Title}}</h1>
-<p class="meta">生成时间 {{.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
+<p class="meta">{{with .LevelText}}<span class="level level-{{$.Level}}">{{.}}</span> {{end}}{{with .Source}}{{.}} · {{end}}生成时间 {{.CreatedAt.Format "2006-01-02 15:04:05"}}</p>
+{{with .Summary}}<p class="summary">{{.}}</p>{{end}}
 {{.Body}}
 </body></html>
 `))
 
+// Page 一份报告的页头与正文。页头由平台渲染，各报告格式一致；正文是模型写的 Markdown
+type Page struct {
+	Title, Summary, Level, Source, Markdown string
+	CreatedAt                               time.Time
+}
+
+var levelText = map[string]string{"ok": "无需处理", "attention": "需处理", "urgent": "紧急"}
+
 // HTML 渲染成独立页面。
-func HTML(title, markdown string, createdAt time.Time) ([]byte, error) {
+func HTML(p Page) ([]byte, error) {
 	var body bytes.Buffer
-	if err := md.Convert([]byte(markdown), &body); err != nil {
+	if err := md.Convert([]byte(stripTitle(p.Markdown)), &body); err != nil {
 		return nil, err
 	}
 	var out bytes.Buffer
 	err := page.Execute(&out, struct {
-		Title     string
-		CreatedAt time.Time
+		Page
+		LevelText string
 		Body      template.HTML // goldmark 已转义，原始 HTML 被省略
-	}{title, createdAt, template.HTML(body.String())})
+	}{p, levelText[p.Level], template.HTML(body.String())})
 	return out.Bytes(), err
 }
 

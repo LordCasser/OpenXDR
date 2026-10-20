@@ -40,11 +40,19 @@ func (Asset) Fields() []ent.Field {
 		field.String("agent_version").Optional().Nillable(),
 		// 失联起始时刻：已发过失联通知，恢复后清空。避免同一次失联反复通知
 		field.Time("silent_since").Optional().Nillable(),
+		// 采集健康通知：已通知过的问题签名（降级的采集器、缓存写不进、丢事件），变了才再通知，恢复后清空
+		field.String("health_problem").Optional().Nillable(),
+		// 上一轮看到的丢弃累计数与最后一次超过阈值的时刻：丢事件是一阵一阵的，超阈值后持续一小时才算恢复
+		field.Int64("health_dropped").Optional().Nillable(),
+		field.Time("health_dropped_at").Optional().Nillable(),
 
 		// 设备清单：agent 上报的监听端口与云环境（OCSF 5001），由 assetmap 物化。原样是 agent 的 JSON，读时校验
 		field.JSON("listening", json.RawMessage{}).Optional(),
 		field.JSON("cloud", json.RawMessage{}).Optional(),
 		field.Time("inventory_at").Optional().Nillable(),
+		// 软件清单：agent 上报的发行版与已装包（OCSF 5020），由 assetmap 物化，漏洞匹配读它
+		field.JSON("software", json.RawMessage{}).Optional(),
+		field.Time("software_at").Optional().Nillable(),
 		// 监听服务说明：键为 协议/端口（如 udp/5405），值含服务名、说明、风险与来源（ai / investigation / human）。
 		// 端口表认不出的服务靠它命名；人工写的优先级最高，AI 不覆盖
 		field.JSON("service_notes", json.RawMessage{}).Optional(),

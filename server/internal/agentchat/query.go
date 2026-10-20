@@ -17,6 +17,8 @@ func query(ctx context.Context, dsn, statement string) (string, error) {
 	if dsn == "" {
 		return "", errors.New("当前组未配置只读查询身份")
 	}
+	// 结尾的分号是写 SQL 的习惯，原样包进限额外壳就成了语法错；中间的分号（多语句）仍由预解析拒绝
+	statement = strings.TrimRight(statement, "; \t\r\n")
 	if len(statement) == 0 || len(statement) > 16384 {
 		return "", errors.New("SQL 长度须为 1–16384")
 	}
@@ -98,15 +100,23 @@ func query(ctx context.Context, dsn, statement string) (string, error) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return "", errors.New("只读查询中断")
+		return "", sqlError("只读查询中断", err)
 	}
 	return marshal(result)
 }
 
+// errQueryTimeout 超时单独说清楚：笼统报「检查语法」会让模型反复改写法，而该做的是收窄范围
+var errQueryTimeout = errors.New("查询超过 5 秒被取消（不是语法或权限问题）：events 必须带窄的 ts 范围，尽量再带 asset_id；" +
+	"要告警对应的事件用 alert_events 视图，不要自己 JOIN events，也不要用 IN (SELECT event_id ...)")
+
 // sqlError 带上 PostgreSQL 的报错原文，模型才知道是哪个列或语法错了；
 // 只取 Message，不带 Position/Where——第二次执行包了一层限额外壳，位置对不上原语句。
+// 本地 5 秒期限与角色的 statement_timeout 同时到点，先到的那个报出来的错不同，两种都按超时报。
 func sqlError(prefix string, err error) error {
 	var pg *pgconn.PgError
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &pg) && pg.Code == "57014") {
+		return errQueryTimeout
+	}
 	if errors.As(err, &pg) {
 		return fmt.Errorf("%s：%s", prefix, pg.Message)
 	}

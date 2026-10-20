@@ -50,6 +50,30 @@ struct ConnEvent {
     daddr: [u8; 16],
 }
 
+/// 内核侧按 `#[repr(C)]` 原样写进 perf 缓冲的事件结构。
+///
+/// # Safety
+/// 实现者必须是 `#[repr(C)]`、只由整数与整数数组组成的类型：任意字节序列都是它的合法值。
+unsafe trait Pod: Copy {}
+
+// SAFETY: 三个事件结构都是 #[repr(C)]，字段只有 u32 / i32 / u16 与 [u8; N]，任意位模式都合法
+unsafe impl Pod for ExecEvent {}
+// SAFETY: 同上，字段为 u32 / i32 / u32
+unsafe impl Pod for ExitEvent {}
+// SAFETY: 同上，字段为 u32 / u16 与两个 [u8; 16]
+unsafe impl Pod for ConnEvent {}
+
+/// 从 perf 缓冲的一条记录里取出事件。不足一个结构体长的残包返回 None；
+/// perf 记录按 8 字节补齐，尾部多出的字节忽略。
+fn decode<T: Pod>(b: &[u8]) -> Option<T> {
+    if b.len() < size_of::<T>() {
+        return None;
+    }
+    // SAFETY: 上面已校验 b 至少有 size_of::<T>() 个已初始化字节，读不越界；
+    // read_unaligned 不要求源地址对齐（BytesMut 只保证字节对齐）；T: Pod 保证任意字节都是合法值
+    Some(unsafe { std::ptr::read_unaligned(b.as_ptr().cast::<T>()) })
+}
+
 const AF_INET: u16 = 2;
 const CONN_TCP_OUT: u16 = 0;
 const CONN_TCP_IN: u16 = 1;
@@ -141,10 +165,9 @@ async fn run_ebpf(
                     return;
                 };
                 for b in bufs.iter().take(batch.read) {
-                    if b.len() < size_of::<ExecEvent>() {
+                    let Some(ev) = decode::<ExecEvent>(b) else {
                         continue;
-                    }
-                    let ev = unsafe { std::ptr::read_unaligned(b.as_ptr() as *const ExecEvent) };
+                    };
                     let events = {
                         let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
                         to_agent_event(&agent_id, &mut reg, &ev)
@@ -173,10 +196,9 @@ async fn run_ebpf(
                     return;
                 };
                 for b in bufs.iter().take(batch.read) {
-                    if b.len() < size_of::<ExitEvent>() {
+                    let Some(ev) = decode::<ExitEvent>(b) else {
                         continue;
-                    }
-                    let ev = unsafe { std::ptr::read_unaligned(b.as_ptr() as *const ExitEvent) };
+                    };
                     let events = {
                         let mut reg = registry.lock().unwrap_or_else(|e| e.into_inner());
                         to_exit_event(&agent_id, &mut reg, &ev)
@@ -292,10 +314,9 @@ async fn spawn_conn_readers(
                     return;
                 };
                 for b in bufs.iter().take(batch.read) {
-                    if b.len() < size_of::<ConnEvent>() {
+                    let Some(ev) = decode::<ConnEvent>(b) else {
                         continue;
-                    }
-                    let ev = unsafe { std::ptr::read_unaligned(b.as_ptr() as *const ConnEvent) };
+                    };
                     let Some(event) = to_conn_event(&agent_id, &state, &ev) else {
                         continue;
                     };
@@ -608,4 +629,295 @@ fn to_exit_event(
 fn cstr(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
     let end = bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len());
     String::from_utf8_lossy(&bytes[..end])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+    use std::mem::offset_of;
+
+    /// 布局必须与 ebpf/src/main.rs 逐字节一致：内核侧原样写、这边原样读
+    #[test]
+    fn event_layout_matches_kernel_side() {
+        assert_eq!(size_of::<ExecEvent>(), 4 + 16 + 256);
+        assert_eq!(offset_of!(ExecEvent, comm), 4);
+        assert_eq!(offset_of!(ExecEvent, filename), 20);
+
+        assert_eq!(size_of::<ExitEvent>(), 12);
+        assert_eq!(offset_of!(ExitEvent, code), 4);
+        assert_eq!(offset_of!(ExitEvent, has_code), 8);
+
+        assert_eq!(size_of::<ConnEvent>(), 44);
+        assert_eq!(offset_of!(ConnEvent, family), 4);
+        assert_eq!(offset_of!(ConnEvent, sport), 6);
+        assert_eq!(offset_of!(ConnEvent, dport), 8);
+        assert_eq!(offset_of!(ConnEvent, kind), 10);
+        assert_eq!(offset_of!(ConnEvent, saddr), 12);
+        assert_eq!(offset_of!(ConnEvent, daddr), 28);
+    }
+
+    fn exit_bytes(pid: u32, code: i32, has_code: u32) -> Vec<u8> {
+        [
+            pid.to_ne_bytes(),
+            code.to_ne_bytes(),
+            has_code.to_ne_bytes(),
+        ]
+        .concat()
+    }
+
+    fn conn_bytes(pid: u32, family: u16, ports: [u16; 3], saddr: &[u8], daddr: &[u8]) -> Vec<u8> {
+        let mut b = pid.to_ne_bytes().to_vec();
+        b.extend(family.to_ne_bytes());
+        for p in ports {
+            b.extend(p.to_ne_bytes());
+        }
+        let mut s = [0u8; 16];
+        s[..saddr.len()].copy_from_slice(saddr);
+        let mut d = [0u8; 16];
+        d[..daddr.len()].copy_from_slice(daddr);
+        b.extend(s);
+        b.extend(d);
+        b
+    }
+
+    #[test]
+    fn decode_rejects_short_record() {
+        let b = exit_bytes(1, 0, 0);
+        assert!(decode::<ExitEvent>(&b[..b.len() - 1]).is_none());
+        assert!(decode::<ExitEvent>(&[]).is_none());
+        assert!(
+            decode::<ConnEvent>(&b).is_none(),
+            "退出事件长度不够一条连接事件"
+        );
+    }
+
+    #[test]
+    fn decode_reads_fields_and_ignores_padding() {
+        // perf 记录按 8 字节补齐，尾部的补齐字节不影响解码
+        let mut b = exit_bytes(4242, 3, 1);
+        b.extend([0xaa; 4]);
+        let ev = decode::<ExitEvent>(&b).unwrap();
+        assert_eq!((ev.pid, ev.code, ev.has_code), (4242, 3, 1));
+    }
+
+    #[test]
+    fn decode_handles_unaligned_source() {
+        let raw = conn_bytes(
+            7,
+            AF_INET,
+            [40000, 443, CONN_TCP_OUT],
+            &[10, 0, 0, 1],
+            &[1, 1, 1, 1],
+        );
+        // 错开一个字节，保证源地址不满足 4 字节对齐
+        let mut shifted = vec![0u8];
+        shifted.extend(&raw);
+        let ev = decode::<ConnEvent>(&shifted[1..]).unwrap();
+        assert_eq!(ev.pid, 7);
+        assert_eq!(
+            (ev.family, ev.sport, ev.dport, ev.kind),
+            (AF_INET, 40000, 443, CONN_TCP_OUT)
+        );
+        assert_eq!(&ev.saddr[..4], &[10, 0, 0, 1]);
+        assert_eq!(&ev.daddr[..4], &[1, 1, 1, 1]);
+    }
+
+    #[test]
+    fn decode_exec_event_strings() {
+        let mut b = 99u32.to_ne_bytes().to_vec();
+        let mut comm = [0u8; 16];
+        comm[..4].copy_from_slice(b"bash");
+        let mut filename = [0u8; 256];
+        filename[..9].copy_from_slice(b"/bin/bash");
+        b.extend(comm);
+        b.extend(filename);
+        let ev = decode::<ExecEvent>(&b).unwrap();
+        assert_eq!(ev.pid, 99);
+        assert_eq!(cstr(&ev.comm), "bash");
+        assert_eq!(cstr(&ev.filename), "/bin/bash");
+    }
+
+    #[test]
+    fn cstr_stops_at_nul_or_end() {
+        assert_eq!(cstr(b"abc\0def"), "abc");
+        assert_eq!(cstr(b"\0abc"), "");
+        // comm 正好 16 字节、没有结尾 NUL 时取满整个数组
+        assert_eq!(cstr(b"0123456789abcdef"), "0123456789abcdef");
+        assert_eq!(cstr(b"a\xffb\0"), "a\u{fffd}b");
+    }
+
+    #[test]
+    fn ip_of_by_family() {
+        let mut v4 = [0u8; 16];
+        v4[..4].copy_from_slice(&[192, 168, 1, 5]);
+        // IPv4 只看前 4 字节，后面的残留不影响
+        v4[4] = 0xff;
+        assert_eq!(
+            ip_of(AF_INET, &v4),
+            "192.168.1.5".parse::<IpAddr>().unwrap()
+        );
+
+        let v6: std::net::Ipv6Addr = "2001:db8::1".parse().unwrap();
+        assert_eq!(ip_of(10, &v6.octets()), IpAddr::V6(v6));
+
+        // 双栈套接字上的 v4 映射地址还原成 IPv4
+        let mapped: std::net::Ipv6Addr = "::ffff:8.8.8.8".parse().unwrap();
+        assert_eq!(
+            ip_of(10, &mapped.octets()),
+            "8.8.8.8".parse::<IpAddr>().unwrap()
+        );
+    }
+
+    fn exec_event(pid: u32) -> ExecEvent {
+        let mut comm = [0u8; 16];
+        comm[..6].copy_from_slice(b"probe1");
+        let mut filename = [0u8; 256];
+        let path = b"/nonexistent/openxdr/probe1";
+        filename[..path.len()].copy_from_slice(path);
+        ExecEvent {
+            pid,
+            comm,
+            filename,
+        }
+    }
+
+    fn process_json(events: &[AgentEvent]) -> Value {
+        let last = events.last().expect("应产出进程事件");
+        serde_json::from_str(&last.raw_json).unwrap()
+    }
+
+    #[test]
+    fn exec_then_exit_carries_code_only_when_known() {
+        // 用本进程的 pid：to_agent_event 会去 /proc 补命令行与父进程
+        let pid = std::process::id();
+        let mut reg = ProcessRegistry::default();
+
+        let launch = to_agent_event("agent-1", &mut reg, &exec_event(pid));
+        let v = process_json(&launch);
+        assert_eq!(v["process"]["pid"], pid);
+        assert_eq!(v["process"]["name"], "probe1");
+        assert_eq!(v["process"]["file"]["path"], "/nonexistent/openxdr/probe1");
+        assert_eq!(v["activity_id"], ACTIVITY_LAUNCH);
+
+        let exit = ExitEvent {
+            pid,
+            code: 0,
+            has_code: 0,
+        };
+        let v = process_json(&to_exit_event("agent-1", &mut reg, &exit));
+        assert_eq!(v["activity_id"], ACTIVITY_TERMINATE);
+        assert_eq!(
+            v["process"]["name"], "probe1",
+            "退出事件的名字来自启动时的登记"
+        );
+        assert!(
+            v["process"]["exit_code"].is_null(),
+            "has_code 为 0 时不编造退出码"
+        );
+
+        to_agent_event("agent-1", &mut reg, &exec_event(pid));
+        let exit = ExitEvent {
+            pid,
+            code: 3,
+            has_code: 1,
+        };
+        let v = process_json(&to_exit_event("agent-1", &mut reg, &exit));
+        assert_eq!(v["process"]["exit_code"], 3);
+    }
+
+    #[test]
+    fn exit_of_unknown_process_is_dropped() {
+        let mut reg = ProcessRegistry::default();
+        let exit = ExitEvent {
+            pid: 999_999_999,
+            code: 1,
+            has_code: 1,
+        };
+        assert!(to_exit_event("agent-1", &mut reg, &exit).is_empty());
+    }
+
+    fn conn_state() -> ConnState {
+        ConnState {
+            registry: Default::default(),
+            tcp_out: Default::default(),
+            tcp_in: Default::default(),
+            udp_out: Default::default(),
+            listeners: Default::default(),
+            dns_owners: Default::default(),
+        }
+    }
+
+    fn conn(kind: u16, local: [u8; 4], sport: u16, remote: [u8; 4], dport: u16) -> ConnEvent {
+        decode(&conn_bytes(
+            0,
+            AF_INET,
+            [sport, dport, kind],
+            &local,
+            &remote,
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn dns_query_only_records_source_port_owner() {
+        let state = conn_state();
+        let mut ev = conn(
+            CONN_UDP_OUT,
+            [10, 0, 0, 5],
+            53001,
+            [127, 0, 0, 53],
+            DNS_PORT,
+        );
+        ev.pid = 4321;
+        // 解析器在回环上也要记：这一步在回环过滤之前
+        assert!(to_conn_event("agent-1", &state, &ev).is_none());
+        assert_eq!(lock(&state.dns_owners).get(&53001).map(|o| o.0), Some(4321));
+    }
+
+    #[test]
+    fn loopback_multicast_broadcast_are_noise() {
+        let state = conn_state();
+        for remote in [[127, 0, 0, 1], [224, 0, 0, 251], [255, 255, 255, 255]] {
+            let ev = conn(CONN_TCP_OUT, [10, 0, 0, 5], 40000, remote, 443);
+            assert!(
+                to_conn_event("agent-1", &state, &ev).is_none(),
+                "{remote:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_kind_is_ignored() {
+        let state = conn_state();
+        let ev = conn(9, [10, 0, 0, 5], 40000, [203, 0, 113, 9], 443);
+        assert!(to_conn_event("agent-1", &state, &ev).is_none());
+    }
+
+    #[test]
+    fn tcp_out_reports_once_per_window() {
+        let state = conn_state();
+        let ev = conn(CONN_TCP_OUT, [10, 0, 0, 5], 40000, [203, 0, 113, 9], 443);
+        let out = to_conn_event("agent-1", &state, &ev).expect("首次出站应上报");
+        assert_eq!(out.conn_tuple, "tcp:10.0.0.5:40000>203.0.113.9:443");
+        let v: Value = serde_json::from_str(&out.raw_json).unwrap();
+        assert_eq!(v["connection_info"]["direction"], "outbound");
+        assert!(v.get("process").is_none(), "pid 为 0 时不写进程");
+        assert!(
+            to_conn_event("agent-1", &state, &ev).is_none(),
+            "窗口内同一目标只报一次"
+        );
+    }
+
+    #[test]
+    fn tcp_in_puts_remote_first() {
+        let state = conn_state();
+        // 本机端是文档地址，必不是宿主机地址：不去查宿主机监听表
+        let ev = conn(CONN_TCP_IN, [192, 0, 2, 10], 5432, [198, 51, 100, 7], 51515);
+        let out = to_conn_event("agent-1", &state, &ev).expect("入站应上报");
+        assert_eq!(out.conn_tuple, "tcp:198.51.100.7:51515>192.0.2.10:5432");
+        let v: Value = serde_json::from_str(&out.raw_json).unwrap();
+        assert_eq!(v["connection_info"]["direction"], "inbound");
+        assert!(v["dst_endpoint"].get("hostname").is_none());
+    }
 }

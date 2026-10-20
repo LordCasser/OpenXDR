@@ -40,7 +40,7 @@ func Validate(conds []Condition) error {
 // Matches 事件体是否满足全部条件；没有条件视为满足
 func Matches(conds []Condition, raw map[string]any) bool {
 	for _, c := range conds {
-		v, ok := lookup(raw, c.Field)
+		v, ok := Lookup(raw, c.Field)
 		if !ok {
 			return false
 		}
@@ -62,7 +62,8 @@ func Matches(conds []Condition, raw map[string]any) bool {
 	return true
 }
 
-func lookup(raw map[string]any, path string) (string, bool) {
+// Lookup 按 dot path 取事件体里的标量值；路径不存在或落在对象、数组上返回 false
+func Lookup(raw map[string]any, path string) (string, bool) {
 	var cur any = raw
 	for _, part := range strings.Split(path, ".") {
 		m, ok := cur.(map[string]any)

@@ -37,7 +37,7 @@ func TestVerificationEvidenceAuditAndScope(t *testing.T) {
 	}
 	good := event(a.ID, issued.Add(time.Minute))
 	in := VerificationInput{Outcome: "inconclusive", Expected: "隔离后的策略生效", Observed: "连接日志不足以判断策略效果", EventIDs: []uuid.UUID{good}}
-	v, err := RecordVerification(ctx, db, u.ID, cmd.ID, in)
+	v, err := RecordVerification(ctx, db, u.ID, cmd.ID, "10.0.0.8", in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,13 +48,13 @@ func TestVerificationEvidenceAuditAndScope(t *testing.T) {
 		t.Fatal("复核覆盖执行回执")
 	}
 	var count int
-	if err := db.QueryRow(`SELECT count(*) FROM audit_logs WHERE action='command_verification_recorded' AND target=$1`, cmd.ID.String()).Scan(&count); err != nil || count != 1 {
+	if err := db.QueryRow(`SELECT count(*) FROM audit_logs WHERE action='command_verification_recorded' AND target=$1 AND remote_addr='10.0.0.8'`, cmd.ID.String()).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("审计缺失: %d %v", count, err)
 	}
 	for _, bad := range []uuid.UUID{uuid.New(), event(other.ID, issued.Add(time.Minute)), event(a.ID, issued.Add(-time.Minute)), event(a.ID, time.Now().Add(time.Hour))} {
 		x := in
 		x.EventIDs = []uuid.UUID{bad}
-		if _, err := RecordVerification(ctx, db, u.ID, cmd.ID, x); !errors.Is(err, ErrVerificationInput) {
+		if _, err := RecordVerification(ctx, db, u.ID, cmd.ID, "10.0.0.8", x); !errors.Is(err, ErrVerificationInput) {
 			t.Fatalf("接受无效证据: %v", err)
 		}
 	}
@@ -87,7 +87,7 @@ func TestVerificationEvidenceAuditAndScope(t *testing.T) {
 		t.Fatal("不存在复核未拒绝")
 	}
 	c.GroupMember.UpdateOne(m).SetRole("viewer").ExecX(ctx)
-	if _, err := RecordVerification(ctx, db, u.ID, cmd.ID, empty); !errors.Is(err, ErrVerificationScope) {
+	if _, err := RecordVerification(ctx, db, u.ID, cmd.ID, "10.0.0.8", empty); !errors.Is(err, ErrVerificationScope) {
 		t.Fatal("viewer 写入")
 	}
 	c.Asset.UpdateOneID(a.ID).SetGroupID(b.ID).ExecX(ctx)
@@ -110,7 +110,7 @@ func TestVerificationEvidenceAuditAndScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Exec(`ALTER TABLE audit_logs DROP CONSTRAINT IF EXISTS reject_verification_test`) })
-	if _, err := RecordVerification(ctx, db, u.ID, cmd.ID, empty); err == nil {
+	if _, err := RecordVerification(ctx, db, u.ID, cmd.ID, "10.0.0.8", empty); err == nil {
 		t.Fatal("审计失败未阻断")
 	}
 	check(admin.ID, 1)
@@ -121,10 +121,10 @@ func TestVerificationEvidenceAuditAndScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Asset.UpdateOneID(a.ID).ClearGroupID().ExecX(ctx)
-	if _, err := RecordVerification(ctx, db, u.ID, cmd.ID, empty); !errors.Is(err, ErrVerificationScope) {
+	if _, err := RecordVerification(ctx, db, u.ID, cmd.ID, "10.0.0.8", empty); !errors.Is(err, ErrVerificationScope) {
 		t.Fatal("未分组越权")
 	}
-	if _, err := RecordVerification(ctx, db, admin.ID, cmd.ID, empty); err != nil {
+	if _, err := RecordVerification(ctx, db, admin.ID, cmd.ID, "10.0.0.8", empty); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/decoyobservation"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/session"
 	"openxdr/server/internal/temporal"
@@ -52,6 +53,13 @@ func (j *Janitor) Run(ctx context.Context) {
 					slog.Error("清理无引用时序归档失败", "err", err)
 				} else if n > 0 {
 					slog.Info("清理无引用时序归档", "deleted", n)
+				}
+			}
+			if j.Retention > 0 {
+				if n, err := j.sweepDecoys(ctx); err != nil {
+					slog.Error("清理过期诱饵观察失败", "err", err)
+				} else if n > 0 {
+					slog.Info("清理过期诱饵观察", "deleted", n)
 				}
 			}
 			// 过期会话是纯垃圾：认证早已拒绝它们，行却一直躺在表里
@@ -103,4 +111,26 @@ func withoutTemporalEvidence(selector *sql.Selector) {
 	evidence := sql.Table("temporal_evidence")
 	selector.Where(sql.NotExists(sql.Select(evidence.C("event_id")).From(evidence).
 		Where(sql.ColumnsEQ(evidence.C("event_id"), selector.C(event.FieldID)))))
+}
+
+// 至少保留 48 小时，覆盖 24 小时运行令牌、去重和事件配额窗口；复核证据不清理。
+func (j *Janitor) sweepDecoys(ctx context.Context) (int, error) {
+	if j.Retention <= 0 {
+		return 0, nil
+	}
+	retention := max(j.Retention, 48*time.Hour)
+	cutoff := time.Now().Add(-retention)
+	total := 0
+	for {
+		ids, err := j.DB.DecoyObservation.Query().Where(decoyobservation.ReceivedAtLT(cutoff), decoyobservation.IncidentIDIsNil()).Limit(batchSize).IDs(ctx)
+		if err != nil || len(ids) == 0 {
+			return total, err
+		}
+		// 删除时再次检查复核引用，避免查询与删除之间人工提交的证据被清掉。
+		n, err := j.DB.DecoyObservation.Delete().Where(decoyobservation.IDIn(ids...), decoyobservation.ReceivedAtLT(cutoff), decoyobservation.IncidentIDIsNil()).Exec(ctx)
+		total += n
+		if err != nil || len(ids) < batchSize {
+			return total, err
+		}
+	}
 }

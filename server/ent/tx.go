@@ -34,6 +34,10 @@ type Tx struct {
 	Command *CommandClient
 	// CommandPolicy is the client for interacting with the CommandPolicy builders.
 	CommandPolicy *CommandPolicyClient
+	// DecoyDeployment is the client for interacting with the DecoyDeployment builders.
+	DecoyDeployment *DecoyDeploymentClient
+	// DecoyObservation is the client for interacting with the DecoyObservation builders.
+	DecoyObservation *DecoyObservationClient
 	// EnrollToken is the client for interacting with the EnrollToken builders.
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
@@ -58,6 +62,8 @@ type Tx struct {
 	ProcessBaseline *ProcessBaselineClient
 	// Report is the client for interacting with the Report builders.
 	Report *ReportClient
+	// ReportRead is the client for interacting with the ReportRead builders.
+	ReportRead *ReportReadClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
 	// SessionMessage is the client for interacting with the SessionMessage builders.
@@ -72,6 +78,8 @@ type Tx struct {
 	TaskRun *TaskRunClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// VulnRecord is the client for interacting with the VulnRecord builders.
+	VulnRecord *VulnRecordClient
 	// Zone is the client for interacting with the Zone builders.
 	Zone *ZoneClient
 
@@ -216,6 +224,8 @@ func (tx *Tx) init() {
 	tx.BeaconBaseline = NewBeaconBaselineClient(tx.config)
 	tx.Command = NewCommandClient(tx.config)
 	tx.CommandPolicy = NewCommandPolicyClient(tx.config)
+	tx.DecoyDeployment = NewDecoyDeploymentClient(tx.config)
+	tx.DecoyObservation = NewDecoyObservationClient(tx.config)
 	tx.EnrollToken = NewEnrollTokenClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.Finding = NewFindingClient(tx.config)
@@ -228,6 +238,7 @@ func (tx *Tx) init() {
 	tx.Memory = NewMemoryClient(tx.config)
 	tx.ProcessBaseline = NewProcessBaselineClient(tx.config)
 	tx.Report = NewReportClient(tx.config)
+	tx.ReportRead = NewReportReadClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
 	tx.SessionMessage = NewSessionMessageClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
@@ -235,6 +246,7 @@ func (tx *Tx) init() {
 	tx.Task = NewTaskClient(tx.config)
 	tx.TaskRun = NewTaskRunClient(tx.config)
 	tx.User = NewUserClient(tx.config)
+	tx.VulnRecord = NewVulnRecordClient(tx.config)
 	tx.Zone = NewZoneClient(tx.config)
 }
 

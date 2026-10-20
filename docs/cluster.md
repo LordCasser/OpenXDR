@@ -53,11 +53,13 @@ UDP/TCP 健康检查，或者部署独立 syslog gateway；HAProxy 只承载 HTT
 | `openxdr_events_published_total` | gateway 成功发布事件 |
 | `openxdr_events_processed_total{duplicate}` | 处理完成与幂等丢弃数 |
 | `openxdr_queue_pending_messages{shard}` | 每个 durable consumer 的积压+待 ACK |
+| `openxdr_queue_replicas_unhealthy` | 事件流不同步或离线的副本数；取不到流信息（没有 leader）时等于副本总数 |
 | `openxdr_event_processing_seconds` | 单事件处理耗时直方图 |
 | `openxdr_pipeline_failures_total{stage}` | 发布、解码或处理失败 |
 | `openxdr_alerts_created_total` | 新建告警数 |
 
-Prometheus 预置节点离线、队列积压、处理失败和 P95 延迟规则；Grafana 预置
+Prometheus 预置节点离线、队列积压、副本不同步、处理失败和 P95 延迟规则（规则只负责判定，
+模板没有配 Alertmanager，要把这些告警接到外部监控才有人收到）；Grafana 预置
 “OpenXDR 集群处理链”面板。NATS 自身的 JetStream、存储、连接和路由状态由
 `prometheus-nats-exporter` 提供。
 
@@ -81,7 +83,18 @@ Prometheus 预置节点离线、队列积压、处理失败和 P95 延迟规则�
 升级时先更新全部 gateway/worker 的环境配置，再完成 server 版本切换；不能把新旧版本长期混跑，否则旧版可能在重启时写回原来的淘汰策略。stream 配置迁移不清空积压。
 已被旧策略淘汰或过期的消息无法追回。本保证不覆盖操作员手工删除、磁盘损坏、旧采集端没有补传缓存等情况。
 
-单机、三节点 Compose 和 HA 的 NATS 模板均设置 `sync_interval: always`，让发布确认前先同步磁盘；使用外部 NATS 时必须自行设置。
+单机、三节点 Compose 和 HA 的 NATS 模板均设置 `sync_interval: 1s`：Agent 收到确认就删本地缓存，NATS 默认 2 分钟才落一次盘，
+副本所在机器同时断电会丢掉这段已确认的事件；每秒落盘把这个窗口缩到 1 秒。没有用 `always`（每条确认前落盘）：
+2026-10-19 在生产 HA 节点（PVE 虚拟盘，与 PostgreSQL 同盘）上用 1 KB 消息、逐条同步发布实测：
+
+| 配置 | 1 并发 | 4 并发 | 16 并发 |
+|---|---|---|---|
+| 默认（2 分钟） | 3217 条/秒，p99 0.5 ms | 8515 条/秒 | 21075 条/秒，p99 1.6 ms |
+| `always` | 959 条/秒，p99 2.3 ms | 1311 条/秒 | 1537 条/秒，p99 17 ms |
+| `1s` | 3111 条/秒，p99 0.4 ms | 9326 条/秒 | 24931 条/秒，p99 1.3 ms |
+
+生产平均每秒 16 条、单秒突发约 1700 条；`always` 让突发排空从约 0.5 秒拉长到数秒，还会与同盘 PostgreSQL 争抢 fsync，
+`1s` 几乎没有代价。使用外部 NATS 时必须自行设置。
 同时设置 `max_payload: 4MB`，覆盖新版 Agent 有界事件大小；外部 NATS 若仍采用默认 1 MiB 上限，大事件可能反复拒收。
 此配置会增加磁盘同步开销，应以实际硬件测量吞吐，不能沿用默认异步同步策略下的容量数字。
 [NATS 官方持久性说明](https://github.com/nats-io/nats.docs/blob/master/nats-concepts/jetstream/README.md)。

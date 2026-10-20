@@ -230,6 +230,7 @@ struct Socket(RawFd);
 
 impl Socket {
     fn open() -> io::Result<Self> {
+        // SAFETY: 纯 FFI 调用，参数都是整数常量，不涉及指针；返回值在下面检查 < 0。
         let fd = unsafe {
             libc::socket(
                 libc::AF_NETLINK,
@@ -242,9 +243,12 @@ impl Socket {
         }
         let sock = Self(fd);
 
+        // SAFETY: sockaddr_nl 只含整数字段，全零是合法值，也是内核要求的初值（nl_pid 为 0 交给内核分配）。
         let mut addr: libc::sockaddr_nl = unsafe { std::mem::zeroed() };
         addr.nl_family = libc::AF_NETLINK as u16;
         addr.nl_groups = CN_IDX_PROC;
+        // SAFETY: fd 是上面刚创建、由 sock 持有的有效套接字；addr 是栈上已初始化的 sockaddr_nl，
+        // 传入的长度正是它的大小，bind 只在调用期间读取。
         let rc = unsafe {
             libc::bind(
                 fd,
@@ -274,6 +278,8 @@ impl Socket {
         msg[cn + 16..cn + 18].copy_from_slice(&4u16.to_ne_bytes()); // cn_msg.len
         msg[PROC_EVENT_OFFSET..].copy_from_slice(&PROC_CN_MCAST_LISTEN.to_ne_bytes());
 
+        // SAFETY: msg 是栈上数组，指针与 msg.len() 对应同一段内存，send 只读；
+        // self.0 在 Socket 存活期间一直有效（只在 Drop 里关闭）。
         let n = unsafe { libc::send(self.0, msg.as_ptr() as *const libc::c_void, msg.len(), 0) };
         if n < 0 {
             return Err(io::Error::last_os_error());
@@ -288,6 +294,7 @@ impl Socket {
                 events: libc::POLLIN,
                 revents: 0,
             };
+            // SAFETY: &mut fd 指向栈上单个 pollfd，nfds 传 1 与之相符，poll 只在调用期间读写它。
             let ready = unsafe { libc::poll(&mut fd, 1, 1000) };
             if ready == 0 {
                 return Err(io::ErrorKind::WouldBlock.into());
@@ -299,6 +306,8 @@ impl Socket {
                 }
                 return Err(err);
             }
+            // SAFETY: buf 是调用方独占借用的可写切片，长度如实传 buf.len()，内核最多写这么多字节；
+            // self.0 在 Socket 存活期间有效。
             let n =
                 unsafe { libc::recv(self.0, buf.as_mut_ptr() as *mut libc::c_void, buf.len(), 0) };
             if n < 0 {
@@ -315,6 +324,7 @@ impl Socket {
 
 impl Drop for Socket {
     fn drop(&mut self) {
+        // SAFETY: self.0 由 Socket 独占持有（open 成功才构造），Drop 只执行一次，不会重复关闭或关到别人的 fd。
         unsafe { libc::close(self.0) };
     }
 }

@@ -242,6 +242,7 @@ struct WatchEntry {
 /// 初始化 inotify：目录目标递归挂 watch（限深），单文件目标直接挂文件本体。
 /// 返回 (fd, wd -> 监控表项)。
 fn ino_init(targets: &[String]) -> io::Result<(RawFd, HashMap<i32, WatchEntry>)> {
+    // SAFETY: 纯 FFI 调用，只传整数标志，不涉及指针；返回值在下面检查 < 0。
     let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC) };
     if fd < 0 {
         return Err(io::Error::last_os_error());
@@ -255,6 +256,7 @@ fn ino_init(targets: &[String]) -> io::Result<(RawFd, HashMap<i32, WatchEntry>)>
         }
     }
     if watched.is_empty() {
+        // SAFETY: fd 是上面 inotify_init1 刚返回的有效 fd，尚未交给任何人，出错返回前关掉，之后不再使用。
         unsafe { libc::close(fd) };
         return Err(io::Error::new(io::ErrorKind::NotFound, "没有可监控的目标"));
     }
@@ -273,6 +275,7 @@ fn ino_add_tree(
         let Ok(c) = std::ffi::CString::new(dir.as_str()) else {
             continue;
         };
+        // SAFETY: fd 是调用方持有的有效 inotify fd；c 是 NUL 结尾的 CString，调用期间一直存活，内核只读路径。
         let wd = unsafe { libc::inotify_add_watch(fd, c.as_ptr(), EVENT_MASK) };
         if wd >= 0 && !watched.contains_key(&wd) {
             fresh.push(dir.clone());
@@ -293,6 +296,7 @@ fn ino_add_file(fd: RawFd, path: &str, watched: &mut HashMap<i32, WatchEntry>) {
     let Ok(c) = std::ffi::CString::new(path) else {
         return;
     };
+    // SAFETY: 同 ino_add_tree：fd 是有效 inotify fd，c 是调用期间存活的 NUL 结尾 CString。
     let wd = unsafe { libc::inotify_add_watch(fd, c.as_ptr(), FILE_EVENT_MASK) };
     if wd >= 0 {
         watched.insert(
@@ -321,11 +325,13 @@ fn ino_run(
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: &mut pfd 指向栈上单个 pollfd，nfds 传 1 与之相符，poll 只在调用期间读写它。
         let prc = unsafe { libc::poll(&mut pfd, 1, EVENT_POLL_TIMEOUT_MS) };
         if prc < 0 {
             if io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
                 continue;
             }
+            // SAFETY: fd 由本函数独占（ino_init 打开后按值移交进来），关闭后立即 return，不会再用或重复关闭。
             unsafe { libc::close(fd) };
             return;
         }
@@ -333,6 +339,7 @@ fn ino_run(
             let fresh = ino_reconcile(fd, &roots, &mut watched);
             last_rescan = Instant::now();
             if !backfill(&fresh, agent_id, sink) {
+                // SAFETY: 同上：关闭独占的 fd 后立即 return。
                 unsafe { libc::close(fd) };
                 return;
             }
@@ -340,14 +347,24 @@ fn ino_run(
         if prc == 0 {
             continue;
         }
+        // SAFETY: buf 是栈上独占的可写数组，长度如实传 buf.len()，内核最多写这么多字节；fd 此时仍有效。
         let n = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
         if n <= 0 {
+            // SAFETY: 同上：关闭独占的 fd 后立即 return。
             unsafe { libc::close(fd) };
             return;
         }
         let mut off = 0usize;
         while off + std::mem::size_of::<libc::inotify_event>() <= n as usize {
-            let ev = unsafe { &*(buf.as_ptr().add(off).cast::<libc::inotify_event>()) };
+            // SAFETY: 循环条件保证 off + size_of::<inotify_event>() ≤ n ≤ buf.len()，事件头完整落在
+            // 本次 read 写入的已初始化字节内；inotify_event 只含整数字段，任意字节都是合法值。
+            // buf 是 [u8; N]，只保证 1 字节对齐，所以按值非对齐读出，不取引用。
+            let ev = unsafe {
+                buf.as_ptr()
+                    .add(off)
+                    .cast::<libc::inotify_event>()
+                    .read_unaligned()
+            };
             let name_off = off + std::mem::size_of::<libc::inotify_event>();
             let name = std::str::from_utf8(&buf[name_off..name_off + ev.len as usize])
                 .unwrap_or("")
@@ -372,6 +389,7 @@ fn ino_run(
             // 单文件 watch：事件落在本体上，inotify 不给子项名，路径即目标
             if entry.is_file {
                 if !sink.send(file_event(agent_id, &entry.path, ino_activity(ev.mask))) {
+                    // SAFETY: 同上：关闭独占的 fd 后立即 return。
                     unsafe { libc::close(fd) };
                     return;
                 }
@@ -389,6 +407,7 @@ fn ino_run(
                 {
                     let fresh = ino_add_tree(fd, &path, MAX_DEPTH - d, &mut watched);
                     if !backfill(&fresh, agent_id, sink) {
+                        // SAFETY: 同上：关闭独占的 fd 后立即 return。
                         unsafe { libc::close(fd) };
                         return;
                     }
@@ -396,6 +415,7 @@ fn ino_run(
                 continue;
             }
             if !sink.send(file_event(agent_id, &path, ino_activity(ev.mask))) {
+                // SAFETY: 同上：关闭独占的 fd 后立即 return。
                 unsafe { libc::close(fd) };
                 return;
             }
@@ -449,6 +469,7 @@ struct FaState {
 /// 需要 CAP_SYS_ADMIN；内核 < 5.9 不支持 FAN_REPORT_NAME 会在 fanotify_init
 /// 直接 EINVAL。任何失败都由调用方回落 inotify。
 fn fa_setup(targets: &[String]) -> io::Result<(FaState, usize)> {
+    // SAFETY: 纯 FFI 调用，只传整数标志，不涉及指针；返回值在下面检查 < 0。
     let fd =
         unsafe { libc::fanotify_init(FA_INIT_FLAGS, (libc::O_RDONLY | libc::O_CLOEXEC) as u32) };
     if fd < 0 {
@@ -464,6 +485,7 @@ fn fa_setup(targets: &[String]) -> io::Result<(FaState, usize)> {
         }
     }
     if n == 0 {
+        // SAFETY: fd 是上面 fanotify_init 刚返回的有效 fd，尚未放进 FaState，出错返回前关掉，之后不再使用。
         unsafe { libc::close(fd) };
         return Err(io::Error::new(io::ErrorKind::NotFound, "没有可监控的目标"));
     }
@@ -493,6 +515,8 @@ fn fa_mark_tree(
         let Ok(c) = std::ffi::CString::new(dir.as_str()) else {
             continue;
         };
+        // SAFETY: fd 是调用方持有的有效 fanotify fd；c 是 NUL 结尾的 CString，调用期间一直存活；
+        // dirfd 为 AT_FDCWD，路径按当前目录解析，内核只读路径。
         let rc = unsafe {
             libc::fanotify_mark(
                 fd,
@@ -521,6 +545,7 @@ fn fa_mark_file(fd: RawFd, path: &str, marked: &mut HashSet<String>) -> usize {
     let Ok(c) = std::ffi::CString::new(path) else {
         return 0;
     };
+    // SAFETY: 同 fa_mark_tree：fd 是有效 fanotify fd，c 是调用期间存活的 NUL 结尾 CString。
     let rc = unsafe {
         libc::fanotify_mark(
             fd,
@@ -679,16 +704,21 @@ fn mount_fd_for(mounts: &mut HashMap<(i32, i32), RawFd>, fsid: (i32, i32)) -> Op
         let Ok(c) = std::ffi::CString::new(mp) else {
             continue;
         };
+        // SAFETY: libc::statfs 只含整数字段（f_fsid 也是两个 int），全零是合法值，随后整体由内核填写。
         let mut sf: libc::statfs = unsafe { std::mem::zeroed() };
+        // SAFETY: c 是 NUL 结尾的 CString，sf 是栈上独占的 statfs，statfs 只在调用期间写入它。
         if unsafe { libc::statfs(c.as_ptr(), &mut sf) } != 0 {
             continue;
         }
         // f_fsid 就是两个 c_int（glibc __fsid_t），按字节取，
         // 不依赖 libc 内部类型 fsid_t 的字段定义
+        // SAFETY: f_fsid 在 glibc / musl 里都是 `struct { int __val[2]; }`，与 [i32; 2] 大小、对齐一致，
+        // 指针由 &raw const 取自已初始化的 sf，读 8 字节不越界，任意位模式都是合法的 i32。
         let val: [i32; 2] = unsafe { std::ptr::read(&raw const sf.f_fsid as *const [i32; 2]) };
         if (val[0], val[1]) != fsid {
             continue;
         }
+        // SAFETY: c 是 NUL 结尾的 CString，调用期间存活；返回值在下面检查，成功的 fd 交给 mounts 缓存持有。
         let fd = unsafe { libc::open(c.as_ptr(), libc::O_RDONLY | libc::O_CLOEXEC) };
         if fd >= 0 {
             mounts.insert(fsid, fd);
@@ -703,6 +733,10 @@ fn mount_fd_for(mounts: &mut HashMap<(i32, i32), RawFd>, fsid: (i32, i32)) -> Op
 /// 再拼上 name。句柄失效（对象已删）或权限不足（缺 CAP_DAC_READ_SEARCH）返回 None。
 fn fa_resolve(mounts: &mut HashMap<(i32, i32), RawFd>, fid: &Fid) -> Option<String> {
     let mfd = mount_fd_for(mounts, fid.fsid)?;
+    // SAFETY: mfd 是 mount_fd_for 缓存的有效挂载点 fd；fid.fh 来自 fa_parse，从 handle_bytes 字段起
+    // 完整覆盖 struct file_handle 的 8 字节头与 handle_bytes 字节的句柄（解析时已校验
+    // 20 + handle_bytes ≤ 记录长度），且借用自调用期间存活的读缓冲。内核只读这个结构、
+    // 按字节拷贝，不要求对齐；转成 *mut 只是迎合 C 签名，不会被写入。
     let fd = unsafe {
         libc::open_by_handle_at(
             mfd,
@@ -716,6 +750,7 @@ fn fa_resolve(mounts: &mut HashMap<(i32, i32), RawFd>, fid: &Fid) -> Option<Stri
     let base = std::fs::read_link(format!("/proc/self/fd/{fd}"))
         .ok()
         .map(|p| p.to_string_lossy().into_owned());
+    // SAFETY: fd 是上面 open_by_handle_at 成功返回、只由本函数持有的 fd，读完链接就关，之后不再使用。
     unsafe { libc::close(fd) };
     let base = base?;
     Some(if fid.name.is_empty() {
@@ -735,6 +770,7 @@ fn fa_run(mut st: FaState, agent_id: &str, sink: &EventSink) {
             events: libc::POLLIN,
             revents: 0,
         };
+        // SAFETY: &mut pfd 指向栈上单个 pollfd，nfds 传 1 与之相符，poll 只在调用期间读写它。
         let prc = unsafe { libc::poll(&mut pfd, 1, EVENT_POLL_TIMEOUT_MS) };
         if prc < 0 {
             if io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
@@ -753,6 +789,7 @@ fn fa_run(mut st: FaState, agent_id: &str, sink: &EventSink) {
         if prc == 0 {
             continue;
         }
+        // SAFETY: buf 是栈上独占的可写数组，长度如实传 buf.len()；st.fd 是 FaState 持有的有效 fanotify fd。
         let n = unsafe { libc::read(st.fd, buf.as_mut_ptr().cast(), buf.len()) };
         if n == 0 {
             break;
@@ -810,8 +847,10 @@ fn fa_run(mut st: FaState, agent_id: &str, sink: &EventSink) {
 }
 
 fn fa_close(st: FaState) {
+    // SAFETY: fa_close 按值吃掉 FaState，st.fd 只会在这里关闭一次，之后无人再用。
     unsafe { libc::close(st.fd) };
     for (_, fd) in st.mounts {
+        // SAFETY: mounts 里每个 fd 都是 mount_fd_for 打开后只插入一次的，随 FaState 一起按值消费，各关一次。
         unsafe { libc::close(fd) };
     }
 }

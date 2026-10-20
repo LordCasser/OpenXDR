@@ -4,10 +4,26 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+const accountPrefix = "account:"
+
+// AccountEntity 把事件 username 列规范化成账号维度实体：去首尾空白、转小写。
+// 不做域前缀/UPN 等格式互认；空用户名返回空串，调用方必须计入 no_account 缺口而不是归到某个默认账号。
+func AccountEntity(username string) string {
+	name := strings.ToLower(strings.TrimSpace(username))
+	if name == "" {
+		return ""
+	}
+	return accountPrefix + name
+}
+
+// IsAccountEntity 区分账号维度实体与资产 ID。
+func IsAccountEntity(entity string) bool { return strings.HasPrefix(entity, accountPrefix) }
 
 // Scope 必须由可信入库上下文构造，不能直接采用模型或原始日志自报的归组。
 // Group 及 Entity 均不可为空；没有授权归属的事件不能参与关联。
@@ -19,6 +35,8 @@ type Event struct {
 	ID    uuid.UUID
 	Time  time.Time
 	Scope Scope
+	// Asset 是事件所属资产，用于 min_assets 的不同资产计数；min_assets 大于 1 的规则要求必填。
+	Asset string
 	Rules []string
 }
 type Match struct {
@@ -46,12 +64,15 @@ func (r *Rule) Evaluate(events []Event) ([]Match, error) {
 		if input.ID == uuid.Nil || input.Time.IsZero() || input.Scope.Group == uuid.Nil || input.Scope.Entity == "" {
 			return nil, fmt.Errorf("时序事件缺少身份、时间或授权归属")
 		}
+		if r.minAssets > 1 && input.Asset == "" {
+			return nil, fmt.Errorf("min_assets 规则的时序事件缺少资产")
+		}
 		e := input
 		e.Rules = append([]string(nil), input.Rules...)
 		slices.Sort(e.Rules)
 		e.Rules = slices.Compact(e.Rules)
 		if prior, ok := seen[e.ID]; ok {
-			if prior.Scope != e.Scope || !prior.Time.Equal(e.Time) || !slices.Equal(prior.Rules, e.Rules) {
+			if prior.Scope != e.Scope || prior.Asset != e.Asset || !prior.Time.Equal(e.Time) || !slices.Equal(prior.Rules, e.Rules) {
 				return nil, fmt.Errorf("同一事件 ID 的内容冲突: %s", e.ID)
 			}
 			continue
@@ -103,9 +124,11 @@ func (r *Rule) evidence(prior []Event, anchor Event) []uuid.UUID {
 				evidence = append(evidence, e.ID)
 			}
 		}
-		// 只在窗口内计数恰好到阈值的那一条出命中：持续爆破时窗口一直在阈值之上，
-		// 每条都出命中会让每个终点都绑定告警、证据永不过期，写库次数也随窗口线性增长
-		if len(evidence) != r.threshold-1 {
+		// 只在条件恰好成立的那一条出命中（越过阈值那一刻）：持续爆破时窗口一直满足条件，
+		// 每条都出命中会让每个终点都绑定告警、证据永不过期，写库次数也随窗口线性增长。
+		// 条件是计数达到 threshold 且不同资产数达到 min_assets；终点之前的同窗口事件已满足则不是越过的那一刻。
+		// min_assets 为 1 时等价于前序恰好 threshold-1 条。
+		if r.counted(prior) || !r.counted(append(prior[:len(prior):len(prior)], anchor)) {
 			return nil
 		}
 		return append(evidence, anchor.ID)
@@ -127,4 +150,17 @@ func (r *Rule) evidence(prior []Event, anchor Event) []uuid.UUID {
 		}
 	}
 	return nil
+}
+
+// counted 判断窗口内命中基础规则的事件是否同时满足计数阈值与不同资产数。
+func (r *Rule) counted(events []Event) bool {
+	count := 0
+	assets := map[string]bool{}
+	for _, e := range events {
+		if slices.Contains(e.Rules, r.references[0]) {
+			count++
+			assets[e.Asset] = true
+		}
+	}
+	return count >= r.threshold && (r.minAssets <= 1 || len(assets) >= r.minAssets)
 }

@@ -3,7 +3,7 @@
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 0.x 期间接口、配置与数据库结构仍可能不兼容变更，升级前请看对应条目。
 
-## [0.1.0] - 未发布
+## [0.1.0] - 2026-10-19
 
 第一个公开版本。
 
@@ -87,7 +87,8 @@
 
 ### 平台
 
-- 三档全局角色 + 组内角色，会话 cookie 认证，登录与处置审计。
+- 三档全局角色 + 组内角色，会话 cookie 认证，登录与处置审计；cookie 按外部协议加 Secure。
+- 控制台下发 CSP、X-Frame-Options、Referrer-Policy 等安全头，对外 HTTPS 发 HSTS；exec 只能经命令门判权、名单与审批下发。
 - mTLS 与按主机绑定证书；NATS JetStream 按资产分片队列，多节点 server。
 - 跨宿主机高可用部署（Patroni + 三节点 JetStream + Keepalived VIP）与滚动发布脚本。
 - Web 控制台：中英双语，AI 助手为主入口，命令面板。

@@ -141,6 +141,17 @@ func (s *Store) open(sec *secret, field, fallback string) string {
 	return plain.Password
 }
 
+// usable 控制台存的密钥解不开时当作没存：实际生效的是环境变量，界面上的来源与末四位也得跟着它
+func (s *Store) usable(sec *secret, field string) *secret {
+	if sec == nil || len(sec.Sealed) == 0 {
+		return sec
+	}
+	if _, err := s.Vault.Open(sec.Sealed, "setting:ai:"+field); err != nil {
+		return nil
+	}
+	return sec
+}
+
 // View 给界面看的：密钥只说有没有、末四位，每项标明来自控制台还是环境变量
 type View struct {
 	BaseURL    string            `json:"baseUrl"`
@@ -163,6 +174,7 @@ func (s *Store) View(ctx context.Context) (View, error) {
 		return View{}, err
 	}
 	c := s.merge(raw)
+	apiKey, vtKey := s.usable(raw.APIKey, "apiKey"), s.usable(raw.VTKey, "vtKey")
 	src := map[string]string{}
 	mark := func(name string, set bool) {
 		src[name] = map[bool]string{true: "console", false: "env"}[set]
@@ -172,11 +184,11 @@ func (s *Store) View(ctx context.Context) (View, error) {
 	mark("piModel", raw.PiModel != nil)
 	mark("ptr", raw.PTR != nil)
 	mark("vtAlertMin", raw.VTAlertMin != nil)
-	mark("apiKey", raw.APIKey != nil)
-	mark("vtKey", raw.VTKey != nil)
+	mark("apiKey", apiKey != nil)
+	mark("vtKey", vtKey != nil)
 	return View{
 		BaseURL: c.BaseURL, Model: c.Model, PiModel: c.PiModel, PTR: c.PTR, VTAlertMin: c.VTAlertMin,
-		APIKeySet: c.APIKey != "", APIKeyHint: hintOf(raw.APIKey, c.APIKey), VTKeySet: c.VTKey != "", VTKeyHint: hintOf(raw.VTKey, c.VTKey),
+		APIKeySet: c.APIKey != "", APIKeyHint: hintOf(apiKey, c.APIKey), VTKeySet: c.VTKey != "", VTKeyHint: hintOf(vtKey, c.VTKey),
 		Source: src, CanSaveSecrets: s.Vault != nil,
 	}, nil
 }

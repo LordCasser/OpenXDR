@@ -15,6 +15,48 @@ import (
 // ClassInventory OCSF Device Inventory Info：agent 的监听端口与云环境快照
 const ClassInventory = 5001
 
+// ClassSoftware OCSF Software Inventory Info：agent 的发行版与已装包
+const ClassSoftware = 5020
+
+const maxPackages = 20000
+
+// Software 物化到资产上的软件清单。Packages 每项是 [包名, 版本, 源码包, 源码版本]
+type Software struct {
+	OS       string      `json:"os"`
+	Version  string      `json:"version"`
+	Manager  string      `json:"manager"`
+	Packages [][4]string `json:"packages"`
+}
+
+// software 从 5020 事件体解出软件清单。agent 数据不可信：字段逐个清洗，超限或格式不对整份丢弃
+func software(raw json.RawMessage) (*Software, bool) {
+	var body struct {
+		OS struct {
+			ID        string `json:"id"`
+			VersionID string `json:"version_id"`
+		} `json:"os"`
+		Manager  string     `json:"manager"`
+		Packages [][]string `json:"packages"`
+	}
+	if json.Unmarshal(raw, &body) != nil || body.Manager != "dpkg" || len(body.Packages) == 0 || len(body.Packages) > maxPackages {
+		return nil, false
+	}
+	s := &Software{OS: clean(strings.ToLower(body.OS.ID), 32), Version: clean(body.OS.VersionID, 32), Manager: body.Manager}
+	for _, p := range body.Packages {
+		if len(p) != 4 {
+			return nil, false
+		}
+		row := [4]string{}
+		for i, v := range p {
+			if row[i] = clean(v, 128); row[i] == "" {
+				return nil, false
+			}
+		}
+		s.Packages = append(s.Packages, row)
+	}
+	return s, s.OS != ""
+}
+
 // classNetwork OCSF Network Activity：agent 出站连接与 sensor 会话
 const classNetwork = 4001
 
@@ -28,6 +70,8 @@ type Listener struct {
 	PID     int    `json:"pid,omitempty"`
 	Process string `json:"process,omitempty"`
 	Path    string `json:"path,omitempty"`
+	// Package 进程可执行文件所属的包（dpkg -S），据此对上漏洞
+	Package string `json:"package,omitempty"`
 }
 
 // Loopback 只绑在回环地址上，外面连不进来
@@ -60,7 +104,8 @@ func inventory(raw json.RawMessage) ([]Listener, *Cloud, string) {
 					PID  int    `json:"pid"`
 					Name string `json:"name"`
 					File *struct {
-						Path string `json:"path"`
+						Path    string `json:"path"`
+						Package string `json:"package"`
 					} `json:"file"`
 				} `json:"process"`
 			} `json:"listening"`
@@ -90,7 +135,7 @@ func inventory(raw json.RawMessage) ([]Listener, *Cloud, string) {
 		if p := l.Process; p != nil {
 			e.PID, e.Process = p.PID, clean(p.Name, 64)
 			if p.File != nil {
-				e.Path = clean(p.File.Path, 256)
+				e.Path, e.Package = clean(p.File.Path, 256), clean(p.File.Package, 128)
 			}
 		}
 		k := key{e.Proto, e.Addr, e.Port}

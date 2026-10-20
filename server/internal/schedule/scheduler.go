@@ -146,9 +146,7 @@ func (s *Scheduler) due(ctx context.Context, t *ent.Task, groupID uuid.UUID, now
 	return next, nil
 }
 
-// fire 每个目标组一个会话。空组不跑；上一轮还在跑的组跳过本轮，不叠加。
-func (s *Scheduler) fire(ctx context.Context, t *ent.Task) { s.fireDue(ctx, t, time.Now()) }
-
+// fireDue 每个目标组一个会话。空组不跑；上一轮还在跑的组跳过本轮，不叠加。
 func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 	if s.slots == nil {
 		s.slots = make(chan struct{}, 4)
@@ -383,7 +381,12 @@ func (s *Scheduler) pushReports(ctx context.Context, g *ent.Group, session *ent.
 		if r.Level == "urgent" {
 			title = "【紧急】" + title
 		}
-		text := fmt.Sprintf("组「%s」\n%s", g.Name, excerpt(r.Markdown, 300))
+		// 一句话结论就是推送正文；旧报告没有结论时退回正文摘录
+		summary := r.Summary
+		if summary == "" {
+			summary = excerpt(r.Markdown, 300)
+		}
+		text := fmt.Sprintf("组「%s」\n%s", g.Name, summary)
 		if err := s.Notify(ctx, title, text, "/api/agent-reports/"+r.ID.String()+"/html"); err != nil {
 			slog.Error("报告推送失败", "report", r.ID, "err", err)
 		}

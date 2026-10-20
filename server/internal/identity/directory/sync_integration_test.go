@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"openxdr/server/internal/cluster"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -115,6 +116,10 @@ func TestDirectoryWorkerPersistsReaderResults(t *testing.T) {
 	}
 	group := client.Group.Create().SetName("worker").SaveX(ctx)
 	reader := keycloakFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/count") {
+			fmt.Fprint(w, "1")
+			return
+		}
 		if r.URL.Query().Get("first") == "0" {
 			fmt.Fprint(w, `[{"id":"one","username":"account","enabled":true}]`)
 		} else {

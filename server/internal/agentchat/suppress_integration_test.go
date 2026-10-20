@@ -35,8 +35,10 @@ func TestSuppressProposal(t *testing.T) {
 	if _, err := proposeWith(host.ID.String(), "probe", `[]`); err == nil {
 		t.Fatal("不带条件应拒绝：不能整条规则压掉")
 	}
-	if _, err := proposeWith(host.ID.String(), "probe", `[{"field":"query.hostname","op":"equals","value":"made-up.top"}]`); err == nil {
-		t.Fatal("对不上任何真实命中的条件应拒绝")
+	// 对不上时把真实值带回去，字段路径写错也要说清楚，模型不用再猜
+	_, err := proposeWith(host.ID.String(), "probe", `[{"field":"query.hostname","op":"equals","value":"made-up.top"},{"field":"query.name","op":"equals","value":"x"}]`)
+	if err == nil || !strings.Contains(err.Error(), `query.hostname = "4mrf9fwf.doggygo.top"`) || !strings.Contains(err.Error(), "query.name 在这些事件里不存在") {
+		t.Fatalf("对不上任何真实命中的条件应拒绝并给出实际值：%v", err)
 	}
 	if _, err := propose(stranger.ID.String(), "probe"); err == nil {
 		t.Fatal("别组主机应拒绝")

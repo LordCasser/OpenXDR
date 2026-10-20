@@ -39,12 +39,22 @@ const (
 	FieldAgentVersion = "agent_version"
 	// FieldSilentSince holds the string denoting the silent_since field in the database.
 	FieldSilentSince = "silent_since"
+	// FieldHealthProblem holds the string denoting the health_problem field in the database.
+	FieldHealthProblem = "health_problem"
+	// FieldHealthDropped holds the string denoting the health_dropped field in the database.
+	FieldHealthDropped = "health_dropped"
+	// FieldHealthDroppedAt holds the string denoting the health_dropped_at field in the database.
+	FieldHealthDroppedAt = "health_dropped_at"
 	// FieldListening holds the string denoting the listening field in the database.
 	FieldListening = "listening"
 	// FieldCloud holds the string denoting the cloud field in the database.
 	FieldCloud = "cloud"
 	// FieldInventoryAt holds the string denoting the inventory_at field in the database.
 	FieldInventoryAt = "inventory_at"
+	// FieldSoftware holds the string denoting the software field in the database.
+	FieldSoftware = "software"
+	// FieldSoftwareAt holds the string denoting the software_at field in the database.
+	FieldSoftwareAt = "software_at"
 	// FieldServiceNotes holds the string denoting the service_notes field in the database.
 	FieldServiceNotes = "service_notes"
 	// FieldEgressNotes holds the string denoting the egress_notes field in the database.
@@ -115,9 +125,14 @@ var Columns = []string{
 	FieldGroupID,
 	FieldAgentVersion,
 	FieldSilentSince,
+	FieldHealthProblem,
+	FieldHealthDropped,
+	FieldHealthDroppedAt,
 	FieldListening,
 	FieldCloud,
 	FieldInventoryAt,
+	FieldSoftware,
+	FieldSoftwareAt,
 	FieldServiceNotes,
 	FieldEgressNotes,
 	FieldZoneID,
@@ -204,9 +219,29 @@ func BySilentSince(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSilentSince, opts...).ToFunc()
 }
 
+// ByHealthProblem orders the results by the health_problem field.
+func ByHealthProblem(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHealthProblem, opts...).ToFunc()
+}
+
+// ByHealthDropped orders the results by the health_dropped field.
+func ByHealthDropped(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHealthDropped, opts...).ToFunc()
+}
+
+// ByHealthDroppedAt orders the results by the health_dropped_at field.
+func ByHealthDroppedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHealthDroppedAt, opts...).ToFunc()
+}
+
 // ByInventoryAt orders the results by the inventory_at field.
 func ByInventoryAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInventoryAt, opts...).ToFunc()
+}
+
+// BySoftwareAt orders the results by the software_at field.
+func BySoftwareAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSoftwareAt, opts...).ToFunc()
 }
 
 // ByZoneID orders the results by the zone_id field.

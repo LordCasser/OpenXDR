@@ -329,7 +329,7 @@ server 全部通过环境变量配置，均有默认值：
 | `RULES_PATH` | `../rules` | Sigma 规则目录 |
 | `IDENTITY_RUN_RETENTION_DAYS` | `30` | 目录终态运行记录保留天数，0 关闭历史删除，范围 0–3650；每来源最新记录保留，过期运行回收不受此开关影响 |
 | `IDENTITY_SOURCES_JSON` | 空（关闭） | 多目录只读账号同步，严格 JSON 数组；凭据通过环境变量名引用，组须已存在，配置后重启生效。见 [身份来源配置](identity-correlation.md#启动配置与定时同步) |
-| `TEMPORAL_RULES_PATH` | 空（关闭） | 时序规则独立目录；配置后与基础规则整批严格加载，共用 RULES_RELOAD_SECONDS 重载周期。容器使用容器内路径，需额外挂载；见 [时序检测](temporal-detection.md) |
+| `TEMPORAL_RULES_PATH` | 空（关闭） | 时序规则独立目录；配置后与基础规则整批严格加载，共用 RULES_RELOAD_SECONDS 重载周期。生产建议指向版本目录的符号链接（`current → v-<版本>`，版本目录需带 `SHA256SUMS`），切换链接即原子发布；同时启用过期候选单活清理。容器使用容器内路径，需额外挂载；见 [时序检测](temporal-detection.md#不可变版本目录发布) |
 | `RULES_RELOAD_SECONDS` | `30` | 规则目录变更检测周期，变更自动热重载；0 关闭 |
 | `TASKS_PATH` | `../tasks` | 预设任务 YAML 目录；配置了 Pi 模型（`PI_MODEL` 或控制台）才运行，见 [Pi 后端](pi-backend.md#预设任务) |
 | `SCHEDULE_INTERVAL_SECONDS` | `30` | 任务到期检查与 YAML 重载周期 |
@@ -347,6 +347,8 @@ server 全部通过环境变量配置，均有默认值：
 | `AGENT_SILENT_MINUTES` | `10` | agent 指令通道超过该时长没有心跳即判失联并通知，恢复时再通知一次 |
 | `HOST_CREDENTIAL_KEY` | 空 | 文档导入凭据的 AES-256-GCM 密钥，base64 编码 32 字节；HA 节点必须一致 |
 | `ENROLL_SSH_ENABLED` | `false` | 允许组管理员使用保存凭据进行 SSH 纳管 |
+| `DECOY_SSH_ENABLED` | `false` | 允许组管理员通过已保存凭据安装 Linux 专用诱饵；要求 systemd 250+、独立核对的 SSH 指纹、凭据加密密钥与 HTTPS `ENROLL_PUBLIC_URL` |
+| `DECOY_DIST_DIR` | 镜像中 `/opt/openxdr/decoy-dist`，裸机为空 | 诱饵静态 ELF 安装包目录，固定文件名 `decoyhost-linux-amd64` / `decoyhost-linux-arm64`；不接受用户提供的下载地址 |
 | `ENROLL_PUBLIC_URL` | 空 | 被纳管主机可访问的可信 HTTPS 控制台地址 |
 | `ENROLL_GRPC_URL` | 空（不启用在线接入） | 写进 agent 配置的 gRPC 地址，主机上必须能访问 |
 | `TLS_CA_KEY_FILE` | 空 | CA 私钥，开了 mTLS 时在线接入用它签发主机证书 |
@@ -361,6 +363,11 @@ server 全部通过环境变量配置，均有默认值：
 | `AUTO_RESPONSE_EXEMPT` | 空 | 逗号分隔的主机名，绝不自动隔离 |
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测的按资产学习期 |
 | `BEACON_ENABLED` | `1` | 外联心跳检测（新出现的规律公网外联），0 关闭 |
+| `COLLECTOR_DROP_ALERT` | `1000` | 一分钟内丢弃这么多事件就推「采集异常」，0 不看丢事件；采集器降级或缓存写不进去照常推送 |
+| `PI_HISTORY_FOLD_KB` | `64` | Pi 会话历史超过这么多 KB 时折叠较早的工具结果再发给模型，0 不折叠 |
+| `VULN_SYNC_HOURS` | `24` | 漏洞库（OSV）同步周期，0 关闭 |
+| `VULN_OSV_URL` | `https://osv-vulnerabilities.storage.googleapis.com` | OSV 下载地址，可指向内网镜像 |
+| `VULN_DIR` | 空 | 离线漏洞库目录（放 `Debian.zip`、`Ubuntu.zip`），设置后不联网 |
 | `BEACON_LEARNING_DAYS` | `7` | 外联心跳学习期，按资产接入时间算；首次启用回放这段历史只学不报 |
 | `RETENTION_DAYS` | `30` | 原始事件保留天数，0 表示不清理。被告警引用的证据事件不受影响 |
 | `IPINFO_PTR` | `true` | 对资产连过的公网地址做反向解析（PTR），结果缓存，供图谱展示与 AI 标注认地址；内网没有外部解析时可设 `false` |

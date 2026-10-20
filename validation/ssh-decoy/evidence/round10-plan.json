@@ -1,0 +1,41 @@
+{
+  "study": "revocation",
+  "seed": 20261019,
+  "order": [
+    {
+      "block": 1,
+      "template": "operator-revoke-v1"
+    },
+    {
+      "block": 1,
+      "template": "operator-close-v1"
+    },
+    {
+      "block": 2,
+      "template": "operator-close-v1"
+    },
+    {
+      "block": 2,
+      "template": "operator-revoke-v1"
+    },
+    {
+      "block": 3,
+      "template": "operator-close-v1"
+    },
+    {
+      "block": 3,
+      "template": "operator-revoke-v1"
+    }
+  ],
+  "frozen": {
+    "server/internal/sshdecoy/server.go": "aa43e41c3f5918c9639f5672995e22a3ee8852ab54152cbdfdf2e279b281b88d",
+    "validation/ssh-decoy/evaluate.py": "88a839242b6825c15c662db043bda492b9145a3f6ce72e6c3dec8e187cfd40fa",
+    "validation/ssh-decoy/Dockerfile": "33af14a6886596c8615fdadf25d035c5309b916735b5f4ec3bfbdb82f2a3597f"
+  },
+  "provider": "glm53-h20",
+  "model": "ZhipuAI/GLM-5.3-Flash",
+  "command_turns": 1,
+  "max_tokens": 16384,
+  "request_timeout": 180,
+  "trial_seconds": 210
+}

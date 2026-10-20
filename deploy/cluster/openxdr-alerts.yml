@@ -13,6 +13,12 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: JetStream 分片积压超过 10000 条
+      - alert: OpenXDRQueueReplicaUnhealthy
+        expr: max(openxdr_queue_replicas_unhealthy) > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: JetStream 事件流有 {{ $value }} 个副本不同步，再坏一个节点就会失去多数、入队全停
       - alert: OpenXDRPipelineFailures
         expr: sum(rate(openxdr_pipeline_failures_total[5m])) > 0
         for: 2m

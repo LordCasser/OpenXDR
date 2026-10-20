@@ -331,6 +331,28 @@ export function fetchTemporalGaps(assetId: string, hours: number) {
   return get<{ items: TemporalGap[]; truncated: boolean }>(`/api/temporal-gaps?${params}`)
 }
 
+// 告警命中时所用的时序规则版本：单事件告警或旧版本告警返回空列表
+export interface TemporalRuleVersion { revision: string; createdAt: string; temporalRules: string[] }
+export const fetchAlertTemporalRevisions = (alertId: string) =>
+  get<{ items: TemporalRuleVersion[] }>(`/api/temporal-rule-snapshots?${new URLSearchParams({ alertId })}`)
+
+export interface ArchivedTemporalRule {
+  id: string
+  title: string
+  author?: string
+  kind: 'event_count' | 'sequence'
+  groupBy: 'asset' | 'account'
+  severity: number
+  windowSeconds: number
+  threshold?: number
+  minAssets: number
+  references: string[]
+  source: string
+  base: Record<string, string>
+}
+export const fetchArchivedTemporalRule = (revision: string, rule: string) =>
+  get<{ revision: string; createdAt: string; rules: ArchivedTemporalRule[] }>(`/api/temporal-rule-snapshots/${encodeURIComponent(revision)}?${new URLSearchParams({ rule })}`)
+
 export interface DirectorySource {
   id: string
   groupId: string
@@ -399,6 +421,105 @@ export function fetchIdentityObservations(assetId: string, hours: number) {
   const params = new URLSearchParams({ assetId, from: from.toISOString(), to: to.toISOString(), limit: '200' })
   return get<{ items: IdentityObservation[]; truncated: boolean }>(`/api/identity-observations?${params}`)
 }
+
+// 全局身份图：目录账号为锚点，强证据自动链接，其余人工确认
+export interface LoginStat {
+  success: number
+  failure: number
+  last: string | null
+  sources: string[]
+}
+export interface IdentitySummary {
+  id: string
+  groupId: string
+  kind: 'directory' | 'host'
+  anchorKind: AccountKind
+  name: string | null
+  sid: string | null
+  uid: number | null
+  assetId: string | null
+  hostname: string | null
+  authority: string | null
+  createdAt: string
+  accounts: number
+  hosts: number
+  lastSeen: string | null
+  manual: boolean
+  // 系统账号（UID 在系统范围且没登录过），只在列表里给
+  system?: boolean
+}
+export type AccountKind = 'directory' | 'windows' | 'linux'
+export type LinkBasis = 'directory_anchor' | 'ad_sid' | 'host_local' | 'manual'
+export interface IdentityAccount {
+  id: string
+  kind: AccountKind
+  name: string | null
+  domain: string | null
+  sid: string | null
+  uid: number | null
+  assetId: string | null
+  hostname: string | null
+  authority: string | null
+  firstSeen: string
+  lastSeen: string
+  linkId: string | null
+  identityId: string | null
+  basis: LinkBasis | null
+  confidence: string | null
+  evidence: Record<string, unknown> | null
+  source: string | null
+  linkedAt: string | null
+  logins: LoginStat | null
+}
+export interface IdentityLinkHistory {
+  id: string
+  accountId: string
+  accountKind: AccountKind
+  accountName: string | null
+  assetId: string | null
+  basis: LinkBasis
+  confidence: string
+  evidence: Record<string, unknown>
+  source: string
+  createdAt: string
+  revokedAt: string | null
+  revokedBy: string | null
+  revokeReason: string | null
+}
+export interface IdentityMergeCandidate {
+  account: IdentityAccount
+  fromIdentityId: string
+  toIdentityId: string
+  toName: string | null
+  toKind: 'directory' | 'host'
+  toHostname: string | null
+  matchedAccountId: string
+  matchedName: string | null
+  matchedKind: AccountKind
+  reason: 'same_name' | 'similar_name' | 'sid_ambiguous'
+  direction: 'incoming' | 'outgoing'
+  rejectionId: string | null
+}
+export interface UnmatchedLogin {
+  name: string
+  state: 'no_account' | 'no_snapshot' | 'snapshot_unavailable'
+  success: number
+  failure: number
+  last: string
+  sources: string[]
+}
+export const fetchIdentities = (groupId: string, q: string, kind: string, offset: number, includeSystem = false) =>
+  get<{ items: IdentitySummary[]; truncated: boolean }>(`/api/identities?${new URLSearchParams({ groupId, q, kind, offset: String(offset), limit: '100', includeSystem: String(includeSystem) })}`)
+export const fetchIdentity = (id: string, hours: number) =>
+  get<{ identity: IdentitySummary; accounts: IdentityAccount[]; truncated: boolean; history: IdentityLinkHistory[] }>(`/api/identities/${encodeURIComponent(id)}?hours=${hours}`)
+export const fetchIdentityMergeCandidates = (id: string) =>
+  get<{ items: IdentityMergeCandidate[]; truncated: boolean }>(`/api/identities/${encodeURIComponent(id)}/candidates`)
+export const confirmIdentityLink = async (identityId: string, accountId: string) => { await send('POST', `/api/identities/${encodeURIComponent(identityId)}/links`, { accountId }) }
+export const rejectIdentityCandidate = async (identityId: string, accountId: string) => { await send('POST', `/api/identities/${encodeURIComponent(identityId)}/rejections`, { accountId }) }
+export const revokeIdentityLink = async (linkId: string) => { await send('DELETE', `/api/identity-links/${encodeURIComponent(linkId)}`) }
+export const revokeIdentityRejection = async (id: string) => { await send('DELETE', `/api/identity-rejections/${encodeURIComponent(id)}`) }
+export const fetchAssetIdentityAccounts = (assetId: string, hours: number) =>
+  get<{ accounts: IdentityAccount[]; unmatched: UnmatchedLogin[]; pending: number; truncated: boolean }>(`/api/assets/${encodeURIComponent(assetId)}/identity-accounts?hours=${hours}`)
 
 export const fetchSuppressions = () => get<Suppression[]>('/api/suppressions')
 
@@ -848,11 +969,25 @@ export interface AgentReport {
   markdown: string
   // ok 无需处理（只存档不推送）/ attention 有需要人处理的事项 / urgent 需要立即处理
   level: 'ok' | 'attention' | 'urgent'
+  // 一句话结论；旧报告为空
+  summary?: string
+  // 当前用户是否看过：打开预览、HTML 或 PDF 都算
+  read?: boolean
 }
 
 export const fetchAgentReports = (groupId: string) =>
   get<AgentReport[]>(`/api/agent-reports?groupId=${groupId}`)
 export const reportHtmlUrl = (id: string) => `/api/agent-reports/${id}/html`
+
+export async function markReportRead(id: string): Promise<void> {
+  const r = await post(`/api/agent-reports/${id}/read`)
+  if (!r.ok) await fail(r)
+}
+
+export async function markAllReportsRead(groupId: string): Promise<void> {
+  const r = await post(`/api/agent-reports/read?groupId=${groupId}`)
+  if (!r.ok) await fail(r)
+}
 
 // 走 fetch 而不是直接跳转：没装 Chromium 时后端回 503，要能在界面上报错
 export async function downloadAgentPdf(r: AgentReport): Promise<void> {
@@ -999,6 +1134,8 @@ export interface ExposedService {
   assetId: string; hostname: string; zone: ZoneRef; level: ExposureLevel; proto: string; addrs: string[]; port: number
   process?: string; service: PortService; criticality?: number; score: number; peers: string[] | null; peerCount: number; fromPublic: boolean
   note?: ServiceNote
+  // 服务进程所属的包，用来对上这台资产的漏洞
+  package?: string
 }
 // 服务说明：端口表认不出时靠它命名；来源优先级 human > investigation > ai
 export interface ServiceNote { name: string; note?: string; risk?: 'high' | 'medium' | 'low'; source: 'ai' | 'investigation' | 'human'; by?: string; at: string }
@@ -1039,6 +1176,20 @@ export interface AssetProfile {
 export type ProfileEdit = { role?: string; summary?: string; criticality?: number; unlock?: string[] }
 
 export const fetchAssetMap = (groupId: string) => get<AssetMap>(`/api/asset-map?groupId=${groupId}`)
+// 软件漏洞：按源码包归组，可升级修复与暂无修复分开
+export interface VulnItem { id: string; aliases?: string[]; summary?: string; score: number; vector?: string; fixed?: string }
+export interface VulnPackage { source: string; version: string; binaries: string[]; exposed: boolean; maxScore: number; fixedIn?: string; vulns: VulnItem[] }
+export interface VulnReport {
+  ecosystem: string; packages: number; fixable: VulnPackage[] | null; unfixed: VulnPackage[] | null
+  softwareAt: string | null; sync: { at: string; records: number; error?: string } | null
+}
+export interface VulnSummary {
+  assetId: string; fixable: number; high: number; exposed: number; unfixed: number; maxScore: number
+  exposedPackages: { source: string; binaries: string[]; maxScore: number; vulns: number; fixedIn?: string }[] | null
+}
+export const fetchAssetVulns = (assetId: string) => get<VulnReport | null>(`/api/assets/${assetId}/vulns`)
+export const fetchVulnSummary = () => get<VulnSummary[]>('/api/vulns/summary')
+
 export const fetchAttackSurface = (groupId: string) => get<AttackSurface>(`/api/attack-surface?groupId=${groupId}`)
 export const fetchZones = (groupId: string) => get<ZoneRow[]>(`/api/zones?groupId=${groupId}`)
 export const createZone = async (z: { groupId: string; name: string; kind: ZoneKind; cidrs: string[] }) => { await send('POST', '/api/zones', z) }
@@ -1088,4 +1239,49 @@ export async function extractHostDocument(groupId: string, file: File): Promise<
   check(r)
   if (!r.ok) await fail(r)
   return await r.json()
+}
+
+export type DecoyKind = 'ssh' | 'http' | 'file' | 'shell'
+export interface DecoyProfile {
+  kind: DecoyKind
+  id: string
+  name: string
+  layer: string
+  template: string
+  evidence: string
+}
+export const fetchDecoyInstallStatus = () => get<{ enabled: boolean }>('/api/decoy-install/status')
+export const installDecoy = (id: string, body: { fingerprint: string; arch: string; listenHost: string; fileRoot?: string }) => send('POST', `/api/decoy-install/${encodeURIComponent(id)}`, body)
+export interface DecoyDeployment {
+  remote_installable: boolean
+  install_state: 'idle' | 'installing' | 'installed' | 'unconfirmed'
+  install_started_at?: string
+  runtime_status?: 'unreported' | 'starting' | 'running' | 'stopped' | 'failed' | 'stale' | 'stopping'
+  runtime_seen_at?: string
+  kind: DecoyKind
+  resource: string
+  id: string
+  asset_id: string
+  profile: string
+  template: string
+  port: number
+  status: 'registered' | 'revoked'
+  created_at: string
+  created_by: string
+  revoked_at?: string
+  revoked_by?: string
+}
+export const fetchDecoyProfiles = () => get<DecoyProfile[]>('/api/decoy-profiles')
+export const fetchDecoys = (groupId: string, offset: number) => get<{ items: DecoyDeployment[]; more: boolean }>(`/api/decoys?groupId=${encodeURIComponent(groupId)}&offset=${offset}`)
+export const registerDecoy = (body: { assetId: string; profile: string; port: number; kind: DecoyKind; resource: string }) => send('POST', '/api/decoys', body)
+export const revokeDecoy = (id: string) => send('POST', `/api/decoys/${encodeURIComponent(id)}/revoke`)
+
+export async function issueDecoyToken(id: string): Promise<{ token: string; expiresAt: string }> {
+  return (await send('POST', `/api/decoys/${encodeURIComponent(id)}/token`)).json()
+}
+export interface DecoyObservation { id: string; kind: string; received_at: string; incident_id?: string | null }
+export const fetchDecoyObservations = (id: string) => get<{ items: DecoyObservation[]; more: boolean }>(`/api/decoys/${encodeURIComponent(id)}/observations`)
+
+export async function reviewDecoyObservation(id: string, observation: string): Promise<{ incidentId: string }> {
+  return (await send('POST', `/api/decoys/${encodeURIComponent(id)}/observations/${encodeURIComponent(observation)}/review`)).json()
 }

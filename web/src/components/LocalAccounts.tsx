@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Empty, Select, Space, Table, Typography } from 'antd'
+import { Alert, Button, Divider, Empty, Select, Space, Table, Typography } from 'antd'
 import { useState } from 'react'
 import { fetchLocalAccountSnapshot, fetchLocalAccountSnapshots, type Asset, type LocalAccount, type LocalAccountSnapshot } from '../api'
 import { useSession } from '../app/session'
 import { useI18n } from '../i18n'
+import { AssetIdentityAccounts } from './AssetIdentityAccounts'
 import { LoadError } from './LoadError'
 import { fmtTime } from './format'
 
@@ -29,6 +30,9 @@ export function LocalAccounts({ asset }: { asset: Asset }) {
   const scope = `${me.username}:${me.role}:${groups.map(g => `${g.id}:${g.role}`).sort().join(',')}:${asset.id}:${asset.groupId}`
   const query = useQuery({ queryKey: ['localAccountSnapshots', scope, hours], queryFn: () => fetchLocalAccountSnapshots(asset.id, hours), gcTime: 0, refetchInterval: 15000 })
   return <Space orientation="vertical" style={{ width: '100%' }}>
+    <AssetIdentityAccounts asset={asset} />
+    <Divider style={{ margin: '8px 0' }} />
+    <Typography.Title level={5} style={{ margin: 0 }}>{t('localAccountsSnapshots')}</Typography.Title>
     <Typography.Text type="secondary">{t('localAccountsHint')}</Typography.Text>
     <Space wrap>
       <Select aria-label={t('thTime')} value={hours} style={{ width: 170 }} onChange={setHours}

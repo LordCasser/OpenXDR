@@ -42,6 +42,7 @@ impl Target {
     fn open(pid: u32) -> Result<Self, String> {
         use std::os::fd::FromRawFd;
         // pidfd 固定进程实例，校验之后 PID 再被复用也不会误杀。
+        // SAFETY: pidfd_open 只接收整数参数（pid 与 flags 0），不涉及指针；返回值在下面检查 < 0。
         let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
         if fd < 0 {
             return Err(format!(
@@ -51,6 +52,8 @@ impl Target {
         }
         Ok(Self {
             pid,
+            // SAFETY: fd ≥ 0 是 pidfd_open 刚返回的新描述符，此处之外无人持有，交给 OwnedFd 独占并负责关闭；
+            // fd 值不超过 RLIMIT_NOFILE，转 i32 不截断。
             fd: unsafe { std::os::fd::OwnedFd::from_raw_fd(fd as i32) },
         })
     }
@@ -64,6 +67,8 @@ impl Target {
     }
     pub fn terminate(&self) -> Result<(), String> {
         use std::os::fd::AsRawFd;
+        // SAFETY: self.fd 是 Target 持有的有效 pidfd，生命周期覆盖本次调用；info 传空指针是 pidfd_send_signal
+        // 允许的用法（等同 kill 的默认 siginfo），flags 为 0。
         let rc = unsafe {
             libc::syscall(
                 libc::SYS_pidfd_send_signal,
@@ -87,6 +92,7 @@ pub struct Target(windows_sys::Win32::Foundation::HANDLE);
 impl Target {
     fn open(pid: u32) -> Result<Self, String> {
         use windows_sys::Win32::System::Threading::*;
+        // SAFETY: OpenProcess 只接收整数参数，不涉及指针；返回空句柄表示失败，下面已检查。
         let handle = unsafe {
             OpenProcess(
                 PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE,
@@ -110,6 +116,8 @@ impl Target {
             FILETIME::default(),
             FILETIME::default(),
         );
+        // SAFETY: self.0 是 open 时以 PROCESS_QUERY_LIMITED_INFORMATION 打开的有效句柄（GetProcessTimes
+        // 所需的访问权），在 Drop 前一直有效；四个出参都指向栈上已初始化的 FILETIME。
         if unsafe { GetProcessTimes(self.0, &mut created, &mut exited, &mut kernel, &mut user) }
             == 0
         {
@@ -118,6 +126,7 @@ impl Target {
         Ok((u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime))
     }
     pub fn terminate(&self) -> Result<(), String> {
+        // SAFETY: self.0 是 open 时带 PROCESS_TERMINATE 权限打开的有效句柄，在 Drop 前一直有效。
         if unsafe { windows_sys::Win32::System::Threading::TerminateProcess(self.0, 1) } == 0 {
             return Err(std::io::Error::last_os_error().to_string());
         }
@@ -128,6 +137,7 @@ impl Target {
 #[cfg(windows)]
 impl Drop for Target {
     fn drop(&mut self) {
+        // SAFETY: Target 独占这个句柄（open 成功才构造，不可 Clone），Drop 只执行一次，不会重复关闭。
         unsafe {
             windows_sys::Win32::Foundation::CloseHandle(self.0);
         }

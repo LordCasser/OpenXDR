@@ -13,17 +13,19 @@ import (
 )
 
 func TestHTMLEscapesUntrustedMarkdown(t *testing.T) {
-	out, err := HTML("巡检 <b>", "# 结论\n\n<script>alert(1)</script>\n\n[x](javascript:alert(1))\n\n| 主机 | 状态 |\n|---|---|\n| web01 | 正常 |\n", time.Now())
+	out, err := HTML(Page{Title: "巡检 <b>", Summary: "摘要 <i>", Level: "urgent", Source: "每日主机巡检", CreatedAt: time.Now(),
+		Markdown: "# 模型自己写的标题\n## 结论\n\n<script>alert(1)</script>\n\n[x](javascript:alert(1))\n\n| 主机 | 状态 |\n|---|---|\n| web01 | 正常 |\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(out)
-	for _, bad := range []string{"<script>", "javascript:", "<b>"} {
+	for _, bad := range []string{"<script>", "javascript:", "<b>", "<i>", "模型自己写的标题"} {
 		if strings.Contains(s, bad) {
 			t.Errorf("输出不应包含 %q", bad)
 		}
 	}
-	for _, want := range []string{"<h1>结论</h1>", "<table>", "巡检 &lt;b&gt;"} {
+	// 页头由平台渲染：标题、级别、来源、一句话结论；正文开头重复的一级标题去掉
+	for _, want := range []string{"<h2>结论</h2>", "<table>", "<h1>巡检 &lt;b&gt;</h1>", `class="level level-urgent">紧急`, "每日主机巡检 · ", `<p class="summary">摘要 &lt;i&gt;</p>`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("输出缺少 %q", want)
 		}
@@ -48,7 +50,7 @@ func TestPDFBlocksIPImages(t *testing.T) {
 	var requests atomic.Int32
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.Write([]byte("image")) }))
 	defer endpoint.Close()
-	html, err := HTML("报告", "![外链]("+endpoint.URL+"/probe)", time.Now())
+	html, err := HTML(Page{Title: "报告", Markdown: "![外链](" + endpoint.URL + "/probe)", CreatedAt: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +67,7 @@ func TestPDFBlocksIPImages(t *testing.T) {
 }
 
 func TestStandaloneHTMLHasCSP(t *testing.T) {
-	html, err := HTML("报告", "![外链](http://127.0.0.1/probe)", time.Now())
+	html, err := HTML(Page{Title: "报告", Markdown: "![外链](http://127.0.0.1/probe)", CreatedAt: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,5 +76,29 @@ func TestStandaloneHTMLHasCSP(t *testing.T) {
 	body := strings.Index(s, "<body>")
 	if csp < 0 || csp > body || !strings.Contains(s, CSP) {
 		t.Fatal("独立 HTML 缺少前置 CSP")
+	}
+}
+
+// 统一格式：必需的节缺了带骨架拒绝，编号写法与模型自写的一级标题都容忍
+func TestNormalize(t *testing.T) {
+	body := "# 自写标题\n## 一、结论\n良性\n## 需要人处理\n无\n## 证据\nss 输出\n## 未验证\n无\n"
+	title, summary, md, err := Normalize("  pve1/pve2 每日巡检 ", " 两台主机均正常 ", body)
+	if err != nil || title != "pve1/pve2 每日巡检" || summary != "两台主机均正常" || strings.HasPrefix(md, "# 自写标题") {
+		t.Fatalf("应通过并整理：%q %q %q %v", title, summary, md, err)
+	}
+	for name, c := range map[string][3]string{
+		"标题过长":  {strings.Repeat("长", MaxTitle+1), "结论", body},
+		"没有结论":  {"标题", "", body},
+		"结论换行":  {"标题", "第一行\n第二行", body},
+		"结论过长":  {"标题", strings.Repeat("长", MaxSummary+1), body},
+		"缺未验证节": {"标题", "结论", "## 结论\n良性\n## 需要人处理\n无\n"},
+		"正文为空":  {"标题", "结论", "# 只有标题"},
+	} {
+		if _, _, _, err := Normalize(c[0], c[1], c[2]); err == nil {
+			t.Errorf("%s 应拒绝", name)
+		}
+	}
+	if _, _, _, err := Normalize("标题", "结论", "## 结论\n良性\n"); err == nil || !strings.Contains(err.Error(), "## 需要人处理、## 未验证") || !strings.Contains(err.Error(), Template) {
+		t.Errorf("缺节时应列出缺的节并带回骨架：%v", err)
 	}
 }

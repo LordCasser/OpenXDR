@@ -14,6 +14,8 @@ import (
 	"openxdr/server/ent/beaconbaseline"
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/ent/decoyobservation"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/finding"
@@ -26,6 +28,7 @@ import (
 	"openxdr/server/ent/memory"
 	"openxdr/server/ent/processbaseline"
 	"openxdr/server/ent/report"
+	"openxdr/server/ent/reportread"
 	"openxdr/server/ent/schema"
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
@@ -34,6 +37,7 @@ import (
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
 	"openxdr/server/ent/user"
+	"openxdr/server/ent/vulnrecord"
 	"openxdr/server/ent/zone"
 	"time"
 
@@ -194,6 +198,48 @@ func init() {
 	commandpolicyDescID := commandpolicyFields[0].Descriptor()
 	// commandpolicy.DefaultID holds the default value on creation for the id field.
 	commandpolicy.DefaultID = commandpolicyDescID.Default.(func() uuid.UUID)
+	decoydeploymentFields := schema.DecoyDeployment{}.Fields()
+	_ = decoydeploymentFields
+	// decoydeploymentDescPort is the schema descriptor for port field.
+	decoydeploymentDescPort := decoydeploymentFields[4].Descriptor()
+	// decoydeployment.PortValidator is a validator for the "port" field. It is called by the builders before save.
+	decoydeployment.PortValidator = func() func(int) error {
+		validators := decoydeploymentDescPort.Validators
+		fns := [...]func(int) error{
+			validators[0].(func(int) error),
+			validators[1].(func(int) error),
+		}
+		return func(port int) error {
+			for _, fn := range fns {
+				if err := fn(port); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// decoydeploymentDescCreatedAt is the schema descriptor for created_at field.
+	decoydeploymentDescCreatedAt := decoydeploymentFields[6].Descriptor()
+	// decoydeployment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	decoydeployment.DefaultCreatedAt = decoydeploymentDescCreatedAt.Default.(func() time.Time)
+	// decoydeploymentDescResource is the schema descriptor for resource field.
+	decoydeploymentDescResource := decoydeploymentFields[11].Descriptor()
+	// decoydeployment.DefaultResource holds the default value on creation for the resource field.
+	decoydeployment.DefaultResource = decoydeploymentDescResource.Default.(string)
+	// decoydeploymentDescID is the schema descriptor for id field.
+	decoydeploymentDescID := decoydeploymentFields[0].Descriptor()
+	// decoydeployment.DefaultID holds the default value on creation for the id field.
+	decoydeployment.DefaultID = decoydeploymentDescID.Default.(func() uuid.UUID)
+	decoyobservationFields := schema.DecoyObservation{}.Fields()
+	_ = decoyobservationFields
+	// decoyobservationDescGeneration is the schema descriptor for generation field.
+	decoyobservationDescGeneration := decoyobservationFields[4].Descriptor()
+	// decoyobservation.DefaultGeneration holds the default value on creation for the generation field.
+	decoyobservation.DefaultGeneration = decoyobservationDescGeneration.Default.(string)
+	// decoyobservationDescReceivedAt is the schema descriptor for received_at field.
+	decoyobservationDescReceivedAt := decoyobservationFields[5].Descriptor()
+	// decoyobservation.DefaultReceivedAt holds the default value on creation for the received_at field.
+	decoyobservation.DefaultReceivedAt = decoyobservationDescReceivedAt.Default.(func() time.Time)
 	enrolltokenFields := schema.EnrollToken{}.Fields()
 	_ = enrolltokenFields
 	// enrolltokenDescCreatedAt is the schema descriptor for created_at field.
@@ -392,10 +438,24 @@ func init() {
 	reportDescLevel := reportFields[6].Descriptor()
 	// report.DefaultLevel holds the default value on creation for the level field.
 	report.DefaultLevel = reportDescLevel.Default.(string)
+	// reportDescSummary is the schema descriptor for summary field.
+	reportDescSummary := reportFields[7].Descriptor()
+	// report.DefaultSummary holds the default value on creation for the summary field.
+	report.DefaultSummary = reportDescSummary.Default.(string)
 	// reportDescID is the schema descriptor for id field.
 	reportDescID := reportFields[0].Descriptor()
 	// report.DefaultID holds the default value on creation for the id field.
 	report.DefaultID = reportDescID.Default.(func() uuid.UUID)
+	reportreadFields := schema.ReportRead{}.Fields()
+	_ = reportreadFields
+	// reportreadDescReadAt is the schema descriptor for read_at field.
+	reportreadDescReadAt := reportreadFields[3].Descriptor()
+	// reportread.DefaultReadAt holds the default value on creation for the read_at field.
+	reportread.DefaultReadAt = reportreadDescReadAt.Default.(func() time.Time)
+	// reportreadDescID is the schema descriptor for id field.
+	reportreadDescID := reportreadFields[0].Descriptor()
+	// reportread.DefaultID holds the default value on creation for the id field.
+	reportread.DefaultID = reportreadDescID.Default.(func() uuid.UUID)
 	sessionFields := schema.Session{}.Fields()
 	_ = sessionFields
 	// sessionDescCreatedAt is the schema descriptor for created_at field.
@@ -512,6 +572,16 @@ func init() {
 	userDescID := userFields[0].Descriptor()
 	// user.DefaultID holds the default value on creation for the id field.
 	user.DefaultID = userDescID.Default.(func() uuid.UUID)
+	vulnrecordFields := schema.VulnRecord{}.Fields()
+	_ = vulnrecordFields
+	// vulnrecordDescScore is the schema descriptor for score field.
+	vulnrecordDescScore := vulnrecordFields[7].Descriptor()
+	// vulnrecord.DefaultScore holds the default value on creation for the score field.
+	vulnrecord.DefaultScore = vulnrecordDescScore.Default.(float64)
+	// vulnrecordDescSyncedAt is the schema descriptor for synced_at field.
+	vulnrecordDescSyncedAt := vulnrecordFields[10].Descriptor()
+	// vulnrecord.DefaultSyncedAt holds the default value on creation for the synced_at field.
+	vulnrecord.DefaultSyncedAt = vulnrecordDescSyncedAt.Default.(func() time.Time)
 	zoneFields := schema.Zone{}.Fields()
 	_ = zoneFields
 	// zoneDescName is the schema descriptor for name field.

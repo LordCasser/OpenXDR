@@ -559,7 +559,24 @@ func (e *Engine) TitleOf(ruleID string) string {
 	if r, ok := e.load().byID[ruleID]; ok {
 		return r.Title
 	}
-	return syntheticTitles[ruleID]
+	if title := syntheticTitles[ruleID]; title != "" {
+		return title
+	}
+	return intelTitle(ruleID)
+}
+
+// intelTitle 情报命中的告警规则 ID 是 intel:<类别>:<值>（intel.Store），没有规则文件可查标题；
+// 给出可读的标题，事件标题、Top 规则与告警列表不再露出内部 ID
+func intelTitle(ruleID string) string {
+	kind, value, ok := strings.Cut(strings.TrimPrefix(ruleID, "intel:"), ":")
+	if !ok || !strings.HasPrefix(ruleID, "intel:") || value == "" {
+		return ""
+	}
+	label := map[string]string{"ip": "IP", "domain": "Domain", "hash": "File Hash"}[kind]
+	if label == "" {
+		return ""
+	}
+	return fmt.Sprintf("Threat Intel Match: %s %s (威胁情报命中)", label, value)
 }
 
 func compileFile(path string) (*Rule, error) {

@@ -1,0 +1,166 @@
+package commandgate
+
+import "testing"
+
+// 生产上定时任务被名单误伤、半夜等审批到过期的只读巡检命令，以及常见只读写法：都应放行
+func TestReadOnlyAccepts(t *testing.T) {
+	for _, cmd := range []string{
+		`for f in /etc/passwd /etc/shadow /etc/group /etc/sudoers /var/log/auth.log; do [ -e "$f" ] && stat -c '%n|mtime=%y' "$f"; done; echo '---'; ls -la /etc/sudoers.d/ 2>/dev/null`,
+		`echo '=== FAILED UNITS ==='; systemctl list-units --state=failed --no-legend; journalctl --since '-1 day' --no-pager 2>/dev/null | grep -iE 'oom|killed|segfault' | tail -20`,
+		`echo '=== LAST -X REBOOT/SHUTDOWN ==='; last -x reboot shutdown 2>/dev/null | head -12; journalctl --no-pager -q -b -1 | grep -i 'shutdown' | tail -5`,
+		`awk -F: '$3==0 || $3>=1000 {print $1, $3, $7}' /etc/passwd`,
+		`getent passwd | awk -F: "\$3==0 || \$3>=1000 {print}"; ls -l /etc/shadow /etc/passwd`,
+		`/usr/bin/df -hT && /usr/bin/df -i && /usr/bin/free -m && /usr/bin/uptime && /usr/bin/timedatectl status`,
+		`ss -tlnp; ss -Hnt state established | grep 8081 || echo none`,
+		`ps -eo pid,ppid,user,comm,%cpu --sort=-%cpu | head -n 6`,
+		`crontab -l -u root 2>/dev/null; ls /etc/cron.d/`,
+		`while read -r user; do chage -l "$user"; done < /etc/passwd`,
+		`systemctl --failed --no-pager; systemctl is-active frr; systemctl status ssh --no-pager >/dev/null 2>&1 && echo up`,
+		`dpkg -l | grep -c ^ii; dpkg -S /usr/sbin/sshd`,
+		`qm list; pct list; pvecm status; zpool status -x`,
+		`find /etc -maxdepth 2 -newermt '-1 day' -type f 2>/dev/null | head`,
+		`LC_ALL=C sort -k2 -t: /etc/group | uniq -c`,
+		`top -bn1 | head -15; ip -br addr; ip route show`,
+		`docker ps --format '{{.Names}} {{.Status}}'`,
+		`stat -c %y /etc/shadow; cat /etc/hostname`,
+		`sshd -T 2>/dev/null | grep -E 'permitrootlogin|passwordauthentication'`,
+		`echo '=== ATQ ==='; atq 2>/dev/null; loginctl list-sessions --no-legend`,
+		// 实地巡检里被拒的只读写法：命令替换、sed 替换、swapon --show、list-jobs、which
+		`echo "===MEM==="; free -h; swapon --show 2>/dev/null`,
+		`systemctl list-units --state=failed --no-pager --no-legend; systemctl list-jobs --no-pager | head -5`,
+		`cat /etc/crontab 2>/dev/null; for u in $(cut -d: -f1 /etc/passwd); do c=$(crontab -u $u -l 2>/dev/null); [ -n "$c" ] && echo "--$u--" && echo "$c"; done`,
+		`lastlog -u $(getent passwd | awk -F: '$3>=1000&&$3<65000{printf "%s,",$1}' | sed 's/,$//') 2>/dev/null | head -15`,
+		`which storcli storcli64 perccli arcconf 2>/dev/null; dmesg 2>/dev/null | grep -iE 'megasas|BBU|battery' | tail -5`,
+		`sed -n '1,20p' /etc/hosts; sed -E 's#/+#/#g' x; sed '/^#/d;/^$/d' /etc/fstab; command -v zpool`,
+		`echo "today is $(date +%F)"`,
+		`smartctl --all /dev/sda 2>/dev/null | grep -iE 'BBU|battery' | head; storcli /c0 show all 2>/dev/null | grep -iA2 'BBU\|Battery' | head -12; arcconf GETCONFIG 1 AD 2>/dev/null | grep -i battery | head -5`,
+		`smartctl -H -d megaraid,0 /dev/sda; storcli64 /c0/bbu show; perccli /c0/cv show all`,
+	} {
+		if !ReadOnly(cmd) {
+			t.Errorf("应判为只读：%s", cmd)
+		}
+	}
+}
+
+// 能改东西、能执行任意命令或读密钥内容的写法：一律不放行，交给人审批
+func TestReadOnlyRejects(t *testing.T) {
+	for _, cmd := range []string{
+		// 拼接与绕道执行
+		`cat /etc/passwd; rm -rf /tmp/x`,
+		`ls $(rm -rf /)`,
+		"ls `rm -rf /`",
+		`echo "$(reboot)"`,
+		`cat x | sh`,
+		`bash -c 'cat /etc/passwd'`,
+		`sh -c "ls"`,
+		`eval ls`,
+		`env rm -rf /`,
+		`xargs rm < list`,
+		`timeout 5 rm -rf /`,
+		`sudo cat /etc/passwd`,
+		`nohup ls &`,
+		`ls &`,
+		`(rm -rf /)`,
+		`{ rm -rf /; }`,
+		`cat <(rm -rf /)`,
+		`cat <<EOF`,
+		`$'\x72m' -rf /`,
+		`./cat /etc/passwd`,
+		`/tmp/cat /etc/passwd`,
+		`$CMD`,
+		`'rm' -rf /`,
+		`cat 'unterminated`,
+		// 写文件
+		`echo x > /etc/passwd`,
+		`echo x >> /root/.bashrc`,
+		`ls >(rm -rf /)`,
+		`ls 2> /tmp/err`,
+		`cat /etc/hosts | tee /etc/hosts.bak`,
+		`sort -o /etc/passwd /etc/passwd`,
+		`sort -no out in`,
+		`uniq in out`,
+		`find / -name x -delete`,
+		`find / -exec rm {} \;`,
+		`find / -fprint /tmp/list`,
+		`sed -i s/a/b/ /etc/hosts`,
+		`awk 'BEGIN{system("rm -rf /")}'`,
+		`awk '{print > "/etc/x"}' /etc/passwd`,
+		`awk '{print | "sh"}' cmds`,
+		`awk '{ "id" | getline x }'`,
+		`awk -f evil.awk`,
+		`awk -i inplace '{print}' /etc/hosts`,
+		// 有副作用的子命令与选项
+		`systemctl stop frr`,
+		`systemctl restart ssh`,
+		`ip link set eth0 down`,
+		`ip netns exec x sh`,
+		`crontab -r`,
+		`crontab -l -root`,
+		`date -s '2020-01-01'`,
+		`hostname evil`,
+		`sysctl -w net.ipv4.ip_forward=1`,
+		`sysctl net.ipv4.ip_forward=1`,
+		`journalctl --vacuum-time=1s`,
+		`dmesg -c`,
+		`docker rm -f x`,
+		`docker exec x sh`,
+		`qm guest exec 108 -- id`,
+		`qm stop 108`,
+		`zfs destroy pool/x`,
+		`top`,
+		`chage -d 0 root`,
+		`sshd`,
+		`loginctl terminate-session 3`,
+		// 命令替换里的命令同样要只读
+		`for u in $(cat /etc/shadow); do echo $u; done`,
+		`echo $(rm -rf /tmp/x)`,
+		`echo $((1+1))`,
+		`echo $(ls $(rm -rf /))`,
+		// sed：原地改写、写文件、执行命令、读脚本文件
+		`sed -i 's/a/b/' /etc/hosts`,
+		`sed -ni 's/a/b/p' /etc/hosts`,
+		`sed 's/a/b/w /etc/x' in`,
+		`sed 's/a/b/e' in`,
+		`sed 'w /tmp/out' in`,
+		`sed '1e id' in`,
+		`sed -f script.sed in`,
+		`sed --in-place 's/a/b/' f`,
+		// swapon / command 的执行形态
+		`swapon -a`,
+		`swapon /dev/sda2`,
+		`command rm -rf /tmp/x`,
+		// RAID / 磁盘工具的改动与自检
+		`smartctl -s off /dev/sda`,
+		`smartctl -t long /dev/sda`,
+		`smartctl -X /dev/sda`,
+		`storcli /c0 set bbu=off`,
+		`storcli /c0/v0 delete`,
+		`storcli /c0/e8/s1 start rebuild`,
+		`storcli /c0 show all; storcli /c0 flash file=fw.rom`,
+		`arcconf SETCACHE 1 LOGICALDRIVE 0 RON`,
+		`arcconf DELETE 1 LOGICALDRIVE 0`,
+		// 读密钥内容，即便遮了哈希
+		`diff /etc/shadow- /etc/shadow 2>/dev/null | sed 's/:.*\$[^:]*/:***HASH***/' | head -10`,
+		`sshd -D -p 2222`,
+		`sshd -T -o PermitRootLogin=yes`,
+		`rpm -e pkg`,
+		`dpkg --purge pkg`,
+		// 读密钥内容：提到密钥路径时只许看元数据
+		`cat /etc/shadow`,
+		`awk -F: '{print $1,$2}' /etc/shadow`,
+		`for f in /etc/shadow; do cat "$f"; done`,
+		`grep root /etc/gshadow`,
+		`head ~/.ssh/id_ed25519`,
+		`while read l; do echo "$l"; done < /etc/shadow; cat /etc/hostname`,
+		`f=/etc/shadow; cat $f`,
+		`cat < /etc/shadow`,
+		`ls -l /etc/shadow && head -1 /etc/shadow`,
+		`for f in /etc/passwd /etc/shadow; do stat "$f"; done; cat "$f"`,
+		``,
+		`   `,
+	} {
+		if ReadOnly(cmd) {
+			t.Errorf("不应判为只读：%s", cmd)
+		}
+	}
+}

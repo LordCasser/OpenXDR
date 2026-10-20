@@ -7,6 +7,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/approval"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/commandgate"
 	"time"
@@ -71,7 +72,7 @@ func mapCommandPolicy(mux *http.ServeMux, db *ent.Client, gate *commandgate.Gate
 		defer tx.Rollback()
 		row, err := tx.CommandPolicy.Create().SetGroupID(body.GroupID).SetOrigin(commandpolicy.Origin(body.Origin)).SetMode(commandpolicy.ModeDeny).SetPattern(body.Pattern).Save(r.Context())
 		if err == nil {
-			err = tx.AuditLog.Create().SetUsername(auth.From(r.Context()).Username).SetAction("command_policy_created").SetTarget(row.ID.String()).SetDetail(body.Origin + ": " + body.Pattern).SetRemoteAddr(r.RemoteAddr).Exec(r.Context())
+			err = audit.Checked(r.Context(), tx.AuditLog.Create(), auth.From(r.Context()).Username, audit.RemoteAddr(r), "command_policy_created", row.ID.String(), body.Origin+": "+body.Pattern)
 		}
 		if err == nil {
 			err = tx.Commit()
@@ -95,7 +96,7 @@ func mapCommandPolicy(mux *http.ServeMux, db *ent.Client, gate *commandgate.Gate
 			if err := tx.CommandPolicy.DeleteOneID(row.ID).Exec(r.Context()); err != nil {
 				return err
 			}
-			return tx.AuditLog.Create().SetUsername(auth.From(r.Context()).Username).SetAction("command_policy_deleted").SetTarget(row.ID.String()).SetDetail(row.Pattern).SetRemoteAddr(r.RemoteAddr).Exec(r.Context())
+			return audit.Checked(r.Context(), tx.AuditLog.Create(), auth.From(r.Context()).Username, audit.RemoteAddr(r), "command_policy_deleted", row.ID.String(), row.Pattern)
 		})
 		if err != nil {
 			http.Error(w, err.Error(), 500)

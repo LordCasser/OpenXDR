@@ -6,7 +6,8 @@ services:
       - natsdata:/data
       - ./deploy/nats.conf:/etc/nats/openxdr.conf:ro
     ports:
-      - "8222:8222"
+      # 监控端口只给本机看，不对外开
+      - "127.0.0.1:8222:8222"
 
   postgres:
     image: postgres:16-alpine
@@ -22,6 +23,7 @@ services:
       retries: 10
 
   server:
+    stop_grace_period: 30s  # 停机时等进行中的定时任务把运行记成 interrupted，交给接手的节点重跑；Docker 默认只给 10 秒
     build:
       context: .
       dockerfile: server/Dockerfile

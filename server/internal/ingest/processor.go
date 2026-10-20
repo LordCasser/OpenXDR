@@ -63,16 +63,16 @@ func (p *Processor) Process(ctx context.Context, e Envelope) (err error) {
 	started := time.Now()
 	alerts := 0
 	duplicate := false
-	temporalSkipReason := ""
+	var temporalSkipped []string
 	defer func() {
 		if p.Metrics != nil {
 			if err != nil {
 				p.Metrics.Failed("process")
 			} else {
 				p.Metrics.Processed(e.Source, duplicate, alerts, time.Since(started))
-				if temporalSkipReason != "" {
-					if metrics, ok := p.Metrics.(interface{ TemporalSkipped(string) }); ok {
-						metrics.TemporalSkipped(temporalSkipReason)
+				if metrics, ok := p.Metrics.(interface{ TemporalSkipped(string) }); ok {
+					for _, reason := range temporalSkipped {
+						metrics.TemporalSkipped(reason)
 					}
 				}
 			}
@@ -149,12 +149,7 @@ ON CONFLICT (id) DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 			if err != nil {
 				return err
 			}
-			if observation.Unscoped {
-				temporalSkipReason = "unscoped"
-			}
-			if observation.CapacityExceeded {
-				temporalSkipReason = "candidate_limit"
-			}
+			temporalSkipped = observation.Skipped
 		}
 	}
 	hits := intel.Detections(baseHits, p.Intel.Match(raw, e.Timestamp))

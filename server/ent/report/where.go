@@ -85,6 +85,11 @@ func Level(v string) predicate.Report {
 	return predicate.Report(sql.FieldEQ(FieldLevel, v))
 }
 
+// Summary applies equality check predicate on the "summary" field. It's identical to SummaryEQ.
+func Summary(v string) predicate.Report {
+	return predicate.Report(sql.FieldEQ(FieldSummary, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Report {
 	return predicate.Report(sql.FieldEQ(FieldCreatedAt, v))
@@ -398,6 +403,71 @@ func LevelEqualFold(v string) predicate.Report {
 // LevelContainsFold applies the ContainsFold predicate on the "level" field.
 func LevelContainsFold(v string) predicate.Report {
 	return predicate.Report(sql.FieldContainsFold(FieldLevel, v))
+}
+
+// SummaryEQ applies the EQ predicate on the "summary" field.
+func SummaryEQ(v string) predicate.Report {
+	return predicate.Report(sql.FieldEQ(FieldSummary, v))
+}
+
+// SummaryNEQ applies the NEQ predicate on the "summary" field.
+func SummaryNEQ(v string) predicate.Report {
+	return predicate.Report(sql.FieldNEQ(FieldSummary, v))
+}
+
+// SummaryIn applies the In predicate on the "summary" field.
+func SummaryIn(vs ...string) predicate.Report {
+	return predicate.Report(sql.FieldIn(FieldSummary, vs...))
+}
+
+// SummaryNotIn applies the NotIn predicate on the "summary" field.
+func SummaryNotIn(vs ...string) predicate.Report {
+	return predicate.Report(sql.FieldNotIn(FieldSummary, vs...))
+}
+
+// SummaryGT applies the GT predicate on the "summary" field.
+func SummaryGT(v string) predicate.Report {
+	return predicate.Report(sql.FieldGT(FieldSummary, v))
+}
+
+// SummaryGTE applies the GTE predicate on the "summary" field.
+func SummaryGTE(v string) predicate.Report {
+	return predicate.Report(sql.FieldGTE(FieldSummary, v))
+}
+
+// SummaryLT applies the LT predicate on the "summary" field.
+func SummaryLT(v string) predicate.Report {
+	return predicate.Report(sql.FieldLT(FieldSummary, v))
+}
+
+// SummaryLTE applies the LTE predicate on the "summary" field.
+func SummaryLTE(v string) predicate.Report {
+	return predicate.Report(sql.FieldLTE(FieldSummary, v))
+}
+
+// SummaryContains applies the Contains predicate on the "summary" field.
+func SummaryContains(v string) predicate.Report {
+	return predicate.Report(sql.FieldContains(FieldSummary, v))
+}
+
+// SummaryHasPrefix applies the HasPrefix predicate on the "summary" field.
+func SummaryHasPrefix(v string) predicate.Report {
+	return predicate.Report(sql.FieldHasPrefix(FieldSummary, v))
+}
+
+// SummaryHasSuffix applies the HasSuffix predicate on the "summary" field.
+func SummaryHasSuffix(v string) predicate.Report {
+	return predicate.Report(sql.FieldHasSuffix(FieldSummary, v))
+}
+
+// SummaryEqualFold applies the EqualFold predicate on the "summary" field.
+func SummaryEqualFold(v string) predicate.Report {
+	return predicate.Report(sql.FieldEqualFold(FieldSummary, v))
+}
+
+// SummaryContainsFold applies the ContainsFold predicate on the "summary" field.
+func SummaryContainsFold(v string) predicate.Report {
+	return predicate.Report(sql.FieldContainsFold(FieldSummary, v))
 }
 
 // And groups predicates with the AND operator between them.

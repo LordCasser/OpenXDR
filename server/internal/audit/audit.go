@@ -28,7 +28,7 @@ func Actor(ctx context.Context) string {
 
 // Log 记一条审计。target/detail 可为空串，空串不落列。
 func Log(ctx context.Context, db *ent.Client, r *http.Request, action, target, detail string) {
-	write(ctx, db, Actor(ctx), remoteAddr(r), action, target, detail)
+	write(ctx, db, Actor(ctx), RemoteAddr(r), action, target, detail)
 }
 
 // System 系统自动动作的审计：没有请求、没有登录用户，但同样必须留痕。
@@ -37,22 +37,26 @@ func System(ctx context.Context, db *ent.Client, action, target, detail string) 
 }
 
 func write(ctx context.Context, db *ent.Client, username, remote, action, target, detail string) {
-	create := db.AuditLog.Create().
-		SetUsername(username).
-		SetAction(action).
-		SetRemoteAddr(remote)
-	if target != "" {
-		create.SetTarget(target)
-	}
-	if detail != "" {
-		create.SetDetail(detail)
-	}
-	if err := create.Exec(ctx); err != nil {
+	if err := Checked(ctx, db.AuditLog.Create(), username, remote, action, target, detail); err != nil {
 		slog.Error("审计写入失败", "action", action, "err", err)
 	}
 }
 
-func remoteAddr(r *http.Request) string {
+// Checked 事务内或需要感知失败的审计写入：返回错误让调用方回滚，
+// 不出现“操作落库而审计丢失”。字段语义同 Log，空串不落列。
+func Checked(ctx context.Context, create *ent.AuditLogCreate, username, remote, action, target, detail string) error {
+	c := create.SetUsername(username).SetAction(action).SetRemoteAddr(remote)
+	if target != "" {
+		c.SetTarget(target)
+	}
+	if detail != "" {
+		c.SetDetail(detail)
+	}
+	return c.Exec(ctx)
+}
+
+// RemoteAddr 请求的来源地址（realip 中间件已还原），与事务里自己写审计的地方共用
+func RemoteAddr(r *http.Request) string {
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
 	}

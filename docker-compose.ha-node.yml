@@ -39,6 +39,7 @@ services:
       - ./deploy/ha/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
 
   server:
+    stop_grace_period: 30s  # 停机时等进行中的定时任务把运行记成 interrupted，交给接手的节点重跑；Docker 默认只给 10 秒
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -102,6 +103,9 @@ services:
     volumes:
       - ./rules:/rules:ro
       - ./tasks:/tasks:ro
+      # 时序规则挂整个父目录：release.sh 发布不可变版本目录并切换 current 链接，单挂链接会固定在挂载时的目标；
+      # 开启时在 .env 设 TEMPORAL_RULES_PATH=/temporal-rules/current
+      - ./temporal-rules:/temporal-rules:ro
       - ./runtime/app-certs:/certs:ro
       - ./dist:/dist:ro
 

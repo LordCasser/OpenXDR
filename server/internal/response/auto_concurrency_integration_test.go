@@ -6,6 +6,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"openxdr/server/internal/testdb"
@@ -74,6 +75,12 @@ func TestAutomaticIsolationCreatesAndDispatchesOnce(t *testing.T) {
 		if err != nil || cmd.ID != id || cmd.Status != status || len(ch) != 0 {
 			t.Fatalf("重建后重放 %s: %v", status, err)
 		}
+	}
+	// Auto 靠「返回的记录早于本次调用」认出已下发过、不重复写审计
+	before := time.Now()
+	cmd, err := NewHub(c, true).Issue(ctx, Request{automatic: true, AssetID: assetID, IncidentID: &incident, Kind: "isolate_host", IssuedBy: "auto"})
+	if err != nil || !cmd.CreatedAt.Before(before) {
+		t.Fatalf("撞上已有自动指令时应返回之前创建的记录: %v %v", err, cmd)
 	}
 }
 

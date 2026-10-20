@@ -215,7 +215,6 @@ function Worker({ task, busy, hosts, onToggle, onGroup, onRun, onEdit }: {
             <Typography.Text strong style={{ fontSize: 16 }}>{name}</Typography.Text>
             {task.category && <Tag color={CATEGORY[task.category].color}>{t(CATEGORY[task.category].key)}</Tag>}
             {task.targetGroup !== '*' && <Tag>{task.targetGroup}</Tag>}
-            {state === 'off' && <Tag>{t('workerOff')}</Tag>}
           </Space>
           <Tooltip title={<pre className="tooltip-pre">{task.prompt}</pre>}>
             <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} style={{ margin: '2px 0 0' }}>{duty}</Typography.Paragraph>

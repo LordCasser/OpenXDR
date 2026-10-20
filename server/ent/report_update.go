@@ -113,6 +113,20 @@ func (_u *ReportUpdate) SetNillableLevel(v *string) *ReportUpdate {
 	return _u
 }
 
+// SetSummary sets the "summary" field.
+func (_u *ReportUpdate) SetSummary(v string) *ReportUpdate {
+	_u.mutation.SetSummary(v)
+	return _u
+}
+
+// SetNillableSummary sets the "summary" field if the given value is not nil.
+func (_u *ReportUpdate) SetNillableSummary(v *string) *ReportUpdate {
+	if v != nil {
+		_u.SetSummary(*v)
+	}
+	return _u
+}
+
 // Mutation returns the ReportMutation object of the builder.
 func (_u *ReportUpdate) Mutation() *ReportMutation {
 	return _u.mutation
@@ -184,6 +198,9 @@ func (_u *ReportUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Level(); ok {
 		_spec.SetField(report.FieldLevel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Summary(); ok {
+		_spec.SetField(report.FieldSummary, field.TypeString, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -289,6 +306,20 @@ func (_u *ReportUpdateOne) SetNillableLevel(v *string) *ReportUpdateOne {
 	return _u
 }
 
+// SetSummary sets the "summary" field.
+func (_u *ReportUpdateOne) SetSummary(v string) *ReportUpdateOne {
+	_u.mutation.SetSummary(v)
+	return _u
+}
+
+// SetNillableSummary sets the "summary" field if the given value is not nil.
+func (_u *ReportUpdateOne) SetNillableSummary(v *string) *ReportUpdateOne {
+	if v != nil {
+		_u.SetSummary(*v)
+	}
+	return _u
+}
+
 // Mutation returns the ReportMutation object of the builder.
 func (_u *ReportUpdateOne) Mutation() *ReportMutation {
 	return _u.mutation
@@ -390,6 +421,9 @@ func (_u *ReportUpdateOne) sqlSave(ctx context.Context) (_node *Report, err erro
 	}
 	if value, ok := _u.mutation.Level(); ok {
 		_spec.SetField(report.FieldLevel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Summary(); ok {
+		_spec.SetField(report.FieldSummary, field.TypeString, value)
 	}
 	_node = &Report{config: _u.config}
 	_spec.Assign = _node.assignValues

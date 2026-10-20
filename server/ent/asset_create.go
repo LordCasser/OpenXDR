@@ -161,6 +161,48 @@ func (_c *AssetCreate) SetNillableSilentSince(v *time.Time) *AssetCreate {
 	return _c
 }
 
+// SetHealthProblem sets the "health_problem" field.
+func (_c *AssetCreate) SetHealthProblem(v string) *AssetCreate {
+	_c.mutation.SetHealthProblem(v)
+	return _c
+}
+
+// SetNillableHealthProblem sets the "health_problem" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableHealthProblem(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetHealthProblem(*v)
+	}
+	return _c
+}
+
+// SetHealthDropped sets the "health_dropped" field.
+func (_c *AssetCreate) SetHealthDropped(v int64) *AssetCreate {
+	_c.mutation.SetHealthDropped(v)
+	return _c
+}
+
+// SetNillableHealthDropped sets the "health_dropped" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableHealthDropped(v *int64) *AssetCreate {
+	if v != nil {
+		_c.SetHealthDropped(*v)
+	}
+	return _c
+}
+
+// SetHealthDroppedAt sets the "health_dropped_at" field.
+func (_c *AssetCreate) SetHealthDroppedAt(v time.Time) *AssetCreate {
+	_c.mutation.SetHealthDroppedAt(v)
+	return _c
+}
+
+// SetNillableHealthDroppedAt sets the "health_dropped_at" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableHealthDroppedAt(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetHealthDroppedAt(*v)
+	}
+	return _c
+}
+
 // SetListening sets the "listening" field.
 func (_c *AssetCreate) SetListening(v json.RawMessage) *AssetCreate {
 	_c.mutation.SetListening(v)
@@ -183,6 +225,26 @@ func (_c *AssetCreate) SetInventoryAt(v time.Time) *AssetCreate {
 func (_c *AssetCreate) SetNillableInventoryAt(v *time.Time) *AssetCreate {
 	if v != nil {
 		_c.SetInventoryAt(*v)
+	}
+	return _c
+}
+
+// SetSoftware sets the "software" field.
+func (_c *AssetCreate) SetSoftware(v json.RawMessage) *AssetCreate {
+	_c.mutation.SetSoftware(v)
+	return _c
+}
+
+// SetSoftwareAt sets the "software_at" field.
+func (_c *AssetCreate) SetSoftwareAt(v time.Time) *AssetCreate {
+	_c.mutation.SetSoftwareAt(v)
+	return _c
+}
+
+// SetNillableSoftwareAt sets the "software_at" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableSoftwareAt(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetSoftwareAt(*v)
 	}
 	return _c
 }
@@ -525,6 +587,18 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 		_spec.SetField(asset.FieldSilentSince, field.TypeTime, value)
 		_node.SilentSince = &value
 	}
+	if value, ok := _c.mutation.HealthProblem(); ok {
+		_spec.SetField(asset.FieldHealthProblem, field.TypeString, value)
+		_node.HealthProblem = &value
+	}
+	if value, ok := _c.mutation.HealthDropped(); ok {
+		_spec.SetField(asset.FieldHealthDropped, field.TypeInt64, value)
+		_node.HealthDropped = &value
+	}
+	if value, ok := _c.mutation.HealthDroppedAt(); ok {
+		_spec.SetField(asset.FieldHealthDroppedAt, field.TypeTime, value)
+		_node.HealthDroppedAt = &value
+	}
 	if value, ok := _c.mutation.Listening(); ok {
 		_spec.SetField(asset.FieldListening, field.TypeJSON, value)
 		_node.Listening = value
@@ -536,6 +610,14 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.InventoryAt(); ok {
 		_spec.SetField(asset.FieldInventoryAt, field.TypeTime, value)
 		_node.InventoryAt = &value
+	}
+	if value, ok := _c.mutation.Software(); ok {
+		_spec.SetField(asset.FieldSoftware, field.TypeJSON, value)
+		_node.Software = value
+	}
+	if value, ok := _c.mutation.SoftwareAt(); ok {
+		_spec.SetField(asset.FieldSoftwareAt, field.TypeTime, value)
+		_node.SoftwareAt = &value
 	}
 	if value, ok := _c.mutation.ServiceNotes(); ok {
 		_spec.SetField(asset.FieldServiceNotes, field.TypeJSON, value)

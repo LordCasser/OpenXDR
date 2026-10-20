@@ -27,17 +27,24 @@ var AssetMapPaths = []string{"/api/asset-map", "/api/attack-surface", "/api/zone
 // aiEnabled 返回 false 时不接受标注请求，图谱与攻击面照常可用。模型可在控制台随时改，每次请求时判断
 func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 	mux := http.NewServeMux()
-	groupParam := func(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-		id, err := uuid.Parse(r.URL.Query().Get("groupId"))
-		if err != nil {
-			http.Error(w, "groupId 必填", http.StatusBadRequest)
-			return uuid.Nil, false
-		}
-		return id, requireGroup(w, r, db, id, "viewer")
-	}
+	mux.HandleFunc("GET /api/asset-map", assetMapGraph(db))
+	mux.HandleFunc("GET /api/attack-surface", attackSurface(db))
+	mux.HandleFunc("GET /api/zones", listZones(db))
+	mux.HandleFunc("POST /api/zones", createZone(db))
+	mux.HandleFunc("PUT /api/zones/{id}", updateZone(db))
+	mux.HandleFunc("DELETE /api/zones/{id}", deleteZone(db))
+	mux.HandleFunc("GET /api/assets/{id}/profile", assetProfile(db, aiEnabled))
+	mux.HandleFunc("PUT /api/assets/{id}/profile", updateAssetProfile(db))
+	mux.HandleFunc("PUT /api/assets/{id}/zone", assignAssetZone(db))
+	mux.HandleFunc("PUT /api/assets/{id}/services", noteAssetService(db))
+	mux.HandleFunc("POST /api/assets/{id}/annotate", requestAnnotate(db, aiEnabled))
+	return mux
+}
 
-	mux.HandleFunc("GET /api/asset-map", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := groupParam(w, r)
+// assetMapGraph 组内资产图谱。
+func assetMapGraph(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := assetMapGroup(w, r, db)
 		if !ok {
 			return
 		}
@@ -47,10 +54,13 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 			return
 		}
 		writeJSON(w, g.Graph(time.Now()))
-	})
+	}
+}
 
-	mux.HandleFunc("GET /api/attack-surface", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := groupParam(w, r)
+// attackSurface 组内攻击面。
+func attackSurface(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := assetMapGroup(w, r, db)
 		if !ok {
 			return
 		}
@@ -60,10 +70,13 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 			return
 		}
 		writeJSON(w, g.Surface())
-	})
+	}
+}
 
-	mux.HandleFunc("GET /api/zones", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := groupParam(w, r)
+// listZones 组内区域定义。
+func listZones(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := assetMapGroup(w, r, db)
 		if !ok {
 			return
 		}
@@ -73,9 +86,12 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 			return
 		}
 		writeJSON(w, rows)
-	})
+	}
+}
 
-	mux.HandleFunc("POST /api/zones", func(w http.ResponseWriter, r *http.Request) {
+// createZone 新建区域，要组 admin。
+func createZone(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		var body zoneBody
 		if !body.decode(w, r) {
 			return
@@ -90,9 +106,12 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 		audit.Log(r.Context(), db, r, "zone_created", row.ID.String(), body.Name+" "+strings.Join(body.Cidrs, ","))
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, row)
-	})
+	}
+}
 
-	mux.HandleFunc("PUT /api/zones/{id}", func(w http.ResponseWriter, r *http.Request) {
+// updateZone 修改区域，组不能换。
+func updateZone(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		row, ok := getByPath(w, r, "id", "zone", db.Zone.Get)
 		if !ok {
 			return
@@ -107,9 +126,12 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 		}
 		audit.Log(r.Context(), db, r, "zone_updated", row.ID.String(), body.Name+" "+strings.Join(body.Cidrs, ","))
 		writeJSON(w, row)
-	})
+	}
+}
 
-	mux.HandleFunc("DELETE /api/zones/{id}", func(w http.ResponseWriter, r *http.Request) {
+// deleteZone 删除区域，指派到它的资产回到自动划分。
+func deleteZone(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		row, ok := getByPath(w, r, "id", "zone", db.Zone.Get)
 		if !ok || !requireGroup(w, r, db, row.GroupID, "admin") {
 			return
@@ -127,9 +149,12 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 		}
 		audit.Log(r.Context(), db, r, "zone_deleted", row.ID.String(), row.Name)
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	mux.HandleFunc("GET /api/assets/{id}/profile", func(w http.ResponseWriter, r *http.Request) {
+// assetProfile 资产画像：区域、暴露面、依赖与 AI 标注。
+func assetProfile(db *ent.Client, aiEnabled func() bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		a, ok := getByPath(w, r, "id", "asset", db.Asset.Get)
 		if !ok || !assetInScope(w, r, db, a.ID, "viewer") {
 			return
@@ -154,66 +179,26 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 			"relationNotes": a.RelationNotes, "lockedFields": a.LockedFields,
 			"annotatedAt": a.AnnotatedAt, "annotateRequestedAt": a.AnnotateRequestedAt, "aiEnabled": aiEnabled(),
 		})
-	})
+	}
+}
 
-	// 人改过的字段锁定，AI 不再覆盖；unlock 交还给 AI 并请求重新标注
-	mux.HandleFunc("PUT /api/assets/{id}/profile", func(w http.ResponseWriter, r *http.Request) {
+// updateAssetProfile 人改过的字段锁定，AI 不再覆盖；unlock 交还给 AI 并请求重新标注
+func updateAssetProfile(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		a, ok := getByPath(w, r, "id", "asset", db.Asset.Get)
 		if !ok || !assetInScope(w, r, db, a.ID, "analyst") {
 			return
 		}
-		var body struct {
-			Role        *string  `json:"role"`
-			Summary     *string  `json:"summary"`
-			Criticality *int     `json:"criticality"`
-			Unlock      []string `json:"unlock"`
-		}
+		var body profileBody
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&body) != nil {
 			http.Error(w, "请求无效", http.StatusBadRequest)
 			return
 		}
-		locked := slices.Clone(a.LockedFields)
-		lock := func(f string) {
-			if !slices.Contains(locked, f) {
-				locked = append(locked, f)
-			}
-		}
 		upd := a.Update()
-		if body.Role != nil {
-			v := strings.TrimSpace(*body.Role)
-			if v == "" || len([]rune(v)) > 32 {
-				http.Error(w, "角色须为 1-32 字", http.StatusBadRequest)
-				return
-			}
-			upd.SetRole(v)
-			lock("role")
-		}
-		if body.Summary != nil {
-			v := strings.TrimSpace(*body.Summary)
-			if len([]rune(v)) > 300 {
-				http.Error(w, "功能说明不超过 300 字", http.StatusBadRequest)
-				return
-			}
-			upd.SetSummary(v)
-			lock("summary")
-		}
-		if body.Criticality != nil {
-			if *body.Criticality < 1 || *body.Criticality > 5 {
-				http.Error(w, "重要程度取 1-5", http.StatusBadRequest)
-				return
-			}
-			upd.SetCriticality(*body.Criticality).SetAnnotationReason("人工指定")
-			lock("criticality")
-		}
-		for _, f := range body.Unlock {
-			if !slices.Contains(assetmap.Lockable, f) {
-				http.Error(w, "unlock 只能是 role / summary / criticality", http.StatusBadRequest)
-				return
-			}
-			locked = slices.DeleteFunc(locked, func(s string) bool { return s == f })
-		}
-		if len(body.Unlock) > 0 {
-			upd.SetAnnotateRequestedAt(time.Now())
+		locked, msg := body.apply(upd, slices.Clone(a.LockedFields))
+		if msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
+			return
 		}
 		if err := upd.SetLockedFields(locked).Exec(r.Context()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -222,9 +207,61 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 		detail, _ := json.Marshal(body)
 		audit.Log(r.Context(), db, r, "asset_profile_updated", a.ID.String(), a.Hostname+" "+string(detail))
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	mux.HandleFunc("PUT /api/assets/{id}/zone", func(w http.ResponseWriter, r *http.Request) {
+type profileBody struct {
+	Role        *string  `json:"role"`
+	Summary     *string  `json:"summary"`
+	Criticality *int     `json:"criticality"`
+	Unlock      []string `json:"unlock"`
+}
+
+// apply 校验人工修改并写进 upd，返回新的锁定字段；不合法时返回给用户看的说明（400）
+func (b *profileBody) apply(upd *ent.AssetUpdateOne, locked []string) ([]string, string) {
+	lock := func(f string) {
+		if !slices.Contains(locked, f) {
+			locked = append(locked, f)
+		}
+	}
+	if b.Role != nil {
+		v := strings.TrimSpace(*b.Role)
+		if v == "" || len([]rune(v)) > 32 {
+			return nil, "角色须为 1-32 字"
+		}
+		upd.SetRole(v)
+		lock("role")
+	}
+	if b.Summary != nil {
+		v := strings.TrimSpace(*b.Summary)
+		if len([]rune(v)) > 300 {
+			return nil, "功能说明不超过 300 字"
+		}
+		upd.SetSummary(v)
+		lock("summary")
+	}
+	if b.Criticality != nil {
+		if *b.Criticality < 1 || *b.Criticality > 5 {
+			return nil, "重要程度取 1-5"
+		}
+		upd.SetCriticality(*b.Criticality).SetAnnotationReason("人工指定")
+		lock("criticality")
+	}
+	for _, f := range b.Unlock {
+		if !slices.Contains(assetmap.Lockable, f) {
+			return nil, "unlock 只能是 role / summary / criticality"
+		}
+		locked = slices.DeleteFunc(locked, func(s string) bool { return s == f })
+	}
+	if len(b.Unlock) > 0 {
+		upd.SetAnnotateRequestedAt(time.Now())
+	}
+	return locked, ""
+}
+
+// assignAssetZone 手工指派资产所在区域，zoneId 为空回到自动划分。
+func assignAssetZone(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		a, ok := getByPath(w, r, "id", "asset", db.Asset.Get)
 		if !ok {
 			return
@@ -258,10 +295,12 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 		}
 		audit.Log(r.Context(), db, r, "asset_zone_assigned", a.ID.String(), detail)
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	// 人工给服务定名与风险，优先级最高；name 为空表示清除，回到 AI 识别或端口推测
-	mux.HandleFunc("PUT /api/assets/{id}/services", func(w http.ResponseWriter, r *http.Request) {
+// noteAssetService 人工给服务定名与风险，优先级最高；name 为空表示清除，回到 AI 识别或端口推测
+func noteAssetService(db *ent.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		a, ok := getByPath(w, r, "id", "asset", db.Asset.Get)
 		if !ok || !assetInScope(w, r, db, a.ID, "analyst") {
 			return
@@ -292,9 +331,12 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 		}
 		audit.Log(r.Context(), db, r, "asset_service_noted", a.ID.String(), detail)
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}
+}
 
-	mux.HandleFunc("POST /api/assets/{id}/annotate", func(w http.ResponseWriter, r *http.Request) {
+// requestAnnotate 请求重新做 AI 标注，未配置模型时拒绝。
+func requestAnnotate(db *ent.Client, aiEnabled func() bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		a, ok := getByPath(w, r, "id", "asset", db.Asset.Get)
 		if !ok || !assetInScope(w, r, db, a.ID, "analyst") {
 			return
@@ -308,8 +350,7 @@ func AssetMap(db *ent.Client, aiEnabled func() bool) http.Handler {
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
-	})
-	return mux
+	}
 }
 
 type zoneBody struct {
@@ -363,4 +404,14 @@ func zoneSaved(w http.ResponseWriter, err error) bool {
 		return false
 	}
 	return true
+}
+
+// assetMapGroup 取查询参数 groupId 并要求组 viewer；失败时已写好响应。
+func assetMapGroup(w http.ResponseWriter, r *http.Request, db *ent.Client) (uuid.UUID, bool) {
+	id, err := uuid.Parse(r.URL.Query().Get("groupId"))
+	if err != nil {
+		http.Error(w, "groupId 必填", http.StatusBadRequest)
+		return uuid.Nil, false
+	}
+	return id, requireGroup(w, r, db, id, "viewer")
 }

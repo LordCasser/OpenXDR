@@ -31,6 +31,7 @@ func TestRepositoryTemporalCorpus(t *testing.T) {
 			Seconds  int            `json:"seconds"`
 			Group    string         `json:"group"`
 			Asset    string         `json:"asset"`
+			Username string         `json:"username"` // 事件 username 列；省略表示无用户名
 			OS       string         `json:"os"`
 			ClassUID int            `json:"classUid"`
 			Raw      map[string]any `json:"raw"`
@@ -60,7 +61,7 @@ func TestRepositoryTemporalCorpus(t *testing.T) {
 				t.Fatal("用例名称和事件不能为空")
 			}
 			current := snapshot
-			var events []Event
+			events := map[string][]Event{}
 			got := map[string][]uuid.UUID{}
 			// 每个新到达事件触发窗口求值，模拟首次命中记账；不把本测试当作数据库幂等证明。
 			for i, input := range tc.Events {
@@ -77,10 +78,20 @@ func TestRepositoryTemporalCorpus(t *testing.T) {
 				if len(refs) == 0 {
 					continue
 				}
-				events = append(events, Event{ID: id(input.ID), Time: time.Unix(1700000000+int64(input.Seconds), 0).UTC(), Scope: Scope{Group: id(input.Group), Entity: input.Asset}, Rules: refs})
-				matches, err := current.Evaluate(events)
-				if err != nil {
-					t.Fatal(err)
+				at := time.Unix(1700000000+int64(input.Seconds), 0).UTC()
+				scopes := map[string]string{GroupByAsset: input.Asset, GroupByAccount: AccountEntity(input.Username)}
+				var matches []Match
+				for groupBy, entity := range scopes {
+					// 与 Observe 一致：无用户名的事件不进账号维度
+					if entity == "" || !current.Relevant(groupBy, refs) {
+						continue
+					}
+					events[groupBy] = append(events[groupBy], Event{ID: id(input.ID), Time: at, Scope: Scope{Group: id(input.Group), Entity: entity}, Asset: input.Asset, Rules: refs})
+					found, err := current.Evaluate(groupBy, events[groupBy])
+					if err != nil {
+						t.Fatal(err)
+					}
+					matches = append(matches, found...)
 				}
 				for _, m := range matches {
 					key := m.RuleID + "/" + m.Anchor.String()

@@ -39,6 +39,12 @@ type Command func(*sql.Selector)
 // CommandPolicy is the predicate function for commandpolicy builders.
 type CommandPolicy func(*sql.Selector)
 
+// DecoyDeployment is the predicate function for decoydeployment builders.
+type DecoyDeployment func(*sql.Selector)
+
+// DecoyObservation is the predicate function for decoyobservation builders.
+type DecoyObservation func(*sql.Selector)
+
 // EnrollToken is the predicate function for enrolltoken builders.
 type EnrollToken func(*sql.Selector)
 
@@ -75,6 +81,9 @@ type ProcessBaseline func(*sql.Selector)
 // Report is the predicate function for report builders.
 type Report func(*sql.Selector)
 
+// ReportRead is the predicate function for reportread builders.
+type ReportRead func(*sql.Selector)
+
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)
 
@@ -95,6 +104,9 @@ type TaskRun func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
+
+// VulnRecord is the predicate function for vulnrecord builders.
+type VulnRecord func(*sql.Selector)
 
 // Zone is the predicate function for zone builders.
 type Zone func(*sql.Selector)

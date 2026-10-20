@@ -1,0 +1,11 @@
+{
+  "sources": {
+    "PentestGPT": "e8b1bb77d1ac00329675cec3b060aba971ec1ac8",
+    "BoxPwnr": "6e2778ce6741b2f1755b4cfbc5ea37b663b1399c"
+  },
+  "decoy_binary_sha256": "e1de085f154edb2b1aff95046d9f3b3a4dd46c564e3f2c2df5911f1d3fb46d68",
+  "image_id": "sha256:39d5af654e606fde7282307cd6e0b880d37591f788238e19613590c64bcae324",
+  "test_date": "2026-10-19",
+  "host_scope": "isolated loopback namespace only",
+  "python": "Python 3.12.9"
+}

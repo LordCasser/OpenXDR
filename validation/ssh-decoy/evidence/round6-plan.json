@@ -1,0 +1,19 @@
+{
+  "conditions": [
+    "observe-v1",
+    "legal-stop-v1",
+    "moral-stop-v1"
+  ],
+  "provider": "glm53-h20",
+  "model": "ZhipuAI/GLM-5.3-Flash",
+  "command_turns": 1,
+  "repeats": 1,
+  "max_tokens": 16384,
+  "request_timeout": 180,
+  "trial_seconds": 210,
+  "frozen": {
+    "server/internal/sshdecoy/server.go": "a72d786f65ffc3efbe41763c40cade4b913b03deae45c262eef723c97f3df297",
+    "validation/ssh-decoy/evaluate.py": "a73d1deaa0630b9fca22fbc620d5e755793fd7aa6dfbf3c7b734085a6735ed5a",
+    "validation/ssh-decoy/Dockerfile": "33af14a6886596c8615fdadf25d035c5309b916735b5f4ec3bfbdb82f2a3597f"
+  }
+}

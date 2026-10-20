@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -21,6 +23,9 @@ CREATE TABLE IF NOT EXISTS temporal_candidates (
  group_id uuid NOT NULL, ts timestamptz NOT NULL, rules jsonb NOT NULL,
  PRIMARY KEY(revision,event_id));
 CREATE INDEX IF NOT EXISTS temporal_candidates_window ON temporal_candidates(revision,asset_id,group_id,ts);
+ALTER TABLE temporal_candidates ADD COLUMN IF NOT EXISTS account text;
+CREATE INDEX IF NOT EXISTS temporal_candidates_ts ON temporal_candidates(ts);
+CREATE INDEX IF NOT EXISTS temporal_candidates_account ON temporal_candidates(revision,group_id,account,ts) WHERE account IS NOT NULL;
 CREATE TABLE IF NOT EXISTS temporal_evaluation_gaps (
  revision text NOT NULL, event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
  asset_id uuid NOT NULL REFERENCES assets(id) ON DELETE CASCADE, group_id uuid NOT NULL,
@@ -80,38 +85,43 @@ END $$;`)
 }
 
 type Observation struct {
-	Unscoped         bool
-	CapacityExceeded bool
-	Matches          []Match
+	// Skipped 是本事件的覆盖缺口原因，去重后逐项计入 openxdr_temporal_skipped_total：
+	// unscoped（无资产或未分组）、no_account（账号维度规则相关但事件无用户名）、candidate_limit（窗口候选超上限）、
+	// late（事件时间早于迟到余量，窗口内候选可能已被清理）。
+	Skipped []string
+	Matches []Match
+}
+
+func (o *Observation) skip(reason string) {
+	if !slices.Contains(o.Skipped, reason) {
+		o.Skipped = append(o.Skipped, reason)
+	}
 }
 
 // Observe 必须在事件与告警共用的事务中调用。基础命中只能来自该 snapshot。
-// 组和资产从数据库获取；没有分组时显式返回 Unscoped，不使用自报归属。
-// 当前实体维度为单资产；跨资产/用户聚合须另定义实体契约。
+// 组和资产从数据库获取；没有分组时显式记 unscoped，不使用自报归属。
+// 资产维度按 (组, 资产) 关联；账号维度按 (组, 规范化用户名) 跨同组资产累计，用户名只取事件 username 列。
 func (s *Snapshot) Observe(ctx context.Context, tx *sql.Tx, id uuid.UUID, ruleIDs []string) (Observation, error) {
 	var e Event
 	var assetID, groupID uuid.NullUUID
-	err := tx.QueryRowContext(ctx, `SELECT e.id,e.ts,e.asset_id,a.group_id FROM events e
- LEFT JOIN assets a ON a.id=e.asset_id WHERE e.id=$1`, id).Scan(&e.ID, &e.Time, &assetID, &groupID)
+	var username sql.NullString
+	var result Observation
+	err := tx.QueryRowContext(ctx, `SELECT e.id,e.ts,e.asset_id,a.group_id,e.username FROM events e
+ LEFT JOIN assets a ON a.id=e.asset_id WHERE e.id=$1`, id).Scan(&e.ID, &e.Time, &assetID, &groupID, &username)
 	if err != nil {
 		return Observation{}, err
 	}
 	if !assetID.Valid {
-		return Observation{Unscoped: true}, nil
+		result.skip("unscoped")
+		return result, nil
 	}
 	// 锁住资产行再重新读组，避免归组查询与换组之间的竞态。
 	if err := tx.QueryRowContext(ctx, `SELECT group_id FROM assets WHERE id=$1 FOR SHARE`, assetID.UUID).Scan(&groupID); err != nil {
 		return Observation{}, err
 	}
 	if !groupID.Valid || groupID.UUID == uuid.Nil {
-		return Observation{Unscoped: true}, nil
-	}
-	e.Scope = Scope{Group: groupID.UUID, Entity: assetID.UUID.String()}
-	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "temporal|"+s.revision+"|"+e.Scope.Entity); err != nil {
-		return Observation{}, err
-	}
-	if err := s.persistArchive(ctx, tx); err != nil {
-		return Observation{}, err
+		result.skip("unscoped")
+		return result, nil
 	}
 	e.Rules = append([]string(nil), ruleIDs...)
 	slices.Sort(e.Rules)
@@ -125,61 +135,127 @@ func (s *Snapshot) Observe(ctx context.Context, tx *sql.Tx, id uuid.UUID, ruleID
 			return Observation{}, fmt.Errorf("未知快照基础命中: %s", id)
 		}
 	}
+	// 迟到超过余量的事件：窗口内候选可能已被 PruneCandidates 清理，不在残缺窗口上求值，记缺口。
+	// 用数据库时间判断，与清理同一时钟。
+	var late bool
+	if err := tx.QueryRowContext(ctx, `SELECT $1::timestamptz < now() - make_interval(secs => $2)`, e.Time, LateGrace.Seconds()).Scan(&late); err != nil {
+		return Observation{}, err
+	}
+	if late {
+		if err := s.persistArchive(ctx, tx); err != nil {
+			return Observation{}, err
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO temporal_evaluation_gaps
+ (revision,event_id,asset_id,group_id,reason,candidate_count_lower_bound,window_from,window_to)
+ VALUES($1,$2,$3,$4,'late',0,$5,$6) ON CONFLICT(revision,event_id) DO NOTHING`,
+			s.revision, e.ID, assetID.UUID, groupID.UUID, e.Time.Add(-s.window), e.Time.Add(s.window))
+		if err != nil {
+			return Observation{}, err
+		}
+		result.skip("late")
+		return result, nil
+	}
+	assetScope := Scope{Group: groupID.UUID, Entity: assetID.UUID.String()}
+	accountScope := Scope{Group: groupID.UUID, Entity: AccountEntity(username.String)}
+	byAccount := s.Relevant(GroupByAccount, e.Rules)
+	if byAccount && accountScope.Entity == "" {
+		result.skip("no_account")
+		byAccount = false
+	}
+	// 加锁顺序固定为先资产后账号：每个事务至多持有一个资产锁和一个账号锁，不会互相等待成环。
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "temporal|"+s.revision+"|"+assetScope.Entity); err != nil {
+		return Observation{}, err
+	}
+	if byAccount {
+		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "temporal|"+s.revision+"|"+groupID.UUID.String()+"|"+accountScope.Entity); err != nil {
+			return Observation{}, err
+		}
+	}
+	if err := s.persistArchive(ctx, tx); err != nil {
+		return Observation{}, err
+	}
 	encoded, err := json.Marshal(e.Rules)
 	if err != nil {
 		return Observation{}, err
 	}
+	account := sql.NullString{String: strings.TrimPrefix(accountScope.Entity, accountPrefix), Valid: accountScope.Entity != ""}
 	var accepted uuid.UUID
-	err = tx.QueryRowContext(ctx, `INSERT INTO temporal_candidates AS existing(revision,event_id,asset_id,group_id,ts,rules)
-VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT(revision,event_id) DO UPDATE SET rules=existing.rules
+	err = tx.QueryRowContext(ctx, `INSERT INTO temporal_candidates AS existing(revision,event_id,asset_id,group_id,ts,rules,account)
+VALUES($1,$2,$3,$4,$5,$6::jsonb,$7) ON CONFLICT(revision,event_id) DO UPDATE SET rules=existing.rules
 WHERE existing.asset_id=EXCLUDED.asset_id AND existing.group_id=EXCLUDED.group_id
-AND existing.ts=EXCLUDED.ts AND existing.rules=EXCLUDED.rules RETURNING event_id`,
-		s.revision, e.ID, assetID.UUID, groupID.UUID, e.Time, string(encoded)).Scan(&accepted)
+AND existing.ts=EXCLUDED.ts AND existing.rules=EXCLUDED.rules AND existing.account IS NOT DISTINCT FROM EXCLUDED.account RETURNING event_id`,
+		s.revision, e.ID, assetID.UUID, groupID.UUID, e.Time, string(encoded), account).Scan(&accepted)
 	if err != nil {
 		return Observation{}, fmt.Errorf("时序候选写入失败或重投内容冲突: %w", err)
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT event_id,ts,rules FROM temporal_candidates
-WHERE revision=$1 AND asset_id=$2 AND group_id=$3 AND ts >= $4 AND ts <= $5
-ORDER BY ts,event_id LIMIT 10001`, s.revision, assetID.UUID, groupID.UUID, e.Time.Add(-s.window), e.Time.Add(s.window))
+	dimensions := []struct {
+		groupBy, column string
+		scope           Scope
+		key             any
+	}{
+		{GroupByAsset, "asset_id", assetScope, assetID.UUID},
+		{GroupByAccount, "account", accountScope, account.String},
+	}
+	for _, d := range dimensions {
+		if !s.Relevant(d.groupBy, e.Rules) || (d.groupBy == GroupByAccount && !byAccount) {
+			continue
+		}
+		matches, err := s.observeScope(ctx, tx, &result, e, assetID.UUID, d.groupBy, d.column, d.scope, d.key)
+		if err != nil {
+			return Observation{}, err
+		}
+		result.Matches = append(result.Matches, matches...)
+	}
+	return result, nil
+}
+
+// observeScope 回查同一实体的候选窗口并记录新命中。column 只取固定列名，不拼接外部输入。
+func (s *Snapshot) observeScope(ctx context.Context, tx *sql.Tx, result *Observation, e Event, assetID uuid.UUID, groupBy, column string, scope Scope, key any) ([]Match, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT event_id,ts,rules,asset_id FROM temporal_candidates
+WHERE revision=$1 AND group_id=$2 AND `+column+`=$3 AND ts >= $4 AND ts <= $5
+ORDER BY ts,event_id LIMIT 10001`, s.revision, scope.Group, key, e.Time.Add(-s.window), e.Time.Add(s.window))
 	if err != nil {
-		return Observation{}, err
+		return nil, err
 	}
 	var candidates []Event
 	for rows.Next() {
-		candidate := Event{Scope: e.Scope}
+		candidate := Event{Scope: scope}
 		var data []byte
-		if err := rows.Scan(&candidate.ID, &candidate.Time, &data); err != nil {
+		var asset uuid.UUID
+		if err := rows.Scan(&candidate.ID, &candidate.Time, &data, &asset); err != nil {
 			rows.Close()
-			return Observation{}, err
+			return nil, err
 		}
 		if err := json.Unmarshal(data, &candidate.Rules); err != nil {
 			rows.Close()
-			return Observation{}, err
+			return nil, err
 		}
+		candidate.Asset = asset.String()
 		candidates = append(candidates, candidate)
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return Observation{}, err
+		return nil, err
 	}
 	if len(candidates) > 10000 {
 		// 容量缺口与事件/基础告警一起提交，避免永久阻塞该资产所在的队列分片。
-		// 不在截断窗口上求值，也不将重投视为自动补检。
+		// 不在截断窗口上求值，也不将重投视为自动补检。两个维度都超限时只记一条缺口。
 		_, err := tx.ExecContext(ctx, `INSERT INTO temporal_evaluation_gaps
  (revision,event_id,asset_id,group_id,reason,candidate_count_lower_bound,window_from,window_to)
  VALUES($1,$2,$3,$4,'candidate_limit',$5,$6,$7) ON CONFLICT(revision,event_id) DO NOTHING`,
-			s.revision, e.ID, assetID.UUID, groupID.UUID, len(candidates), e.Time.Add(-s.window), e.Time.Add(s.window))
+			s.revision, e.ID, assetID, scope.Group, len(candidates), e.Time.Add(-s.window), e.Time.Add(s.window))
 		if err != nil {
-			return Observation{}, err
+			return nil, err
 		}
-		return Observation{CapacityExceeded: true}, nil
+		result.skip("candidate_limit")
+		return nil, nil
 	}
-	matches, err := s.Evaluate(candidates)
+	matches, err := s.Evaluate(groupBy, candidates)
 	if err != nil {
-		return Observation{}, err
+		return nil, err
 	}
-	var result Observation
+	var recorded []Match
 	for _, match := range matches {
 		// 新事件只可能改变它之后（含同一时刻）终点的结果；更早的终点已在当时求值落库
 		if match.Time.Before(e.Time) {
@@ -187,28 +263,51 @@ ORDER BY ts,event_id LIMIT 10001`, s.revision, assetID.UUID, groupID.UUID, e.Tim
 		}
 		evidence, err := json.Marshal(match.Evidence)
 		if err != nil {
-			return Observation{}, err
+			return nil, err
 		}
 		inserted, err := tx.ExecContext(ctx, `INSERT INTO temporal_detections(revision,rule_id,anchor_id,group_id,entity,evidence)
 VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING`, match.Revision, match.RuleID, match.Anchor, match.Scope.Group, match.Scope.Entity, string(evidence))
 		if err != nil {
-			return Observation{}, err
+			return nil, err
 		}
 		n, err := inserted.RowsAffected()
 		if err != nil {
-			return Observation{}, err
+			return nil, err
 		}
-		if n > 0 {
-			for _, evidenceID := range match.Evidence {
-				if evidenceID == match.Anchor {
-					continue
-				}
-				if _, err := tx.ExecContext(ctx, `INSERT INTO temporal_evidence(revision,rule_id,anchor_id,event_id) VALUES($1,$2,$3,$4)`, match.Revision, match.RuleID, match.Anchor, evidenceID); err != nil {
-					return Observation{}, err
-				}
+		if n == 0 {
+			continue
+		}
+		for _, evidenceID := range match.Evidence {
+			if evidenceID == match.Anchor {
+				continue
 			}
-			result.Matches = append(result.Matches, match)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO temporal_evidence(revision,rule_id,anchor_id,event_id) VALUES($1,$2,$3,$4)`, match.Revision, match.RuleID, match.Anchor, evidenceID); err != nil {
+				return nil, err
+			}
 		}
+		recorded = append(recorded, match)
 	}
-	return result, nil
+	return recorded, nil
+}
+
+// LateGrace 是事件迟到的容忍余量：事件时间早于数据库当前时间减此值时不再求值（记 late 缺口），
+// 候选也只需保留到「最大窗口 + LateGrace」。agent 离线缓冲更久的事件照常入库与单事件检测，但不参与时序关联。
+const LateGrace = 2 * time.Hour
+
+// pruneSlack 覆盖处理事务从开始（now() 取事务开始时间）到读窗口之间的耗时，清理多留这段余量。
+const pruneSlack = 10 * time.Minute
+
+// PruneCandidates 删除不会再被任何求值读取的候选，限批返回删除行数。
+// 当前版本：早于 now() - 最大窗口 - LateGrace - pruneSlack；更晚到的事件已按 late 缺口跳过，读不到被删的候选。
+// 其他版本可能仍被尚未重载的节点使用，按规则允许的最大窗口 24 小时计。候选不被证据或告警引用，
+// 删除不影响已落库命中、temporal_evidence 及原始事件；被删版本的归档随后可由 PruneArchives 释放。
+func PruneCandidates(ctx context.Context, db *sql.DB, revision string, window time.Duration) (int64, error) {
+	result, err := db.ExecContext(ctx, `DELETE FROM temporal_candidates WHERE ctid = ANY(ARRAY(
+ SELECT ctid FROM temporal_candidates WHERE ts < now() - make_interval(secs => $2)
+ AND (revision=$1 OR ts < now() - make_interval(secs => $3)) LIMIT 10000))`,
+		revision, (window + LateGrace + pruneSlack).Seconds(), (24*time.Hour + LateGrace + pruneSlack).Seconds())
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

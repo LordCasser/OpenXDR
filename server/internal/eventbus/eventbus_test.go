@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 
 	"openxdr/server/internal/ingest"
 )
@@ -29,6 +30,7 @@ func (m *fakeMetrics) Published(string)               { m.published++ }
 func (m *fakeMetrics) PublishFailed()                 { m.failed++ }
 func (m *fakeMetrics) Failed(string)                  {}
 func (m *fakeMetrics) SetQueuePending(string, uint64) {}
+func (m *fakeMetrics) SetQueueReplicasUnhealthy(int)  {}
 
 func env(source string) ingest.Envelope {
 	return ingest.Envelope{
@@ -101,5 +103,31 @@ func TestNewJetStreamParamValidation(t *testing.T) {
 func TestInstanceName(t *testing.T) {
 	if got := InstanceName("host-a", 1234); got != "host-a-1234" {
 		t.Errorf("InstanceName() = %q, want \"host-a-1234\"", got)
+	}
+}
+
+// 副本健康度：流 leader 应答算一个健康副本，其余看 current 且在线；取不到流信息按全部不健康
+func TestUnhealthyReplicas(t *testing.T) {
+	peers := func(ps ...*nats.PeerInfo) *nats.StreamInfo {
+		return &nats.StreamInfo{Cluster: &nats.ClusterInfo{Leader: "node1", Replicas: ps}}
+	}
+	cases := []struct {
+		name     string
+		info     *nats.StreamInfo
+		err      error
+		replicas int
+		want     int
+	}{
+		{"三副本全同步", peers(&nats.PeerInfo{Name: "node2", Current: true}, &nats.PeerInfo{Name: "witness", Current: true}), nil, 3, 0},
+		{"一个副本掉队", peers(&nats.PeerInfo{Name: "node2", Current: true}, &nats.PeerInfo{Name: "witness"}), nil, 3, 1},
+		{"副本离线即使标着 current", peers(&nats.PeerInfo{Name: "node2", Current: true}, &nats.PeerInfo{Name: "witness", Current: true, Offline: true}), nil, 3, 1},
+		{"副本不在列表里", peers(&nats.PeerInfo{Name: "node2", Current: true}), nil, 3, 1},
+		{"单节点无集群信息", &nats.StreamInfo{}, nil, 1, 0},
+		{"取不到流信息", nil, errors.New("timeout"), 3, 3},
+	}
+	for _, c := range cases {
+		if got := unhealthyReplicas(c.info, c.err, c.replicas); got != c.want {
+			t.Errorf("%s: got %d, want %d", c.name, got, c.want)
+		}
 	}
 }

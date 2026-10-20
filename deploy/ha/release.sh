@@ -13,8 +13,9 @@
 #   ALPINE_MIRROR 构建 server 镜像时的 alpine 软件源，如 https://mirrors.ustc.edu.cn
 #   ALLOW_DIRTY  设为 1 才允许工作区有未提交改动（镜像会带上它们，标签加 -dirty）
 #
-# 同步内容：两个镜像，以及 rules/ 与 tasks/（节点上 bind mount，逐个文件原地覆盖，
-# 不整体替换目录——容器挂的是目录本身，换掉目录它会继续看旧的）。
+# 同步内容：两个镜像，rules/ 与 tasks/（节点上 bind mount，逐个文件原地覆盖，
+# 不整体替换目录——容器挂的是目录本身，换掉目录它会继续看旧的）；temporal-rules/ 按内容哈希发布成
+# 不可变版本目录，再原子切换 current 链接。
 # 回滚：在节点上 cd $HA_DIR，把 openxdr-ha-{server,web}:pre-<标签> 重新 tag 成 latest 后
 #   docker compose -f docker-compose.ha-node.yml up -d --no-build --no-deps server web
 set -eu
@@ -42,7 +43,7 @@ docker build -q -f "$ROOT/web/Dockerfile" ${NPM_REGISTRY:+--build-arg NPM_REGIST
 
 bundle=$(mktemp)
 trap 'rm -f "$bundle"' EXIT
-tar -C "$ROOT" -czf "$bundle" rules tasks
+tar -C "$ROOT" -czf "$bundle" rules tasks temporal-rules
 
 for node in "$first" "$second"; do
   echo "== $node：推镜像与规则"
@@ -56,7 +57,19 @@ for node in "$first" "$second"; do
       # 递归原地覆盖（规则有子目录，如 rules/sigmahq）；目录是 bind mount，不能整个换掉
       cp -rf \"\$tmp\"/\$d/. \$d/
       find \$d -type f | while read -r f; do [ -e \"\$tmp/\$f\" ] || rm -f \"\$f\"; done
-    done" < "$bundle"
+    done
+    # 时序规则按不可变版本目录发布：内容哈希做版本名，写完带 SHA256SUMS 再原子切换 current 链接（相对路径，
+    # 容器里也解析得到）；server 整批加载链接指向的目录，不会读到半写入的版本。保留最近 5 个版本
+    mkdir -p temporal-rules
+    ver=v-\$(cd \"\$tmp/temporal-rules\" && cat \$(ls *.yml | sort) | sha256sum | cut -c1-12)
+    if [ ! -d temporal-rules/\$ver ]; then
+      mkdir temporal-rules/.\$ver.tmp
+      cp \"\$tmp\"/temporal-rules/*.yml temporal-rules/.\$ver.tmp/
+      (cd temporal-rules/.\$ver.tmp && sha256sum *.yml > SHA256SUMS)
+      mv temporal-rules/.\$ver.tmp temporal-rules/\$ver
+    fi
+    ln -sfn \$ver temporal-rules/current.tmp && mv -T temporal-rules/current.tmp temporal-rules/current
+    ls -dt temporal-rules/v-* | tail -n +6 | xargs -r rm -rf" < "$bundle"
 
   echo "== $node：切换到 $TAG"
   remote "$node" "set -eu

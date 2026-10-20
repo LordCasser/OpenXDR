@@ -80,7 +80,7 @@ func TestSessionHistoryAndReports(t *testing.T) {
 				return nil, err
 			}
 		}
-		if _, err := h(ctx, "report", json.RawMessage(`{"title":"报告","markdown":"# 无异常"}`)); err != nil {
+		if _, err := h(ctx, "report", json.RawMessage(`{"title":"报告","summary":"正常","markdown":"## 结论\n正常\n## 需要人处理\n无\n## 未验证\n无"}`)); err != nil {
 			return nil, err
 		}
 		return &piruntime.Result{Response: "完成", StopReason: "stop"}, nil

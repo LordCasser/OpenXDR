@@ -185,6 +185,13 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 - 路径按 /lib/modules/$(uname -r)/ 解析，解析失败只报名字不编造路径；
   /proc/modules 拿不到加载者——进程与 username 留空（那是 audit/eBPF 的领域）
 
+### 软件清单（software，Linux dpkg）
+
+`software.rs` 每 30 分钟跑一次 `dpkg-query`，取状态 `ii` 的包名、版本、源码包与源码版本，连同 `/etc/os-release`
+的发行版与版本号报 OCSF 5020；清单变了才报，最长 24 小时补报。没有 dpkg 的主机健康快照里 `software` 为不可用。
+监听清单里每个服务进程的可执行文件用 `dpkg -S` 查所属包（按路径缓存），攻击面据此标出暴露服务的漏洞。
+匹配逻辑见 [vulns.md](vulns.md)。
+
 ### 设备清单（inventory，监听端口与云环境）
 
 `inventory_linux.rs` 读 `/proc/net/{tcp,tcp6,udp,udp6}`：TCP 取 LISTEN，UDP 取未连接且端口低于
@@ -379,6 +386,12 @@ agent 的 `respond/` 模块执行 server 下发的指令：结束进程、主机
 监听端口或内核模块清单读取失败时保留上次有效基线，跳过本次差异事件并上报 unavailable；恢复后与有效基线比较，不能将读取失败解释为服务消失或模块卸载。Linux 登录认证按 wtmp/btmp 可读性及 journalctl 存活状态报告 active/degraded/unavailable。
 队列丢失数仅覆盖本次进程运行期间的内存出口溢出，跨配置切换累计；不统计内核缓冲丢失与尚未刷盘数据。
 上报时间偏差超过 5 分钟会拒绝保存，应先校准 Agent 时钟。服务端保存接收时间，拒绝旧序号覆盖新状态，并继续按组限制读取。
+
+**主动通知**（`server/internal/liveness/health.go`，与失联巡视同一个单活循环，每分钟一轮）：在线主机的快照里有采集器
+「降级 / 不可用」、本地缓存写不进去、或一轮内丢弃事件超过 `COLLECTOR_DROP_ALERT`（默认 1000，0 不看）时，按 Webhook
+推「N 台主机采集异常」，写明哪台、哪个采集器、走的什么路径；问题集合变了才再推，恢复了推一次「采集恢复正常」。
+丢事件超过阈值后持续一小时才算恢复，避免一阵一阵地来回推；agent 重启累计数归零按重新起算。已失联的主机交给失联通知，
+快照超过 5 分钟没更新（旧 agent、快照停了）的不评估。
 
 ### 缓存损坏与身份变化
 

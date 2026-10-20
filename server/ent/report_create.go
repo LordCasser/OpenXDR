@@ -73,6 +73,20 @@ func (_c *ReportCreate) SetNillableLevel(v *string) *ReportCreate {
 	return _c
 }
 
+// SetSummary sets the "summary" field.
+func (_c *ReportCreate) SetSummary(v string) *ReportCreate {
+	_c.mutation.SetSummary(v)
+	return _c
+}
+
+// SetNillableSummary sets the "summary" field if the given value is not nil.
+func (_c *ReportCreate) SetNillableSummary(v *string) *ReportCreate {
+	if v != nil {
+		_c.SetSummary(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ReportCreate) SetID(v uuid.UUID) *ReportCreate {
 	_c.mutation.SetID(v)
@@ -130,6 +144,10 @@ func (_c *ReportCreate) defaults() {
 		v := report.DefaultLevel
 		_c.mutation.SetLevel(v)
 	}
+	if _, ok := _c.mutation.Summary(); !ok {
+		v := report.DefaultSummary
+		_c.mutation.SetSummary(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := report.DefaultID()
 		_c.mutation.SetID(v)
@@ -160,6 +178,9 @@ func (_c *ReportCreate) check() error {
 	}
 	if _, ok := _c.mutation.Level(); !ok {
 		return &ValidationError{Name: "level", err: errors.New(`ent: missing required field "Report.level"`)}
+	}
+	if _, ok := _c.mutation.Summary(); !ok {
+		return &ValidationError{Name: "summary", err: errors.New(`ent: missing required field "Report.summary"`)}
 	}
 	return nil
 }
@@ -219,6 +240,10 @@ func (_c *ReportCreate) createSpec() (*Report, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Level(); ok {
 		_spec.SetField(report.FieldLevel, field.TypeString, value)
 		_node.Level = value
+	}
+	if value, ok := _c.mutation.Summary(); ok {
+		_spec.SetField(report.FieldSummary, field.TypeString, value)
+		_node.Summary = value
 	}
 	return _node, _spec
 }

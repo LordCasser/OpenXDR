@@ -186,7 +186,16 @@ func mapAgentSessions(mux *http.ServeMux, db *ent.Client, service *agentchat.Ser
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		writeJSON(w, rows)
+		read, err := readOf(r.Context(), db, auth.From(r.Context()).ID, rows)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		out := make([]reportRow, len(rows))
+		for i, row := range rows {
+			out[i] = reportRow{row, read[row.ID]}
+		}
+		writeJSON(w, out)
 	})
 	mux.HandleFunc("GET /api/agent-reports/{id}", func(w http.ResponseWriter, r *http.Request) {
 		row, ok := getByPath(w, r, "id", "report", db.Report.Get)

@@ -140,6 +140,30 @@ func (f CommandPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommandPolicyMutation", m)
 }
 
+// The DecoyDeploymentFunc type is an adapter to allow the use of ordinary
+// function as DecoyDeployment mutator.
+type DecoyDeploymentFunc func(context.Context, *ent.DecoyDeploymentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DecoyDeploymentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DecoyDeploymentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DecoyDeploymentMutation", m)
+}
+
+// The DecoyObservationFunc type is an adapter to allow the use of ordinary
+// function as DecoyObservation mutator.
+type DecoyObservationFunc func(context.Context, *ent.DecoyObservationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DecoyObservationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DecoyObservationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DecoyObservationMutation", m)
+}
+
 // The EnrollTokenFunc type is an adapter to allow the use of ordinary
 // function as EnrollToken mutator.
 type EnrollTokenFunc func(context.Context, *ent.EnrollTokenMutation) (ent.Value, error)
@@ -284,6 +308,18 @@ func (f ReportFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ReportMutation", m)
 }
 
+// The ReportReadFunc type is an adapter to allow the use of ordinary
+// function as ReportRead mutator.
+type ReportReadFunc func(context.Context, *ent.ReportReadMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ReportReadFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ReportReadMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ReportReadMutation", m)
+}
+
 // The SessionFunc type is an adapter to allow the use of ordinary
 // function as Session mutator.
 type SessionFunc func(context.Context, *ent.SessionMutation) (ent.Value, error)
@@ -366,6 +402,18 @@ func (f UserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserMutation", m)
+}
+
+// The VulnRecordFunc type is an adapter to allow the use of ordinary
+// function as VulnRecord mutator.
+type VulnRecordFunc func(context.Context, *ent.VulnRecordMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f VulnRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.VulnRecordMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.VulnRecordMutation", m)
 }
 
 // The ZoneFunc type is an adapter to allow the use of ordinary

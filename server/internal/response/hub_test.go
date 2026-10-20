@@ -242,3 +242,15 @@ func TestStorable(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// exec 的唯一入口是 commandgate；Hub 的普通下发必须拒绝，不能靠调用方自觉。
+func TestIssueRejectsExec(t *testing.T) {
+	h := NewHub(nil, true)
+	cmd := "id"
+	if _, err := h.Issue(context.Background(), Request{Kind: "exec", Cmd: &cmd}); err == nil {
+		t.Fatal("Issue 不应接受 exec")
+	}
+	if _, err := h.IssueExec(context.Background(), Request{Kind: "kill_process"}); err == nil {
+		t.Fatal("IssueExec 只应接受 exec")
+	}
+}

@@ -47,14 +47,28 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 	if err := temporal.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("时序处理状态初始化失败: %v", err)
 	}
+	truncateRaw(ctx, t, db)
 	truncate(ctx, t, client)
 	return ctx, client
+}
+
+// truncateRaw 清空不归 ent 管的身份图表（由 identity.EnsureSchema 建，表可能还不存在）。
+// 游标表也要清，否则上一个测试的增量游标会让新数据被跳过。
+func truncateRaw(ctx context.Context, t *testing.T, db *sql.DB) {
+	t.Helper()
+	for _, table := range []string{"identity_login_matches", "identity_candidate_rejections", "identity_links", "identities", "identity_accounts", "identity_graph_cursors"} {
+		if _, err := db.ExecContext(ctx, `DO $$ BEGIN IF to_regclass('`+table+`') IS NOT NULL THEN DELETE FROM `+table+`; END IF; END $$`); err != nil {
+			t.Fatalf("清空表 %s 失败: %v", table, err)
+		}
+	}
 }
 
 // truncate 按外键依赖顺序清空全部表，保证每个测试从干净状态开始。
 func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 	t.Helper()
 	dels := []func(context.Context) (int, error){
+		func(ctx context.Context) (int, error) { return c.DecoyObservation.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.DecoyDeployment.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AIJob.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.HostCredential.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Finding.Delete().Exec(ctx) },
@@ -64,6 +78,7 @@ func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 		func(ctx context.Context) (int, error) { return c.Approval.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.CommandPolicy.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Report.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.ReportRead.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.SessionMessage.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AgentSession.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.GroupMember.Delete().Exec(ctx) },
@@ -80,6 +95,7 @@ func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 		func(ctx context.Context) (int, error) { return c.Intel.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Suppression.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.ProcessBaseline.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.VulnRecord.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.BeaconBaseline.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Setting.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AssetLink.Delete().Exec(ctx) },

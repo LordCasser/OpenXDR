@@ -14,17 +14,19 @@ import (
 
 // ExposedService 一个对外监听的服务：在哪台资产、哪个区域、暴露到什么程度、谁连过
 type ExposedService struct {
-	AssetID     uuid.UUID `json:"assetId"`
-	Hostname    string    `json:"hostname"`
-	Zone        Zone      `json:"zone"`
-	Level       string    `json:"level"`
-	Proto       string    `json:"proto"`
-	Addrs       []string  `json:"addrs"`
-	Port        int       `json:"port"`
-	Process     string    `json:"process,omitempty"`
-	Service     Service   `json:"service"`
-	Criticality *int      `json:"criticality,omitempty"`
-	Score       int       `json:"score"`
+	AssetID  uuid.UUID `json:"assetId"`
+	Hostname string    `json:"hostname"`
+	Zone     Zone      `json:"zone"`
+	Level    string    `json:"level"`
+	Proto    string    `json:"proto"`
+	Addrs    []string  `json:"addrs"`
+	Port     int       `json:"port"`
+	Process  string    `json:"process,omitempty"`
+	// Package 服务进程所属的包，前端据此对上这台资产的漏洞
+	Package     string  `json:"package,omitempty"`
+	Service     Service `json:"service"`
+	Criticality *int    `json:"criticality,omitempty"`
+	Score       int     `json:"score"`
 	// 观测到的访问来源（主机名或 IP），公网来源是实际被外部访问的证据
 	Peers      []string `json:"peers"`
 	PeerCount  int      `json:"peerCount"`
@@ -194,6 +196,7 @@ func (g *Group) Surface() Surface {
 			for _, l := range groups[k] {
 				e.Addrs = append(e.Addrs, l.Addr)
 				e.Process = cmp.Or(e.Process, l.Process)
+				e.Package = cmp.Or(e.Package, l.Package)
 				addr, _ := netip.ParseAddr(l.Addr)
 				if Public(addr) {
 					level = ExposureInternet

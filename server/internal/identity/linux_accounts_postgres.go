@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -30,7 +31,8 @@ func ObserveLinuxAccounts(ctx context.Context, tx *sql.Tx, eventID uuid.UUID) er
 	var class int
 	var raw json.RawMessage
 	var asset uuid.NullUUID
-	if err := tx.QueryRowContext(ctx, `SELECT source,class_uid,raw,asset_id FROM events WHERE id=$1`, eventID).Scan(&source, &class, &raw, &asset); err != nil {
+	var ts time.Time
+	if err := tx.QueryRowContext(ctx, `SELECT source,class_uid,raw,asset_id,ts FROM events WHERE id=$1`, eventID).Scan(&source, &class, &raw, &asset, &ts); err != nil {
 		return err
 	}
 	if source != "agent" || class != 5001 || !asset.Valid {
@@ -56,8 +58,8 @@ func ObserveLinuxAccounts(ctx context.Context, tx *sql.Tx, eventID uuid.UUID) er
 	if group.Valid {
 		groupValue = group.UUID
 	}
-	result, err := tx.ExecContext(ctx, `INSERT INTO identity_local_snapshots(event_id,asset_id,group_id,state,source)
- VALUES($1,$2,$3,$4,'etc-passwd') ON CONFLICT(event_id) DO NOTHING`, eventID, asset.UUID, groupValue, state)
+	result, err := tx.ExecContext(ctx, `INSERT INTO identity_local_snapshots(event_id,asset_id,group_id,state,source,ts)
+ VALUES($1,$2,$3,$4,'etc-passwd',$5) ON CONFLICT(event_id) DO NOTHING`, eventID, asset.UUID, groupValue, state, ts)
 	if err != nil {
 		return err
 	}

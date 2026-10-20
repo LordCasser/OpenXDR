@@ -58,20 +58,18 @@ func (s *Service) RunTask(ctx context.Context, job schedule.Job) (retErr error) 
 		return s.tool(ctx, current, who, name, args)
 	}
 	record := s.recorder(session, &seq, nil)
-	result, err := s.Runtime.Run(ctx, request, handle, record)
+	// 轮数或时间耗尽先收尾一次，收尾仍没正常结束或没交报告才算失败
+	result, err := s.investigate(ctx, session, request, handle, record, &seq)
 	if err != nil {
 		return err
-	}
-	// 轮数耗尽先收尾一次，收尾仍没正常结束或没交报告才算失败
-	if result, err = s.wrapUp(ctx, session, request, result, handle, record); err != nil {
-		return err
-	}
-	if result.StopReason != "stop" {
-		return fmt.Errorf("会话未完整结束：%s", result.StopReason)
 	}
 	n, err := s.DB.Report.Query().Where(report.SessionIDEQ(session.ID)).Count(ctx)
 	if err != nil {
 		return err
+	}
+	// 收尾就是为了交报告：报告交上了、只是收尾的轮数在最后一句话前用完，不算失败，否则会白白整轮重跑
+	if result.StopReason != "stop" && (result.StopReason != "max_turns" || n == 0) {
+		return fmt.Errorf("会话未完整结束：%s", result.StopReason)
 	}
 	if n == 0 {
 		return errors.New("会话结束但没有提交报告")

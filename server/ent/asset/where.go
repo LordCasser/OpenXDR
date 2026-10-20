@@ -101,9 +101,29 @@ func SilentSince(v time.Time) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldSilentSince, v))
 }
 
+// HealthProblem applies equality check predicate on the "health_problem" field. It's identical to HealthProblemEQ.
+func HealthProblem(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldHealthProblem, v))
+}
+
+// HealthDropped applies equality check predicate on the "health_dropped" field. It's identical to HealthDroppedEQ.
+func HealthDropped(v int64) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldHealthDropped, v))
+}
+
+// HealthDroppedAt applies equality check predicate on the "health_dropped_at" field. It's identical to HealthDroppedAtEQ.
+func HealthDroppedAt(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldHealthDroppedAt, v))
+}
+
 // InventoryAt applies equality check predicate on the "inventory_at" field. It's identical to InventoryAtEQ.
 func InventoryAt(v time.Time) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldInventoryAt, v))
+}
+
+// SoftwareAt applies equality check predicate on the "software_at" field. It's identical to SoftwareAtEQ.
+func SoftwareAt(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSoftwareAt, v))
 }
 
 // ZoneID applies equality check predicate on the "zone_id" field. It's identical to ZoneIDEQ.
@@ -696,6 +716,181 @@ func SilentSinceNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldSilentSince))
 }
 
+// HealthProblemEQ applies the EQ predicate on the "health_problem" field.
+func HealthProblemEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldHealthProblem, v))
+}
+
+// HealthProblemNEQ applies the NEQ predicate on the "health_problem" field.
+func HealthProblemNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldHealthProblem, v))
+}
+
+// HealthProblemIn applies the In predicate on the "health_problem" field.
+func HealthProblemIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldHealthProblem, vs...))
+}
+
+// HealthProblemNotIn applies the NotIn predicate on the "health_problem" field.
+func HealthProblemNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldHealthProblem, vs...))
+}
+
+// HealthProblemGT applies the GT predicate on the "health_problem" field.
+func HealthProblemGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldHealthProblem, v))
+}
+
+// HealthProblemGTE applies the GTE predicate on the "health_problem" field.
+func HealthProblemGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldHealthProblem, v))
+}
+
+// HealthProblemLT applies the LT predicate on the "health_problem" field.
+func HealthProblemLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldHealthProblem, v))
+}
+
+// HealthProblemLTE applies the LTE predicate on the "health_problem" field.
+func HealthProblemLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldHealthProblem, v))
+}
+
+// HealthProblemContains applies the Contains predicate on the "health_problem" field.
+func HealthProblemContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldHealthProblem, v))
+}
+
+// HealthProblemHasPrefix applies the HasPrefix predicate on the "health_problem" field.
+func HealthProblemHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldHealthProblem, v))
+}
+
+// HealthProblemHasSuffix applies the HasSuffix predicate on the "health_problem" field.
+func HealthProblemHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldHealthProblem, v))
+}
+
+// HealthProblemIsNil applies the IsNil predicate on the "health_problem" field.
+func HealthProblemIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldHealthProblem))
+}
+
+// HealthProblemNotNil applies the NotNil predicate on the "health_problem" field.
+func HealthProblemNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldHealthProblem))
+}
+
+// HealthProblemEqualFold applies the EqualFold predicate on the "health_problem" field.
+func HealthProblemEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldHealthProblem, v))
+}
+
+// HealthProblemContainsFold applies the ContainsFold predicate on the "health_problem" field.
+func HealthProblemContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldHealthProblem, v))
+}
+
+// HealthDroppedEQ applies the EQ predicate on the "health_dropped" field.
+func HealthDroppedEQ(v int64) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldHealthDropped, v))
+}
+
+// HealthDroppedNEQ applies the NEQ predicate on the "health_dropped" field.
+func HealthDroppedNEQ(v int64) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldHealthDropped, v))
+}
+
+// HealthDroppedIn applies the In predicate on the "health_dropped" field.
+func HealthDroppedIn(vs ...int64) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldHealthDropped, vs...))
+}
+
+// HealthDroppedNotIn applies the NotIn predicate on the "health_dropped" field.
+func HealthDroppedNotIn(vs ...int64) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldHealthDropped, vs...))
+}
+
+// HealthDroppedGT applies the GT predicate on the "health_dropped" field.
+func HealthDroppedGT(v int64) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldHealthDropped, v))
+}
+
+// HealthDroppedGTE applies the GTE predicate on the "health_dropped" field.
+func HealthDroppedGTE(v int64) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldHealthDropped, v))
+}
+
+// HealthDroppedLT applies the LT predicate on the "health_dropped" field.
+func HealthDroppedLT(v int64) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldHealthDropped, v))
+}
+
+// HealthDroppedLTE applies the LTE predicate on the "health_dropped" field.
+func HealthDroppedLTE(v int64) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldHealthDropped, v))
+}
+
+// HealthDroppedIsNil applies the IsNil predicate on the "health_dropped" field.
+func HealthDroppedIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldHealthDropped))
+}
+
+// HealthDroppedNotNil applies the NotNil predicate on the "health_dropped" field.
+func HealthDroppedNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldHealthDropped))
+}
+
+// HealthDroppedAtEQ applies the EQ predicate on the "health_dropped_at" field.
+func HealthDroppedAtEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldHealthDroppedAt, v))
+}
+
+// HealthDroppedAtNEQ applies the NEQ predicate on the "health_dropped_at" field.
+func HealthDroppedAtNEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldHealthDroppedAt, v))
+}
+
+// HealthDroppedAtIn applies the In predicate on the "health_dropped_at" field.
+func HealthDroppedAtIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldHealthDroppedAt, vs...))
+}
+
+// HealthDroppedAtNotIn applies the NotIn predicate on the "health_dropped_at" field.
+func HealthDroppedAtNotIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldHealthDroppedAt, vs...))
+}
+
+// HealthDroppedAtGT applies the GT predicate on the "health_dropped_at" field.
+func HealthDroppedAtGT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldHealthDroppedAt, v))
+}
+
+// HealthDroppedAtGTE applies the GTE predicate on the "health_dropped_at" field.
+func HealthDroppedAtGTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldHealthDroppedAt, v))
+}
+
+// HealthDroppedAtLT applies the LT predicate on the "health_dropped_at" field.
+func HealthDroppedAtLT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldHealthDroppedAt, v))
+}
+
+// HealthDroppedAtLTE applies the LTE predicate on the "health_dropped_at" field.
+func HealthDroppedAtLTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldHealthDroppedAt, v))
+}
+
+// HealthDroppedAtIsNil applies the IsNil predicate on the "health_dropped_at" field.
+func HealthDroppedAtIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldHealthDroppedAt))
+}
+
+// HealthDroppedAtNotNil applies the NotNil predicate on the "health_dropped_at" field.
+func HealthDroppedAtNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldHealthDroppedAt))
+}
+
 // ListeningIsNil applies the IsNil predicate on the "listening" field.
 func ListeningIsNil() predicate.Asset {
 	return predicate.Asset(sql.FieldIsNull(FieldListening))
@@ -764,6 +959,66 @@ func InventoryAtIsNil() predicate.Asset {
 // InventoryAtNotNil applies the NotNil predicate on the "inventory_at" field.
 func InventoryAtNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldInventoryAt))
+}
+
+// SoftwareIsNil applies the IsNil predicate on the "software" field.
+func SoftwareIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSoftware))
+}
+
+// SoftwareNotNil applies the NotNil predicate on the "software" field.
+func SoftwareNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSoftware))
+}
+
+// SoftwareAtEQ applies the EQ predicate on the "software_at" field.
+func SoftwareAtEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSoftwareAt, v))
+}
+
+// SoftwareAtNEQ applies the NEQ predicate on the "software_at" field.
+func SoftwareAtNEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldSoftwareAt, v))
+}
+
+// SoftwareAtIn applies the In predicate on the "software_at" field.
+func SoftwareAtIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldSoftwareAt, vs...))
+}
+
+// SoftwareAtNotIn applies the NotIn predicate on the "software_at" field.
+func SoftwareAtNotIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldSoftwareAt, vs...))
+}
+
+// SoftwareAtGT applies the GT predicate on the "software_at" field.
+func SoftwareAtGT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldSoftwareAt, v))
+}
+
+// SoftwareAtGTE applies the GTE predicate on the "software_at" field.
+func SoftwareAtGTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldSoftwareAt, v))
+}
+
+// SoftwareAtLT applies the LT predicate on the "software_at" field.
+func SoftwareAtLT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldSoftwareAt, v))
+}
+
+// SoftwareAtLTE applies the LTE predicate on the "software_at" field.
+func SoftwareAtLTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldSoftwareAt, v))
+}
+
+// SoftwareAtIsNil applies the IsNil predicate on the "software_at" field.
+func SoftwareAtIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSoftwareAt))
+}
+
+// SoftwareAtNotNil applies the NotNil predicate on the "software_at" field.
+func SoftwareAtNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSoftwareAt))
 }
 
 // ServiceNotesIsNil applies the IsNil predicate on the "service_notes" field.

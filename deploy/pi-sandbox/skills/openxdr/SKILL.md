@@ -22,7 +22,14 @@ description: OpenXDR 运维与安全助手的工作手册。处理安全事件�
 xdr hosts                                   # 主机名 角色 重要程度 区域 系统
 xdr context > ctx.json                      # 资产、规则名、待办、交给你的事件（subjects）——先存文件再按需取
 xdr exec pve1 'ss -tlnp'                    # 主机用主机名；第三个参数是超时秒数，默认 60
-xdr sql "SELECT ... FROM alerts ..." > a.tsv # 只读查询本组视图，TSV 输出
+xdr exec pve1 - 120 <<'EOF'                 # 命令里有引号、awk、多行时用 - 从 heredoc 读，不要在单引号里再套单引号
+awk -F: '$3==0 || $3>=1000 {print $1}' /etc/passwd
+grep -hvE '^#|^$' /etc/sudoers /etc/sudoers.d/* 2>/dev/null
+EOF
+xdr sql "SELECT ... FROM alerts ..." > a.tsv # 只读查询本组视图，TSV 输出（首行列名）
+xdr sql --json - > ev.jsonl <<'EOF'          # --json 每行一个 JSON 对象，jsonb 列原样保留，交给 jq；SQL 同样可以从 heredoc 读
+SELECT alert_id, event_ts, raw FROM alert_events WHERE incident_id = '<事件 id>'
+EOF
 xdr track pve1 disk-full medium open '根分区 93%' '/dev/sda1 93%，journal 占 11G'
 xdr identify pve1 udp/5405 low 'Corosync 集群通信' '进程 corosync，PVE 集群心跳，仅集群内访问'
 xdr egress pve2 208.111.34.178 low 'Tailscale 中继' 'tailscaled 连 DERP 中继，组网正常业务'
@@ -33,7 +40,13 @@ xdr forget <记忆 id>                         # 删掉被现场证据推翻的 
 xdr suppress pve1 8f1d3b56-7a29-4e03-b5c8-1d4f9e2a7b60 'VM100 vpn-proxy 每天 10:58 解析订阅域名，例行业务' 30 'query.hostname$=.doggygo.top'
 xdr suppress pve1 5d0f6b6e-3c43-4a8e-9a54-2f8e2c7d1b90 'Termix 面板每分钟 SSH 健康检查' 30 'process.cmd_line~=__TERMIX_EXIT' 'dst_endpoint.port=22'
 xdr propose-close <事件 id> false_positive '误报/良性：……（定性、关键证据、依据）' <报告 id>
-xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件）；级别 ok 只存档不推送 / attention（默认）/ urgent
+xdr report 'pve1 磁盘排查' '根分区 93%，journal 占 11G，可清理' report.md [级别]   # 标题、一句话结论、正文；级别 ok 只存档不推送 / attention（默认）/ urgent
+xdr report 'pve1/pve2 端口核查' '两台均无异常监听' - ok <<'EOF'                      # 正文也可以从 heredoc 读；带空格或括号的参数整个用引号括起来
+## 结论
+……
+EOF'        # 正文也可以从 heredoc 读；标题有空格或括号时整个用引号括起来
+# 结论
+EOF
 ```
 
 **保持上下文干净**：大结果先重定向到文件，再用 `jq`、`grep`、`head`、`awk` 取需要的部分，不要把整块原始数据读进对话。
@@ -45,7 +58,8 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
 |---|---|
 | assets | id, hostname, os, ip_addrs, agent_id, first_seen, last_seen, agent_version, silent_since, role, criticality, summary, listening(jsonb), cloud(jsonb), service_notes(jsonb), egress_notes(jsonb), zone_id, inventory_at |
 | events | id, ts, class_uid, source, asset_id, username, conn_tuple, raw(jsonb) |
-| alerts | id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id |
+| alerts | id, ts, last_ts, count, rule_id, severity, event_id, asset_id, incident_id, command_id, detail |
+| alert_events | alert_id, ts, last_ts, count, rule_id, severity, asset_id, incident_id, command_id, event_id, event_ts, class_uid, username, conn_tuple, raw（告警连同触发它的原始事件） |
 | incidents | id, created_at, status, title, ai_verdict(jsonb), graph(jsonb) |
 | commands | id, created_at, completed_at, kind, status, asset_id, incident_id, issued_by, detail, cmd, exit_code, stdout, stderr, truncated |
 | findings | id, asset_id, key, title, detail, severity, status(open/resolved/ignored), first_seen, last_seen, resolved_at, resolved_by, note |
@@ -53,11 +67,25 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
 | memories | id, created_at, updated_at, asset_id, content, source(human/ai), author |
 | asset_links | src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen（本组主机发起的连接聚合） |
 | ip_infos | ip, ptr, as_owner, asn, country, malicious, suspicious, domains, vt_at（本组主机连过的公网地址） |
-| reports | id, created_at, title, level(ok/attention/urgent), markdown（本组历史报告，可与上一轮对比） |
+| reports | id, created_at, title, level(ok/attention/urgent), markdown, summary（本组历史报告，可与上一轮对比；定时任务的标题就是任务名） |
+| identities | id, kind(directory/host), name, anchor_account_id, created_at（每个目录账号一个身份；没有目录锚点的主机账号各自是主机内身份） |
+| identity_accounts | id, kind(directory/windows/linux), asset_id, name, domain, sid, uid, directory_account_id, first_seen, last_seen, identity_id, link_basis, link_confidence, link_source, linked_at（账号与当前所属身份） |
+| identity_links | id, identity_id, account_id, basis(directory_anchor/ad_sid/host_local/manual), confidence(authoritative/strong/local/manual), evidence(jsonb), source, created_at, revoked_at, revoked_by, revoke_reason（链接与撤销历史） |
+| identity_linux_logins | event_id, ts, asset_id, account_name, success, source_address, state(matched/no_account/no_snapshot/snapshot_unavailable), snapshot_event_id, snapshot_ts, uid, account_id（Linux 登录关联到登录时有效的本地账号清单） |
 
-- **events 查询必须带 ts 范围**，表很大。
+- **events 查询必须带 ts 范围**，表很大，尽量再带 asset_id。
+- **身份只按强证据合并**：目录账号是锚点，Windows SID 等于 AD objectSid 才自动链接，其余由人工确认（basis=manual）。
+  不同主机上的同名账号默认是不同身份，不要按名字自行合并下结论；Linux 登录 state 不是 matched 的不能当作某个账号的登录。
+- **要告警对应的原始事件就查 alert_events**（按 incident_id / rule_id / alert_id 过滤）。不要自己 `alerts JOIN events`，
+  也不要 `events WHERE id IN (SELECT event_id ...)`：这两种写法都会扫全表、超时。已知单个事件 id 时直接 `WHERE id = '...'` 也可以。
+- 报「查询超过 5 秒被取消」是范围太大，不是语法错：收窄 ts、加 asset_id 或换 alert_events，不要反复改写同一条查询。
+- 带 raw 等 jsonb 列的结果要进一步处理时用 `xdr sql --json`：TSV 会把 JSON 里的反斜杠再转义一层，解析不回来。
+  jq 里取字段用 `.raw.process.cmd_line`，`->` / `->>` 是 SQL 的写法，jq 不认。`--json` 输出是每行一个对象（JSON Lines），
+  要当数组处理（`.[0:3]`、`length`、排序）用 `jq -s`。
 - `raw` 是 jsonb，用路径取字段，**不要**对 `raw::text` 做截取或 LIKE 切片：
-  - 进程（class_uid 1007）：`raw->'process'->>'name'`、`->>'cmd_line'`、`->'file'->>'path'`、`->'parent_process'->>'pid'`；
+  - 进程（class_uid 1007）：`raw->'process'->>'name'`、`raw->'process'->>'cmd_line'`、`raw->'process'->'file'->>'path'`、
+    父进程 `raw->'process'->'parent_process'->>'name'`（同样有 pid、cmd_line）；`->>` 取出的是文本，后面不能再接 `->` 或 `->>`，
+    要往下走的每一层都用 `->`，只有最后一层用 `->>`；
     退出事件（`raw->>'activity_id'='2'`）有 `raw->'process'->>'exit_code'`、`raw->>'duration_ms'`
   - 网络（4001）：`raw->'dst_endpoint'->>'ip'`、`->>'port'`、`->>'hostname'`（agent 解析过的域名）、`raw->'process'->>'name'`；
     `raw->'connection_info'->>'direction'`（outbound / inbound，入站时 src 是对端、进程是本机服务）、`->>'protocol_name'`（tcp / udp）
@@ -66,6 +94,8 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
     拉起的进程触发的——来源已知，统计威胁时排除（`AND command_id IS NULL`），不要把自己的巡检命令当成可疑活动报告
   - 容器：任何事件都可能带 `raw->'container'`（`->>'runtime'` docker / lxc / qemu…、`->>'uid'`、`->>'name'`），说明进程在哪个容器或虚拟机里
   - 文件（1001）：`raw->'file'->>'path'`；认证（3002）：`raw->>'status_id'`（1 成功 2 失败）
+  - 内核模块（1005）：`raw->'module'->'file'->>'name'`、`raw->'module'->'file'->>'path'`，`raw->>'activity_id'` 1 加载 4 卸载；没有进程与用户字段
+- `assets.ip_addrs` 是 jsonb 字符串数组：按地址找主机用 `ip_addrs ? '10.1.1.3'`，展开用 `jsonb_array_elements_text(ip_addrs)`，不是 PostgreSQL 数组。
   - 不确定结构时先 `SELECT raw FROM events WHERE ... LIMIT 1` 看一条，再写正式查询。
 - 规则名：`xdr context | jq '.rule_titles'`，rule_id 对应的中文标题在这里，不要猜。
 - incidents.status：triaged 表示 AI 已研判、尚未人工结案。
@@ -76,8 +106,11 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
 -- 某主机 24 小时内命中的规则
 SELECT a.rule_id, a.severity, sum(a.count) hits FROM alerts a JOIN assets h ON h.id=a.asset_id
 WHERE h.hostname='pve1' AND a.last_ts > now()-interval '24 hours' AND a.command_id IS NULL GROUP BY 1,2 ORDER BY 3 DESC;
--- 某告警对应的原始事件
-SELECT e.ts, e.raw->'process'->>'cmd_line' FROM alerts a JOIN events e ON e.id=a.event_id WHERE a.incident_id='<id>';
+-- 某事件下各告警对应的原始事件
+SELECT alert_id, rule_id, event_ts, raw->'process'->>'cmd_line' FROM alert_events WHERE incident_id='<id>';
+-- 某条规则 7 天内命中的事件
+SELECT event_ts, raw->'process'->>'cmd_line' FROM alert_events
+WHERE rule_id='<规则 id>' AND last_ts > now()-interval '7 days' AND command_id IS NULL;
 ```
 
 ## 工作流程
@@ -92,6 +125,9 @@ SELECT e.ts, e.raw->'process'->>'cmd_line' FROM alerts a JOIN events e ON e.id=a
 closed 属实且已处置；说明写成人能直接采纳的结案说明，可附报告 id）。事件由人在事件页一键采纳，你不能也不需要自己结案。
 
 **巡检**：每台主机看磁盘与 inode、内存与负载、失败的服务、监听端口与外连、新增账户与 sudo、计划任务、近 24 小时登录失败、平台告警。
+巡检只用只读命令：定时任务里被高风险名单误伤的只读命令会自动批准，会改东西或读密钥内容的才要等人。
+账户检查用 `getent passwd`、`chage -l <用户>`；`/etc/shadow` 只单独一段 `stat -c %y /etc/shadow` 看修改时间，
+不要读它的内容，也不要把它放进 for 列表或变量里——那样整条命令都会转去等人审批。
 需要人处理的问题用 `xdr track` 登记，一个问题一条，同一问题每次用同一个 key；正常项写进报告，不登记。
 
 **调查服务**：查清端口由哪个进程监听、可执行文件属于哪个软件包、服务单元与配置、谁在访问、是否需要对当前范围开放，
@@ -107,4 +143,26 @@ closed 属实且已处置；说明写成人能直接采纳的结案说明，可�
 不能整条规则压掉：比如 DNS 服务器上的可疑后缀规则管着全网的查询，只能压具体域名。一次性的误报写进结论即可，不要提；
 被拒绝过的不要再提。平台指令（包括你自己的命令）触发的告警本来就不进事件，不需要抑制。
 
-最后用 `xdr report` 交一份报告：结论在前，证据在后，未验证事项单独列出。
+最后用 `xdr report` 交一份报告，所有报告同一个格式：
+
+- **标题**：「对象 + 主题」，最多 50 字，不写结论（定时任务的标题由平台固定成任务名，写什么都行）。
+- **一句话结论**：最多 120 字、不换行，读的人只看这一句也知道要不要处理，比如「pve2 RAID 电池故障待更换，其余正常」。
+- **正文**：不写一级标题（平台会渲染标题、级别、时间与结论），按下面的二级标题分节、按这个顺序；
+  结论、需要人处理、未验证三节必须有，没有内容就写「无」，其余可省略：
+
+```markdown
+## 结论
+定性与关键理由，一两段。
+## 需要人处理
+逐条写事项、主机、严重程度与建议；巡检分「### 新增」「### 仍未解决」「### 本轮已修复」。
+## 证据
+已观察到的事实，标明主机与来源命令或查询；多台主机按主机分三级标题。
+## 推断
+基于证据的判断与把握程度。
+## 未验证
+没覆盖到、等待批准或执行失败的检查项。
+## 已执行的操作
+改动、登记的待办、提交的抑制或结案建议。
+```
+
+级别：没有需要人处理的事项写 ok（只存档不推送），有就写 attention，疑似入侵或服务即将中断写 urgent。对话里也照这个分。

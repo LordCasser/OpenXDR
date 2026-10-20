@@ -3,6 +3,7 @@
 package migrate
 
 import (
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/dialect/sql/schema"
 	"entgo.io/ent/schema/field"
 )
@@ -206,9 +207,14 @@ var (
 		{Name: "group_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "agent_version", Type: field.TypeString, Nullable: true},
 		{Name: "silent_since", Type: field.TypeTime, Nullable: true},
+		{Name: "health_problem", Type: field.TypeString, Nullable: true},
+		{Name: "health_dropped", Type: field.TypeInt64, Nullable: true},
+		{Name: "health_dropped_at", Type: field.TypeTime, Nullable: true},
 		{Name: "listening", Type: field.TypeJSON, Nullable: true},
 		{Name: "cloud", Type: field.TypeJSON, Nullable: true},
 		{Name: "inventory_at", Type: field.TypeTime, Nullable: true},
+		{Name: "software", Type: field.TypeJSON, Nullable: true},
+		{Name: "software_at", Type: field.TypeTime, Nullable: true},
 		{Name: "service_notes", Type: field.TypeJSON, Nullable: true},
 		{Name: "egress_notes", Type: field.TypeJSON, Nullable: true},
 		{Name: "zone_id", Type: field.TypeUUID, Nullable: true},
@@ -379,6 +385,95 @@ var (
 				Name:    "commandpolicy_group_id_origin",
 				Unique:  false,
 				Columns: []*schema.Column{CommandPoliciesColumns[2], CommandPoliciesColumns[3]},
+			},
+		},
+	}
+	// DecoyDeploymentsColumns holds the columns for the "decoy_deployments" table.
+	DecoyDeploymentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "asset_id", Type: field.TypeUUID},
+		{Name: "profile", Type: field.TypeString},
+		{Name: "template", Type: field.TypeString},
+		{Name: "port", Type: field.TypeInt},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"registered", "revoked"}, Default: "registered"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "revoked_by", Type: field.TypeString, Nullable: true},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"ssh", "http", "file", "shell"}, Default: "ssh"},
+		{Name: "resource", Type: field.TypeString, Default: ""},
+		{Name: "marker", Type: field.TypeString, Nullable: true},
+		{Name: "token_hash", Type: field.TypeString, Nullable: true},
+		{Name: "token_group_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "token_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "runtime_instance_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "runtime_seen_at", Type: field.TypeTime, Nullable: true},
+		{Name: "runtime_state", Type: field.TypeEnum, Enums: []string{"unknown", "starting", "running", "stopped", "failed"}, Default: "unknown"},
+		{Name: "runtime_generation", Type: field.TypeString, Nullable: true},
+		{Name: "install_state", Type: field.TypeEnum, Enums: []string{"idle", "installing", "installed", "unconfirmed"}, Default: "idle"},
+		{Name: "install_started_at", Type: field.TypeTime, Nullable: true},
+	}
+	// DecoyDeploymentsTable holds the schema information for the "decoy_deployments" table.
+	DecoyDeploymentsTable = &schema.Table{
+		Name:       "decoy_deployments",
+		Columns:    DecoyDeploymentsColumns,
+		PrimaryKey: []*schema.Column{DecoyDeploymentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "decoydeployment_asset_id_port",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyDeploymentsColumns[1], DecoyDeploymentsColumns[4]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'registered' AND port > 0",
+				},
+			},
+			{
+				Name:    "decoydeployment_asset_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{DecoyDeploymentsColumns[1], DecoyDeploymentsColumns[6]},
+			},
+			{
+				Name:    "decoydeployment_asset_id_kind_resource",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyDeploymentsColumns[1], DecoyDeploymentsColumns[10], DecoyDeploymentsColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'registered' AND kind IN ('file', 'shell')",
+				},
+			},
+		},
+	}
+	// DecoyObservationsColumns holds the columns for the "decoy_observations" table.
+	DecoyObservationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "deployment_id", Type: field.TypeUUID},
+		{Name: "incident_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "kind", Type: field.TypeString},
+		{Name: "generation", Type: field.TypeString, Default: ""},
+		{Name: "received_at", Type: field.TypeTime},
+	}
+	// DecoyObservationsTable holds the schema information for the "decoy_observations" table.
+	DecoyObservationsTable = &schema.Table{
+		Name:       "decoy_observations",
+		Columns:    DecoyObservationsColumns,
+		PrimaryKey: []*schema.Column{DecoyObservationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "decoyobservation_received_at",
+				Unique:  false,
+				Columns: []*schema.Column{DecoyObservationsColumns[5]},
+			},
+			{
+				Name:    "decoyobservation_deployment_id_received_at",
+				Unique:  false,
+				Columns: []*schema.Column{DecoyObservationsColumns[1], DecoyObservationsColumns[5]},
+			},
+			{
+				Name:    "decoyobservation_deployment_id_generation",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyObservationsColumns[1], DecoyObservationsColumns[4]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "kind = 'marker_used'",
+				},
 			},
 		},
 	}
@@ -683,6 +778,7 @@ var (
 		{Name: "title", Type: field.TypeString, Size: 200},
 		{Name: "markdown", Type: field.TypeString, Size: 2147483647},
 		{Name: "level", Type: field.TypeString, Default: "attention"},
+		{Name: "summary", Type: field.TypeString, Default: ""},
 	}
 	// ReportsTable holds the schema information for the "reports" table.
 	ReportsTable = &schema.Table{
@@ -699,6 +795,31 @@ var (
 				Name:    "report_session_id",
 				Unique:  false,
 				Columns: []*schema.Column{ReportsColumns[2]},
+			},
+		},
+	}
+	// ReportReadsColumns holds the columns for the "report_reads" table.
+	ReportReadsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "report_id", Type: field.TypeUUID},
+		{Name: "user_id", Type: field.TypeUUID},
+		{Name: "read_at", Type: field.TypeTime},
+	}
+	// ReportReadsTable holds the schema information for the "report_reads" table.
+	ReportReadsTable = &schema.Table{
+		Name:       "report_reads",
+		Columns:    ReportReadsColumns,
+		PrimaryKey: []*schema.Column{ReportReadsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "reportread_report_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{ReportReadsColumns[1], ReportReadsColumns[2]},
+			},
+			{
+				Name:    "reportread_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{ReportReadsColumns[2]},
 			},
 		},
 	}
@@ -862,6 +983,33 @@ var (
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
 	}
+	// VulnRecordsColumns holds the columns for the "vuln_records" table.
+	VulnRecordsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "osv_id", Type: field.TypeString},
+		{Name: "ecosystem", Type: field.TypeString},
+		{Name: "package", Type: field.TypeString},
+		{Name: "ranges", Type: field.TypeJSON},
+		{Name: "aliases", Type: field.TypeJSON, Nullable: true},
+		{Name: "summary", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "score", Type: field.TypeFloat64, Default: 0},
+		{Name: "vector", Type: field.TypeString, Nullable: true},
+		{Name: "published", Type: field.TypeTime, Nullable: true},
+		{Name: "synced_at", Type: field.TypeTime},
+	}
+	// VulnRecordsTable holds the schema information for the "vuln_records" table.
+	VulnRecordsTable = &schema.Table{
+		Name:       "vuln_records",
+		Columns:    VulnRecordsColumns,
+		PrimaryKey: []*schema.Column{VulnRecordsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "vulnrecord_ecosystem_package",
+				Unique:  false,
+				Columns: []*schema.Column{VulnRecordsColumns[2], VulnRecordsColumns[3]},
+			},
+		},
+	}
 	// ZonesColumns holds the columns for the "zones" table.
 	ZonesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -897,6 +1045,8 @@ var (
 		BeaconBaselinesTable,
 		CommandsTable,
 		CommandPoliciesTable,
+		DecoyDeploymentsTable,
+		DecoyObservationsTable,
 		EnrollTokensTable,
 		EventsTable,
 		FindingsTable,
@@ -909,6 +1059,7 @@ var (
 		MemoriesTable,
 		ProcessBaselinesTable,
 		ReportsTable,
+		ReportReadsTable,
 		SessionsTable,
 		SessionMessagesTable,
 		SettingsTable,
@@ -916,6 +1067,7 @@ var (
 		TasksTable,
 		TaskRunsTable,
 		UsersTable,
+		VulnRecordsTable,
 		ZonesTable,
 	}
 )

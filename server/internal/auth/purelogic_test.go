@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -108,6 +109,33 @@ func TestAllowed(t *testing.T) {
 	for _, c := range cases {
 		if got := Allowed(c.role, c.min); got != c.want {
 			t.Errorf("Allowed(%q, %q) = %v, want %v", c.role, c.min, got, c.want)
+		}
+	}
+}
+
+func TestSecureCookie(t *testing.T) {
+	cases := []struct {
+		name  string
+		tls   bool
+		proto string
+		want  bool
+	}{
+		{"直连 TLS", true, "", true},
+		{"代理转发 https", false, "https", true},
+		{"代理头带跳数", false, "https, http", true},
+		{"代理转发 http", false, "http", false},
+		{"无代理头", false, "", false},
+	}
+	for _, c := range cases {
+		r := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+		if c.tls {
+			r.TLS = &tls.ConnectionState{}
+		}
+		if c.proto != "" {
+			r.Header.Set("X-Forwarded-Proto", c.proto)
+		}
+		if got := secureCookie(r); got != c.want {
+			t.Errorf("%s: secureCookie = %v, want %v", c.name, got, c.want)
 		}
 	}
 }

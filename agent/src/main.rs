@@ -698,6 +698,7 @@ mod shutdown_tests {
         .await
         .unwrap();
         assert_eq!(
+            // SAFETY: 纯 FFI 调用，只传 pid 与信号编号；子进程尚未被 wait 回收，pid 不会被复用到别的进程上。
             unsafe { libc::kill(child.id().unwrap() as i32, libc::SIGTERM) },
             0
         );

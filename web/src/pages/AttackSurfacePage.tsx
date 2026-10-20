@@ -6,13 +6,14 @@ import {
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
-  createZone, deleteZone, fetchAttackSurface, fetchZones, saveServiceNote, updateZone, type BlindSpot, type ExposedService, type ServiceNote, type ZoneKind, type ZoneRow,
+  createZone, deleteZone, fetchAttackSurface, fetchVulnSummary, fetchZones, saveServiceNote, updateZone, type BlindSpot, type ExposedService, type ServiceNote, type ZoneKind, type ZoneRow,
 } from '../api'
 import { useCanAct, useSession } from '../app/session'
 import { useCanChat, useHandoff } from '../components/Handoff'
 import { SurfaceGraph } from '../components/SurfaceGraph'
 import { CritTag, ExposureTag, ZoneTag, useZoneColor } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
+import { ScoreTag } from '../components/AssetVulns'
 import { Page } from '../components/Page'
 import { errText, fmtTime } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
@@ -42,6 +43,11 @@ export function AttackSurfacePage() {
   const [hideLow, setHideLow] = useState(true)
   const [picked, setPicked] = useState<ExposedService | null>(null)
   const query = useQuery({ queryKey: ['attackSurface', group?.id], queryFn: () => fetchAttackSurface(group!.id), enabled: !!group })
+  // 暴露服务的已知漏洞：按资产拿汇总，用服务进程所属的包对上
+  const vulns = useQuery({ queryKey: ['vuln-summary'], queryFn: fetchVulnSummary })
+  const vulnOf = (e: ExposedService) => e.package
+    ? vulns.data?.find(v => v.assetId === e.assetId)?.exposedPackages?.find(p => p.binaries.includes(e.package!))
+    : undefined
   const s = query.data
   const isGroupAdmin = isAdmin || group?.role === 'admin'
   // 刷新后抽屉里显示最新数据（调查或标注会改它）
@@ -87,6 +93,12 @@ export function AttackSurfacePage() {
                 { title: t('zoneLabel'), width: 120, render: (_, e) => <ZoneTag zone={e.zone} /> },
                 { title: t('criticality'), dataIndex: 'criticality', width: 110, render: v => <CritTag value={v} /> },
                 { title: t('listenProcess'), dataIndex: 'process', width: 130, render: v => v ?? '-' },
+                {
+                  title: t('tabVulns'), width: 150, render: (_, e) => {
+                    const v = vulnOf(e)
+                    return v ? <Link to={`/assets/${e.assetId}?tab=vulns`} style={{ whiteSpace: 'nowrap' }}><ScoreTag score={v.maxScore} />{t('vulnOnSurface', { n: v.vulns })}</Link> : '-'
+                  },
+                },
                 { title: t('thBind'), dataIndex: 'addrs', width: 150, render: (v: string[]) => <span className="mono">{v.join(', ')}</span> },
                 { title: t('thPeers'), render: (_, e) => e.peerCount === 0 ? '-' : (
                   <Tooltip title={(e.peers ?? []).join(', ')}>

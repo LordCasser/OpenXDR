@@ -14,6 +14,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/approval"
 	"openxdr/server/ent/commandpolicy"
+	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/response"
 )
@@ -159,7 +160,11 @@ func (g *Gate) Issue(ctx context.Context, req Request) (out *ent.Command, retErr
 		return nil, err
 	}
 	if required {
-		if err := g.await(ctx, req, actor); err != nil {
+		wait := g.await
+		if req.System && g.linux(ctx, req) && ReadOnly(*req.Command.Cmd) {
+			wait = g.autoApprove
+		}
+		if err := wait(ctx, req, actor); err != nil {
 			return nil, err
 		}
 	}
@@ -169,11 +174,11 @@ func (g *Gate) Issue(ctx context.Context, req Request) (out *ent.Command, retErr
 		return nil, err
 	}
 	req.Command.IssuedBy = actor
-	return g.Hub.Issue(ctx, req.Command)
+	return g.Hub.IssueExec(ctx, req.Command)
 }
 
 func (g *Gate) log(ctx context.Context, actor, action, target, detail string) error {
-	return g.DB.AuditLog.Create().SetUsername(actor).SetAction(action).SetTarget(target).SetDetail(detail).SetRemoteAddr("server").Exec(ctx)
+	return audit.Checked(ctx, g.DB.AuditLog.Create(), actor, "server", action, target, detail)
 }
 
 func (g *Gate) await(ctx context.Context, req Request, username string) error {
@@ -245,6 +250,34 @@ func (g *Gate) await(ctx context.Context, req Request, username string) error {
 	}
 }
 
+// linux 只读判定按 sh -c 的语义做，Windows（PowerShell）和系统不明的主机不自动批准
+func (g *Gate) linux(ctx context.Context, req Request) bool {
+	a, err := g.DB.Asset.Get(ctx, req.Command.AssetID)
+	return err == nil && a.Os != nil && strings.EqualFold(*a.Os, "linux")
+}
+
+// autoApprove 定时任务里被名单误伤的只读命令：半夜没人审批，等到过期只会让巡检缺项。
+// 照常留一条审批记录（直接记为已消费、由 system 批准）并写审计，事后能查到哪些命令是自动放行的。
+func (g *Gate) autoApprove(ctx context.Context, req Request, username string) error {
+	tx, err := g.DB.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	now := time.Now()
+	a, err := tx.Approval.Create().SetGroupID(req.GroupID).SetNillableSessionID(req.SessionID).
+		SetAssetID(req.Command.AssetID).SetRequestedBy(username).SetOrigin(approval.Origin(req.Origin)).
+		SetCmd(*req.Command.Cmd).SetTimeoutMs(req.Command.TimeoutMS).SetExpiresAt(now).
+		SetStatus(approval.StatusConsumed).SetDecidedBy(SystemActor).SetDecidedAt(now).Save(ctx)
+	if err != nil {
+		return err
+	}
+	if err := audit.Checked(ctx, tx.AuditLog.Create(), SystemActor, "server", "approval_auto", a.ID.String(), "定时任务只读命令自动批准"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // pending 等待到期时的说法。给模型的不能说成拒绝：它会把"被拒"当成障碍去改写命令绕过，
 // 实际只是管理员还没处理，让它先做别的，最后把待批准的操作交代清楚。
 func pending(req Request) error {
@@ -307,7 +340,7 @@ func (g *Gate) Decide(ctx context.Context, id uuid.UUID, u *ent.User, approved b
 	if n != 1 {
 		return errors.New("审批已结束或已过期")
 	}
-	if err := tx.AuditLog.Create().SetUsername(u.Username).SetAction("approval_decided").SetTarget(id.String()).SetDetail(string(status)).SetRemoteAddr("server").Exec(ctx); err != nil {
+	if err := audit.Checked(ctx, tx.AuditLog.Create(), u.Username, "server", "approval_decided", id.String(), string(status)); err != nil {
 		return err
 	}
 	return tx.Commit()
