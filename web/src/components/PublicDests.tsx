@@ -52,7 +52,7 @@ export function PublicDestList({ items, host, limit = 8 }: {
                     </Space>
                   </Tooltip>
                 ) : d.purpose ? <Typography.Text strong>{d.purpose}</Typography.Text> : <Typography.Text type="secondary">{t('egressUnknown')}</Typography.Text>}
-                {(d.owner || d.country) && <Typography.Text type="secondary"> · {[d.owner, d.country].filter(Boolean).join(' · ')}</Typography.Text>}
+                {(d.owner || d.asn || d.country) && <Typography.Text type="secondary"> · {[d.owner, d.asn && `AS${d.asn}`, d.country].filter(Boolean).join(' · ')}</Typography.Text>}
               </div>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {d.ports.join(' ')}
@@ -78,6 +78,12 @@ export function PublicDestList({ items, host, limit = 8 }: {
         <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setAll(!all)}>
           {all ? t('collapse') : t('showAllN', { n: items.length })}
         </Button>
+      )}
+      {/* DB-IP Lite 是 CC BY 4.0：展示了它的数据就署名并链接 */}
+      {shown.some(d => d.ipdb) && (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">{t('ipdbAttribution')}</a>
+        </Typography.Text>
       )}
     </div>
   )

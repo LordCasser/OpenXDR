@@ -1162,10 +1162,12 @@ export interface MapNode {
   listening?: number
   ports?: string[]
 }
-// 公网目的地址：按地址合并的外联明细，带反向解析、VirusTotal 信息与 AI 给的用途
+// 公网目的地址：按地址合并的外联明细，带反向解析、离线归属库、VirusTotal 信息与 AI 给的用途
 export interface PublicDest {
   ip: string; ports: string[]; processes?: string[]; count: number; lastSeen: string
-  ptr?: string; owner?: string; country?: string; malicious?: number; suspicious?: number; domains?: string[]; checked?: boolean; purpose?: string
+  ptr?: string; owner?: string; asn?: number; country?: string; malicious?: number; suspicious?: number; domains?: string[]; checked?: boolean; purpose?: string
+  // 归属里用到了离线库（DB-IP Lite）的数据：按 CC BY 4.0 要署名
+  ipdb?: boolean
   // 上机调查或人工给的结论，优先于 AI 推断的 purpose
   note?: ServiceNote
 }
