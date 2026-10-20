@@ -68,6 +68,7 @@ xdr report '标题' report.md [级别]          # 最终报告（Markdown 文件
   也不要 `events WHERE id IN (SELECT event_id ...)`：这两种写法都会扫全表、超时。已知单个事件 id 时直接 `WHERE id = '...'` 也可以。
 - 报「查询超过 5 秒被取消」是范围太大，不是语法错：收窄 ts、加 asset_id 或换 alert_events，不要反复改写同一条查询。
 - 带 raw 等 jsonb 列的结果要进一步处理时用 `xdr sql --json`：TSV 会把 JSON 里的反斜杠再转义一层，解析不回来。
+  jq 里取字段用 `.raw.process.cmd_line`，`->` / `->>` 是 SQL 的写法，jq 不认。
 - `raw` 是 jsonb，用路径取字段，**不要**对 `raw::text` 做截取或 LIKE 切片：
   - 进程（class_uid 1007）：`raw->'process'->>'name'`、`raw->'process'->>'cmd_line'`、`raw->'process'->'file'->>'path'`、
     父进程 `raw->'process'->'parent_process'->>'name'`（同样有 pid、cmd_line）；`->>` 取出的是文本，后面不能再接 `->` 或 `->>`，
