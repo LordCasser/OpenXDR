@@ -329,7 +329,7 @@ server 全部通过环境变量配置，均有默认值：
 | `RULES_PATH` | `../rules` | Sigma 规则目录 |
 | `IDENTITY_RUN_RETENTION_DAYS` | `30` | 目录终态运行记录保留天数，0 关闭历史删除，范围 0–3650；每来源最新记录保留，过期运行回收不受此开关影响 |
 | `IDENTITY_SOURCES_JSON` | 空（关闭） | 多目录只读账号同步，严格 JSON 数组；凭据通过环境变量名引用，组须已存在，配置后重启生效。见 [身份来源配置](identity-correlation.md#启动配置与定时同步) |
-| `TEMPORAL_RULES_PATH` | 空（关闭） | 时序规则独立目录；配置后与基础规则整批严格加载，共用 RULES_RELOAD_SECONDS 重载周期。容器使用容器内路径，需额外挂载；见 [时序检测](temporal-detection.md) |
+| `TEMPORAL_RULES_PATH` | 空（关闭） | 时序规则独立目录；配置后与基础规则整批严格加载，共用 RULES_RELOAD_SECONDS 重载周期。生产建议指向版本目录的符号链接（`current → v-<版本>`，版本目录需带 `SHA256SUMS`），切换链接即原子发布；同时启用过期候选单活清理。容器使用容器内路径，需额外挂载；见 [时序检测](temporal-detection.md#不可变版本目录发布) |
 | `RULES_RELOAD_SECONDS` | `30` | 规则目录变更检测周期，变更自动热重载；0 关闭 |
 | `TASKS_PATH` | `../tasks` | 预设任务 YAML 目录；配置了 Pi 模型（`PI_MODEL` 或控制台）才运行，见 [Pi 后端](pi-backend.md#预设任务) |
 | `SCHEDULE_INTERVAL_SECONDS` | `30` | 任务到期检查与 YAML 重载周期 |
