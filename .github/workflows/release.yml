@@ -67,6 +67,17 @@ jobs:
         with:
           name: binaries
           path: out
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache-dependency-path: server/go.sum
+      - name: 离线 IP 归属库
+        # DB-IP Lite（CC BY 4.0）当月版本打进镜像，下载后做结构与类型校验；DB-IP 只保留最近两个月、不发布校验和，
+        # 没法钉固定版本的 SHA256，这里把实际打进去的哈希记进日志和镜像。下载或校验失败直接让发版失败，不发缺库的镜像
+        working-directory: server
+        run: |
+          go run ./cmd/ipdb -dir ../ipdb-out/ipdb
+          cd ../ipdb-out/ipdb && sha256sum -- *.mmdb | tee SHA256SUMS
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -90,8 +101,10 @@ jobs:
         with:
           context: .
           file: server/Dockerfile
-          # 把 agent 安装包打进镜像：升级镜像，在线 agent 跟着自动升级
-          build-contexts: agents=out
+          # 把 agent 安装包打进镜像：升级镜像，在线 agent 跟着自动升级；离线 IP 归属库随镜像带一份
+          build-contexts: |
+            agents=out
+            ipdb=ipdb-out
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.server }}
