@@ -69,13 +69,17 @@ export function IncidentGroupTable({ groups, loading, emptyText, actable, onReso
         ),
       }}
       columns={[
-        { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
+        { responsive: WIDE_ONLY, title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
         {
           title: t('thRule'), dataIndex: 'ruleId', ellipsis: wideTable,
-          render: (v, g) => <Tooltip title={v}><Typography.Text>{g.ruleTitle ?? (v || '-')}</Typography.Text></Tooltip>,
+          render: (v, g) => <>
+            <Tooltip title={g.ruleTitle ? `${g.ruleTitle} · ${v}` : v}><Typography.Text>{g.ruleTitle ?? (v || '-')}</Typography.Text></Tooltip>
+            {/* 窄屏收起级别、主机与事件数三列，挪到规则名下面 */}
+            {!wideTable && <div><SeverityTag value={g.severity} /> <HostLink id={g.assetId} fallback={g.hostname ?? '-'} /> · {g.count}</div>}
+          </>,
         },
-        { title: t('thHostname'), dataIndex: 'assetId', width: 150, ellipsis: true, render: (v, g) => <HostLink id={v} fallback={g.hostname ?? '-'} /> },
-        { title: t('thIncidentCount'), dataIndex: 'count', width: 80, align: 'right' },
+        { responsive: WIDE_ONLY, title: t('thHostname'), dataIndex: 'assetId', width: 150, ellipsis: true, render: (v, g) => <HostLink id={v} fallback={g.hostname ?? '-'} /> },
+        { responsive: WIDE_ONLY, title: t('thIncidentCount'), dataIndex: 'count', width: 100, align: 'right' },
         {
           responsive: WIDE_ONLY, title: t('thVerdictMix'), width: 230,
           render: (_, g) => {
@@ -90,17 +94,17 @@ export function IncidentGroupTable({ groups, loading, emptyText, actable, onReso
             )
           },
         },
-        { responsive: WIDE_ONLY, title: t('groupFirstAt'), dataIndex: 'firstAt', width: 100, render: v => <Ago iso={v} /> },
-        { responsive: WIDE_ONLY, title: t('groupLastAt'), dataIndex: 'lastAt', width: 100, render: v => <Ago iso={v} /> },
+        { responsive: WIDE_ONLY, title: t('groupFirstAt'), dataIndex: 'firstAt', width: 110, render: v => <Ago iso={v} /> },
+        { responsive: WIDE_ONLY, title: t('groupLastAt'), dataIndex: 'lastAt', width: 110, render: v => <Ago iso={v} /> },
         ...(anyActable ? [{
-          title: '', width: 170,
+          title: '', width: wideTable ? 170 : 96,
           render: (_: unknown, g: IncidentGroup) => {
             const rows = g.incidents.filter(actable)
             if (!rows.length) return null
             const tooMany = rows.length > BATCH_RESOLVE_MAX
             return (
               <Tooltip title={tooMany ? t('batchTooMany', { n: BATCH_RESOLVE_MAX }) : undefined}>
-                <Space size={0} className="row-actions" style={{ whiteSpace: 'nowrap' }}>
+                <Space size={0} orientation={wideTable ? 'horizontal' : 'vertical'} className="row-actions" style={{ whiteSpace: 'nowrap' }}>
                   <Button type="link" size="small" disabled={tooMany} onClick={() => onResolve('closed', rows)}>{t('markTrue')}</Button>
                   <Button type="link" size="small" danger disabled={tooMany} onClick={() => onResolve('false_positive', rows)}>{t('markFpShort')}</Button>
                 </Space>
