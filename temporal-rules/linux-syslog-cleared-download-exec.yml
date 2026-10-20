@@ -1,0 +1,9 @@
+id: temporal:linux-syslog-cleared-download-exec
+title: 同主机清空系统日志后下载执行
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - 3fcc9b35-39e4-44c0-a2ad-9e82b6902b31
+  - 223020a8-492c-4258-9bc3-230e5777aa24
+level: high

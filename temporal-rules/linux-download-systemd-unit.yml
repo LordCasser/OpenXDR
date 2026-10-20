@@ -1,0 +1,9 @@
+id: temporal:linux-download-systemd-unit
+title: 同主机下载执行后新建或修改 systemd 服务单元
+author: OpenXDR
+kind: sequence
+within: 10m
+rules:
+  - 223020a8-492c-4258-9bc3-230e5777aa24
+  - 3f7a9c2e-6b1d-4e8a-9c3f-2d5b7a9e1c04
+level: high

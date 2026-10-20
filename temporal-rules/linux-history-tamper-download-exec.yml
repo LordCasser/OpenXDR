@@ -1,0 +1,9 @@
+id: temporal:linux-history-tamper-download-exec
+title: 同主机清除或禁用命令历史后下载执行
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - 59283b6a-5e10-4c13-9834-e6cb64299287
+  - 223020a8-492c-4258-9bc3-230e5777aa24
+level: high

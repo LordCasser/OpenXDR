@@ -1,0 +1,9 @@
+id: temporal:linux-shadow-read-upload
+title: 同主机读取影子口令库后用 curl 上传数据
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - ed025ae8-3316-43da-9a3c-1a8f2d885972
+  - 00b90cc1-17ec-402c-96ad-3a8117d7a582
+level: high

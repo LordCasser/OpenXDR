@@ -90,11 +90,16 @@ func TestTemporalRuleSnapshotHistory(t *testing.T) {
 		return out.Items, out.Truncated
 	}
 
+	// 仓库时序规则条数随规则库增减，按当前快照计
+	archived, err := temporal.ViewArchive(snapshot.Archive(), snapshot.Revision())
+	if err != nil {
+		t.Fatal(err)
+	}
 	items, truncated := list(analyst, "")
 	if len(items) != 3 || truncated || items[0].Revision != snapshot.Revision() || items[1].Revision != "tampered" || items[2].Revision != "old-empty" {
 		t.Fatalf("应按首次使用时间倒序列出版本: %+v", items)
 	}
-	if items[0].Format != 1 || items[0].BaseRuleCount == 0 || len(items[0].TemporalRules) != 3 || items[2].BaseRuleCount != 0 || len(items[2].TemporalRules) != 0 {
+	if items[0].Format != 1 || items[0].BaseRuleCount == 0 || len(items[0].TemporalRules) != len(archived) || items[2].BaseRuleCount != 0 || len(items[2].TemporalRules) != 0 {
 		t.Fatalf("版本元数据错误: %+v", items)
 	}
 	if items, truncated := list(analyst, "?limit=1"); len(items) != 1 || !truncated {
@@ -124,7 +129,7 @@ func TestTemporalRuleSnapshotHistory(t *testing.T) {
 	if got.ID != rule || got.GroupBy != "account" || got.Threshold != 5 || got.MinAssets != 2 || !strings.Contains(got.Source, "group_by: account") || !strings.Contains(got.Base[got.References[0]], "status_id: 2") {
 		t.Fatalf("规则原文或引用的基础规则缺失: %+v", got)
 	}
-	if err := json.Unmarshal(get(admin, "/api/temporal-rule-snapshots/"+snapshot.Revision(), 200), &detail); err != nil || len(detail.Rules) != 3 {
+	if err := json.Unmarshal(get(admin, "/api/temporal-rule-snapshots/"+snapshot.Revision(), 200), &detail); err != nil || len(detail.Rules) != len(archived) {
 		t.Fatalf("全量时序规则错误: %v", err)
 	}
 	get(analyst, "/api/temporal-rule-snapshots/"+snapshot.Revision()+"?rule=missing", 404)

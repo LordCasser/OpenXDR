@@ -97,7 +97,12 @@ func TestViewArchiveMatchesLoadedRevision(t *testing.T) {
 		t.Fatalf("归档时序规则数 %d", len(rules))
 	}
 	for i, r := range rules {
-		if r.ID != snapshot.rules[i].id || r.Source == "" || len(r.Base) != len(snapshot.rules[i].references) {
+		// 序列允许同一基础规则出现在多个步骤，原文按 ID 只存一份
+		distinct := map[string]bool{}
+		for _, ref := range snapshot.rules[i].references {
+			distinct[ref] = true
+		}
+		if r.ID != snapshot.rules[i].id || r.Source == "" || len(r.Base) != len(distinct) {
 			t.Fatalf("归档规则元数据或引用原文不完整: %+v", r)
 		}
 		for _, ref := range r.References {

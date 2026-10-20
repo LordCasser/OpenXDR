@@ -1,0 +1,8 @@
+id: temporal:windows-recon-burst
+title: Windows 主机短时侦察命令集中出现
+author: OpenXDR
+kind: event_count
+within: 2m
+rules: [7b9e2a44-5f10-4c8d-9a3b-8e1f0c6d2a91]
+threshold: 6
+level: medium

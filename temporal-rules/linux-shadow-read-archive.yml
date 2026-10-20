@@ -1,0 +1,9 @@
+id: temporal:linux-shadow-read-archive
+title: 同主机读取影子口令库后打包敏感目录
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - ed025ae8-3316-43da-9a3c-1a8f2d885972
+  - be49049f-6ff2-4620-8ce1-6b6f833fe943
+level: high

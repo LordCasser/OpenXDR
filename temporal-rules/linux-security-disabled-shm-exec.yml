@@ -1,0 +1,9 @@
+id: temporal:linux-security-disabled-shm-exec
+title: 同主机关闭防火墙或安全防护后从 /dev/shm 执行程序
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - e3a8a052-111f-4606-9aee-f28ebeb76776
+  - 5cd16c8f-44a6-4654-81e7-a84d6db507d4
+level: high

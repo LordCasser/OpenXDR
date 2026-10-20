@@ -1,0 +1,9 @@
+id: temporal:windows-lolbin-download-scheduled-task
+title: Windows 主机 LOLBin 下载后新建或修改计划任务
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - 3d95e779-e05e-4d93-9e63-a98932f3762c
+  - 9a3f7c1e-4d8b-4e2c-a6f9-1c5d8b3e6a47
+level: high

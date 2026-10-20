@@ -1,0 +1,9 @@
+id: temporal:linux-ssh-key-read-upload
+title: 同主机读取 SSH 私钥后用 curl 上传数据
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - 9ec89191-b328-4ada-85d0-e595903b990c
+  - 00b90cc1-17ec-402c-96ad-3a8117d7a582
+level: high

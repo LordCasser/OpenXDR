@@ -1,0 +1,9 @@
+id: temporal:linux-ssh-key-read-suspicious-outbound
+title: 同主机读取 SSH 私钥后外联高危端口
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - 9ec89191-b328-4ada-85d0-e595903b990c
+  - 3c5e8a17-4b62-4d91-8f0a-6e2d7b9c1a34
+level: high

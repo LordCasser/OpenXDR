@@ -1,0 +1,9 @@
+id: temporal:windows-defender-exclusion-lolbin-download
+title: Windows 主机添加 Defender 排除项后 LOLBin 下载
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - e6b01661-1679-454d-acb4-35790bb9b724
+  - 3d95e779-e05e-4d93-9e63-a98932f3762c
+level: high

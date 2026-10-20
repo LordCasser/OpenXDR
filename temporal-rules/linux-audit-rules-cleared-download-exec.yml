@@ -1,0 +1,9 @@
+id: temporal:linux-audit-rules-cleared-download-exec
+title: 同主机清空审计规则后下载执行
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - bed26dea-4525-47f4-b24a-76e30e44ffb0
+  - 223020a8-492c-4258-9bc3-230e5777aa24
+level: high

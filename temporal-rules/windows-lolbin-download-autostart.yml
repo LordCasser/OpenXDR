@@ -1,0 +1,9 @@
+id: temporal:windows-lolbin-download-autostart
+title: Windows 主机 LOLBin 下载后写入自启动注册表
+author: OpenXDR
+kind: sequence
+within: 15m
+rules:
+  - 3d95e779-e05e-4d93-9e63-a98932f3762c
+  - 7b3f2c8a-1d5e-4a96-b0c4-9e8d6f2a5c31
+level: high

@@ -1,0 +1,9 @@
+id: temporal:linux-download-shell-rc
+title: 同主机下载执行后改动 shell 启动文件
+author: OpenXDR
+kind: sequence
+within: 10m
+rules:
+  - 223020a8-492c-4258-9bc3-230e5777aa24
+  - 43320393-2d94-4db9-8211-7c31ba7f2ee7
+level: high
