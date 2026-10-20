@@ -12,6 +12,7 @@ func TestString(t *testing.T) {
 		`tool --token "a b c" --verbose`:                                                        "tool --token *** --verbose",
 		"OPENAI=sk-proj1234567890abcdefghij run":                                                "OPENAI=sk-*** run",
 		"ANTHROPIC=sk-ant-api03-abcdefghijklmnopqrstuv":                                         "ANTHROPIC=sk-ant-***",
+		"sh -s -- https://xdr.example oxe_Q0FFRUJBQkVfMTIzNDU2Nzg5MGFiY2RlZg eth0":              "sh -s -- https://xdr.example oxe_*** eth0",
 	}
 	for in, want := range cases {
 		if got := String(in); got != want {

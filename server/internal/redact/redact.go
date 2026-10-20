@@ -21,6 +21,8 @@ var rules = []struct {
 	{regexp.MustCompile(`\b(gh[pousr]_|github_pat_|glpat-|xox[abprs]-)[A-Za-z0-9_-]{16,}`), "${1}" + Mask},
 	{regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`), "AKIA" + Mask},
 	{regexp.MustCompile(`\bsk-(ant-)?[A-Za-z0-9_-]{20,}`), "sk-${1}" + Mask},
+	// 本平台的接入令牌：一行安装把它当参数传，会原样进安装进程的命令行事件
+	{regexp.MustCompile(`\boxe_[A-Za-z0-9_-]{24,}`), "oxe_" + Mask},
 	// 长选项传口令：--password=x、--token x
 	{regexp.MustCompile(`(?i)(--(?:password|passwd|token|secret|api-?key|access-key)[= ])("[^"]*"|'[^']*'|\S+)`), "${1}" + Mask},
 }
