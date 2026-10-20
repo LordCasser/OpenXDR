@@ -23,7 +23,10 @@ CREATE INDEX IF NOT EXISTS identity_observations_asset ON identity_observations(
 	if err := ensureLocalAccountsSchema(ctx, db); err != nil {
 		return err
 	}
-	return directory.EnsureSchema(ctx, db)
+	if err := directory.EnsureSchema(ctx, db); err != nil {
+		return err
+	}
+	return ensureGraphSchema(ctx, db)
 }
 
 // ObserveWindows 在事件首次插入的事务内记录来源观察；解析不支持的来源不造关系，

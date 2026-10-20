@@ -47,8 +47,20 @@ func New(t *testing.T) (context.Context, *ent.Client) {
 	if err := temporal.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("时序处理状态初始化失败: %v", err)
 	}
+	truncateRaw(ctx, t, db)
 	truncate(ctx, t, client)
 	return ctx, client
+}
+
+// truncateRaw 清空不归 ent 管的身份图表（由 identity.EnsureSchema 建，表可能还不存在）。
+// 游标表也要清，否则上一个测试的增量游标会让新数据被跳过。
+func truncateRaw(ctx context.Context, t *testing.T, db *sql.DB) {
+	t.Helper()
+	for _, table := range []string{"identity_login_matches", "identity_candidate_rejections", "identity_links", "identities", "identity_accounts", "identity_graph_cursors"} {
+		if _, err := db.ExecContext(ctx, `DO $$ BEGIN IF to_regclass('`+table+`') IS NOT NULL THEN DELETE FROM `+table+`; END IF; END $$`); err != nil {
+			t.Fatalf("清空表 %s 失败: %v", table, err)
+		}
+	}
 }
 
 // truncate 按外键依赖顺序清空全部表，保证每个测试从干净状态开始。

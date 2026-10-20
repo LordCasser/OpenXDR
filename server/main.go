@@ -39,6 +39,7 @@ import (
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/grpcsvc"
 	"openxdr/server/internal/hostimport"
+	"openxdr/server/internal/identity"
 	"openxdr/server/internal/identity/directory"
 	"openxdr/server/internal/ingest"
 	"openxdr/server/internal/intel"
@@ -180,7 +181,7 @@ func migrateSchema(ctx context.Context, db *sql.DB, client *ent.Client) error {
 	return ingest.EnsureSchema(ctx, db)
 }
 
-// startDirectorySync 目录来源登记、单活同步与运行记录清理。
+// startDirectorySync 目录来源登记、单活同步、运行记录清理与身份图增量更新。
 func startDirectorySync(ctx context.Context, db *sql.DB) {
 	directoryJobs, err := directory.LoadConfig(os.Getenv("IDENTITY_SOURCES_JSON"), os.Getenv)
 	if err != nil {
@@ -204,6 +205,8 @@ func startDirectorySync(ctx context.Context, db *sql.DB) {
 	go cluster.RunLeader(ctx, db, "identity-maintenance", func(ctx context.Context) {
 		directory.RunMaintenance(ctx, db, time.Duration(directoryRetention)*24*time.Hour)
 	})
+	// 身份图不依赖目录配置：本地账号与登录观察也要建图
+	go cluster.RunLeader(ctx, db, "identity-graph", func(ctx context.Context) { identity.RunGraph(ctx, db) })
 }
 
 // startIntel 情报库定时重载与情报订阅。
