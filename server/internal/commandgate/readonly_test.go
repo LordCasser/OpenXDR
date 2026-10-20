@@ -35,6 +35,7 @@ func TestReadOnlyAccepts(t *testing.T) {
 		`echo "today is $(date +%F)"`,
 		`smartctl --all /dev/sda 2>/dev/null | grep -iE 'BBU|battery' | head; storcli /c0 show all 2>/dev/null | grep -iA2 'BBU\|Battery' | head -12; arcconf GETCONFIG 1 AD 2>/dev/null | grep -i battery | head -5`,
 		`smartctl -H -d megaraid,0 /dev/sda; storcli64 /c0/bbu show; perccli /c0/cv show all`,
+		`megasasctl -v 2>&1 | head -40; megactl`,
 		// 进 LXC / 容器看：里面的命令按同一份清单判定，单引号脚本递归判定
 		`visudo -c 2>&1 | head -5; vtysh -c 'show bfd peers' 2>/dev/null | head -8`,
 		`pct exec 203 -- sh -c 'du -sh /var/lib/docker/containers/*/ 2>/dev/null | sort -rh | head -5; docker ps --format "{{.Names}} {{.Status}}" 2>/dev/null | head -10' 2>/dev/null`,
@@ -162,6 +163,8 @@ func TestReadOnlyRejects(t *testing.T) {
 		`storcli /c0/e8/s1 start rebuild`,
 		`storcli /c0 show all; storcli /c0 flash file=fw.rom`,
 		`arcconf SETCACHE 1 LOGICALDRIVE 0 RON`,
+		`megasasctl -T long a0d0`,
+		`megactl -vT short`,
 		`arcconf DELETE 1 LOGICALDRIVE 0`,
 		// 读密钥内容，即便遮了哈希
 		`diff /etc/shadow- /etc/shadow 2>/dev/null | sed 's/:.*\$[^:]*/:***HASH***/' | head -10`,

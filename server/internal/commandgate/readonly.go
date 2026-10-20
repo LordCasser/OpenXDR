@@ -383,11 +383,14 @@ var readOnlyPrograms = map[string]func(args []string) bool{
 	"storcli":     raidShow,
 	"storcli64":   raidShow,
 	"perccli":     raidShow,
-	"perccli64":   raidShow,
-	"arcconf":     arcconfGet,
-	"swapon":      swaponShow,
-	"command":     onlyFlagPrefix("-v", "-V"), // command 不带 -v 就是执行后面的命令
-	"loginctl":    subcommand(true, "list-sessions", "list-users", "list-seats", "show-session", "show-user", "session-status", "user-status"),
+	// megactl 包：只读出控制器、电池与阵列状态；-T 会让磁盘做自检，不放行
+	"megasasctl": noArgPrefix("-T"),
+	"megactl":    noArgPrefix("-T"),
+	"perccli64":  raidShow,
+	"arcconf":    arcconfGet,
+	"swapon":     swaponShow,
+	"command":    onlyFlagPrefix("-v", "-V"), // command 不带 -v 就是执行后面的命令
+	"loginctl":   subcommand(true, "list-sessions", "list-users", "list-seats", "show-session", "show-user", "session-status", "user-status"),
 }
 
 // sshdTest sshd -T / -t 只打印或校验配置；不带它们就是起一个守护进程
