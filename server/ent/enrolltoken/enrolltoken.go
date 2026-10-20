@@ -3,6 +3,7 @@
 package enrolltoken
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -18,6 +19,8 @@ const (
 	FieldTokenHash = "token_hash"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldKind holds the string denoting the kind field in the database.
+	FieldKind = "kind"
 	// FieldCreatedBy holds the string denoting the created_by field in the database.
 	FieldCreatedBy = "created_by"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -37,6 +40,7 @@ var Columns = []string{
 	FieldID,
 	FieldTokenHash,
 	FieldGroupID,
+	FieldKind,
 	FieldCreatedBy,
 	FieldCreatedAt,
 	FieldExpiresAt,
@@ -65,6 +69,32 @@ var (
 	DefaultID func() uuid.UUID
 )
 
+// Kind defines the type for the "kind" enum field.
+type Kind string
+
+// KindAgent is the default value of the Kind enum.
+const DefaultKind = KindAgent
+
+// Kind values.
+const (
+	KindAgent  Kind = "agent"
+	KindSensor Kind = "sensor"
+)
+
+func (k Kind) String() string {
+	return string(k)
+}
+
+// KindValidator is a validator for the "kind" field enum values. It is called by the builders before save.
+func KindValidator(k Kind) error {
+	switch k {
+	case KindAgent, KindSensor:
+		return nil
+	default:
+		return fmt.Errorf("enrolltoken: invalid enum value for kind field: %q", k)
+	}
+}
+
 // OrderOption defines the ordering options for the EnrollToken queries.
 type OrderOption func(*sql.Selector)
 
@@ -81,6 +111,11 @@ func ByTokenHash(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// ByKind orders the results by the kind field.
+func ByKind(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldKind, opts...).ToFunc()
 }
 
 // ByCreatedBy orders the results by the created_by field.

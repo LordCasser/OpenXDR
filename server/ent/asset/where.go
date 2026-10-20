@@ -86,6 +86,21 @@ func LastSeen(v time.Time) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldLastSeen, v))
 }
 
+// SensorVersion applies equality check predicate on the "sensor_version" field. It's identical to SensorVersionEQ.
+func SensorVersion(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSensorVersion, v))
+}
+
+// SensorSeen applies equality check predicate on the "sensor_seen" field. It's identical to SensorSeenEQ.
+func SensorSeen(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSensorSeen, v))
+}
+
+// SensorProblem applies equality check predicate on the "sensor_problem" field. It's identical to SensorProblemEQ.
+func SensorProblem(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSensorProblem, v))
+}
+
 // GroupID applies equality check predicate on the "group_id" field. It's identical to GroupIDEQ.
 func GroupID(v uuid.UUID) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldGroupID, v))
@@ -529,6 +544,216 @@ func CollectorHealthIsNil() predicate.Asset {
 // CollectorHealthNotNil applies the NotNil predicate on the "collector_health" field.
 func CollectorHealthNotNil() predicate.Asset {
 	return predicate.Asset(sql.FieldNotNull(FieldCollectorHealth))
+}
+
+// SensorVersionEQ applies the EQ predicate on the "sensor_version" field.
+func SensorVersionEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSensorVersion, v))
+}
+
+// SensorVersionNEQ applies the NEQ predicate on the "sensor_version" field.
+func SensorVersionNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldSensorVersion, v))
+}
+
+// SensorVersionIn applies the In predicate on the "sensor_version" field.
+func SensorVersionIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldSensorVersion, vs...))
+}
+
+// SensorVersionNotIn applies the NotIn predicate on the "sensor_version" field.
+func SensorVersionNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldSensorVersion, vs...))
+}
+
+// SensorVersionGT applies the GT predicate on the "sensor_version" field.
+func SensorVersionGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldSensorVersion, v))
+}
+
+// SensorVersionGTE applies the GTE predicate on the "sensor_version" field.
+func SensorVersionGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldSensorVersion, v))
+}
+
+// SensorVersionLT applies the LT predicate on the "sensor_version" field.
+func SensorVersionLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldSensorVersion, v))
+}
+
+// SensorVersionLTE applies the LTE predicate on the "sensor_version" field.
+func SensorVersionLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldSensorVersion, v))
+}
+
+// SensorVersionContains applies the Contains predicate on the "sensor_version" field.
+func SensorVersionContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldSensorVersion, v))
+}
+
+// SensorVersionHasPrefix applies the HasPrefix predicate on the "sensor_version" field.
+func SensorVersionHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldSensorVersion, v))
+}
+
+// SensorVersionHasSuffix applies the HasSuffix predicate on the "sensor_version" field.
+func SensorVersionHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldSensorVersion, v))
+}
+
+// SensorVersionIsNil applies the IsNil predicate on the "sensor_version" field.
+func SensorVersionIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSensorVersion))
+}
+
+// SensorVersionNotNil applies the NotNil predicate on the "sensor_version" field.
+func SensorVersionNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSensorVersion))
+}
+
+// SensorVersionEqualFold applies the EqualFold predicate on the "sensor_version" field.
+func SensorVersionEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldSensorVersion, v))
+}
+
+// SensorVersionContainsFold applies the ContainsFold predicate on the "sensor_version" field.
+func SensorVersionContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldSensorVersion, v))
+}
+
+// SensorSeenEQ applies the EQ predicate on the "sensor_seen" field.
+func SensorSeenEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSensorSeen, v))
+}
+
+// SensorSeenNEQ applies the NEQ predicate on the "sensor_seen" field.
+func SensorSeenNEQ(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldSensorSeen, v))
+}
+
+// SensorSeenIn applies the In predicate on the "sensor_seen" field.
+func SensorSeenIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldSensorSeen, vs...))
+}
+
+// SensorSeenNotIn applies the NotIn predicate on the "sensor_seen" field.
+func SensorSeenNotIn(vs ...time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldSensorSeen, vs...))
+}
+
+// SensorSeenGT applies the GT predicate on the "sensor_seen" field.
+func SensorSeenGT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldSensorSeen, v))
+}
+
+// SensorSeenGTE applies the GTE predicate on the "sensor_seen" field.
+func SensorSeenGTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldSensorSeen, v))
+}
+
+// SensorSeenLT applies the LT predicate on the "sensor_seen" field.
+func SensorSeenLT(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldSensorSeen, v))
+}
+
+// SensorSeenLTE applies the LTE predicate on the "sensor_seen" field.
+func SensorSeenLTE(v time.Time) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldSensorSeen, v))
+}
+
+// SensorSeenIsNil applies the IsNil predicate on the "sensor_seen" field.
+func SensorSeenIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSensorSeen))
+}
+
+// SensorSeenNotNil applies the NotNil predicate on the "sensor_seen" field.
+func SensorSeenNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSensorSeen))
+}
+
+// SensorHealthIsNil applies the IsNil predicate on the "sensor_health" field.
+func SensorHealthIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSensorHealth))
+}
+
+// SensorHealthNotNil applies the NotNil predicate on the "sensor_health" field.
+func SensorHealthNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSensorHealth))
+}
+
+// SensorProblemEQ applies the EQ predicate on the "sensor_problem" field.
+func SensorProblemEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldSensorProblem, v))
+}
+
+// SensorProblemNEQ applies the NEQ predicate on the "sensor_problem" field.
+func SensorProblemNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldSensorProblem, v))
+}
+
+// SensorProblemIn applies the In predicate on the "sensor_problem" field.
+func SensorProblemIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldSensorProblem, vs...))
+}
+
+// SensorProblemNotIn applies the NotIn predicate on the "sensor_problem" field.
+func SensorProblemNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldSensorProblem, vs...))
+}
+
+// SensorProblemGT applies the GT predicate on the "sensor_problem" field.
+func SensorProblemGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldSensorProblem, v))
+}
+
+// SensorProblemGTE applies the GTE predicate on the "sensor_problem" field.
+func SensorProblemGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldSensorProblem, v))
+}
+
+// SensorProblemLT applies the LT predicate on the "sensor_problem" field.
+func SensorProblemLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldSensorProblem, v))
+}
+
+// SensorProblemLTE applies the LTE predicate on the "sensor_problem" field.
+func SensorProblemLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldSensorProblem, v))
+}
+
+// SensorProblemContains applies the Contains predicate on the "sensor_problem" field.
+func SensorProblemContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldSensorProblem, v))
+}
+
+// SensorProblemHasPrefix applies the HasPrefix predicate on the "sensor_problem" field.
+func SensorProblemHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldSensorProblem, v))
+}
+
+// SensorProblemHasSuffix applies the HasSuffix predicate on the "sensor_problem" field.
+func SensorProblemHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldSensorProblem, v))
+}
+
+// SensorProblemIsNil applies the IsNil predicate on the "sensor_problem" field.
+func SensorProblemIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldSensorProblem))
+}
+
+// SensorProblemNotNil applies the NotNil predicate on the "sensor_problem" field.
+func SensorProblemNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldSensorProblem))
+}
+
+// SensorProblemEqualFold applies the EqualFold predicate on the "sensor_problem" field.
+func SensorProblemEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldSensorProblem, v))
+}
+
+// SensorProblemContainsFold applies the ContainsFold predicate on the "sensor_problem" field.
+func SensorProblemContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldSensorProblem, v))
 }
 
 // ConfigIsNil applies the IsNil predicate on the "config" field.

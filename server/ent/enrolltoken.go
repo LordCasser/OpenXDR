@@ -22,6 +22,8 @@ type EnrollToken struct {
 	TokenHash string `json:"-"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID uuid.UUID `json:"group_id,omitempty"`
+	// Kind holds the value of the "kind" field.
+	Kind enrolltoken.Kind `json:"kind,omitempty"`
 	// CreatedBy holds the value of the "created_by" field.
 	CreatedBy string `json:"created_by,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -44,7 +46,7 @@ func (*EnrollToken) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case enrolltoken.FieldUses:
 			values[i] = new(sql.NullInt64)
-		case enrolltoken.FieldTokenHash, enrolltoken.FieldCreatedBy:
+		case enrolltoken.FieldTokenHash, enrolltoken.FieldKind, enrolltoken.FieldCreatedBy:
 			values[i] = new(sql.NullString)
 		case enrolltoken.FieldCreatedAt, enrolltoken.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
@@ -82,6 +84,12 @@ func (_m *EnrollToken) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field group_id", values[i])
 			} else if value != nil {
 				_m.GroupID = *value
+			}
+		case enrolltoken.FieldKind:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field kind", values[i])
+			} else if value.Valid {
+				_m.Kind = enrolltoken.Kind(value.String)
 			}
 		case enrolltoken.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -153,6 +161,9 @@ func (_m *EnrollToken) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("group_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.GroupID))
+	builder.WriteString(", ")
+	builder.WriteString("kind=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Kind))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
 	builder.WriteString(_m.CreatedBy)

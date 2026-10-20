@@ -36,44 +36,79 @@ type collectorHealth struct {
 	Capabilities    map[string]capability `json:"capabilities"`
 }
 
-func parseHealth(raw string, now time.Time) (collectorHealth, error) {
-	var h collectorHealth
+// safeInteger 前端用 JSON number 读计数，超过 2^53 就失真
+const safeInteger = 1<<53 - 1
+
+// decodeHealth 严格解析状态快照：大小有界、不认识的字段直接拒绝、只能有一个 JSON 值。
+func decodeHealth(raw string, v any) error {
 	if len(raw) > 16*1024 {
-		return h, status.Error(codes.InvalidArgument, "采集状态超过大小上限")
+		return status.Error(codes.InvalidArgument, "采集状态超过大小上限")
 	}
 	decoder := json.NewDecoder(bytes.NewBufferString(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&h) != nil || decoder.Decode(new(any)) != io.EOF {
-		return h, status.Error(codes.InvalidArgument, "采集状态格式无效")
+	if decoder.Decode(v) != nil || decoder.Decode(new(any)) != io.EOF {
+		return status.Error(codes.InvalidArgument, "采集状态格式无效")
 	}
-	_, err := uuid.Parse(h.BootID)
-	const safeInteger = 1<<53 - 1
-	if err != nil || h.Sequence == 0 || h.Sequence > safeInteger || h.QueueBytes > safeInteger || h.QueueLimitBytes > safeInteger || h.DroppedEvents > safeInteger || h.QueueBatches > 8192 || len(h.Capabilities) > 16 {
+	return nil
+}
+
+// checkSnapshot agent 与 sensor 共用的快照头：启动标识、序号、采样时刻与组件状态。
+func checkSnapshot(bootID string, sequence uint64, reportedMs int64, caps map[string]capability, known func(string) bool, now time.Time) error {
+	if _, err := uuid.Parse(bootID); err != nil || sequence == 0 || sequence > safeInteger || len(caps) > 16 {
+		return status.Error(codes.InvalidArgument, "采集状态字段越界")
+	}
+	reported := time.UnixMilli(reportedMs)
+	if reported.Before(now.Add(-5*time.Minute)) || reported.After(now.Add(5*time.Minute)) {
+		return status.Error(codes.InvalidArgument, "状态时间与服务端相差超过 5 分钟，请校准时钟")
+	}
+	for name, cap := range caps {
+		if !known(name) {
+			return status.Error(codes.InvalidArgument, "未知采集组件")
+		}
+		switch cap.State {
+		case "active", "degraded", "unavailable", "disabled", "unknown":
+		default:
+			return status.Error(codes.InvalidArgument, "未知采集状态")
+		}
+		if len(cap.Path) > 64 {
+			return status.Error(codes.InvalidArgument, "采集路径过长")
+		}
+	}
+	return nil
+}
+
+func parseHealth(raw string, now time.Time) (collectorHealth, error) {
+	var h collectorHealth
+	if err := decodeHealth(raw, &h); err != nil {
+		return h, err
+	}
+	if h.QueueBytes > safeInteger || h.QueueLimitBytes > safeInteger || h.DroppedEvents > safeInteger || h.QueueBatches > 8192 {
 		return h, status.Error(codes.InvalidArgument, "采集状态字段越界")
 	}
 	if r := h.Receipts; r != nil && (r.Pending > 256 || r.Incomplete > 256 || r.Pending+r.Incomplete > 256) {
 		return h, status.Error(codes.InvalidArgument, "回执缓存数量越界")
 	}
-	reported := time.UnixMilli(h.ReportedUnixMs)
-	if reported.Before(now.Add(-5*time.Minute)) || reported.After(now.Add(5*time.Minute)) {
-		return h, status.Error(codes.InvalidArgument, "状态时间与服务端相差超过 5 分钟，请校准时钟")
-	}
-	for name, cap := range h.Capabilities {
+	known := func(name string) bool {
 		switch name {
 		case "process", "files", "network", "dns", "auth", "inventory", "local-accounts", "persist", "kmod", "powershell", "software":
-		default:
-			return h, status.Error(codes.InvalidArgument, "未知采集组件")
+			return true
 		}
-		switch cap.State {
-		case "active", "degraded", "unavailable", "disabled", "unknown":
-		default:
-			return h, status.Error(codes.InvalidArgument, "未知采集状态")
-		}
-		if len(cap.Path) > 64 {
-			return h, status.Error(codes.InvalidArgument, "采集路径过长")
-		}
+		return false
 	}
-	return h, nil
+	return h, checkSnapshot(h.BootID, h.Sequence, h.ReportedUnixMs, h.Capabilities, known, now)
+}
+
+// newerSnapshot 只放行比库里更新的快照：同一次启动比序号；启动变化时要求采样时刻不倒退。
+// column 是常量列名，不来自请求。
+func newerSnapshot(column, bootID string, sequence uint64, reportedMs int64) func(*sql.Selector) {
+	return func(sel *sql.Selector) {
+		sel.Where(sql.P(func(b *sql.Builder) {
+			b.WriteString("(" + column + " IS NULL OR " + column + " = 'null'::jsonb OR ((" + column + "->>'bootId' = ").Arg(bootID)
+			b.WriteString(" AND (" + column + "->>'sequence')::numeric < ").Arg(sequence)
+			b.WriteString(") OR (" + column + "->>'bootId' <> ").Arg(bootID)
+			b.WriteString(" AND (" + column + "->>'reportedUnixMs')::bigint < ").Arg(reportedMs).WriteString(")))")
+		}))
+	}
 }
 
 // ReportHealth 不依赖事件总线。先验证证书归属，再原子拒绝重复或倒序状态。
@@ -98,15 +133,8 @@ func (s *Server) ReportHealth(ctx context.Context, req *pb.HealthRequest) (*pb.H
 	if err != nil {
 		return nil, status.Error(codes.Internal, "状态编码失败")
 	}
-	// 同一次启动使用序号；启动变化时还要求采样时刻不倒退。
-	n, err := s.DB.Asset.Update().Where(asset.AgentIDEQ(id), func(sel *sql.Selector) {
-		sel.Where(sql.P(func(b *sql.Builder) {
-			b.WriteString("(collector_health IS NULL OR collector_health = 'null'::jsonb OR ((collector_health->>'bootId' = ").Arg(h.BootID)
-			b.WriteString(" AND (collector_health->>'sequence')::numeric < ").Arg(h.Sequence)
-			b.WriteString(") OR (collector_health->>'bootId' <> ").Arg(h.BootID)
-			b.WriteString(" AND (collector_health->>'reportedUnixMs')::bigint < ").Arg(h.ReportedUnixMs).WriteString(")))")
-		}))
-	}).SetCollectorHealth(raw).SetLastSeen(now).Save(ctx)
+	n, err := s.DB.Asset.Update().Where(asset.AgentIDEQ(id), newerSnapshot(asset.FieldCollectorHealth, h.BootID, h.Sequence, h.ReportedUnixMs)).
+		SetCollectorHealth(raw).SetLastSeen(now).Save(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "采集状态保存失败")
 	}

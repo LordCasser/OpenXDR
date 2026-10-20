@@ -88,11 +88,6 @@ func (w *Watcher) sweepHealth(ctx context.Context, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	type change struct {
-		a     *ent.Asset
-		sig   string
-		lines []string
-	}
 	var bad, good []change
 	for _, a := range assets {
 		var h healthSnapshot
@@ -137,7 +132,22 @@ func (w *Watcher) sweepHealth(ctx context.Context, now time.Time) error {
 			bad = append(bad, change{a, sig, lines})
 		}
 	}
-	// 先通知后落标记：推送失败下轮重试
+	return w.notifyChanges(ctx, bad, good, func(a *ent.Asset, sig string) error {
+		if sig == "" {
+			return a.Update().ClearHealthProblem().Exec(ctx)
+		}
+		return a.Update().SetHealthProblem(sig).Exec(ctx)
+	})
+}
+
+type change struct {
+	a     *ent.Asset
+	sig   string
+	lines []string
+}
+
+// notifyChanges 推送问题集合的变化，推送成功后才落标记：推送失败下轮重试。
+func (w *Watcher) notifyChanges(ctx context.Context, bad, good []change, mark func(*ent.Asset, string) error) error {
 	if len(bad) > 0 {
 		lines := make([]string, len(bad))
 		for i, c := range bad {
@@ -148,7 +158,7 @@ func (w *Watcher) sweepHealth(ctx context.Context, now time.Time) error {
 			return err
 		}
 		for _, c := range bad {
-			if err := c.a.Update().SetHealthProblem(c.sig).Exec(ctx); err != nil {
+			if err := mark(c.a, c.sig); err != nil {
 				return err
 			}
 		}
@@ -163,11 +173,83 @@ func (w *Watcher) sweepHealth(ctx context.Context, now time.Time) error {
 			return err
 		}
 		for _, c := range good {
-			if err := c.a.Update().ClearHealthProblem().Exec(ctx); err != nil {
+			if err := mark(c.a, ""); err != nil {
 				return err
 			}
 		}
 		slog.Info("主机采集恢复", "count", len(good))
 	}
 	return nil
+}
+
+// sensorSnapshot 探针抓包状态里通知要用的部分。
+type sensorSnapshot struct {
+	ReceivedAt   time.Time `json:"receivedAt"`
+	Workers      int       `json:"workers"`
+	WorkersAlive int       `json:"workersAlive"`
+	Capabilities map[string]struct {
+		Path  string `json:"path"`
+		State string `json:"state"`
+	} `json:"capabilities"`
+}
+
+// sensorProblems 探针没有指令通道心跳，状态快照停更就是失联；抓包降级（丢包、线程退出）与不可用另记。
+// 丢包是否算降级由探针按一小时窗口自己判定，这里不再看计数，免得两头口径不一。
+func sensorProblems(raw []byte, now time.Time) []problem {
+	var h sensorSnapshot
+	if json.Unmarshal(raw, &h) != nil {
+		return nil
+	}
+	if now.Sub(h.ReceivedAt) > healthStale {
+		return []problem{{"sensor:silent", "流量探针失联（最后上报 " + h.ReceivedAt.Local().Format("01-02 15:04") + "）"}}
+	}
+	c := h.Capabilities["capture"]
+	where := ""
+	if c.Path != "" {
+		where = "（" + c.Path + "）"
+	}
+	switch {
+	case c.State == "unavailable":
+		return []problem{{"sensor:capture:unavailable", "流量抓包不可用" + where}}
+	case c.State == "degraded" && h.WorkersAlive < h.Workers:
+		return []problem{{"sensor:capture:degraded", fmt.Sprintf("流量抓包降级%s：%d/%d 个抓包线程在运行", where, h.WorkersAlive, h.Workers)}}
+	case c.State == "degraded":
+		return []problem{{"sensor:capture:degraded", "流量抓包降级" + where + "：近一小时丢包超过 0.1%，会话会缺失"}}
+	}
+	return nil
+}
+
+// sweepSensorHealth 探针状态与 agent 采集状态走同一条「主机采集异常」通知，签名分开记。
+func (w *Watcher) sweepSensorHealth(ctx context.Context, now time.Time) error {
+	assets, err := w.DB.Asset.Query().Where(asset.SensorHealthNotNil()).
+		Order(ent.Asc(asset.FieldHostname)).All(ctx)
+	if err != nil {
+		return err
+	}
+	var bad, good []change
+	for _, a := range assets {
+		ps := sensorProblems(a.SensorHealth, now)
+		sig, old := signature(ps), ""
+		if a.SensorProblem != nil {
+			old = *a.SensorProblem
+		}
+		if sig == old {
+			continue
+		}
+		if sig == "" {
+			good = append(good, change{a, sig, nil})
+			continue
+		}
+		lines := make([]string, len(ps))
+		for i, p := range ps {
+			lines[i] = p.text
+		}
+		bad = append(bad, change{a, sig, lines})
+	}
+	return w.notifyChanges(ctx, bad, good, func(a *ent.Asset, sig string) error {
+		if sig == "" {
+			return a.Update().ClearSensorProblem().Exec(ctx)
+		}
+		return a.Update().SetSensorProblem(sig).Exec(ctx)
+	})
 }

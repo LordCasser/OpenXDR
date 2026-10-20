@@ -172,6 +172,84 @@ func (_u *AssetUpdate) ClearCollectorHealth() *AssetUpdate {
 	return _u
 }
 
+// SetSensorVersion sets the "sensor_version" field.
+func (_u *AssetUpdate) SetSensorVersion(v string) *AssetUpdate {
+	_u.mutation.SetSensorVersion(v)
+	return _u
+}
+
+// SetNillableSensorVersion sets the "sensor_version" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableSensorVersion(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetSensorVersion(*v)
+	}
+	return _u
+}
+
+// ClearSensorVersion clears the value of the "sensor_version" field.
+func (_u *AssetUpdate) ClearSensorVersion() *AssetUpdate {
+	_u.mutation.ClearSensorVersion()
+	return _u
+}
+
+// SetSensorSeen sets the "sensor_seen" field.
+func (_u *AssetUpdate) SetSensorSeen(v time.Time) *AssetUpdate {
+	_u.mutation.SetSensorSeen(v)
+	return _u
+}
+
+// SetNillableSensorSeen sets the "sensor_seen" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableSensorSeen(v *time.Time) *AssetUpdate {
+	if v != nil {
+		_u.SetSensorSeen(*v)
+	}
+	return _u
+}
+
+// ClearSensorSeen clears the value of the "sensor_seen" field.
+func (_u *AssetUpdate) ClearSensorSeen() *AssetUpdate {
+	_u.mutation.ClearSensorSeen()
+	return _u
+}
+
+// SetSensorHealth sets the "sensor_health" field.
+func (_u *AssetUpdate) SetSensorHealth(v json.RawMessage) *AssetUpdate {
+	_u.mutation.SetSensorHealth(v)
+	return _u
+}
+
+// AppendSensorHealth appends value to the "sensor_health" field.
+func (_u *AssetUpdate) AppendSensorHealth(v json.RawMessage) *AssetUpdate {
+	_u.mutation.AppendSensorHealth(v)
+	return _u
+}
+
+// ClearSensorHealth clears the value of the "sensor_health" field.
+func (_u *AssetUpdate) ClearSensorHealth() *AssetUpdate {
+	_u.mutation.ClearSensorHealth()
+	return _u
+}
+
+// SetSensorProblem sets the "sensor_problem" field.
+func (_u *AssetUpdate) SetSensorProblem(v string) *AssetUpdate {
+	_u.mutation.SetSensorProblem(v)
+	return _u
+}
+
+// SetNillableSensorProblem sets the "sensor_problem" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableSensorProblem(v *string) *AssetUpdate {
+	if v != nil {
+		_u.SetSensorProblem(*v)
+	}
+	return _u
+}
+
+// ClearSensorProblem clears the value of the "sensor_problem" field.
+func (_u *AssetUpdate) ClearSensorProblem() *AssetUpdate {
+	_u.mutation.ClearSensorProblem()
+	return _u
+}
+
 // SetConfig sets the "config" field.
 func (_u *AssetUpdate) SetConfig(v json.RawMessage) *AssetUpdate {
 	_u.mutation.SetConfig(v)
@@ -842,6 +920,35 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.CollectorHealthCleared() {
 		_spec.ClearField(asset.FieldCollectorHealth, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.SensorVersion(); ok {
+		_spec.SetField(asset.FieldSensorVersion, field.TypeString, value)
+	}
+	if _u.mutation.SensorVersionCleared() {
+		_spec.ClearField(asset.FieldSensorVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.SensorSeen(); ok {
+		_spec.SetField(asset.FieldSensorSeen, field.TypeTime, value)
+	}
+	if _u.mutation.SensorSeenCleared() {
+		_spec.ClearField(asset.FieldSensorSeen, field.TypeTime)
+	}
+	if value, ok := _u.mutation.SensorHealth(); ok {
+		_spec.SetField(asset.FieldSensorHealth, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedSensorHealth(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldSensorHealth, value)
+		})
+	}
+	if _u.mutation.SensorHealthCleared() {
+		_spec.ClearField(asset.FieldSensorHealth, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SensorProblem(); ok {
+		_spec.SetField(asset.FieldSensorProblem, field.TypeString, value)
+	}
+	if _u.mutation.SensorProblemCleared() {
+		_spec.ClearField(asset.FieldSensorProblem, field.TypeString)
+	}
 	if value, ok := _u.mutation.Config(); ok {
 		_spec.SetField(asset.FieldConfig, field.TypeJSON, value)
 	}
@@ -1317,6 +1424,84 @@ func (_u *AssetUpdateOne) AppendCollectorHealth(v json.RawMessage) *AssetUpdateO
 // ClearCollectorHealth clears the value of the "collector_health" field.
 func (_u *AssetUpdateOne) ClearCollectorHealth() *AssetUpdateOne {
 	_u.mutation.ClearCollectorHealth()
+	return _u
+}
+
+// SetSensorVersion sets the "sensor_version" field.
+func (_u *AssetUpdateOne) SetSensorVersion(v string) *AssetUpdateOne {
+	_u.mutation.SetSensorVersion(v)
+	return _u
+}
+
+// SetNillableSensorVersion sets the "sensor_version" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableSensorVersion(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetSensorVersion(*v)
+	}
+	return _u
+}
+
+// ClearSensorVersion clears the value of the "sensor_version" field.
+func (_u *AssetUpdateOne) ClearSensorVersion() *AssetUpdateOne {
+	_u.mutation.ClearSensorVersion()
+	return _u
+}
+
+// SetSensorSeen sets the "sensor_seen" field.
+func (_u *AssetUpdateOne) SetSensorSeen(v time.Time) *AssetUpdateOne {
+	_u.mutation.SetSensorSeen(v)
+	return _u
+}
+
+// SetNillableSensorSeen sets the "sensor_seen" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableSensorSeen(v *time.Time) *AssetUpdateOne {
+	if v != nil {
+		_u.SetSensorSeen(*v)
+	}
+	return _u
+}
+
+// ClearSensorSeen clears the value of the "sensor_seen" field.
+func (_u *AssetUpdateOne) ClearSensorSeen() *AssetUpdateOne {
+	_u.mutation.ClearSensorSeen()
+	return _u
+}
+
+// SetSensorHealth sets the "sensor_health" field.
+func (_u *AssetUpdateOne) SetSensorHealth(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.SetSensorHealth(v)
+	return _u
+}
+
+// AppendSensorHealth appends value to the "sensor_health" field.
+func (_u *AssetUpdateOne) AppendSensorHealth(v json.RawMessage) *AssetUpdateOne {
+	_u.mutation.AppendSensorHealth(v)
+	return _u
+}
+
+// ClearSensorHealth clears the value of the "sensor_health" field.
+func (_u *AssetUpdateOne) ClearSensorHealth() *AssetUpdateOne {
+	_u.mutation.ClearSensorHealth()
+	return _u
+}
+
+// SetSensorProblem sets the "sensor_problem" field.
+func (_u *AssetUpdateOne) SetSensorProblem(v string) *AssetUpdateOne {
+	_u.mutation.SetSensorProblem(v)
+	return _u
+}
+
+// SetNillableSensorProblem sets the "sensor_problem" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableSensorProblem(v *string) *AssetUpdateOne {
+	if v != nil {
+		_u.SetSensorProblem(*v)
+	}
+	return _u
+}
+
+// ClearSensorProblem clears the value of the "sensor_problem" field.
+func (_u *AssetUpdateOne) ClearSensorProblem() *AssetUpdateOne {
+	_u.mutation.ClearSensorProblem()
 	return _u
 }
 
@@ -2019,6 +2204,35 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if _u.mutation.CollectorHealthCleared() {
 		_spec.ClearField(asset.FieldCollectorHealth, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SensorVersion(); ok {
+		_spec.SetField(asset.FieldSensorVersion, field.TypeString, value)
+	}
+	if _u.mutation.SensorVersionCleared() {
+		_spec.ClearField(asset.FieldSensorVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.SensorSeen(); ok {
+		_spec.SetField(asset.FieldSensorSeen, field.TypeTime, value)
+	}
+	if _u.mutation.SensorSeenCleared() {
+		_spec.ClearField(asset.FieldSensorSeen, field.TypeTime)
+	}
+	if value, ok := _u.mutation.SensorHealth(); ok {
+		_spec.SetField(asset.FieldSensorHealth, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedSensorHealth(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, asset.FieldSensorHealth, value)
+		})
+	}
+	if _u.mutation.SensorHealthCleared() {
+		_spec.ClearField(asset.FieldSensorHealth, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SensorProblem(); ok {
+		_spec.SetField(asset.FieldSensorProblem, field.TypeString, value)
+	}
+	if _u.mutation.SensorProblemCleared() {
+		_spec.ClearField(asset.FieldSensorProblem, field.TypeString)
 	}
 	if value, ok := _u.mutation.Config(); ok {
 		_spec.SetField(asset.FieldConfig, field.TypeJSON, value)

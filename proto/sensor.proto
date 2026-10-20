@@ -1,5 +1,6 @@
 // OpenXDR sensor <-> server 通信契约。
-// 流量探针专属通道：会话记录批量上报。会话字段与端点事件差异大，独立于 agent.proto。
+// 流量探针专属通道：注册与升级、抓包状态、会话记录批量上报。会话字段与端点事件差异大，独立于 agent.proto。
+// 消息名带 Sensor 前缀：Go 侧两份契约生成在同一个包里，不能与 agent.proto 重名。
 syntax = "proto3";
 
 package openxdr.sensor.v1;
@@ -7,12 +8,47 @@ package openxdr.sensor.v1;
 option go_package = "openxdr/server/pb";
 
 service SensorService {
+  // 启动与重连时注册：登记探针所在主机，取回自动升级指令
+  rpc Register(SensorRegisterRequest) returns (SensorRegisterResponse);
+  // 抓包状态，独立于会话上报，与 agent 的采集状态同一口径
+  rpc ReportHealth(SensorHealthRequest) returns (SensorHealthAck);
   // 客户端流式上报会话记录，一条长连接批量推
   rpc ReportFlows(stream FlowBatch) returns (FlowAck);
+  // 下载 server 分发的 sensor 安装包，分块流式返回。走已认证的同一条通道，不另开下载地址
+  rpc DownloadSensor(SensorDownloadRequest) returns (stream SensorChunk);
+}
+
+message SensorRegisterRequest {
+  string hostname = 1;        // 探针所在主机名；绑定证书（CN sensor:<主机名>）时必须一致
+  repeated string ip_addrs = 2;
+  string version = 3;
+  string arch = 4;            // Rust std::env::consts::ARCH，如 x86_64
+  string binary_sha256 = 5;   // 当前运行的二进制哈希，空表示不支持自动升级
+}
+
+message SensorRegisterResponse {
+  // 分发目录里的版本与探针当前二进制不同时给出，探针下载、校验、自检后替换重启
+  string upgrade_sha256 = 1;
+  string upgrade_platform = 2;
+}
+
+message SensorHealthRequest {
+  string hostname = 1;
+  string health_json = 2;
+}
+message SensorHealthAck {}
+
+message SensorDownloadRequest {
+  string platform = 1;    // 取 SensorRegisterResponse.upgrade_platform
+  string sha256 = 2;      // 期望的版本；server 上已换成别的版本时拒绝
+}
+
+message SensorChunk {
+  bytes data = 1;
 }
 
 message FlowBatch {
-  string sensor_id = 1;   // 探针标识，通常是主机名
+  string sensor_id = 1;   // 探针所在主机名；绑定证书时必须与证书一致
   repeated FlowRecord flows = 2;
   // 内核丢包累计数，用于判断探针是否过载
   uint64 dropped_packets = 3;
@@ -45,6 +81,9 @@ message FlowRecord {
   bool tls_cert_self_signed = 24;    // subject DN 与 issuer DN 原始 DER 相等（启发式）
   int64 tls_cert_not_before = 25;    // 有效期起，unix 秒，无则 0
   int64 tls_cert_not_after = 26;     // 有效期止，unix 秒，无则 0
+  // 客户端发完 ClientHello 后没有发出任何应用数据（TLS 1.3 除去 Finished）就结束了会话：
+  // 只握手不发请求。只在客户端方向 record 跟得上时才置 true，跟丢了宁可不报
+  bool tls_handshake_only = 27;
 }
 
 message FlowAck {

@@ -113,6 +113,54 @@ func (_c *AssetCreate) SetCollectorHealth(v json.RawMessage) *AssetCreate {
 	return _c
 }
 
+// SetSensorVersion sets the "sensor_version" field.
+func (_c *AssetCreate) SetSensorVersion(v string) *AssetCreate {
+	_c.mutation.SetSensorVersion(v)
+	return _c
+}
+
+// SetNillableSensorVersion sets the "sensor_version" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableSensorVersion(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetSensorVersion(*v)
+	}
+	return _c
+}
+
+// SetSensorSeen sets the "sensor_seen" field.
+func (_c *AssetCreate) SetSensorSeen(v time.Time) *AssetCreate {
+	_c.mutation.SetSensorSeen(v)
+	return _c
+}
+
+// SetNillableSensorSeen sets the "sensor_seen" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableSensorSeen(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetSensorSeen(*v)
+	}
+	return _c
+}
+
+// SetSensorHealth sets the "sensor_health" field.
+func (_c *AssetCreate) SetSensorHealth(v json.RawMessage) *AssetCreate {
+	_c.mutation.SetSensorHealth(v)
+	return _c
+}
+
+// SetSensorProblem sets the "sensor_problem" field.
+func (_c *AssetCreate) SetSensorProblem(v string) *AssetCreate {
+	_c.mutation.SetSensorProblem(v)
+	return _c
+}
+
+// SetNillableSensorProblem sets the "sensor_problem" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableSensorProblem(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetSensorProblem(*v)
+	}
+	return _c
+}
+
 // SetConfig sets the "config" field.
 func (_c *AssetCreate) SetConfig(v json.RawMessage) *AssetCreate {
 	_c.mutation.SetConfig(v)
@@ -570,6 +618,22 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CollectorHealth(); ok {
 		_spec.SetField(asset.FieldCollectorHealth, field.TypeJSON, value)
 		_node.CollectorHealth = value
+	}
+	if value, ok := _c.mutation.SensorVersion(); ok {
+		_spec.SetField(asset.FieldSensorVersion, field.TypeString, value)
+		_node.SensorVersion = &value
+	}
+	if value, ok := _c.mutation.SensorSeen(); ok {
+		_spec.SetField(asset.FieldSensorSeen, field.TypeTime, value)
+		_node.SensorSeen = &value
+	}
+	if value, ok := _c.mutation.SensorHealth(); ok {
+		_spec.SetField(asset.FieldSensorHealth, field.TypeJSON, value)
+		_node.SensorHealth = value
+	}
+	if value, ok := _c.mutation.SensorProblem(); ok {
+		_spec.SetField(asset.FieldSensorProblem, field.TypeString, value)
+		_node.SensorProblem = &value
 	}
 	if value, ok := _c.mutation.Config(); ok {
 		_spec.SetField(asset.FieldConfig, field.TypeJSON, value)

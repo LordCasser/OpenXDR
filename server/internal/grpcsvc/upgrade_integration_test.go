@@ -49,7 +49,7 @@ func TestRegisterOffersUpgradeAndStreamsBinary(t *testing.T) {
 	}
 	sum := sha256.Sum256(binary)
 	want := hex.EncodeToString(sum[:])
-	srv := &Server{DB: client, Dist: &enroll.Dist{Dir: dir}, AutoUpgrade: true}
+	srv := &Server{DB: client, Dist: enroll.AgentDist(dir), AutoUpgrade: true}
 
 	register := func(sha, arch string) *pb.RegisterResponse {
 		t.Helper()

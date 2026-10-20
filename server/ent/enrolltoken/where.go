@@ -195,6 +195,26 @@ func GroupIDLTE(v uuid.UUID) predicate.EnrollToken {
 	return predicate.EnrollToken(sql.FieldLTE(FieldGroupID, v))
 }
 
+// KindEQ applies the EQ predicate on the "kind" field.
+func KindEQ(v Kind) predicate.EnrollToken {
+	return predicate.EnrollToken(sql.FieldEQ(FieldKind, v))
+}
+
+// KindNEQ applies the NEQ predicate on the "kind" field.
+func KindNEQ(v Kind) predicate.EnrollToken {
+	return predicate.EnrollToken(sql.FieldNEQ(FieldKind, v))
+}
+
+// KindIn applies the In predicate on the "kind" field.
+func KindIn(vs ...Kind) predicate.EnrollToken {
+	return predicate.EnrollToken(sql.FieldIn(FieldKind, vs...))
+}
+
+// KindNotIn applies the NotIn predicate on the "kind" field.
+func KindNotIn(vs ...Kind) predicate.EnrollToken {
+	return predicate.EnrollToken(sql.FieldNotIn(FieldKind, vs...))
+}
+
 // CreatedByEQ applies the EQ predicate on the "created_by" field.
 func CreatedByEQ(v string) predicate.EnrollToken {
 	return predicate.EnrollToken(sql.FieldEQ(FieldCreatedBy, v))

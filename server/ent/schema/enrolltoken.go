@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// EnrollToken 主机接入令牌：持有者可把主机接入指定组。有效期内可重复使用，便于批量装机。
+// EnrollToken 主机接入令牌：持有者可把主机（agent）或流量探针（sensor）接入指定组。有效期内可重复使用，便于批量装机。
 type EnrollToken struct {
 	ent.Schema
 }
@@ -20,6 +20,8 @@ func (EnrollToken) Fields() []ent.Field {
 		// 只存 SHA-256，明文只在创建时返回一次
 		field.String("token_hash").Unique().Sensitive(),
 		field.UUID("group_id", uuid.UUID{}),
+		// 用途：agent 令牌只能接入端点 agent，sensor 令牌只能接入流量探针，互不通用
+		field.Enum("kind").Values("agent", "sensor").Default("agent"),
 		field.String("created_by"),
 		field.Time("created_at").Default(time.Now),
 		field.Time("expires_at"),

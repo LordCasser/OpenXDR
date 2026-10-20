@@ -4768,6 +4768,11 @@ type AssetMutation struct {
 	last_seen              *time.Time
 	collector_health       *json.RawMessage
 	appendcollector_health json.RawMessage
+	sensor_version         *string
+	sensor_seen            *time.Time
+	sensor_health          *json.RawMessage
+	appendsensor_health    json.RawMessage
+	sensor_problem         *string
 	_config                *json.RawMessage
 	append_config          json.RawMessage
 	group_id               *uuid.UUID
@@ -5303,6 +5308,218 @@ func (m *AssetMutation) ResetCollectorHealth() {
 	m.collector_health = nil
 	m.appendcollector_health = nil
 	delete(m.clearedFields, asset.FieldCollectorHealth)
+}
+
+// SetSensorVersion sets the "sensor_version" field.
+func (m *AssetMutation) SetSensorVersion(s string) {
+	m.sensor_version = &s
+}
+
+// SensorVersion returns the value of the "sensor_version" field in the mutation.
+func (m *AssetMutation) SensorVersion() (r string, exists bool) {
+	v := m.sensor_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSensorVersion returns the old "sensor_version" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldSensorVersion(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSensorVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSensorVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSensorVersion: %w", err)
+	}
+	return oldValue.SensorVersion, nil
+}
+
+// ClearSensorVersion clears the value of the "sensor_version" field.
+func (m *AssetMutation) ClearSensorVersion() {
+	m.sensor_version = nil
+	m.clearedFields[asset.FieldSensorVersion] = struct{}{}
+}
+
+// SensorVersionCleared returns if the "sensor_version" field was cleared in this mutation.
+func (m *AssetMutation) SensorVersionCleared() bool {
+	_, ok := m.clearedFields[asset.FieldSensorVersion]
+	return ok
+}
+
+// ResetSensorVersion resets all changes to the "sensor_version" field.
+func (m *AssetMutation) ResetSensorVersion() {
+	m.sensor_version = nil
+	delete(m.clearedFields, asset.FieldSensorVersion)
+}
+
+// SetSensorSeen sets the "sensor_seen" field.
+func (m *AssetMutation) SetSensorSeen(t time.Time) {
+	m.sensor_seen = &t
+}
+
+// SensorSeen returns the value of the "sensor_seen" field in the mutation.
+func (m *AssetMutation) SensorSeen() (r time.Time, exists bool) {
+	v := m.sensor_seen
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSensorSeen returns the old "sensor_seen" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldSensorSeen(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSensorSeen is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSensorSeen requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSensorSeen: %w", err)
+	}
+	return oldValue.SensorSeen, nil
+}
+
+// ClearSensorSeen clears the value of the "sensor_seen" field.
+func (m *AssetMutation) ClearSensorSeen() {
+	m.sensor_seen = nil
+	m.clearedFields[asset.FieldSensorSeen] = struct{}{}
+}
+
+// SensorSeenCleared returns if the "sensor_seen" field was cleared in this mutation.
+func (m *AssetMutation) SensorSeenCleared() bool {
+	_, ok := m.clearedFields[asset.FieldSensorSeen]
+	return ok
+}
+
+// ResetSensorSeen resets all changes to the "sensor_seen" field.
+func (m *AssetMutation) ResetSensorSeen() {
+	m.sensor_seen = nil
+	delete(m.clearedFields, asset.FieldSensorSeen)
+}
+
+// SetSensorHealth sets the "sensor_health" field.
+func (m *AssetMutation) SetSensorHealth(jm json.RawMessage) {
+	m.sensor_health = &jm
+	m.appendsensor_health = nil
+}
+
+// SensorHealth returns the value of the "sensor_health" field in the mutation.
+func (m *AssetMutation) SensorHealth() (r json.RawMessage, exists bool) {
+	v := m.sensor_health
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSensorHealth returns the old "sensor_health" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldSensorHealth(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSensorHealth is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSensorHealth requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSensorHealth: %w", err)
+	}
+	return oldValue.SensorHealth, nil
+}
+
+// AppendSensorHealth adds jm to the "sensor_health" field.
+func (m *AssetMutation) AppendSensorHealth(jm json.RawMessage) {
+	m.appendsensor_health = append(m.appendsensor_health, jm...)
+}
+
+// AppendedSensorHealth returns the list of values that were appended to the "sensor_health" field in this mutation.
+func (m *AssetMutation) AppendedSensorHealth() (json.RawMessage, bool) {
+	if len(m.appendsensor_health) == 0 {
+		return nil, false
+	}
+	return m.appendsensor_health, true
+}
+
+// ClearSensorHealth clears the value of the "sensor_health" field.
+func (m *AssetMutation) ClearSensorHealth() {
+	m.sensor_health = nil
+	m.appendsensor_health = nil
+	m.clearedFields[asset.FieldSensorHealth] = struct{}{}
+}
+
+// SensorHealthCleared returns if the "sensor_health" field was cleared in this mutation.
+func (m *AssetMutation) SensorHealthCleared() bool {
+	_, ok := m.clearedFields[asset.FieldSensorHealth]
+	return ok
+}
+
+// ResetSensorHealth resets all changes to the "sensor_health" field.
+func (m *AssetMutation) ResetSensorHealth() {
+	m.sensor_health = nil
+	m.appendsensor_health = nil
+	delete(m.clearedFields, asset.FieldSensorHealth)
+}
+
+// SetSensorProblem sets the "sensor_problem" field.
+func (m *AssetMutation) SetSensorProblem(s string) {
+	m.sensor_problem = &s
+}
+
+// SensorProblem returns the value of the "sensor_problem" field in the mutation.
+func (m *AssetMutation) SensorProblem() (r string, exists bool) {
+	v := m.sensor_problem
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSensorProblem returns the old "sensor_problem" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldSensorProblem(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSensorProblem is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSensorProblem requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSensorProblem: %w", err)
+	}
+	return oldValue.SensorProblem, nil
+}
+
+// ClearSensorProblem clears the value of the "sensor_problem" field.
+func (m *AssetMutation) ClearSensorProblem() {
+	m.sensor_problem = nil
+	m.clearedFields[asset.FieldSensorProblem] = struct{}{}
+}
+
+// SensorProblemCleared returns if the "sensor_problem" field was cleared in this mutation.
+func (m *AssetMutation) SensorProblemCleared() bool {
+	_, ok := m.clearedFields[asset.FieldSensorProblem]
+	return ok
+}
+
+// ResetSensorProblem resets all changes to the "sensor_problem" field.
+func (m *AssetMutation) ResetSensorProblem() {
+	m.sensor_problem = nil
+	delete(m.clearedFields, asset.FieldSensorProblem)
 }
 
 // SetConfig sets the "config" field.
@@ -6831,7 +7048,7 @@ func (m *AssetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetMutation) Fields() []string {
-	fields := make([]string, 0, 32)
+	fields := make([]string, 0, 36)
 	if m.hostname != nil {
 		fields = append(fields, asset.FieldHostname)
 	}
@@ -6855,6 +7072,18 @@ func (m *AssetMutation) Fields() []string {
 	}
 	if m.collector_health != nil {
 		fields = append(fields, asset.FieldCollectorHealth)
+	}
+	if m.sensor_version != nil {
+		fields = append(fields, asset.FieldSensorVersion)
+	}
+	if m.sensor_seen != nil {
+		fields = append(fields, asset.FieldSensorSeen)
+	}
+	if m.sensor_health != nil {
+		fields = append(fields, asset.FieldSensorHealth)
+	}
+	if m.sensor_problem != nil {
+		fields = append(fields, asset.FieldSensorProblem)
 	}
 	if m._config != nil {
 		fields = append(fields, asset.FieldConfig)
@@ -6952,6 +7181,14 @@ func (m *AssetMutation) Field(name string) (ent.Value, bool) {
 		return m.LastSeen()
 	case asset.FieldCollectorHealth:
 		return m.CollectorHealth()
+	case asset.FieldSensorVersion:
+		return m.SensorVersion()
+	case asset.FieldSensorSeen:
+		return m.SensorSeen()
+	case asset.FieldSensorHealth:
+		return m.SensorHealth()
+	case asset.FieldSensorProblem:
+		return m.SensorProblem()
 	case asset.FieldConfig:
 		return m.Config()
 	case asset.FieldGroupID:
@@ -7025,6 +7262,14 @@ func (m *AssetMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldLastSeen(ctx)
 	case asset.FieldCollectorHealth:
 		return m.OldCollectorHealth(ctx)
+	case asset.FieldSensorVersion:
+		return m.OldSensorVersion(ctx)
+	case asset.FieldSensorSeen:
+		return m.OldSensorSeen(ctx)
+	case asset.FieldSensorHealth:
+		return m.OldSensorHealth(ctx)
+	case asset.FieldSensorProblem:
+		return m.OldSensorProblem(ctx)
 	case asset.FieldConfig:
 		return m.OldConfig(ctx)
 	case asset.FieldGroupID:
@@ -7137,6 +7382,34 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCollectorHealth(v)
+		return nil
+	case asset.FieldSensorVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSensorVersion(v)
+		return nil
+	case asset.FieldSensorSeen:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSensorSeen(v)
+		return nil
+	case asset.FieldSensorHealth:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSensorHealth(v)
+		return nil
+	case asset.FieldSensorProblem:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSensorProblem(v)
 		return nil
 	case asset.FieldConfig:
 		v, ok := value.(json.RawMessage)
@@ -7378,6 +7651,18 @@ func (m *AssetMutation) ClearedFields() []string {
 	if m.FieldCleared(asset.FieldCollectorHealth) {
 		fields = append(fields, asset.FieldCollectorHealth)
 	}
+	if m.FieldCleared(asset.FieldSensorVersion) {
+		fields = append(fields, asset.FieldSensorVersion)
+	}
+	if m.FieldCleared(asset.FieldSensorSeen) {
+		fields = append(fields, asset.FieldSensorSeen)
+	}
+	if m.FieldCleared(asset.FieldSensorHealth) {
+		fields = append(fields, asset.FieldSensorHealth)
+	}
+	if m.FieldCleared(asset.FieldSensorProblem) {
+		fields = append(fields, asset.FieldSensorProblem)
+	}
 	if m.FieldCleared(asset.FieldConfig) {
 		fields = append(fields, asset.FieldConfig)
 	}
@@ -7478,6 +7763,18 @@ func (m *AssetMutation) ClearField(name string) error {
 		return nil
 	case asset.FieldCollectorHealth:
 		m.ClearCollectorHealth()
+		return nil
+	case asset.FieldSensorVersion:
+		m.ClearSensorVersion()
+		return nil
+	case asset.FieldSensorSeen:
+		m.ClearSensorSeen()
+		return nil
+	case asset.FieldSensorHealth:
+		m.ClearSensorHealth()
+		return nil
+	case asset.FieldSensorProblem:
+		m.ClearSensorProblem()
 		return nil
 	case asset.FieldConfig:
 		m.ClearConfig()
@@ -7582,6 +7879,18 @@ func (m *AssetMutation) ResetField(name string) error {
 		return nil
 	case asset.FieldCollectorHealth:
 		m.ResetCollectorHealth()
+		return nil
+	case asset.FieldSensorVersion:
+		m.ResetSensorVersion()
+		return nil
+	case asset.FieldSensorSeen:
+		m.ResetSensorSeen()
+		return nil
+	case asset.FieldSensorHealth:
+		m.ResetSensorHealth()
+		return nil
+	case asset.FieldSensorProblem:
+		m.ResetSensorProblem()
 		return nil
 	case asset.FieldConfig:
 		m.ResetConfig()
@@ -14117,6 +14426,7 @@ type EnrollTokenMutation struct {
 	id            *uuid.UUID
 	token_hash    *string
 	group_id      *uuid.UUID
+	kind          *enrolltoken.Kind
 	created_by    *string
 	created_at    *time.Time
 	expires_at    *time.Time
@@ -14303,6 +14613,42 @@ func (m *EnrollTokenMutation) OldGroupID(ctx context.Context) (v uuid.UUID, err 
 // ResetGroupID resets all changes to the "group_id" field.
 func (m *EnrollTokenMutation) ResetGroupID() {
 	m.group_id = nil
+}
+
+// SetKind sets the "kind" field.
+func (m *EnrollTokenMutation) SetKind(e enrolltoken.Kind) {
+	m.kind = &e
+}
+
+// Kind returns the value of the "kind" field in the mutation.
+func (m *EnrollTokenMutation) Kind() (r enrolltoken.Kind, exists bool) {
+	v := m.kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKind returns the old "kind" field's value of the EnrollToken entity.
+// If the EnrollToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EnrollTokenMutation) OldKind(ctx context.Context) (v enrolltoken.Kind, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKind: %w", err)
+	}
+	return oldValue.Kind, nil
+}
+
+// ResetKind resets all changes to the "kind" field.
+func (m *EnrollTokenMutation) ResetKind() {
+	m.kind = nil
 }
 
 // SetCreatedBy sets the "created_by" field.
@@ -14539,12 +14885,15 @@ func (m *EnrollTokenMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EnrollTokenMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.token_hash != nil {
 		fields = append(fields, enrolltoken.FieldTokenHash)
 	}
 	if m.group_id != nil {
 		fields = append(fields, enrolltoken.FieldGroupID)
+	}
+	if m.kind != nil {
+		fields = append(fields, enrolltoken.FieldKind)
 	}
 	if m.created_by != nil {
 		fields = append(fields, enrolltoken.FieldCreatedBy)
@@ -14573,6 +14922,8 @@ func (m *EnrollTokenMutation) Field(name string) (ent.Value, bool) {
 		return m.TokenHash()
 	case enrolltoken.FieldGroupID:
 		return m.GroupID()
+	case enrolltoken.FieldKind:
+		return m.Kind()
 	case enrolltoken.FieldCreatedBy:
 		return m.CreatedBy()
 	case enrolltoken.FieldCreatedAt:
@@ -14596,6 +14947,8 @@ func (m *EnrollTokenMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldTokenHash(ctx)
 	case enrolltoken.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case enrolltoken.FieldKind:
+		return m.OldKind(ctx)
 	case enrolltoken.FieldCreatedBy:
 		return m.OldCreatedBy(ctx)
 	case enrolltoken.FieldCreatedAt:
@@ -14628,6 +14981,13 @@ func (m *EnrollTokenMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case enrolltoken.FieldKind:
+		v, ok := value.(enrolltoken.Kind)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKind(v)
 		return nil
 	case enrolltoken.FieldCreatedBy:
 		v, ok := value.(string)
@@ -14733,6 +15093,9 @@ func (m *EnrollTokenMutation) ResetField(name string) error {
 		return nil
 	case enrolltoken.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case enrolltoken.FieldKind:
+		m.ResetKind()
 		return nil
 	case enrolltoken.FieldCreatedBy:
 		m.ResetCreatedBy()

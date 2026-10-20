@@ -243,15 +243,15 @@ func init() {
 	enrolltokenFields := schema.EnrollToken{}.Fields()
 	_ = enrolltokenFields
 	// enrolltokenDescCreatedAt is the schema descriptor for created_at field.
-	enrolltokenDescCreatedAt := enrolltokenFields[4].Descriptor()
+	enrolltokenDescCreatedAt := enrolltokenFields[5].Descriptor()
 	// enrolltoken.DefaultCreatedAt holds the default value on creation for the created_at field.
 	enrolltoken.DefaultCreatedAt = enrolltokenDescCreatedAt.Default.(func() time.Time)
 	// enrolltokenDescRevoked is the schema descriptor for revoked field.
-	enrolltokenDescRevoked := enrolltokenFields[6].Descriptor()
+	enrolltokenDescRevoked := enrolltokenFields[7].Descriptor()
 	// enrolltoken.DefaultRevoked holds the default value on creation for the revoked field.
 	enrolltoken.DefaultRevoked = enrolltokenDescRevoked.Default.(bool)
 	// enrolltokenDescUses is the schema descriptor for uses field.
-	enrolltokenDescUses := enrolltokenFields[7].Descriptor()
+	enrolltokenDescUses := enrolltokenFields[8].Descriptor()
 	// enrolltoken.DefaultUses holds the default value on creation for the uses field.
 	enrolltoken.DefaultUses = enrolltokenDescUses.Default.(int)
 	// enrolltokenDescID is the schema descriptor for id field.

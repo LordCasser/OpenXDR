@@ -418,10 +418,15 @@ func listAssets(db *ent.Client) http.HandlerFunc {
 			SilentSince     *time.Time      `json:"silentSince"`
 			AgentVersion    *string         `json:"agentVersion"`
 			CollectorHealth json.RawMessage `json:"collectorHealth"`
+			// 流量探针：同机探针的版本、心跳与抓包状态，没有探针时为空
+			SensorVersion *string         `json:"sensorVersion"`
+			SensorSeen    *time.Time      `json:"sensorSeen"`
+			SensorHealth  json.RawMessage `json:"sensorHealth"`
 		}
 		out := make([]assetRow, len(assets))
 		for i, a := range assets {
-			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen, a.GroupID, a.SilentSince, a.AgentVersion, a.CollectorHealth}
+			out[i] = assetRow{a.ID, a.Hostname, a.Os, a.IPAddrs, a.AgentID, a.FirstSeen, a.LastSeen, a.GroupID, a.SilentSince, a.AgentVersion, a.CollectorHealth,
+				a.SensorVersion, a.SensorSeen, a.SensorHealth}
 		}
 		writeJSON(w, out)
 	}

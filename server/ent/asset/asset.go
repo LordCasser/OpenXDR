@@ -31,6 +31,14 @@ const (
 	FieldLastSeen = "last_seen"
 	// FieldCollectorHealth holds the string denoting the collector_health field in the database.
 	FieldCollectorHealth = "collector_health"
+	// FieldSensorVersion holds the string denoting the sensor_version field in the database.
+	FieldSensorVersion = "sensor_version"
+	// FieldSensorSeen holds the string denoting the sensor_seen field in the database.
+	FieldSensorSeen = "sensor_seen"
+	// FieldSensorHealth holds the string denoting the sensor_health field in the database.
+	FieldSensorHealth = "sensor_health"
+	// FieldSensorProblem holds the string denoting the sensor_problem field in the database.
+	FieldSensorProblem = "sensor_problem"
 	// FieldConfig holds the string denoting the config field in the database.
 	FieldConfig = "config"
 	// FieldGroupID holds the string denoting the group_id field in the database.
@@ -121,6 +129,10 @@ var Columns = []string{
 	FieldFirstSeen,
 	FieldLastSeen,
 	FieldCollectorHealth,
+	FieldSensorVersion,
+	FieldSensorSeen,
+	FieldSensorHealth,
+	FieldSensorProblem,
 	FieldConfig,
 	FieldGroupID,
 	FieldAgentVersion,
@@ -202,6 +214,21 @@ func ByFirstSeen(opts ...sql.OrderTermOption) OrderOption {
 // ByLastSeen orders the results by the last_seen field.
 func ByLastSeen(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastSeen, opts...).ToFunc()
+}
+
+// BySensorVersion orders the results by the sensor_version field.
+func BySensorVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSensorVersion, opts...).ToFunc()
+}
+
+// BySensorSeen orders the results by the sensor_seen field.
+func BySensorSeen(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSensorSeen, opts...).ToFunc()
+}
+
+// BySensorProblem orders the results by the sensor_problem field.
+func BySensorProblem(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSensorProblem, opts...).ToFunc()
 }
 
 // ByGroupID orders the results by the group_id field.

@@ -32,6 +32,14 @@ func (Asset) Fields() []ent.Field {
 		field.Time("last_seen").Default(time.Now),
 		// 最近的采集与投递状态；时间包含服务端接收时刻，不代表全部采集路径健康。
 		field.JSON("collector_health", json.RawMessage{}).Optional(),
+		// 流量探针：同一台主机可以同时跑 agent 与 sensor，版本、心跳与抓包状态分开记。
+		// 探针心跳不刷新 last_seen，否则 agent 挂了会被同机探针的心跳掩盖
+		field.String("sensor_version").Optional().Nillable(),
+		field.Time("sensor_seen").Optional().Nillable(),
+		// 最近的抓包状态，与 collector_health 同一口径（启动标识、序号、组件状态），另带网卡、后端、丢包与速率
+		field.JSON("sensor_health", json.RawMessage{}).Optional(),
+		// 探针状态通知：已通知过的问题签名（抓包降级、不可用、失联），与 health_problem 分开记，变了才再通知
+		field.String("sensor_problem").Optional().Nillable(),
 		// 采集配置，随 Register 下发给 agent。为空表示用 agent 内置默认
 		field.JSON("config", json.RawMessage{}).Optional(),
 		// 所属组。未分组的资产只有全局 admin 可见可管

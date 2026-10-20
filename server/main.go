@@ -117,7 +117,7 @@ func main() {
 	}
 	defer events.Close()
 	startSyslog(ctx, client, rules, dedupWindow, suppressions, intelStore, events)
-	grpcServer, dist := startGRPC(db, client, rules, dedupWindow, hub, suppressions, intelStore, events)
+	grpcServer, dists := startGRPC(db, client, rules, dedupWindow, hub, suppressions, intelStore, events)
 
 	if err := cluster.WithLock(ctx, db, "bootstrap", func() error { return auth.Bootstrap(ctx, client) }); err != nil {
 		slog.Error("初始化 admin 账号失败", "err", err)
@@ -133,10 +133,10 @@ func main() {
 	routes := http.NewServeMux()
 	registerSQLRoutes(routes, db)
 	registerHostRoutes(ctx, routes, db, client, rules, credentialVault, enrollSvc, conf)
-	registerSettingsRoutes(routes, db, client, credentialVault, notifySettings, webhook, aiConf, intelFeeds, enrollSvc, dist)
+	registerSettingsRoutes(routes, db, client, credentialVault, notifySettings, webhook, aiConf, intelFeeds, enrollSvc, dists)
 	registerAIRoutes(routes, client, llmFor, assetEngine)
 	routes.Handle("/", api.Handler(client, rules, hub, suppressions, intelStore, allowlist, chat))
-	mux := publicMux(auth.Middleware(client, routes), db, client, registry, enrollSvc, dist, events)
+	mux := publicMux(auth.Middleware(client, routes), db, client, registry, enrollSvc, dists, events)
 	// 经反向代理时还原客户端地址，登录退避与审计才按真人计
 	trustedProxies, err := realip.Parse(os.Getenv("TRUSTED_PROXIES"))
 	if err != nil {
@@ -441,8 +441,8 @@ func startSyslog(ctx context.Context, client *ent.Client, rules sigma.Catalog, d
 	}).Run(ctx)
 }
 
-// startGRPC 监听 agent 与 sensor 接入，返回 gRPC 服务与 agent 安装包目录。
-func startGRPC(db *sql.DB, client *ent.Client, rules sigma.Catalog, dedupWindow time.Duration, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, events eventbus.Bus) (*grpc.Server, *enroll.Dist) {
+// startGRPC 监听 agent 与 sensor 接入，返回 gRPC 服务与采集端安装包目录。
+func startGRPC(db *sql.DB, client *ent.Client, rules sigma.Catalog, dedupWindow time.Duration, hub *response.Hub, suppressions *suppress.Store, intelStore *intel.Store, events eventbus.Bus) (*grpc.Server, enroll.Dists) {
 	grpcAddr := getenv("GRPC_ADDR", ":8081")
 	lis, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
@@ -457,9 +457,11 @@ func startGRPC(db *sql.DB, client *ent.Client, rules sigma.Catalog, dedupWindow 
 	if !mtls {
 		slog.Warn("gRPC 未启用 mTLS，采集端通信为明文，仅适合本机调试")
 	}
-	grpcServer := grpc.NewServer(tlsOpts...)
-	// agent 安装包：一键接入从这里下载，在线 agent 也按这里的版本自动升级（AGENT_AUTO_UPGRADE=false 关闭）
-	dist := &enroll.Dist{Dir: os.Getenv("AGENT_DIST_DIR")}
+	// 证书用途核对在所有 RPC 之前：探针证书进不了 agent 通道，反之亦然
+	grpcServer := grpc.NewServer(append(tlsOpts, grpcsvc.Interceptors()...)...)
+	// 采集端安装包：一键接入从这里下载，在线 agent / sensor 也按这里的版本自动升级（AGENT_AUTO_UPGRADE=false 都关闭）
+	dists := enroll.NewDists(os.Getenv("AGENT_DIST_DIR"))
+	autoUpgrade := os.Getenv("AGENT_AUTO_UPGRADE") != "false"
 	pb.RegisterAgentServiceServer(grpcServer, &grpcsvc.Server{
 		DB:          client,
 		SQL:         db,
@@ -469,8 +471,8 @@ func startGRPC(db *sql.DB, client *ent.Client, rules sigma.Catalog, dedupWindow 
 		Suppress:    suppressions,
 		Intel:       intelStore,
 		Events:      events,
-		Dist:        dist,
-		AutoUpgrade: os.Getenv("AGENT_AUTO_UPGRADE") != "false",
+		Dist:        dists.Agent,
+		AutoUpgrade: autoUpgrade,
 	})
 	pb.RegisterSensorServiceServer(grpcServer, &grpcsvc.SensorServer{
 		DB:          client,
@@ -479,6 +481,8 @@ func startGRPC(db *sql.DB, client *ent.Client, rules sigma.Catalog, dedupWindow 
 		Suppress:    suppressions,
 		Intel:       intelStore,
 		Events:      events,
+		Dist:        dists.Sensor,
+		AutoUpgrade: autoUpgrade,
 	})
 	go func() {
 		slog.Info("gRPC 启动", "addr", grpcAddr)
@@ -487,7 +491,7 @@ func startGRPC(db *sql.DB, client *ent.Client, rules sigma.Catalog, dedupWindow 
 			os.Exit(1)
 		}
 	}()
-	return grpcServer, dist
+	return grpcServer, dists
 }
 
 // startQueryRoles 组查询身份：手工配置的优先，其余由平台账号自动开通（需 CREATEROLE）
@@ -632,12 +636,12 @@ func registerHostRoutes(ctx context.Context, routes *http.ServeMux, db *sql.DB, 
 }
 
 // registerSettingsRoutes 诱饵部署、系统设置、情报订阅与接入令牌接口。
-func registerSettingsRoutes(routes *http.ServeMux, db *sql.DB, client *ent.Client, credentialVault *hostimport.Vault, notifySettings *notify.Settings, webhook *notify.Webhook, aiConf *aiconf.Store, intelFeeds *intel.Feeds, enrollSvc *enroll.Service, dist *enroll.Dist) {
+func registerSettingsRoutes(routes *http.ServeMux, db *sql.DB, client *ent.Client, credentialVault *hostimport.Vault, notifySettings *notify.Settings, webhook *notify.Webhook, aiConf *aiconf.Store, intelFeeds *intel.Feeds, enrollSvc *enroll.Service, dists enroll.Dists) {
 	routes.Handle("/api/decoy-install/", api.DecoyInstalls(&hostimport.Service{DB: client, Vault: credentialVault}, api.DecoyInstallConfig{Enabled: getenv("DECOY_SSH_ENABLED", "false") == "true", PublicURL: os.Getenv("ENROLL_PUBLIC_URL"), DistDir: os.Getenv("DECOY_DIST_DIR")}))
 	routes.Handle("/api/settings/", api.Settings(client, notifySettings, webhook, aiConf, db))
 	routes.Handle("/api/intel/feeds", api.IntelFeeds(client, intelFeeds))
 	routes.Handle("/api/intel/feeds/", api.IntelFeeds(client, intelFeeds))
-	enrollTokens := api.EnrollTokens(client, enrollSvc, dist)
+	enrollTokens := api.EnrollTokens(client, enrollSvc, dists)
 	routes.Handle("/api/enroll-tokens", enrollTokens)
 	routes.Handle("/api/enroll-tokens/", enrollTokens)
 }
@@ -658,11 +662,11 @@ func registerAIRoutes(routes *http.ServeMux, client *ent.Client, llmFor func(str
 }
 
 // publicMux 外层路由：指标、健康检查与免登录的接入端点，其余交给需登录的 app。
-func publicMux(app http.Handler, db *sql.DB, client *ent.Client, registry *prometheus.Registry, enrollSvc *enroll.Service, dist *enroll.Dist, events eventbus.Bus) *http.ServeMux {
+func publicMux(app http.Handler, db *sql.DB, client *ent.Client, registry *prometheus.Registry, enrollSvc *enroll.Service, dists enroll.Dists, events eventbus.Bus) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", telemetry.Handler(registry))
 	// 接入端点免登录：安装脚本与二进制公开，注册靠令牌
-	mux.Handle("/api/enroll/", enrollSvc.Public(dist))
+	mux.Handle("/api/enroll/", enrollSvc.Public(dists))
 	mux.Handle("/api/decoy-runtime/", api.DecoyRuntime(client))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {

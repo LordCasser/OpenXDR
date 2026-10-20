@@ -77,7 +77,7 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 		ConfigJson: string(a.Config),
 	}
 	// 自动升级：分发目录里的版本与 agent 自身不同就让它换。不报哈希的老 agent 不会升级，也不会被要求
-	if platform := enroll.Platform(req.Os, req.Arch); s.AutoUpgrade && req.BinarySha256 != "" && platform != "" {
+	if platform := s.Dist.Platform(req.Os, req.Arch); s.AutoUpgrade && req.BinarySha256 != "" && platform != "" {
 		if want := s.Dist.SHA256(platform); want != "" && want != req.BinarySha256 {
 			resp.UpgradeSha256, resp.UpgradePlatform = want, platform
 			slog.Info("下发 agent 升级", "host", req.Hostname, "from", req.AgentVersion, "platform", platform)
@@ -91,10 +91,17 @@ const downloadChunk = 256 << 10
 
 // DownloadAgent 分块推送安装包。哈希不符说明分发目录刚换了版本，拒绝后 agent 下次注册拿新哈希重来。
 func (s *Server) DownloadAgent(req *pb.DownloadRequest, stream pb.AgentService_DownloadAgentServer) error {
-	if want := s.Dist.SHA256(req.Platform); want == "" || want != req.Sha256 {
+	return sendDist(s.Dist, req.Platform, req.Sha256, func(b []byte) error {
+		return stream.Send(&pb.AgentChunk{Data: b})
+	})
+}
+
+// sendDist agent 与 sensor 共用的分块下载：只发与期望哈希一致的安装包。
+func sendDist(dist *enroll.Dist, platform, sha256 string, send func([]byte) error) error {
+	if want := dist.SHA256(platform); want == "" || want != sha256 {
 		return status.Error(codes.FailedPrecondition, "分发版本已变化或不存在")
 	}
-	f, err := s.Dist.Open(req.Platform)
+	f, err := dist.Open(platform)
 	if err != nil {
 		return status.Error(codes.NotFound, "安装包不存在")
 	}
@@ -103,7 +110,7 @@ func (s *Server) DownloadAgent(req *pb.DownloadRequest, stream pb.AgentService_D
 	for {
 		n, err := f.Read(buf)
 		if n > 0 {
-			if serr := stream.Send(&pb.AgentChunk{Data: buf[:n]}); serr != nil {
+			if serr := send(buf[:n]); serr != nil {
 				return serr
 			}
 		}

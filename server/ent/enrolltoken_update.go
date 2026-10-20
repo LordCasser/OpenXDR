@@ -57,6 +57,20 @@ func (_u *EnrollTokenUpdate) SetNillableGroupID(v *uuid.UUID) *EnrollTokenUpdate
 	return _u
 }
 
+// SetKind sets the "kind" field.
+func (_u *EnrollTokenUpdate) SetKind(v enrolltoken.Kind) *EnrollTokenUpdate {
+	_u.mutation.SetKind(v)
+	return _u
+}
+
+// SetNillableKind sets the "kind" field if the given value is not nil.
+func (_u *EnrollTokenUpdate) SetNillableKind(v *enrolltoken.Kind) *EnrollTokenUpdate {
+	if v != nil {
+		_u.SetKind(*v)
+	}
+	return _u
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (_u *EnrollTokenUpdate) SetCreatedBy(v string) *EnrollTokenUpdate {
 	_u.mutation.SetCreatedBy(v)
@@ -166,7 +180,20 @@ func (_u *EnrollTokenUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *EnrollTokenUpdate) check() error {
+	if v, ok := _u.mutation.Kind(); ok {
+		if err := enrolltoken.KindValidator(v); err != nil {
+			return &ValidationError{Name: "kind", err: fmt.Errorf(`ent: validator failed for field "EnrollToken.kind": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *EnrollTokenUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(enrolltoken.Table, enrolltoken.Columns, sqlgraph.NewFieldSpec(enrolltoken.FieldID, field.TypeUUID))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -180,6 +207,9 @@ func (_u *EnrollTokenUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.GroupID(); ok {
 		_spec.SetField(enrolltoken.FieldGroupID, field.TypeUUID, value)
+	}
+	if value, ok := _u.mutation.Kind(); ok {
+		_spec.SetField(enrolltoken.FieldKind, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.CreatedBy(); ok {
 		_spec.SetField(enrolltoken.FieldCreatedBy, field.TypeString, value)
@@ -243,6 +273,20 @@ func (_u *EnrollTokenUpdateOne) SetGroupID(v uuid.UUID) *EnrollTokenUpdateOne {
 func (_u *EnrollTokenUpdateOne) SetNillableGroupID(v *uuid.UUID) *EnrollTokenUpdateOne {
 	if v != nil {
 		_u.SetGroupID(*v)
+	}
+	return _u
+}
+
+// SetKind sets the "kind" field.
+func (_u *EnrollTokenUpdateOne) SetKind(v enrolltoken.Kind) *EnrollTokenUpdateOne {
+	_u.mutation.SetKind(v)
+	return _u
+}
+
+// SetNillableKind sets the "kind" field if the given value is not nil.
+func (_u *EnrollTokenUpdateOne) SetNillableKind(v *enrolltoken.Kind) *EnrollTokenUpdateOne {
+	if v != nil {
+		_u.SetKind(*v)
 	}
 	return _u
 }
@@ -369,7 +413,20 @@ func (_u *EnrollTokenUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *EnrollTokenUpdateOne) check() error {
+	if v, ok := _u.mutation.Kind(); ok {
+		if err := enrolltoken.KindValidator(v); err != nil {
+			return &ValidationError{Name: "kind", err: fmt.Errorf(`ent: validator failed for field "EnrollToken.kind": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *EnrollTokenUpdateOne) sqlSave(ctx context.Context) (_node *EnrollToken, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(enrolltoken.Table, enrolltoken.Columns, sqlgraph.NewFieldSpec(enrolltoken.FieldID, field.TypeUUID))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -400,6 +457,9 @@ func (_u *EnrollTokenUpdateOne) sqlSave(ctx context.Context) (_node *EnrollToken
 	}
 	if value, ok := _u.mutation.GroupID(); ok {
 		_spec.SetField(enrolltoken.FieldGroupID, field.TypeUUID, value)
+	}
+	if value, ok := _u.mutation.Kind(); ok {
+		_spec.SetField(enrolltoken.FieldKind, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.CreatedBy(); ok {
 		_spec.SetField(enrolltoken.FieldCreatedBy, field.TypeString, value)

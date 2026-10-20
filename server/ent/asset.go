@@ -35,6 +35,14 @@ type Asset struct {
 	LastSeen time.Time `json:"last_seen,omitempty"`
 	// CollectorHealth holds the value of the "collector_health" field.
 	CollectorHealth json.RawMessage `json:"collector_health,omitempty"`
+	// SensorVersion holds the value of the "sensor_version" field.
+	SensorVersion *string `json:"sensor_version,omitempty"`
+	// SensorSeen holds the value of the "sensor_seen" field.
+	SensorSeen *time.Time `json:"sensor_seen,omitempty"`
+	// SensorHealth holds the value of the "sensor_health" field.
+	SensorHealth json.RawMessage `json:"sensor_health,omitempty"`
+	// SensorProblem holds the value of the "sensor_problem" field.
+	SensorProblem *string `json:"sensor_problem,omitempty"`
 	// Config holds the value of the "config" field.
 	Config json.RawMessage `json:"config,omitempty"`
 	// GroupID holds the value of the "group_id" field.
@@ -136,13 +144,13 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case asset.FieldAgentID, asset.FieldGroupID, asset.FieldZoneID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case asset.FieldIPAddrs, asset.FieldCollectorHealth, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldSoftware, asset.FieldServiceNotes, asset.FieldEgressNotes, asset.FieldRelationNotes, asset.FieldLockedFields:
+		case asset.FieldIPAddrs, asset.FieldCollectorHealth, asset.FieldSensorHealth, asset.FieldConfig, asset.FieldListening, asset.FieldCloud, asset.FieldSoftware, asset.FieldServiceNotes, asset.FieldEgressNotes, asset.FieldRelationNotes, asset.FieldLockedFields:
 			values[i] = new([]byte)
 		case asset.FieldHealthDropped, asset.FieldCriticality:
 			values[i] = new(sql.NullInt64)
-		case asset.FieldHostname, asset.FieldOs, asset.FieldOsDisplay, asset.FieldAgentVersion, asset.FieldHealthProblem, asset.FieldRole, asset.FieldSummary, asset.FieldAnnotationReason, asset.FieldAnnotatedFacts:
+		case asset.FieldHostname, asset.FieldOs, asset.FieldOsDisplay, asset.FieldSensorVersion, asset.FieldSensorProblem, asset.FieldAgentVersion, asset.FieldHealthProblem, asset.FieldRole, asset.FieldSummary, asset.FieldAnnotationReason, asset.FieldAnnotatedFacts:
 			values[i] = new(sql.NullString)
-		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSilentSince, asset.FieldHealthDroppedAt, asset.FieldInventoryAt, asset.FieldSoftwareAt, asset.FieldAnnotatedAt, asset.FieldAnnotateRequestedAt:
+		case asset.FieldFirstSeen, asset.FieldLastSeen, asset.FieldSensorSeen, asset.FieldSilentSince, asset.FieldHealthDroppedAt, asset.FieldInventoryAt, asset.FieldSoftwareAt, asset.FieldAnnotatedAt, asset.FieldAnnotateRequestedAt:
 			values[i] = new(sql.NullTime)
 		case asset.FieldID:
 			values[i] = new(uuid.UUID)
@@ -221,6 +229,35 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.CollectorHealth); err != nil {
 					return fmt.Errorf("unmarshal field collector_health: %w", err)
 				}
+			}
+		case asset.FieldSensorVersion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sensor_version", values[i])
+			} else if value.Valid {
+				_m.SensorVersion = new(string)
+				*_m.SensorVersion = value.String
+			}
+		case asset.FieldSensorSeen:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field sensor_seen", values[i])
+			} else if value.Valid {
+				_m.SensorSeen = new(time.Time)
+				*_m.SensorSeen = value.Time
+			}
+		case asset.FieldSensorHealth:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field sensor_health", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.SensorHealth); err != nil {
+					return fmt.Errorf("unmarshal field sensor_health: %w", err)
+				}
+			}
+		case asset.FieldSensorProblem:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sensor_problem", values[i])
+			} else if value.Valid {
+				_m.SensorProblem = new(string)
+				*_m.SensorProblem = value.String
 			}
 		case asset.FieldConfig:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -478,6 +515,24 @@ func (_m *Asset) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("collector_health=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CollectorHealth))
+	builder.WriteString(", ")
+	if v := _m.SensorVersion; v != nil {
+		builder.WriteString("sensor_version=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SensorSeen; v != nil {
+		builder.WriteString("sensor_seen=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("sensor_health=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SensorHealth))
+	builder.WriteString(", ")
+	if v := _m.SensorProblem; v != nil {
+		builder.WriteString("sensor_problem=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("config=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Config))

@@ -177,6 +177,10 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		if ev.AssetID != nil {
 			ownIPs = own[*ev.AssetID]
 		}
+		// sensor 会话源地址不是纳管资产时归到目的端（公网打进网关的），发起方不是这台资产，按入站记
+		if ev.Source == "sensor" && ev.AssetID != nil && !slices.Contains(ownIPs, c.src) {
+			c.inbound = true
+		}
 		if c.inbound {
 			// 入站只补发起方未纳管的那部分：发起方纳管时它自己的出站已经记过这条依赖。
 			// 只认连到宿主机自己地址上的：宿主机上容器的服务（docker 网桥、LXC）不是这台资产的服务。

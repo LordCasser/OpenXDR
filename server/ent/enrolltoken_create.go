@@ -33,6 +33,20 @@ func (_c *EnrollTokenCreate) SetGroupID(v uuid.UUID) *EnrollTokenCreate {
 	return _c
 }
 
+// SetKind sets the "kind" field.
+func (_c *EnrollTokenCreate) SetKind(v enrolltoken.Kind) *EnrollTokenCreate {
+	_c.mutation.SetKind(v)
+	return _c
+}
+
+// SetNillableKind sets the "kind" field if the given value is not nil.
+func (_c *EnrollTokenCreate) SetNillableKind(v *enrolltoken.Kind) *EnrollTokenCreate {
+	if v != nil {
+		_c.SetKind(*v)
+	}
+	return _c
+}
+
 // SetCreatedBy sets the "created_by" field.
 func (_c *EnrollTokenCreate) SetCreatedBy(v string) *EnrollTokenCreate {
 	_c.mutation.SetCreatedBy(v)
@@ -136,6 +150,10 @@ func (_c *EnrollTokenCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *EnrollTokenCreate) defaults() {
+	if _, ok := _c.mutation.Kind(); !ok {
+		v := enrolltoken.DefaultKind
+		_c.mutation.SetKind(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := enrolltoken.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -161,6 +179,14 @@ func (_c *EnrollTokenCreate) check() error {
 	}
 	if _, ok := _c.mutation.GroupID(); !ok {
 		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "EnrollToken.group_id"`)}
+	}
+	if _, ok := _c.mutation.Kind(); !ok {
+		return &ValidationError{Name: "kind", err: errors.New(`ent: missing required field "EnrollToken.kind"`)}
+	}
+	if v, ok := _c.mutation.Kind(); ok {
+		if err := enrolltoken.KindValidator(v); err != nil {
+			return &ValidationError{Name: "kind", err: fmt.Errorf(`ent: validator failed for field "EnrollToken.kind": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.CreatedBy(); !ok {
 		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "EnrollToken.created_by"`)}
@@ -219,6 +245,10 @@ func (_c *EnrollTokenCreate) createSpec() (*EnrollToken, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GroupID(); ok {
 		_spec.SetField(enrolltoken.FieldGroupID, field.TypeUUID, value)
 		_node.GroupID = value
+	}
+	if value, ok := _c.mutation.Kind(); ok {
+		_spec.SetField(enrolltoken.FieldKind, field.TypeEnum, value)
+		_node.Kind = value
 	}
 	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(enrolltoken.FieldCreatedBy, field.TypeString, value)

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"openxdr/server/pb"
 )
 
@@ -148,5 +150,39 @@ func TestConnTuple(t *testing.T) {
 	other := &pb.FlowRecord{Protocol: 0, SrcIp: "1.1.1.1", SrcPort: 1, DstIp: "2.2.2.2", DstPort: 2}
 	if got := connTuple(other); got != "udp:1.1.1.1:1>2.2.2.2:2" {
 		t.Errorf("未知协议连接元组 = %q，期望按 udp 处理", got)
+	}
+}
+
+// 只握手标注只在为真时出现，没有其它 TLS 元数据也要建 tls 对象
+func TestFlowRawHandshakeOnly(t *testing.T) {
+	m := rawToMap(t, &pb.FlowRecord{Protocol: 6, TlsHandshakeOnly: true})
+	if tls, ok := m["tls"].(map[string]any); !ok || tls["handshake_only"] != true {
+		t.Fatalf("应标注 tls.handshake_only：%v", m)
+	}
+	m = rawToMap(t, &pb.FlowRecord{Protocol: 6, TlsSni: "a.example"})
+	if _, ok := m["tls"].(map[string]any)["handshake_only"]; ok {
+		t.Fatalf("没跟上或发了请求不应写 handshake_only：%v", m)
+	}
+}
+
+// 源地址纳管归源，否则归目的，两头都不纳管不归属
+func TestFlowAsset(t *testing.T) {
+	gw, web := uuid.New(), uuid.New()
+	byIP := map[string]*uuid.UUID{"203.0.113.10": &gw, "10.0.0.5": &web}
+	osByIP := map[string]string{"203.0.113.10": "linux", "10.0.0.5": "windows"}
+	cases := []struct {
+		src, dst string
+		want     *uuid.UUID
+		os       string
+	}{
+		{"10.0.0.5", "203.0.113.10", &web, "windows"},
+		{"198.51.100.7", "203.0.113.10", &gw, "linux"},
+		{"198.51.100.7", "192.0.2.1", nil, ""},
+	}
+	for _, c := range cases {
+		id, os := flowAsset(&pb.FlowRecord{SrcIp: c.src, DstIp: c.dst}, byIP, osByIP)
+		if id != c.want || os != c.os {
+			t.Errorf("%s>%s：want %v %q got %v %q", c.src, c.dst, c.want, c.os, id, os)
+		}
 	}
 }

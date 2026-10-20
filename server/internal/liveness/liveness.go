@@ -45,6 +45,9 @@ func (w *Watcher) Run(ctx context.Context) {
 		if err := w.sweepHealth(ctx, time.Now()); err != nil {
 			slog.Error("采集健康巡视失败", "err", err)
 		}
+		if err := w.sweepSensorHealth(ctx, time.Now()); err != nil {
+			slog.Error("探针状态巡视失败", "err", err)
+		}
 		select {
 		case <-ctx.Done():
 			return

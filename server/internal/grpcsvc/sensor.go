@@ -12,10 +12,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"openxdr/server/ent"
 	"openxdr/server/ent/asset"
 	"openxdr/server/internal/dedup"
+	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/ingest"
 	"openxdr/server/internal/intel"
@@ -41,6 +44,9 @@ type SensorServer struct {
 	Suppress    *suppress.Store
 	Intel       *intel.Store
 	Events      eventbus.Bus
+	// sensor 安装包与自动升级开关，与 agent 共用 AGENT_DIST_DIR / AGENT_AUTO_UPGRADE
+	Dist        *enroll.Dist
+	AutoUpgrade bool
 }
 
 func (s *SensorServer) ReportFlows(stream pb.SensorService_ReportFlowsServer) error {
@@ -57,6 +63,9 @@ func (s *SensorServer) ReportFlows(stream pb.SensorService_ReportFlowsServer) er
 		}
 		if err != nil {
 			return err
+		}
+		if host, bound := sensorHostname(ctx); bound && host != batch.SensorId {
+			return status.Error(codes.PermissionDenied, "sensor_id 与探针证书绑定的主机不符")
 		}
 		if batch.DroppedPackets > 0 {
 			slog.Warn("探针丢包", "sensor", batch.SensorId, "dropped", batch.DroppedPackets)
@@ -85,7 +94,7 @@ func (s *SensorServer) enqueue(ctx context.Context, batch *pb.FlowBatch) error {
 			classUID = classDNSActivity
 		}
 		raw := flowRaw(f)
-		assetID := assetByIP[f.SrcIp]
+		assetID, assetOS := flowAsset(f, assetByIP, osByIP)
 		partitionKey := f.SrcIp
 		if assetID != nil {
 			partitionKey = assetID.String()
@@ -95,7 +104,7 @@ func (s *SensorServer) enqueue(ctx context.Context, batch *pb.FlowBatch) error {
 		if err := s.Events.Publish(ctx, ingest.Envelope{
 			Version: ingest.EnvelopeVersion, ID: id, PartitionKey: partitionKey,
 			Timestamp: time.Unix(0, f.StartUnixNs), ClassUID: classUID, Source: "sensor",
-			AssetID: assetID, AssetOS: osByIP[f.SrcIp], ConnTuple: connTuple(f), Raw: raw,
+			AssetID: assetID, AssetOS: assetOS, ConnTuple: connTuple(f), Raw: raw,
 		}); err != nil {
 			return fmt.Errorf("流事件入队: %w", err)
 		}
@@ -104,7 +113,7 @@ func (s *SensorServer) enqueue(ctx context.Context, batch *pb.FlowBatch) error {
 }
 
 func (s *SensorServer) ingest(ctx context.Context, batch *pb.FlowBatch, deduper *dedup.Deduper) error {
-	// 网络事件按源 IP 归属资产，让 NTA 数据和 EDR 数据落到同一实体上。
+	// 网络事件按地址归属资产，让 NTA 数据和 EDR 数据落到同一实体上。
 	// 资产数量是主机量级，每批建一次索引即可。
 	assetByIP, osByIP, err := s.assetIPIndex(ctx)
 	if err != nil {
@@ -125,7 +134,7 @@ func (s *SensorServer) ingest(ctx context.Context, batch *pb.FlowBatch, deduper 
 
 		eventID := uuid.Must(uuid.NewV7())
 		ts := time.Unix(0, f.StartUnixNs)
-		assetID := assetByIP[f.SrcIp]
+		assetID, assetOS := flowAsset(f, assetByIP, osByIP)
 		ec := s.DB.Event.Create().
 			SetID(eventID).
 			SetTs(ts).
@@ -136,7 +145,7 @@ func (s *SensorServer) ingest(ctx context.Context, batch *pb.FlowBatch, deduper 
 			SetRaw(sanitizeRawJSON(raw))
 		eventCreates = append(eventCreates, ec)
 
-		for _, h := range intel.Detections(s.Rules.Evaluate(classUID, osByIP[f.SrcIp], rawMap), s.Intel.Match(rawMap, ts)) {
+		for _, h := range intel.Detections(s.Rules.Evaluate(classUID, assetOS, rawMap), s.Intel.Match(rawMap, ts)) {
 			if s.Suppress.Suppressed(h.RuleID, assetID, rawMap, ts) {
 				continue
 			}
@@ -194,6 +203,16 @@ func (s *SensorServer) assetIPIndex(ctx context.Context) (map[string]*uuid.UUID,
 	return index, osIndex, nil
 }
 
+// flowAsset 会话归属：源地址是纳管资产就归源（出站、内网互访，与以往一致）；否则看目的地址——
+// 公网打进反代网关的会话归到网关上，组视图与研判才看得见，与 agent 记录入站连接同一口径。
+// 两头都不是纳管资产就不归属。归到目的端的事件体里源地址不是资产自己的，资产图谱据此按入站处理。
+func flowAsset(f *pb.FlowRecord, assetByIP map[string]*uuid.UUID, osByIP map[string]string) (*uuid.UUID, string) {
+	if id := assetByIP[f.SrcIp]; id != nil {
+		return id, osByIP[f.SrcIp]
+	}
+	return assetByIP[f.DstIp], osByIP[f.DstIp]
+}
+
 func connTuple(f *pb.FlowRecord) string {
 	name := "udp"
 	if f.Protocol == protoTCP {
@@ -241,7 +260,7 @@ func flowRaw(f *pb.FlowRecord) json.RawMessage {
 			body["answers"] = answers
 		}
 	}
-	if f.TlsSni != "" || f.Ja3 != "" || f.Ja3S != "" || f.TlsCertSubject != "" {
+	if f.TlsSni != "" || f.Ja3 != "" || f.Ja3S != "" || f.TlsCertSubject != "" || f.TlsHandshakeOnly {
 		tls := map[string]any{}
 		if f.TlsSni != "" {
 			tls["sni"] = f.TlsSni
@@ -251,6 +270,10 @@ func flowRaw(f *pb.FlowRecord) json.RawMessage {
 		}
 		if f.Ja3S != "" {
 			tls["ja3s_hash"] = f.Ja3S
+		}
+		if f.TlsHandshakeOnly {
+			// 只握手不发请求：扫描器、证书探测、存活检查的典型形态。只陈述事实，不单独告警
+			tls["handshake_only"] = true
 		}
 		if f.TlsCertSubject != "" {
 			// 仅 TLS ≤1.2 可见；self_signed 是 subject/issuer 相等的启发式，非签名验证

@@ -11,9 +11,12 @@ import (
 	"time"
 )
 
-// Dist AGENT_DIST_DIR 里的 agent 安装包。安装脚本从这里下载，在线 agent 也按这里的版本自动升级。
+// Dist AGENT_DIST_DIR 里的采集端安装包。agent 与 sensor 放同一个目录、按文件名区分，
+// 安装脚本从这里下载，在线的 agent / sensor 也按这里的版本自动升级。
 type Dist struct {
 	Dir string
+	// 平台到文件名，由 AgentDist / SensorDist 给定
+	Files map[string]string
 
 	mu    sync.Mutex
 	cache map[string]distEntry
@@ -25,28 +28,46 @@ type distEntry struct {
 	sha256  string
 }
 
-// files 可分发的平台与文件名。
-var files = map[string]string{
-	"linux-amd64":   "openxdr-agent-linux-amd64",
-	"linux-arm64":   "openxdr-agent-linux-arm64",
-	"windows-amd64": "openxdr-agent-windows-amd64.exe",
+// AgentDist agent 安装包。
+func AgentDist(dir string) *Dist {
+	return &Dist{Dir: dir, Files: map[string]string{
+		"linux-amd64":   "openxdr-agent-linux-amd64",
+		"linux-arm64":   "openxdr-agent-linux-arm64",
+		"windows-amd64": "openxdr-agent-windows-amd64.exe",
+	}}
 }
+
+// SensorDist sensor 安装包，只有 Linux。
+func SensorDist(dir string) *Dist {
+	return &Dist{Dir: dir, Files: map[string]string{
+		"linux-amd64": "openxdr-sensor-linux-amd64",
+		"linux-arm64": "openxdr-sensor-linux-arm64",
+	}}
+}
+
+// Dists 同一个分发目录里的两类安装包。
+type Dists struct{ Agent, Sensor *Dist }
+
+func NewDists(dir string) Dists { return Dists{AgentDist(dir), SensorDist(dir)} }
 
 // arches Rust std::env::consts::ARCH 到分发平台后缀。
 var arches = map[string]string{"x86_64": "amd64", "aarch64": "arm64"}
 
-// Platform agent 上报的 os/arch 对应的分发平台，不支持时返回空。
-func Platform(os, arch string) string {
+// Platform 采集端上报的 os/arch 对应的分发平台，不支持时返回空。
+func (d *Dist) Platform(os, arch string) string {
 	p := os + "-" + arches[arch]
-	if _, ok := files[p]; !ok {
+	if _, ok := d.path(p); !ok {
 		return ""
 	}
 	return p
 }
 
 func (d *Dist) path(platform string) (string, bool) {
-	name, ok := files[platform]
-	if !ok || d == nil || d.Dir == "" {
+	if d == nil || d.Dir == "" {
+		return "", false
+	}
+	name, ok := d.Files[platform]
+	if !ok {
 		return "", false
 	}
 	return filepath.Join(d.Dir, name), true
@@ -54,8 +75,11 @@ func (d *Dist) path(platform string) (string, bool) {
 
 // Available 实际放了安装包的平台。
 func (d *Dist) Available() []string {
+	if d == nil {
+		return nil
+	}
 	var out []string
-	for p := range files {
+	for p := range d.Files {
 		if path, ok := d.path(p); ok {
 			if st, err := os.Stat(path); err == nil && st.Mode().IsRegular() {
 				out = append(out, p)
