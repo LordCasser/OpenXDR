@@ -7,7 +7,7 @@ import { downloadAgentPdf, fetchAgentReports, markAllReportsRead, markReportRead
 import { useSession } from '../app/session'
 import { Markdown } from '../components/Markdown'
 import { EmptyHint, Refreshed } from '../components/Ago'
-import { FilterCard, Page } from '../components/Page'
+import { FilterCard, Page, WIDE_ONLY, useWideTable } from '../components/Page'
 import { fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 import { LoadError } from '../components/LoadError'
@@ -28,6 +28,8 @@ export function ReportsPage() {
   const [search, setSearch] = useState('')
   const [level, setLevel] = useState<'all' | 'action' | 'unread'>('all')
   const queryClient = useQueryClient()
+  // 窄屏只留标题（带结论）与级别：时间、来源会话与导出挪进预览抽屉，表格不再被挤成一字一行
+  const wideTable = useWideTable()
   const [downloads, setDownloads] = useState<Set<string>>(new Set())
   const [preview, setPreview] = useState<AgentReport | null>(null)
   const { data, isPending, isError, error, refetch, isFetching, dataUpdatedAt } = useQuery({
@@ -76,7 +78,7 @@ export function ReportsPage() {
         extra={<Refreshed at={dataUpdatedAt} fetching={isFetching} onRefresh={() => refetch()} />}
       >
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<AgentReport>
-          scroll={{ x: 800 }}
+          scroll={wideTable ? { x: 800 } : undefined}
           rowKey="id"
           loading={isPending}
           dataSource={rows}
@@ -94,11 +96,11 @@ export function ReportsPage() {
                 </div>
               ),
             },
-            { title: t('reportLevel'), dataIndex: 'level', width: 110, render: (v: AgentReport['level']) => <Tag color={LEVEL[v]?.color}>{t(LEVEL[v]?.key ?? 'reportLevelAttention')}</Tag> },
-            { title: t('thCreatedAt'), dataIndex: 'created_at', width: 190, render: fmtTime },
-            { title: t('sourceSession'), dataIndex: 'session_id', width: 140, render: v => <Link to={`/chat/${v}`}>{t('openSession')}</Link> },
+            { title: t('reportLevel'), dataIndex: 'level', width: 90, render: (v: AgentReport['level']) => <Tag color={LEVEL[v]?.color}>{t(LEVEL[v]?.key ?? 'reportLevelAttention')}</Tag> },
+            { responsive: WIDE_ONLY, title: t('thCreatedAt'), dataIndex: 'created_at', width: 190, render: fmtTime },
+            { responsive: WIDE_ONLY, title: t('sourceSession'), dataIndex: 'session_id', width: 140, render: v => <Link to={`/chat/${v}`}>{t('openSession')}</Link> },
             {
-              title: t('actions'), width: 200,
+              responsive: WIDE_ONLY, title: t('actions'), width: 200,
               render: (_, r) => (
                 <Space>
                   <Button size="small" icon={<ExportOutlined aria-hidden />} onClick={() => html(r)}>HTML</Button>
@@ -126,6 +128,7 @@ export function ReportsPage() {
           <Space wrap style={{ marginBottom: 12 }}>
             <Tag color={LEVEL[preview.level]?.color}>{t(LEVEL[preview.level]?.key ?? 'reportLevelAttention')}</Tag>
             <Typography.Text type="secondary">{fmtTime(preview.created_at)}</Typography.Text>
+            <Link to={`/chat/${preview.session_id}`}>{t('openSession')}</Link>
           </Space>
           {preview.summary && <Typography.Paragraph strong style={{ borderLeft: '4px solid #1677ff', padding: '6px 12px', background: 'rgba(22,119,255,0.06)' }}>{preview.summary}</Typography.Paragraph>}
           <Markdown text={preview.markdown.replace(/^\s*#\s+[^\n]*\n/, '')} />

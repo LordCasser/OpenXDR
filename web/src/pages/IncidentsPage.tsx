@@ -186,10 +186,11 @@ export function IncidentsPage() {
               { responsive: WIDE_ONLY, title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
               { responsive: WIDE_ONLY, title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
               ...(anyActable ? [{
-                responsive: WIDE_ONLY, title: '', width: 170,
+                // 三个链接按钮（AI、确认属实、误报）带内边距约 220px，给少了最后一个会被裁掉
+                responsive: WIDE_ONLY, title: '', width: 230,
                 // 单条处理不用先勾选：直接点，弹窗写结论
                 render: (_: unknown, r: IncidentSummary) => actable(r) && (
-                  <Space size={0} className="row-actions">
+                  <Space size={0} className="row-actions" style={{ whiteSpace: 'nowrap' }}>
                     {canChat(r.groupId) && <Button type="link" size="small" icon={<RobotOutlined />} onClick={() => handTo([r])}>AI</Button>}
                     <Button type="link" size="small" onClick={() => { setSelected([r.id]); setResolving('closed') }}>{t('markTrue')}</Button>
                     <Button type="link" size="small" danger onClick={() => { setSelected([r.id]); setResolving('false_positive') }}>{t('markFpShort')}</Button>

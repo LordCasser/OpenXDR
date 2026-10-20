@@ -168,7 +168,13 @@ export function EventsPage() {
                 )
               },
             },
-            { responsive: WIDE_ONLY, title: t('thUser'), dataIndex: 'username', width: 110, render: v => v || '-' },
+            {
+              responsive: WIDE_ONLY, title: t('thUser'), dataIndex: 'username', width: 110,
+              // 纯数字是宿主机上查不到用户名的 UID，多是容器的映射 UID；不按某个偏移去猜容器里是谁
+              render: (v: string | null) => v && /^\d+$/.test(v)
+                ? <Tooltip title={t('numericUserHint')}><Typography.Text type="secondary">uid {v}</Typography.Text></Tooltip>
+                : v || '-',
+            },
             {
               responsive: WIDE_ONLY, title: '', key: 'ask', width: 44,
               render: (_, r) => (
