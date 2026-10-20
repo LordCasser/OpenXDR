@@ -18,3 +18,4 @@
 
 基础规则仍会各自产生单事件告警。时序级别为 high，不自动触发任何额外处置。
 单元回放与数据库持久回放见 `validation/temporal/README.md`；尚未做生产误报率评估。
+上线前用 `cmd/backtest` 的时序模式在生产只读副本上回测命中量，见 [时序检测 · 回测](../docs/temporal-detection.md#回测)。

@@ -8,6 +8,12 @@
 // 分段后每段很短，被取消的段重试。
 //
 // 用法: DATABASE_URL=... go run ./cmd/backtest [-days 3] [-samples 3] <规则目录>
+//
+// 时序规则：设 TEMPORAL_RULES_PATH 后，<规则目录> 是配套的基础规则目录（同线上 RULES_PATH），与时序规则整批严格加载，
+// 按事件时间顺序回放基础匹配与时序求值（纯内存、只读事务），输出每条时序规则的命中数、按资产/账号分布与样例证据事件 ID。
+// 时间范围用 -from/-to（RFC3339），缺省为最近 -days 天：
+//
+//	DATABASE_URL=... TEMPORAL_RULES_PATH=../temporal-rules go run ./cmd/backtest -from 2026-10-01T00:00:00Z -to 2026-10-04T00:00:00Z ../rules
 package main
 
 import (
@@ -38,9 +44,22 @@ type stat struct {
 func main() {
 	days := flag.Int("days", 3, "回测最近几天的事件")
 	samples := flag.Int("samples", 3, "每条规则列出几个不同的样本")
+	fromFlag := flag.String("from", "", "时序回测起点（RFC3339，仅 TEMPORAL_RULES_PATH 模式）")
+	toFlag := flag.String("to", "", "时序回测终点（RFC3339，默认现在，仅 TEMPORAL_RULES_PATH 模式）")
 	flag.Parse()
 	if flag.NArg() != 1 || os.Getenv("DATABASE_URL") == "" {
 		fmt.Fprintln(os.Stderr, "用法: DATABASE_URL=... backtest [-days 3] [-samples 3] <规则目录>")
+		os.Exit(2)
+	}
+	if dir := os.Getenv("TEMPORAL_RULES_PATH"); dir != "" {
+		if err := temporalMain(flag.Arg(0), dir, *fromFlag, *toFlag, *days, *samples); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *fromFlag != "" || *toFlag != "" {
+		fmt.Fprintln(os.Stderr, "-from/-to 只用于时序回测，需同时设置 TEMPORAL_RULES_PATH")
 		os.Exit(2)
 	}
 	engine := sigma.LoadDir(flag.Arg(0))
