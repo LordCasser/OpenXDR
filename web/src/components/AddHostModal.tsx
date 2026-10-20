@@ -89,15 +89,15 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <Modal title={t('addHost')} open={open} onCancel={close} footer={null} width={720} closable={!busy} maskClosable={!busy} keyboard={!busy} destroyOnHidden>
       {window.location.protocol !== 'https:' ? (
-        <Alert type="warning" showIcon message={t('hostHTTPSRequired')} />
+        <Alert type="warning" showIcon title={t('hostHTTPSRequired')} />
       ) : status.isError ? (
         <LoadError error={status.error} onRetry={() => status.refetch()} />
       ) : status.isPending ? (
         <Spin />
       ) : status.data && !status.data.enabled && !(isAdmin && status.data.sensorEnabled) ? (
-        <Alert type="warning" showIcon message={t('addHostDisabled')} description={status.data.reason} />
+        <Alert type="warning" showIcon title={t('addHostDisabled')} description={status.data.reason} />
       ) : adminGroups.length === 0 ? (
-        <Alert type="info" showIcon message={t('addHostNoGroup')} />
+        <Alert type="info" showIcon title={t('addHostNoGroup')} />
       ) : (
         <Flex vertical gap={16}>
           {isAdmin && (
@@ -105,7 +105,7 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
               options={[{ value: 'agent', label: t('addHostKindAgent') }, { value: 'sensor', label: t('addHostKindSensor') }]} />
           )}
           {kind === 'sensor' && <Typography.Text type="secondary">{t('addSensorIntro')}</Typography.Text>}
-          {!kindEnabled && <Alert type="warning" showIcon message={t('addHostDisabled')} description={kindReason} />}
+          {!kindEnabled && <Alert type="warning" showIcon title={t('addHostDisabled')} description={kindReason} />}
           <Space wrap>
             <span>{t('addHostGroup')}</span>
             <Select aria-label={t('addHostGroup')} showSearch optionFilterProp="label" disabled={busy} style={{ width: 200 }} value={groupId} onChange={g => { setGroupId(g); setIssued(undefined) }}
@@ -127,7 +127,7 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
             <>
               <Typography.Text type="secondary">{t(iface ? 'addSensorHint' : 'addSensorHintNoIface')}</Typography.Text>
               <Command text={sensorCmd} />
-              <Alert type="success" showIcon message={t('addSensorDone')} />
+              <Alert type="success" showIcon title={t('addSensorDone')} />
             </>
           )}
           {cmds && (
@@ -137,7 +137,7 @@ export function AddHostModal({ open, onClose }: { open: boolean; onClose: () => 
                 { key: 'linux', label: t('addHostLinux'), children: <Command text={cmds.linux} /> },
                 { key: 'windows', label: t('addHostWindows'), children: <Command text={cmds.windows} /> },
               ]} />
-              <Alert type="success" showIcon message={t('addHostDone')} />
+              <Alert type="success" showIcon title={t('addHostDone')} />
             </>
           )}
           <Collapse ghost size="small" items={[{
