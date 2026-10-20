@@ -11,12 +11,12 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use uuid::Uuid;
 
-use super::{Container, EventSink, container};
+use super::{Container, EventSink, container, dnsnames};
 use crate::pb::AgentEvent;
 
 /// OCSF DNS Activity
@@ -84,35 +84,12 @@ pub fn spawn(agent_id: String, sink: EventSink, resolver: Option<Resolver>) {
     }
 }
 
-/// 应答里的地址 → 域名，出站连接事件按目的地址回填 dst_endpoint.hostname
-#[cfg_attr(not(feature = "ebpf"), allow(dead_code))]
-pub fn hostname_of(ip: IpAddr) -> Option<String> {
-    let names = answers().lock().unwrap_or_else(|e| e.into_inner());
-    names
-        .get(&ip)
-        .filter(|(_, until)| Instant::now() < *until)
-        .map(|(name, _)| name.clone())
-}
-
-fn answers() -> &'static Mutex<HashMap<IpAddr, (String, Instant)>> {
-    static ANSWERS: OnceLock<Mutex<HashMap<IpAddr, (String, Instant)>>> = OnceLock::new();
-    ANSWERS.get_or_init(Default::default)
-}
-
-/// 应答地址按 TTL 记住，最短 1 分钟（连接常在 TTL 过期后才建），最长 1 小时
+/// 应答里的地址按 TTL 记住（最短 1 分钟，连接常在 TTL 过期后才建；最长 1 小时），出站连接回填域名用
 fn remember(message: &Message) {
-    let now = Instant::now();
-    let mut names = answers().lock().unwrap_or_else(|e| e.into_inner());
-    if names.len() >= MAX_TRACKED {
-        names.retain(|_, (_, until)| now < *until);
-        if names.len() >= MAX_TRACKED {
-            names.clear();
-        }
-    }
     for answer in &message.answers {
         if let Rdata::Ip(ip) = answer.data {
             let ttl = Duration::from_secs(answer.ttl.clamp(60, 3600) as u64);
-            names.insert(ip, (message.qname.clone(), now + ttl));
+            dnsnames::remember(&message.qname, ip, ttl);
         }
     }
 }
@@ -614,24 +591,6 @@ fn read_name(msg: &[u8], start: usize) -> Option<(String, usize)> {
     None
 }
 
-fn qtype_name(t: u16) -> String {
-    match t {
-        1 => "A".into(),
-        2 => "NS".into(),
-        5 => "CNAME".into(),
-        6 => "SOA".into(),
-        12 => "PTR".into(),
-        15 => "MX".into(),
-        16 => "TXT".into(),
-        28 => "AAAA".into(),
-        33 => "SRV".into(),
-        64 => "SVCB".into(),
-        65 => "HTTPS".into(),
-        255 => "ANY".into(),
-        t => format!("TYPE{t}"),
-    }
-}
-
 /// 字段与 sensor 的 DNS 事件同一约定（query.hostname、answers[].ip），规则与情报对两路一视同仁
 /// 这条查询是谁发的：本机进程、所在容器、替哪个客户端转发
 #[derive(Default)]
@@ -657,7 +616,7 @@ fn dns_event(
     let mut raw = serde_json::json!({
         // OCSF：1 Query（没等到应答）/ 6 Traffic（一问一答）
         "activity_id": if answer.is_some() { 6 } else { 1 },
-        "query": { "hostname": query.qname, "type": qtype_name(query.qtype) },
+        "query": { "hostname": query.qname, "type": dnsnames::qtype_name(query.qtype) },
         "src_endpoint": { "ip": key.client.to_string(), "port": key.port },
         "dst_endpoint": { "ip": server.to_string(), "port": DNS_PORT },
     });
@@ -667,7 +626,8 @@ fn dns_event(
             .answers
             .iter()
             .map(|a| {
-                let mut v = serde_json::json!({ "type": qtype_name(a.rtype), "ttl": a.ttl });
+                let mut v =
+                    serde_json::json!({ "type": dnsnames::qtype_name(a.rtype), "ttl": a.ttl });
                 match &a.data {
                     Rdata::Ip(ip) => v["ip"] = ip.to_string().into(),
                     Rdata::Name(n) => v["rdata"] = n.as_str().into(),
@@ -915,10 +875,10 @@ mod tests {
     fn remembers_answer_names() {
         remember(&parse(&response()).unwrap());
         assert_eq!(
-            hostname_of("93.184.216.34".parse().unwrap()).as_deref(),
+            dnsnames::hostname_of("93.184.216.34".parse().unwrap()).as_deref(),
             Some("example.com")
         );
-        assert_eq!(hostname_of("1.1.1.1".parse().unwrap()), None);
+        assert_eq!(dnsnames::hostname_of("1.1.1.1".parse().unwrap()), None);
     }
 
     /// 过滤器跳转偏移手算，越界会被内核拒绝：每条跳转都必须落在程序内

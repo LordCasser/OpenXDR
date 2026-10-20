@@ -32,6 +32,13 @@ mod container;
 #[cfg(target_os = "linux")]
 mod dnswatch;
 
+// DNS 应答里见过的地址 → 域名，出站连接回填 dst_endpoint.hostname；Linux 抓包与 Windows DNS-Client 共用
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod dnsnames;
+
+#[cfg(target_os = "windows")]
+mod dnswatch_win;
+
 // 资产清单（监听端口 + 云环境 + 系统显示名）：共用部分与云探测跨平台，监听表按平台取
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod cloud;
@@ -57,7 +64,7 @@ pub use config::Config;
 pub use registry::{Container, ProcessRegistry};
 
 // eBPF 采集是可选特性；关掉它 Linux 走 netlink，构建不需要 nightly。
-// 网络采集（TCP 出站）：Linux 只在 eBPF 模式下提供，Windows 走 ETW Kernel-Network；
+// 网络采集：Linux 只在 eBPF 模式下提供，Windows 走 ETW Kernel-Network；
 // netwatch 是两路共用的用户态组装（采样去重 + 归一化），不含平台代码
 #[cfg(all(target_os = "linux", feature = "ebpf"))]
 mod linux;
@@ -199,12 +206,13 @@ pub fn spawn(
         }
     }
 
-    // 网络采集（TCP 出站）：ETW Kernel-Network TcpConnect，与进程采集共享
-    // GUID 注册表，网络事件的 process_guid 才能与进程血缘对上；独立 trace，
+    // 网络采集（TCP 出入站、UDP 出站）：ETW Kernel-Network；DNS：ETW DNS-Client。都与进程采集共享
+    // GUID 注册表，网络与 DNS 事件的 process_guid 才能与进程血缘对上；各自独立 trace，
     // 失败只降级警告，不影响进程采集主路
     #[cfg(target_os = "windows")]
     if cfg.collect_network {
         netwatch_win::spawn(agent_id.clone(), sink.clone(), registry.clone());
+        dnswatch_win::spawn(agent_id.clone(), sink.clone(), registry.clone());
     }
 
     #[cfg(target_os = "windows")]

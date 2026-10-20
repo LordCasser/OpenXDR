@@ -24,21 +24,32 @@ const MAX_TRACKED: usize = 4096;
 
 #[derive(Default)]
 pub struct ConnSampler {
-    seen: HashMap<(IpAddr, u16), Instant>,
+    /// (对端地址, 端口, 进程)：按目标采样时进程位填 0
+    seen: HashMap<(IpAddr, u16, u32), Instant>,
 }
 
 impl ConnSampler {
     /// 该目标是否值得上报。窗口内重复目标返回 false。
     pub fn should_report(&mut self, dst: IpAddr, dport: u16) -> bool {
+        self.first((dst, dport, 0))
+    }
+
+    /// 同上，但每个进程各算各的：别的进程连过同一目标不压掉这一个
+    #[cfg(target_os = "windows")]
+    pub fn should_report_for(&mut self, dst: IpAddr, dport: u16, pid: u32) -> bool {
+        self.first((dst, dport, pid))
+    }
+
+    fn first(&mut self, key: (IpAddr, u16, u32)) -> bool {
         let now = Instant::now();
         if self.seen.len() >= MAX_TRACKED {
             self.seen
                 .retain(|_, t| now.duration_since(*t) < SAMPLE_WINDOW);
         }
-        match self.seen.get(&(dst, dport)) {
+        match self.seen.get(&key) {
             Some(t) if now.duration_since(*t) < SAMPLE_WINDOW => false,
             _ => {
-                self.seen.insert((dst, dport), now);
+                self.seen.insert(key, now);
                 true
             }
         }

@@ -48,6 +48,9 @@ pub struct ProcessRegistry {
     canaries: HashMap<u32, Instant>,
 }
 
+/// 占位 GUID 的有效期：各 ETW 会话之间的先后差不过一两秒，再久就当作另一个进程（pid 复用）
+const PLACEHOLDER_TTL: Duration = Duration::from_secs(10);
+
 /// 自检进程登记的有效期：启动与退出事件早该到了，过期的登记不再认，pid 复用也不会把别人的进程藏掉
 const CANARY_TTL: Duration = Duration::from_secs(30);
 
@@ -65,6 +68,8 @@ struct Entry {
     ppid: Option<u32>,
     /// 被折叠、还没上报的启动事件
     held: Option<AgentEvent>,
+    /// 网络 / DNS 事件先于进程启动事件到达时现场占的位（见 placeholder）
+    placeholder: Option<Instant>,
 }
 
 /// 注册表里记得的进程身份，退出事件靠它说清是谁退出了。
@@ -84,7 +89,15 @@ impl ProcessRegistry {
     /// 登记新进程，返回它的 GUID 和父进程 GUID（父未知则 None）。
     pub fn register(&mut self, pid: u32, ppid: Option<u32>) -> (Uuid, Option<Uuid>) {
         let parent = ppid.and_then(|p| self.guids.get(&p).map(|e| e.guid));
-        let guid = Uuid::new_v4();
+        // 刚占过位的进程沿用占位时的 GUID：先到的网络 / DNS 事件与随后的启动事件才连得上
+        let guid = self
+            .guids
+            .get(&pid)
+            .filter(|e| {
+                e.placeholder
+                    .is_some_and(|at| at.elapsed() < PLACEHOLDER_TTL)
+            })
+            .map_or_else(Uuid::new_v4, |e| e.guid);
         crate::process_identity::record(pid, guid);
 
         self.seq += 1;
@@ -103,6 +116,7 @@ impl ProcessRegistry {
                 command: None,
                 ppid,
                 held: None,
+                placeholder: None,
             },
         );
 
@@ -111,6 +125,18 @@ impl ProcessRegistry {
             self.guids.retain(|_, e| e.seq > cutoff);
         }
         (guid, parent)
+    }
+
+    /// 给还没登记的进程占位，返回 GUID。Windows 的进程、网络与 DNS 走各自的 ETW 会话，
+    /// 短命进程（nslookup、curl）的连接或查询常比它的启动事件先到：占位后若启动事件在
+    /// PLACEHOLDER_TTL 内到达，就沿用这个 GUID，而不是另发一个、把先到的事件挂空
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    pub fn placeholder(&mut self, pid: u32) -> Uuid {
+        let (guid, _) = self.register(pid, None);
+        if let Some(e) = self.guids.get_mut(&pid) {
+            e.placeholder = Some(Instant::now());
+        }
+        guid
     }
 
     /// 预登记已存在的进程（agent 启动时的进程表快照），让后续子进程能找到父，
@@ -326,5 +352,18 @@ mod tests {
             let (g, _) = reg.register(pid, None);
             assert!(seen.insert(g), "GUID 不应重复");
         }
+    }
+
+    /// 占位的 GUID 由随后的启动事件沿用，只沿用一次；pid 复用（再次登记）照常换新 GUID
+    #[test]
+    fn placeholder_guid_is_reused_once() {
+        let mut reg = ProcessRegistry::default();
+        reg.seed(1, "explorer.exe", None);
+        let early = reg.placeholder(42);
+        let (guid, parent) = reg.register(42, Some(1));
+        assert_eq!(guid, early, "先到的网络事件与启动事件应同一 GUID");
+        assert!(parent.is_some());
+        let (next, _) = reg.register(42, Some(1));
+        assert_ne!(next, early, "启动之后再登记是 pid 复用");
     }
 }

@@ -466,7 +466,7 @@ fn conn_info(
         dst,
         dport,
         container,
-        hostname: dnswatch::hostname_of(dst),
+        hostname: super::dnsnames::hostname_of(dst),
         command: known.as_ref().and_then(|k| k.command.clone()),
     }
 }

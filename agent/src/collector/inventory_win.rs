@@ -32,7 +32,7 @@ pub fn spawn(agent_id: String, sink: EventSink) {
 /// 一行原始记录：(协议, 地址, 端口, pid)
 type Row = (Proto, IpAddr, u16, u32);
 
-fn scan(sys: &mut System) -> std::io::Result<Vec<Listener>> {
+pub(super) fn scan(sys: &mut System) -> std::io::Result<Vec<Listener>> {
     let mut rows: Vec<Row> = Vec::new();
 
     let buf = fetch(|p, n| unsafe {
