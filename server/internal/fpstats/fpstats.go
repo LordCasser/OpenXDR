@@ -290,7 +290,9 @@ func (s *Stats) drafts(k key, whole *tally, alerts []*ent.Alert) []draft {
 			return out[:min(len(out), maxDraftsPerKey)]
 		}
 	}
-	if concentrated || !s.qualifies(whole) {
+	// 平台合成规则（xdr:new-process 这类 UEBA 首次出现检测）每条命中本来就是不同实体，
+	// 整条规则抑制等于关掉这台主机上的这项检测，不出草案
+	if concentrated || strings.HasPrefix(k.rule, "xdr:") || !s.qualifies(whole) {
 		return nil
 	}
 	return []draft{{key: k, t: whole}}

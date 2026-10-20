@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"openxdr/server/ent"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -150,6 +151,40 @@ func TestBatchTriagesAndPersistsVerdict(t *testing.T) {
 	got2, _ := client.Incident.Get(ctx, inc.ID)
 	if got2.Status != "triaged" {
 		t.Errorf("已研判的 incident 不应被重复处理，status = %q", got2.Status)
+	}
+}
+
+// 复发并入后重判从良性翻成恶意：之前按良性静默标过推送的要清掉标记重新决定；仍是良性、或本来就非良性的不动
+func TestBatchVerdictFlipClearsNotified(t *testing.T) {
+	ctx, client := testdb.New(t)
+	notified := time.Now().Add(-time.Hour)
+	mk := func(prev string) *ent.Incident {
+		inc, err := client.Incident.Create().SetStatus("open").SetGraph(json.RawMessage(`{"nodes":[]}`)).
+			SetAiVerdict(json.RawMessage(`{"verdict":"` + prev + `"}`)).SetNotifiedAt(notified).Save(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return inc
+	}
+	flip, same := mk("benign"), mk("suspicious")
+	e := &Engine{DB: client, LLM: oneShotLLM(t, `{"verdict":"malicious","confidence":90,"summary":"复发后确认外连"}`)}
+	if err := e.batch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := client.Incident.Get(ctx, flip.ID); got.NotifiedAt != nil {
+		t.Errorf("良性翻成恶意应清掉推送标记")
+	}
+	if got, _ := client.Incident.Get(ctx, same.ID); got.NotifiedAt == nil {
+		t.Errorf("原本就非良性的已推送过，不应重推")
+	}
+
+	stay := mk("benign")
+	e.LLM = oneShotLLM(t, `{"verdict":"benign","confidence":80,"summary":"仍是例行探测"}`)
+	if err := e.batch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := client.Incident.Get(ctx, stay.ID); got.NotifiedAt == nil {
+		t.Errorf("仍判良性不应清推送标记")
 	}
 }
 

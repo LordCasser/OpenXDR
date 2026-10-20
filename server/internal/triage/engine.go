@@ -99,10 +99,12 @@ func (e *Engine) batch(ctx context.Context) error {
 		}
 		verdict := withModel(parseVerdict(inc.ID.String(), answer), model)
 		// LLM 调用慢，逐个落库，中途挂了不丢已完成的研判
-		if err := e.DB.Incident.UpdateOneID(inc.ID).
-			SetAiVerdict(verdict).
-			SetStatus("triaged").
-			Exec(ctx); err != nil {
+		upd := e.DB.Incident.UpdateOneID(inc.ID).SetAiVerdict(verdict).SetStatus("triaged")
+		// 复发并入后重判从良性翻成可疑或恶意：之前按良性静默过的要重新决定推送，升级信号不能被旧结论吞掉
+		if inc.NotifiedAt != nil && verdictLabel(inc.AiVerdict) == "benign" && verdictLabel(verdict) != "benign" {
+			upd.ClearNotifiedAt()
+		}
+		if err := upd.Exec(ctx); err != nil {
 			return err
 		}
 		slog.Info("incident 研判完成", "id", inc.ID)
@@ -111,6 +113,15 @@ func (e *Engine) batch(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// verdictLabel 研判结论里的 verdict 字段，解析不了当没有
+func verdictLabel(raw json.RawMessage) string {
+	var v struct {
+		Verdict string `json:"verdict"`
+	}
+	_ = json.Unmarshal(raw, &v)
+	return v.Verdict
 }
 
 // 工具调用轮数上限：防模型在调查里打转。用尽后强制收结论。

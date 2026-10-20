@@ -90,6 +90,10 @@ func TestSweep(t *testing.T) {
 	db.Alert.Update().Where(alert.RuleIDEQ("critical")).SetSeverity(5).ExecX(ctx)
 	// shell 映像不算实体：命中全出自 bash 也只能给整条规则
 	f.times(5, "shell", "false_positive", "alice", "", `{"process":{"file":{"path":"/usr/bin/bash"}}}`)
+	// 平台合成规则实体分散时不给整条规则草案（等于关掉这台主机上的首次出现检测）
+	for i := range 6 {
+		f.incident("xdr:new-process", "false_positive", "alice", "", `{"file":{"path":"/opt/n`+string(rune('a'+i))+`"}}`)
+	}
 	// 已有生效的同范围抑制（更宽：只按域名）
 	f.times(5, "covered", "false_positive", "alice", "", dns)
 	db.Suppression.Create().SetRuleID("covered").SetAssetID(host.ID).SetStatus("active").
@@ -98,7 +102,7 @@ func TestSweep(t *testing.T) {
 	if n, err := s.Sweep(ctx, time.Now()); err != nil || n != 3 {
 		t.Fatalf("应生成 3 条草案，得到 %d %v", n, err)
 	}
-	for _, rule := range []string{"few", "real", "aiprop", "ratio", "purged", "covered", "critical"} {
+	for _, rule := range []string{"few", "real", "aiprop", "ratio", "purged", "covered", "critical", "xdr:new-process"} {
 		if d := f.drafts(rule); len(d) != 0 {
 			t.Errorf("%s 不该生成草案：%+v", rule, d[0])
 		}
