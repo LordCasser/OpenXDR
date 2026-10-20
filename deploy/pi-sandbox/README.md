@@ -6,6 +6,8 @@ Pi 在一次性容器里用自己的默认工具（bash / read / edit / write）
 - `bridge.mjs`：容器入口，与 `server/pi-runtime/runner.mjs` 说同一套 JSONL 协议，用 Pi SDK 驱动会话。
 - `xdr`：经 unix socket 把调用交给桥，桥发 `tool_request` 回平台；判权、审批、审计都在平台完成。
   容器里没有任何平台凭据，也不需要访问平台网络。
+- `jq`：装在 `/usr/local/bin` 的薄包装。参数里带 `->` 且 jq 报语法错时，在 stderr 补一句「用点路径，不是 SQL 的 `->`」；
+  输出与退出码原样交给 `/usr/bin/jq`。
 - `server/cmd/sandboxd`：沙箱主机上的守护进程，每轮对话起一个容器，平台断开或超时即删除。
 
 ## 部署

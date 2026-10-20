@@ -51,7 +51,7 @@ AI 不能结案：人工结案会作为案例回喂研判，AI 自己结案再�
 配置 `SANDBOX_URL` 后，Pi 不再在 server 里跑 `runner.mjs`，而是由独立主机上的 `sandboxd`
 为每轮对话起一个一次性容器（`deploy/pi-sandbox`）。容器里 Pi 用自己的默认工具（bash / read / edit / write），
 按 `openxdr` Skill 工作手册行事；平台能力只通过容器内的 `xdr` 命令行使用
-（`xdr exec / sql / track / identify / egress / report / context`）。
+（`xdr exec / sql / track / ignore / identify / egress / report / context` 等）。
 
 - 协议不变：server 与容器之间仍是 runner 的 JSONL，经 sandboxd 一条全双工 HTTP 流转发。
   `xdr` 经容器内 unix socket 把调用交给桥，桥发 `tool_request` 回平台——组、发起人、
@@ -68,6 +68,9 @@ AI 不能结案：人工结案会作为案例回喂研判，AI 自己结案再�
   一轮运行内部 Pi 自己累积的上下文由 Pi 自带压缩处理。
 - 默认工具在沙箱里可以随意读写、写脚本处理数据，这是这条路比平台工具 schema 稳定的原因：
   对平台的一切影响仍然只能经过 `xdr`。
+- `xdr` 子命令参数不够时只打印该子命令那一行用法并指出缺的参数；`forget` 给的 ID 不是合法 UUID 时，
+  能按前缀唯一对上本组 AI 记忆就提示完整 ID（只提示不代删），否则说明格式。镜像里的 `jq` 是薄包装：
+  参数带 `->` 且报语法错时在 stderr 补一句「用点路径，不是 SQL 的 `->`」，输出与退出码不变。
 
 sandboxd 配置（环境变量）：
 
