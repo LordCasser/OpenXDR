@@ -133,10 +133,14 @@ agent 为 v0.2.0 musl 静态 / mingw 构建。
   凭据读取后外联 4444 `credential-dump-suspicious-outbound`）；1001 / 1005 / 1007 / 4001 事件齐全。
 - Linux 缺口：脚本里的 `curl … | bash` 没命中 Download and Pipe to Shell——管道两端是同一父进程下的两个兄弟进程，
   两条命令行里都没有 `|`，规则按命令行匹配看不到。交互 shell 与 `sh -c 'curl … | sh'` 形态不受影响。
+  仍未覆盖：规则侧没有可用的写法，原因见 [temporal-rules/README.md](../../temporal-rules/README.md#当前格式做不到留待引擎扩展的链路)，
+  语料以已知缺口记录。
 - Windows：17 条规则实机命中（含 Windows Recon、Suspicious PowerShell Invocation、IFEO、Defender 排除项、WMI 订阅、
   账户管理），两条新时序规则（LOLBin 下载后写自启动 / 建计划任务）同样命中；临时关闭 Defender 也被 Security Service Stopped 报出。
 - Windows 缺口：COM 劫持（HKCU CLSID InprocServer32）与审计策略变更（4719，activity_id 15）**已采集、没有规则**；
   网络只有 TCP 出站（`etw-tcp-out` 报 degraded 是设计如此），DNS 未采集。
+  前两项已补规则 `User-Level COM Hijack (HKCU CLSID Server)`、`Windows Audit Policy Disabled`，
+  语料直接取本轮入库的原始事件（4719 的 `policy_changes` 是 `%%8448, %%8450` 这类消息 ID，不是文字）。
 - 本轮抓到的真实缺陷：
   1. **Windows 进程采集静默停止**：ETW 会话随机命名，agent 被强杀或升级退出时会话泄漏；Kernel-Process provider 可挂的会话数有限，
      测试机漏到 7 个后新会话收不到任何进程事件，健康状态却仍报 `etw/active`。改为固定会话名并在启动前停掉同名旧会话（894bbc7）。

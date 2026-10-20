@@ -5,6 +5,17 @@
 
 ## [未发布]
 
+### 检测
+
+- 新增 Windows 规则「User-Level COM Hijack (HKCU CLSID Server)」（T1546.015）：HKCU CLSID 的 InprocServer32 / LocalServer32
+  默认值新建或改写即报，排除 Program Files 下的服务器与 OneDrive、经典 Teams 会议插件的按用户注册（按目录 + 文件名收窄），
+  删除与 ThreadingModel 等附属值不报。
+- 新增 Windows 规则「Windows Audit Policy Disabled」（T1562.002）：4719 的审计变更含成功移除（%%8448）或失败移除（%%8450）报 high，
+  只开启审计不报。两条都在生产 7 天数据上回测，只命中第四轮实机回放的两次测试，无误报（生产只有一台 Windows 测试机）。
+- 脚本内 `curl … | bash`（兄弟进程）仍不覆盖：时序链路本身在生产 7 天只命中回放那一次，但两步各需一条会单独出告警的基础规则
+  （每天合计约 100 次），按父进程关联也解决不了这一点，理由与数据见 [temporal-rules/README.md](temporal-rules/README.md#当前格式做不到留待引擎扩展的链路)；
+  语料以已知缺口记录。
+
 ### 修复
 
 - 资产图谱出现 `0.0.0.0` / `::` 节点：agent 在 `udp_sendmsg` 采样时，未连接的 UDP 套接字（tailscaled 之类的 sendto）
