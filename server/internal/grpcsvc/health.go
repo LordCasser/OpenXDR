@@ -20,6 +20,10 @@ type capability struct {
 	State string `json:"state"`
 	// Reason 降级原因：agent 活性检测发现通道开着却收不到事件时给出，只能跟着 degraded
 	Reason string `json:"reason,omitempty"`
+	// Rebuilds 本轮静默里 agent 已自动重建采集几次仍未恢复，只能跟着 Reason
+	Rebuilds uint32 `json:"rebuilds,omitempty"`
+	// Recoveries 本次运行里静默后靠自动重建恢复的次数，任何状态都可以带
+	Recoveries uint32 `json:"recoveries,omitempty"`
 }
 type receiptHealth struct {
 	Pending    uint64 `json:"pending"`
@@ -77,6 +81,9 @@ func checkSnapshot(bootID string, sequence uint64, reportedMs int64, caps map[st
 		}
 		if len(cap.Reason) > 256 || (cap.Reason != "" && cap.State != "degraded") {
 			return status.Error(codes.InvalidArgument, "降级原因无效")
+		}
+		if cap.Rebuilds > 0 && cap.Reason == "" {
+			return status.Error(codes.InvalidArgument, "重建次数无效")
 		}
 	}
 	return nil

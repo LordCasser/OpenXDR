@@ -34,9 +34,10 @@ type healthSnapshot struct {
 	DroppedEvents int64     `json:"droppedEvents"`
 	WriteBlocked  bool      `json:"writeBlocked"`
 	Capabilities  map[string]struct {
-		Path   string `json:"path"`
-		State  string `json:"state"`
-		Reason string `json:"reason"`
+		Path     string `json:"path"`
+		State    string `json:"state"`
+		Reason   string `json:"reason"`
+		Rebuilds int    `json:"rebuilds"`
 	} `json:"capabilities"`
 }
 
@@ -63,6 +64,10 @@ func healthProblems(h healthSnapshot, dropping bool, dropped int64) []problem {
 		if c.Reason != "" {
 			text += "：" + c.Reason
 			key += ":" + c.Reason
+		}
+		// agent 失明后会按退避自动重建采集，次数只进文字不进签名：每重建一次都重新推送就成了刷屏
+		if c.Rebuilds > 0 {
+			text += fmt.Sprintf("（已自动重建 %d 次仍未恢复）", c.Rebuilds)
 		}
 		out = append(out, problem{key, text})
 	}

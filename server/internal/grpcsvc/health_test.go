@@ -26,6 +26,13 @@ func TestHealthValidation(t *testing.T) {
 	if parsed, err := parseHealth(string(raw), now); err != nil || parsed.Capabilities["files"].Reason == "" {
 		t.Fatalf("降级原因丢失: %v", err)
 	}
+	// 自动重建：未恢复时重建次数跟着原因，恢复后只留恢复次数
+	h.Capabilities["files"] = capability{Path: "rdcw", State: "degraded", Reason: "收不到", Rebuilds: 3, Recoveries: 1}
+	h.Capabilities["network"] = capability{Path: "etw", State: "active", Recoveries: 2}
+	raw, _ = json.Marshal(h)
+	if parsed, err := parseHealth(string(raw), now); err != nil || parsed.Capabilities["files"].Rebuilds != 3 || parsed.Capabilities["network"].Recoveries != 2 {
+		t.Fatalf("自动重建次数丢失: %v", err)
+	}
 	h.Receipts = &receiptHealth{Pending: 2, Incomplete: 1}
 	raw, _ = json.Marshal(h)
 	parsed, err := parseHealth(string(raw), now)
@@ -41,6 +48,9 @@ func TestHealthValidation(t *testing.T) {
 		},
 		func(h *collectorHealth) {
 			h.Capabilities = map[string]capability{"process": {State: "degraded", Reason: strings.Repeat("长", 100)}}
+		},
+		func(h *collectorHealth) {
+			h.Capabilities = map[string]capability{"process": {State: "degraded", Rebuilds: 1}}
 		},
 	} {
 		copy := h

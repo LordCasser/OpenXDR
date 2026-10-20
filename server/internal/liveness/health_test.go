@@ -26,6 +26,17 @@ func TestHealthProblemsSilentReason(t *testing.T) {
 	if signature(plain) == signature(silent) {
 		t.Fatal("静默降级与自报降级签名相同，不会重新通知")
 	}
+	// 自动重建的次数写进文字、不进签名：每重建一次都重新推送就刷屏了
+	rebuilt := healthProblems(parse(`{"capabilities":{"process":{"path":"etw","state":"degraded","reason":"持续 5 分钟收不到进程事件，自检进程也没被看到","rebuilds":2}}}`), false, 0)
+	if want := "进程采集降级（etw）：持续 5 分钟收不到进程事件，自检进程也没被看到（已自动重建 2 次仍未恢复）"; len(rebuilt) != 1 || rebuilt[0].text != want {
+		t.Fatalf("通知文字 = %v", rebuilt)
+	}
+	if signature(rebuilt) != signature(silent) {
+		t.Fatal("重建次数变了不应改签名")
+	}
+	if ps := healthProblems(parse(`{"capabilities":{"process":{"path":"etw","state":"active","recoveries":1}}}`), false, 0); len(ps) != 0 {
+		t.Fatalf("自动恢复后不应有问题: %v", ps)
+	}
 	if ps := healthProblems(parse(`{"capabilities":{"process":{"path":"etw","state":"active"}}}`), false, 0); len(ps) != 0 {
 		t.Fatalf("恢复后不应有问题: %v", ps)
 	}
