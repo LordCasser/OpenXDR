@@ -123,3 +123,31 @@ func TestOfCapKeepsHumanAcrossGroups(t *testing.T) {
 		t.Fatalf("人工记忆应保留且排第一: %d 条，首条 %v", len(items), items[0]["content"])
 	}
 }
+
+// 交给模型的记忆带待复核标注：AI 写的否定性结论不论新旧都标，其余 AI 记忆过了复核期才标；人工记忆一概不标
+func TestOfMarksReview(t *testing.T) {
+	ctx, db := testdb.New(t)
+	g := db.Group.Create().SetName("g").SaveX(ctx)
+	stale := time.Now().Add(-ReviewAfter - time.Hour)
+	want := map[string]bool{}
+	add := func(content, source string, updated time.Time, marked bool) {
+		db.Memory.Create().SetGroupID(g.ID).SetContent(content).SetSource(source).SetAuthor("x").SetUpdatedAt(updated).ExecX(ctx)
+		want[content] = marked
+	}
+	add("pve2 宿主机在线核实不了 RAID BBU 状态：无 storcli/perccli/MegaCli", "ai", time.Now(), true)
+	add("pve1 每天 04:30 跑 vzdump", "ai", time.Now(), false)
+	add("10.1.1.53 是内网 DNS 容器", "ai", stale, true)
+	add("nas1 没有 smartctl 工具，磁盘健康只能看 Web 界面", "human", stale, false)
+	add("10.1.1.1 是网关", "human", stale, false)
+
+	items, err := Of(ctx, db, []uuid.UUID{g.ID}, nil)
+	if err != nil || len(items) != len(want) {
+		t.Fatalf("应读到 %d 条: %d %v", len(want), len(items), err)
+	}
+	for _, m := range items {
+		_, marked := m["review"]
+		if content := m["content"].(string); marked != want[content] {
+			t.Errorf("%q 待复核标注应为 %v，实际 %v（%v）", content, want[content], marked, m["review"])
+		}
+	}
+}

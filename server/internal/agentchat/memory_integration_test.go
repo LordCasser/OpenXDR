@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -32,8 +33,14 @@ func TestRememberAndForget(t *testing.T) {
 	if err != nil || !strings.Contains(out, "remembered") {
 		t.Fatalf("记忆写入: %s %v", out, err)
 	}
-	if out, _ := call("remember", `{"content":"每天 04:30 跑端口巡检脚本"}`); !strings.Contains(out, "exists") {
-		t.Fatalf("重复内容应提示已有: %s", out)
+	// 同样的 AI 记忆再记一次是复核过仍成立：刷新更新时间，不新增
+	old := time.Now().Add(-memories.ReviewAfter - time.Hour)
+	db.Memory.Update().SetUpdatedAt(old).ExecX(ctx)
+	if out, _ := call("remember", `{"content":"每天 04:30 跑端口巡检脚本"}`); !strings.Contains(out, "refreshed") {
+		t.Fatalf("重复的 AI 记忆应刷新: %s", out)
+	}
+	if m := db.Memory.Query().OnlyX(ctx); !m.UpdatedAt.After(old.Add(time.Hour)) {
+		t.Fatalf("复核时间应刷新: %v", m.UpdatedAt)
 	}
 	if _, err := call("remember", `{"host":"`+stranger.ID.String()+`","content":"别组主机"}`); err == nil {
 		t.Fatal("别组主机应拒绝")
@@ -44,6 +51,13 @@ func TestRememberAndForget(t *testing.T) {
 	human := db.Memory.Create().SetGroupID(group.ID).SetContent("10.1.1.100 是网关容器").SetSource("human").SetAuthor("admin").SaveX(ctx)
 	if _, err := call("forget", `{"id":"`+human.ID.String()+`"}`); err == nil {
 		t.Fatal("人工记忆不能被 AI 删除")
+	}
+	// AI 重记人工写过的内容：只提示已有，不动人工记忆
+	if out, _ := call("remember", `{"content":"10.1.1.100 是网关容器"}`); !strings.Contains(out, "exists") {
+		t.Fatalf("与人工记忆重复应提示已有: %s", out)
+	}
+	if m := db.Memory.GetX(ctx, human.ID); m.UpdatedAt.Sub(human.UpdatedAt).Abs() > time.Millisecond || m.Source != "human" {
+		t.Fatalf("人工记忆不应被改动: %+v", m)
 	}
 
 	items, err := memories.Of(ctx, db, []uuid.UUID{group.ID}, map[uuid.UUID]string{host.ID: "pve1"})

@@ -37,7 +37,7 @@ xdr track pve1 disk-full medium open '根分区 93%' '/dev/sda1 93%，journal �
 xdr ignore pve2 raid-bbu-failed '用户要求忽略：电池已订货，下周更换'   # 只在用户明确要求忽略时用，见下
 xdr identify pve1 udp/5405 low 'Corosync 集群通信' '进程 corosync，PVE 集群心跳，仅集群内访问'
 xdr egress pve2 208.111.34.178 low 'Tailscale 中继' 'tailscaled 连 DERP 中继，组网正常业务'
-xdr memories                                # 本组长期记忆（实时，含刚记下的）：id 来源 主机 内容
+xdr memories                                # 本组长期记忆（实时，含刚记下的）：id 来源 主机 内容 待复核说明
 xdr remember pve1 '每天 04:30 cron 跑 /root/port-check.sh，用 /dev/tcp 探测内网端口，是例行巡检'
 xdr remember - '10.1.1.100 是 pve1 上的 LXC 203（网关：Caddy + docker），不是独立主机'
 xdr forget <记忆 id>                         # 删掉被现场证据推翻的 AI 记忆
@@ -123,6 +123,14 @@ WHERE rule_id='<规则 id>' AND last_ts > now()-interval '7 days' AND command_id
 现场证据与之矛盾时以现场为准，用 `xdr forget` 删掉过时的，再 `xdr remember` 记下新的。
 查证过、以后还用得上的环境事实（某主机的定时任务、某个地址是什么设备、某类告警在这里为什么正常）用 `xdr remember` 记下，
 一条只写一件事；一次性的结论写报告，问题用 `track`，服务与外联用 `identify` / `egress`，不要往记忆里塞。
+
+**记忆会过时，否定性结论尤其**：带「待复核」的是 AI 写的、可能已过时的记忆——超过 30 天没复核的，以及所有
+「无法核实 / 查不了 / 没有工具」这类否定性结论（这类每轮都会标）。否定性结论最容易变成永久盲区：信了就不再试，
+主机上其实装着别的工具也发现不了（曾有一条「核实不了 RAID BBU：无 storcli/perccli/MegaCli」被信了多天，
+其实装着 megactl，`megasasctl` 一查就看到 BBU 故障）。所以用到这类记忆时，每轮先花一两条廉价的只读命令重新试：
+`command -v 工具1 工具2 …`、`dpkg -l | grep -i 关键词` / `rpm -qa | grep -i 关键词`、`ls /opt /usr/local/bin /usr/sbin | grep -i 关键词`、
+换一个同类工具或看 `dmesg` / `/proc` / `/sys` 里的同类信息。试出新办法就 `xdr forget` 旧的、`xdr remember` 新的（写清用什么命令能查到）；
+仍然做不到就原样再 `xdr remember` 一次刷新复核时间，并在记忆里写明试过哪些命令。别的待复核记忆用到时同样先核实，仍成立就原样再记一次。
 
 **处理交来的事件**：`xdr context` 里的 `subjects` 是交给你的事件。逐个：读告警与证据 → 需要时上机取证（进程、文件、登录记录、网络连接）→
 给出结论（恶意 / 可疑 / 良性）、关键证据与处置建议，再用 `xdr propose-close` 提结案建议（false_positive 误报或良性 /

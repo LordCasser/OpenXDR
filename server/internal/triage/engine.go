@@ -256,7 +256,11 @@ func (e *Engine) appendMemories(ctx context.Context, sb *strings.Builder, alerts
 		if host != "" {
 			host = "[" + host + "] "
 		}
-		fmt.Fprintf(sb, "- (%s) %s%s\n", m["source"], host, m["content"])
+		review := ""
+		if note, _ := m["review"].(string); note != "" {
+			review = "〔待复核：" + note + "〕"
+		}
+		fmt.Fprintf(sb, "- (%s) %s%s%s\n", m["source"], host, m["content"], review)
 	}
 }
 
