@@ -47,6 +47,9 @@ type Engine struct {
 
 func (e *Engine) Run(ctx context.Context) {
 	e.cursor = e.loadCursor(ctx)
+	if err := e.dropUnspecified(ctx); err != nil {
+		slog.Error("清理未指定源地址的依赖边失败", "err", err)
+	}
 	ticker := time.NewTicker(e.Interval)
 	defer ticker.Stop()
 	for {
@@ -86,6 +89,16 @@ func (e *Engine) loadCursor(ctx context.Context) time.Time {
 	}
 	return time.Now().Add(-backfill)
 }
+
+// upsertLink 依赖边累加：同键的计数相加、时间取并集
+const upsertLink = `INSERT INTO asset_links
+  (id, src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+ON CONFLICT (src_ip, dst_ip, dst_port, proto, process) DO UPDATE SET
+  count = asset_links.count + EXCLUDED.count,
+  first_seen = LEAST(asset_links.first_seen, EXCLUDED.first_seen),
+  last_seen = GREATEST(asset_links.last_seen, EXCLUDED.last_seen),
+  src_asset_id = COALESCE(EXCLUDED.src_asset_id, asset_links.src_asset_id)`
 
 type linkKey struct {
 	srcIP, dstIP string
@@ -173,7 +186,7 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 			}
 			srcAsset, process = nil, ""
 		} else {
-			if !dependency(c, ownIPs) {
+			if c.src, ok = sourceOf(c.src, c.dst, ownIPs); !ok || !dependency(c, ownIPs) {
 				continue
 			}
 			// 新版 agent 随连接带进程名；旧版只有 GUID，回查同一进程的启动事件
@@ -198,14 +211,7 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 	for k, a := range links {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO asset_links
-  (id, src_ip, src_asset_id, dst_ip, dst_port, proto, process, count, first_seen, last_seen)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-ON CONFLICT (src_ip, dst_ip, dst_port, proto, process) DO UPDATE SET
-  count = asset_links.count + EXCLUDED.count,
-  first_seen = LEAST(asset_links.first_seen, EXCLUDED.first_seen),
-  last_seen = GREATEST(asset_links.last_seen, EXCLUDED.last_seen),
-  src_asset_id = COALESCE(EXCLUDED.src_asset_id, asset_links.src_asset_id)`,
+		if _, err := tx.ExecContext(ctx, upsertLink,
 			uuid.Must(uuid.NewV7()), k.srcIP, a.srcAsset, k.dstIP, k.port, k.proto, k.process, a.count, a.first, a.last); err != nil {
 			return 0, err
 		}
@@ -286,4 +292,20 @@ FROM events WHERE process_guid = ANY($1::uuid[]) AND class_uid = 1007`, "{"+stri
 		out[id] = clean(name, 64)
 	}
 	return out, rows.Err()
+}
+
+// dropUnspecified 清掉旧数据：早先 UDP 出站的未指定源地址（0.0.0.0 / ::）原样进了 asset_links，
+// 在图谱上长出一个「0.0.0.0」节点。这些边不能改记到某台资产上：唯一键里没有资产，
+// 多台资产连同一目的（各机的 tailscaled 连同一批 DERP）落在同一行、src_asset_id 是最后写入者，
+// 计数与归属都混了，改记就是把别人的连接安到这台机器头上。直接删，活跃的连接下一批事件就按资产自己的地址重新长出来。
+// 在写入侧一次清干净，图谱、攻击面、标注与 AI 只读视图这些读方都不必各自记得过滤。幂等。
+func (e *Engine) dropUnspecified(ctx context.Context) error {
+	res, err := e.SQL.ExecContext(ctx, `DELETE FROM asset_links WHERE src_ip IN ('0.0.0.0', '::')`)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		slog.Info("已清理未指定源地址的依赖边", "rows", n)
+	}
+	return nil
 }

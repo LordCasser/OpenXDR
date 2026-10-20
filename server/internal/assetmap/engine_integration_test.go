@@ -185,3 +185,80 @@ func TestAnnotateRespectsLocksAndFacts(t *testing.T) {
 		t.Fatalf("坏输出不写入且退避: calls %d→%d", before, calls)
 	}
 }
+
+// 未 connect 的 UDP 套接字源地址是未指定地址：旧 agent 照报 0.0.0.0、新 agent 查不到出口时省略，
+// 都记到上报资产自己的地址上；旧库里已有的 0.0.0.0 / :: 边归属不可信，启动时清掉，图谱上不出现未指定地址节点。
+func TestEngineUnspecifiedSource(t *testing.T) {
+	ctx, client := testdb.New(t)
+	db, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	group := client.Group.Create().SetName("prod").SaveX(ctx)
+	host := client.Asset.Create().SetHostname("pve1").SetGroupID(group.ID).
+		SetIPAddrs([]string{"100.121.204.45", "10.1.1.2", "fd7a:115c:a1e0::a37:cc2e"}).SaveX(ctx)
+	bare := client.Asset.Create().SetHostname("no-ip").SetGroupID(group.ID).SaveX(ctx)
+	now := time.Now()
+	// 没登记地址的资产说不清从哪个地址发出，不进图谱
+	client.Event.Create().SetTs(now.Add(-3 * time.Minute)).SetClassUID(classNetwork).SetSource("agent").SetAssetID(bare.ID).
+		SetRaw(json.RawMessage(`{"connection_info":{"direction":"outbound"},"src_endpoint":{"ip":"0.0.0.0","port":1},"dst_endpoint":{"ip":"198.51.100.8","port":3478}}`)).
+		SaveX(ctx)
+
+	// 旧库脏数据清掉，正常的边不动
+	mkLink := func(src string, dst string, count int64) {
+		client.AssetLink.Create().SetSrcIP(src).SetSrcAssetID(host.ID).SetDstIP(dst).SetDstPort(41641).
+			SetProto("udp").SetProcess("tailscaled").SetCount(count).SetFirstSeen(now.Add(-time.Hour)).SetLastSeen(now).SaveX(ctx)
+	}
+	mkLink("0.0.0.0", "110.42.47.158", 5)
+	mkLink("::", "2001:db8::9", 1)
+	mkLink("10.1.1.2", "110.42.47.158", 2)
+
+	// 新事件：旧 agent 报 0.0.0.0，新 agent 省略源地址
+	for i, src := range []string{`"ip":"0.0.0.0",`, ``} {
+		client.Event.Create().SetTs(now.Add(-time.Duration(2-i) * time.Minute)).SetClassUID(classNetwork).SetSource("agent").
+			SetAssetID(host.ID).SetConnTuple("udp::41641>198.51.100.7:3478").
+			SetRaw(json.RawMessage(`{"connection_info":{"direction":"outbound","protocol_name":"udp"},"src_endpoint":{` + src +
+				`"port":41641},"dst_endpoint":{"ip":"198.51.100.7","port":3478},"process":{"name":"tailscaled"}}`)).
+			SaveX(ctx)
+	}
+
+	e := &Engine{DB: client, SQL: db, Interval: time.Second}
+	e.cursor = e.loadCursor(ctx)
+	for range 2 { // 幂等：第二次没有脏数据
+		if err := e.dropUnspecified(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.batch(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]int64{}
+	for _, l := range client.AssetLink.Query().AllX(ctx) {
+		got[l.SrcIP+">"+l.DstIP] = l.Count
+	}
+	want := map[string]int64{
+		"10.1.1.2>110.42.47.158": 2,
+		"10.1.1.2>198.51.100.7":  2, // 两条新事件记到资产的私网地址上
+	}
+	if len(got) != len(want) {
+		t.Fatalf("依赖边 %v，期望 %v", got, want)
+	}
+	for k, n := range want {
+		if got[k] != n {
+			t.Errorf("%s 计数 %d，期望 %d", k, got[k], n)
+		}
+	}
+
+	g, err := LoadGroup(ctx, client, group.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range g.Graph(now).Nodes {
+		if n.Label == "0.0.0.0" || n.Label == "::" {
+			t.Errorf("图谱出现未指定地址节点: %+v", n)
+		}
+	}
+}

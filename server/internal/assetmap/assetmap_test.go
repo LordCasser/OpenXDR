@@ -117,13 +117,48 @@ func TestDependencyFiltersNoise(t *testing.T) {
 	}
 }
 
+// 未指定的源地址换成资产自己的同族地址，私网优先；没有可用地址就不进图谱
+func TestSourceOf(t *testing.T) {
+	own := parseIPs([]string{"127.0.0.1", "100.121.204.45", "10.1.1.2", "fe80::1", "fd7a:115c:a1e0::a37:cc2e"})
+	v4, v6 := netip.MustParseAddr("110.42.47.158"), netip.MustParseAddr("2001:db8::9")
+	cases := []struct {
+		src  netip.Addr
+		dst  netip.Addr
+		own  []netip.Addr
+		want string
+	}{
+		{netip.MustParseAddr("192.0.2.1"), v4, own, "192.0.2.1"}, // 正常源地址原样
+		{netip.IPv4Unspecified(), v4, own, "10.1.1.2"},
+		{netip.Addr{}, v4, own, "10.1.1.2"},
+		{netip.IPv6Unspecified(), v6, own, "fd7a:115c:a1e0::a37:cc2e"},
+		{netip.Addr{}, v4, parseIPs([]string{"100.121.204.45"}), "100.121.204.45"}, // 没有私网地址取第一个可用的
+		{netip.Addr{}, v6, parseIPs([]string{"10.1.1.2", "fe80::1"}), ""},          // 没有同族可用地址
+		{netip.Addr{}, v4, nil, ""},                                                // sensor 事件没有资产
+	}
+	for _, c := range cases {
+		got, ok := sourceOf(c.src, c.dst, c.own)
+		if ok != (c.want != "") || (ok && got.String() != c.want) {
+			t.Errorf("%v → %v: got %v %v, want %q", c.src, c.dst, got, ok, c.want)
+		}
+	}
+	if dependency(conn{src: netip.IPv4Unspecified(), dst: v4}, nil) || dependency(conn{dst: v4}, nil) {
+		t.Error("未指定或缺失的源地址不能成为依赖边的一端")
+	}
+}
+
 func TestConnOf(t *testing.T) {
 	c, ok := connOf(json.RawMessage(`{"src_endpoint":{"ip":"10.0.0.1","port":5000},"dst_endpoint":{"ip":"::ffff:10.0.0.2","port":5432},"process":{"pid":7,"name":"psql"}}`), "udp:10.0.0.1:5000>10.0.0.2:5432")
 	if !ok || c.proto != "udp" || c.dst != netip.MustParseAddr("10.0.0.2") || c.port != 5432 || c.process != "psql" {
 		t.Fatalf("%+v %v", c, ok)
 	}
 	if _, ok := connOf(json.RawMessage(`{"dst_endpoint":{"ip":"10.0.0.2","port":0}}`), ""); ok {
-		t.Fatal("缺源地址或端口非法应丢弃")
+		t.Fatal("端口非法应丢弃")
+	}
+	if c, ok := connOf(json.RawMessage(`{"src_endpoint":{"port":41641},"dst_endpoint":{"ip":"10.0.0.2","port":41641}}`), ""); !ok || c.src.IsValid() {
+		t.Fatalf("缺源地址的照收、源留空由调用方补：%+v %v", c, ok)
+	}
+	if _, ok := connOf(json.RawMessage(`{"src_endpoint":{"ip":"bogus"},"dst_endpoint":{"ip":"10.0.0.2","port":80}}`), ""); ok {
+		t.Fatal("源地址写了但解析不了应丢弃")
 	}
 	// 容器里的进程记成「容器/进程」，没有名字用运行时与 ID；入站标出来
 	for raw, want := range map[string]string{

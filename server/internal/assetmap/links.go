@@ -19,6 +19,7 @@ type conn struct {
 }
 
 // connOf 从网络事件取出两端。agent 与 sensor 的事件体同一约定：src_endpoint / dst_endpoint。
+// 源地址可以缺省（agent 的 UDP 出站查不到出口地址时不写），此时 src 为零值，由调用方按资产补上。
 // 协议取 conn_tuple 的前缀，缺省按 tcp。进程在容器里时记成「容器/进程」，图上分得清是哪个容器发起的
 func connOf(raw json.RawMessage, tuple string) (conn, bool) {
 	var body struct {
@@ -44,7 +45,11 @@ func connOf(raw json.RawMessage, tuple string) (conn, bool) {
 	if json.Unmarshal(raw, &body) != nil {
 		return conn{}, false
 	}
-	src, err1 := netip.ParseAddr(body.Src.IP)
+	var src netip.Addr
+	var err1 error
+	if body.Src.IP != "" {
+		src, err1 = netip.ParseAddr(body.Src.IP)
+	}
 	dst, err2 := netip.ParseAddr(body.Dst.IP)
 	if err1 != nil || err2 != nil || body.Dst.Port < 1 || body.Dst.Port > 65535 {
 		return conn{}, false
@@ -60,14 +65,38 @@ func connOf(raw json.RawMessage, tuple string) (conn, bool) {
 	return conn{src.Unmap(), dst.Unmap(), body.Dst.Port, proto, process, body.Info.Direction == "inbound"}, true
 }
 
+// sourceOf 发起方地址。未 connect 的 UDP 套接字在 agent 上看到的源地址是未指定地址
+// （旧版 agent 照报 0.0.0.0 / ::，新版查不到出口地址时省略），它不是一台主机——发起方就是
+// 上报的资产本身，记成它登记的与目的同族的地址，私网地址优先（出公网的包多半从私网地址经 NAT 出去）。
+// 资产没有可用地址时返回 false：说不清是谁发起的连接不进图谱，不编一个节点出来。
+func sourceOf(src, dst netip.Addr, own []netip.Addr) (netip.Addr, bool) {
+	if src.IsValid() && !src.IsUnspecified() {
+		return src, true
+	}
+	var pick netip.Addr
+	for _, a := range own {
+		if a.Is4() != dst.Is4() || a.IsUnspecified() || a.IsLoopback() || a.IsLinkLocalUnicast() {
+			continue
+		}
+		if a.IsPrivate() {
+			return a, true
+		}
+		if !pick.IsValid() {
+			pick = a
+		}
+	}
+	return pick, pick.IsValid()
+}
+
 // dependency 这条连接算不算资产间的依赖。own 是上报 agent 所在资产的地址，sensor 事件为空。
 //
+// 未指定的源地址不是节点（发起方先经 sourceOf 换成资产自己的地址）。
 // 回环、组播、链路本地、自己连自己都不算。另有一类要剔掉：源地址不是本机登记的地址、
 // 目的又和源同在一个私网段——这是宿主机里容器之间的通信（docker 网桥），
 // 不该在图上长出一台「未纳管主机」。
 func dependency(c conn, own []netip.Addr) bool {
 	d := c.dst
-	if !d.IsValid() || d.IsLoopback() || d.IsUnspecified() || d.IsMulticast() ||
+	if !c.src.IsValid() || c.src.IsUnspecified() || !d.IsValid() || d.IsLoopback() || d.IsUnspecified() || d.IsMulticast() ||
 		d.IsLinkLocalUnicast() || d.IsLinkLocalMulticast() || c.src == d {
 		return false
 	}
