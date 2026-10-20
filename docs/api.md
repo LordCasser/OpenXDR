@@ -119,6 +119,24 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 建组自带 AI 高风险命令名单并自动开通组查询身份；删组一并回收（见 `docs/pi-backend.md`）。
 
+## 身份
+
+全局身份图（合并规则与边界见 [身份来源与关联](identity-correlation.md#全局身份图)）。读按组成员（viewer 起），
+确认/拒绝/撤销要求组内 analyst 以上；不可见与不存在统一 404，列表组外返回空。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/identities?groupId=&q=&kind=&limit=&offset=` | 组内身份列表 `{items,truncated}`；`q` 匹配账号名 / SID / 主机名，`kind` 为 `directory` / `host`，`limit` 1–200 |
+| GET | `/api/identities/{id}?hours=` | 身份详情：`identity`、链接的 `accounts`（依据、置信度、证据、来源、近期登录）、`history`（最近 50 条撤销记录）；`hours` 默认 168，1–720 |
+| GET | `/api/identities/{id}/candidates` | 合并候选（同名、相似名、SID 对应多个目录账号），最多 50 条，带方向与拒绝记录 |
+| POST | `/api/identities/{id}/links` | `{"accountId"}` 确认把账号并入该身份；候选已不成立或已被拒绝时 409；落审计 `identity_link_confirmed` |
+| POST | `/api/identities/{id}/rejections` | `{"accountId"}` 判定不是同一人；落审计 `identity_candidate_rejected` |
+| DELETE | `/api/identity-links/{id}` | 撤销人工链接，账号回到默认归属；系统链接 409；落审计 `identity_link_revoked` |
+| DELETE | `/api/identity-rejections/{id}` | 撤销拒绝；落审计 `identity_candidate_rejection_revoked` |
+| GET | `/api/assets/{id}/identity-accounts?hours=` | 资产账号视图：`accounts`（近期登录与所属身份）、`unmatched`（未关联到账号的 Linux 登录）、`pending`（待后台关联数）；`hours` 默认 24 |
+
+登录观察、本地账号快照与目录状态等只读接口见 [身份来源与关联](identity-correlation.md)。
+
 ## 主机接入
 
 文档导入、凭据管理和 SSH 纳管接口见 [文档导入与主机纳管](host-enrollment.md#api)。
