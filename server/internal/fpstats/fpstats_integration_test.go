@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/alert"
 	"openxdr/server/ent/suppression"
 	"openxdr/server/internal/suppress"
 	"openxdr/server/internal/testdb"
@@ -84,15 +85,20 @@ func TestSweep(t *testing.T) {
 	for i := range 6 {
 		f.incident("spread", "false_positive", "alice", "", `{"file":{"path":"/tmp/x`+string(rune('a'+i))+`"}}`)
 	}
+	// 高危及以上的规则不出草案
+	f.times(5, "critical", "false_positive", "alice", "", dns)
+	db.Alert.Update().Where(alert.RuleIDEQ("critical")).SetSeverity(5).ExecX(ctx)
+	// shell 映像不算实体：命中全出自 bash 也只能给整条规则
+	f.times(5, "shell", "false_positive", "alice", "", `{"process":{"file":{"path":"/usr/bin/bash"}}}`)
 	// 已有生效的同范围抑制（更宽：只按域名）
 	f.times(5, "covered", "false_positive", "alice", "", dns)
 	db.Suppression.Create().SetRuleID("covered").SetAssetID(host.ID).SetStatus("active").
 		SetConditions([]suppress.Condition{{Field: "query.hostname", Op: "equals", Value: "updates.example.com"}}).SaveX(ctx)
 
-	if n, err := s.Sweep(ctx, time.Now()); err != nil || n != 2 {
-		t.Fatalf("应生成 2 条草案，得到 %d %v", n, err)
+	if n, err := s.Sweep(ctx, time.Now()); err != nil || n != 3 {
+		t.Fatalf("应生成 3 条草案，得到 %d %v", n, err)
 	}
-	for _, rule := range []string{"few", "real", "aiprop", "ratio", "purged", "covered"} {
+	for _, rule := range []string{"few", "real", "aiprop", "ratio", "purged", "covered", "critical"} {
 		if d := f.drafts(rule); len(d) != 0 {
 			t.Errorf("%s 不该生成草案：%+v", rule, d[0])
 		}
@@ -125,6 +131,10 @@ func TestSweep(t *testing.T) {
 	if len(spread) != 1 || len(spread[0].Conditions) != 0 || spread[0].Evidence.Scope != "rule" ||
 		!strings.Contains(*spread[0].Reason, "【整条规则】") {
 		t.Errorf("实体分散时应给整条规则的草案并标注：%+v", spread)
+	}
+
+	if shell := f.drafts("shell"); len(shell) != 1 || len(shell[0].Conditions) != 0 {
+		t.Errorf("通用 shell 映像不该当实体收窄：%+v", shell)
 	}
 
 	// 草案未批准不生效

@@ -49,6 +49,28 @@ var entityFields = []string{
 // imageField 按对象收窄后，如果这些命中都出自同一个进程映像，再加一条进程条件
 const imageField = "process.file.path"
 
+// genericImages shell、脚本解释器与常被滥用的系统程序：攻击同样经由它们执行，
+// 按它们的映像「收窄」压掉的其实是这条规则在这台主机上的全部命中，不算实体
+var genericImages = map[string]bool{
+	"sh": true, "bash": true, "dash": true, "zsh": true, "ksh": true, "ash": true, "busybox": true,
+	"python": true, "python2": true, "python3": true, "perl": true, "ruby": true, "node": true, "php": true,
+	"cmd.exe": true, "powershell.exe": true, "pwsh.exe": true, "pwsh": true, "wscript.exe": true, "cscript.exe": true,
+	"mshta.exe": true, "rundll32.exe": true, "regsvr32.exe": true,
+}
+
+// generic 取值是否是不能当实体的通用映像
+func generic(field, value string) bool {
+	if field != imageField {
+		return false
+	}
+	base := strings.ToLower(value[strings.LastIndexAny(value, `/\`)+1:])
+	if genericImages[base] {
+		return true
+	}
+	// python3.11 之类带版本号的
+	return strings.HasPrefix(base, "python") || strings.HasPrefix(base, "perl") || strings.HasPrefix(base, "php")
+}
+
 // maxDraftsPerKey 同一（规则、主机）一轮最多出几条按实体的草案，免得一次把审批页刷屏
 const maxDraftsPerKey = 5
 
@@ -181,11 +203,16 @@ func (s *Stats) Sweep(ctx context.Context, now time.Time) (int, error) {
 		return 0, err
 	}
 	byKey := map[key]*tally{}
+	severe := map[key]bool{}
 	for _, a := range alerts {
 		if a.Edges.Incident == nil {
 			continue
 		}
 		k := key{a.RuleID, *a.AssetID}
+		// 高危及以上的规则不靠统计出草案：和研判同一个口径，高危被一句「良性」吞掉代价太大，要压由人手写条件
+		if a.Severity >= review.Severity {
+			severe[k] = true
+		}
 		if byKey[k] == nil {
 			byKey[k] = &tally{}
 		}
@@ -193,7 +220,7 @@ func (s *Stats) Sweep(ctx context.Context, now time.Time) (int, error) {
 	}
 	keys := make([]key, 0, len(byKey))
 	for k, t := range byKey {
-		if t.counts[fp] >= s.MinCount {
+		if t.counts[fp] >= s.MinCount && !severe[k] {
 			keys = append(keys, k)
 		}
 	}
@@ -245,6 +272,9 @@ func (s *Stats) drafts(k key, whole *tally, alerts []*ent.Alert) []draft {
 		values := entityTallies(hits, field)
 		var out []draft
 		for _, v := range values {
+			if generic(field, v.value) {
+				continue
+			}
 			if v.t.counts[fp] >= s.MinCount {
 				concentrated = true
 			}

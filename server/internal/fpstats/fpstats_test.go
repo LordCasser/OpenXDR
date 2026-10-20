@@ -27,3 +27,14 @@ func TestCovered(t *testing.T) {
 		t.Error("过期的抑制不算覆盖")
 	}
 }
+
+func TestGeneric(t *testing.T) {
+	for _, v := range []string{"/usr/bin/bash", `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, "/usr/bin/python3.11"} {
+		if !generic(imageField, v) {
+			t.Errorf("%s 应算通用映像", v)
+		}
+	}
+	if generic(imageField, "/opt/adguardhome/AdGuardHome") || generic("file.path", "/usr/bin/bash") {
+		t.Error("具体程序与非映像字段不算通用")
+	}
+}
