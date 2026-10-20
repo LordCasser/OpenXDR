@@ -3,6 +3,7 @@ package temporal
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -84,7 +85,7 @@ func (r *Rule) Evaluate(events []Event) ([]Match, error) {
 	for scope, group := range groups {
 		slices.SortFunc(group, compareEvent)
 		for i, anchor := range group {
-			if !slices.Contains(anchor.Rules, r.references[len(r.references)-1]) {
+			if !r.anchors(anchor) {
 				continue
 			}
 			start := i
@@ -133,6 +134,13 @@ func (r *Rule) evidence(prior []Event, anchor Event) []uuid.UUID {
 		}
 		return append(evidence, anchor.ID)
 	}
+	if r.kind == "temporal" {
+		// 与计数同理只在条件越过的那一刻出命中。前序已凑齐就不是越过；凑齐时的分配必然用到终点本身。
+		if r.cover(prior) != nil {
+			return nil
+		}
+		return r.cover(append(prior[:len(prior):len(prior)], anchor))
+	}
 	step := 0
 	var previous time.Time
 	for _, e := range prior {
@@ -163,4 +171,54 @@ func (r *Rule) counted(events []Event) bool {
 		}
 	}
 	return count >= r.threshold && (r.minAssets <= 1 || len(assets) >= r.minAssets)
+}
+
+// anchors 判断事件能否作为终点：序列与计数只认最后一步，共现任一引用规则都可以。
+func (r *Rule) anchors(e Event) bool {
+	if r.kind == "temporal" {
+		return slices.ContainsFunc(r.references, func(id string) bool { return slices.Contains(e.Rules, id) })
+	}
+	return slices.Contains(e.Rules, r.references[len(r.references)-1])
+}
+
+// cover 给每条引用规则分配一个不同的事件（二分图增广路匹配），按时间顺序返回所选事件；分配不出来返回 nil。
+// 不要求先后、允许同一时刻：兄弟进程几乎同时启动，采集到的先后不可信。
+// 每条规则只取最早的 len(references) 个候选：某条规则的候选达到这个数时，其余规则最多占去其中 len-1 个，
+// 它总能分到一个，更多候选不会改变能否分配，也让结果只取决于时间顺序。
+func (r *Rule) cover(events []Event) []uuid.UUID {
+	k := len(r.references)
+	options := make([][]int, k)
+	for i, e := range events {
+		for j, id := range r.references {
+			if len(options[j]) < k && slices.Contains(e.Rules, id) {
+				options[j] = append(options[j], i)
+			}
+		}
+	}
+	owner := map[int]int{} // 事件下标 -> 规则下标
+	var assign func(j int, tried map[int]bool) bool
+	assign = func(j int, tried map[int]bool) bool {
+		for _, i := range options[j] {
+			if tried[i] {
+				continue
+			}
+			tried[i] = true
+			if other, taken := owner[i]; !taken || assign(other, tried) {
+				owner[i] = j
+				return true
+			}
+		}
+		return false
+	}
+	for j := range k {
+		if !assign(j, map[int]bool{}) {
+			return nil
+		}
+	}
+	picked := slices.Sorted(maps.Keys(owner))
+	evidence := make([]uuid.UUID, len(picked))
+	for n, i := range picked {
+		evidence[n] = events[i].ID
+	}
+	return evidence
 }

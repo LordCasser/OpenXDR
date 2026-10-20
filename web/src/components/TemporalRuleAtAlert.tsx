@@ -34,7 +34,7 @@ export function TemporalRuleAtAlert({ alertId, ruleId }: { alertId: string; rule
         <Descriptions size="small" column={1} items={[
           { key: 'rule', label: rule.id, children: <Space wrap><Typography.Text strong>{rule.title}</Typography.Text><SeverityTag value={rule.severity} /></Space> },
           { key: 'kind', label: t('temporalRuleGroupBy'), children: <Space wrap>
-            <Tag>{t(rule.kind === 'event_count' ? 'temporalCount' : 'temporalSequence')}</Tag>
+            <Tag>{t(rule.kind === 'event_count' ? 'temporalCount' : rule.kind === 'temporal' ? 'temporalUnordered' : 'temporalSequence')}</Tag>
             <Tag>{t(rule.groupBy === 'account' ? 'temporalGroupByAccount' : 'temporalGroupByAsset')}</Tag>
             <Typography.Text type="secondary">{t('temporalRuleWindow', { seconds: rule.windowSeconds })}{rule.threshold ? ` · ${t('temporalRuleThreshold', { count: rule.threshold })}` : ''}{rule.minAssets > 1 ? ` · ${t('temporalRuleMinAssets', { count: rule.minAssets })}` : ''}</Typography.Text>
           </Space> },

@@ -53,7 +53,7 @@ export function RulesPage() {
         columns={[
           {
             title: t('thRule'), dataIndex: 'title',
-            render: (v, r) => <><Tooltip title={r.id}>{v || r.id}</Tooltip>{r.kind && <Space size={4} wrap style={{ display: 'flex', marginTop: 4 }}><Tag>{t(r.kind === 'event_count' ? 'temporalCount' : 'temporalSequence')}</Tag><Typography.Text type="secondary">{t('temporalRuleWindow', { seconds: r.windowSeconds ?? 0 })}{r.threshold ? ` · ${t('temporalRuleThreshold', { count: r.threshold })}` : ''}</Typography.Text></Space>}{r.author && <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{t('ruleBy', { author: r.author })}</Typography.Text>}</>,
+            render: (v, r) => <><Tooltip title={r.id}>{v || r.id}</Tooltip>{r.signal && <Tooltip title={t('ruleSignalHint')}><Tag style={{ marginLeft: 8 }}>{t('ruleSignal')}</Tag></Tooltip>}{r.kind && <Space size={4} wrap style={{ display: 'flex', marginTop: 4 }}><Tag>{t(r.kind === 'event_count' ? 'temporalCount' : r.kind === 'temporal' ? 'temporalUnordered' : 'temporalSequence')}</Tag><Typography.Text type="secondary">{t('temporalRuleWindow', { seconds: r.windowSeconds ?? 0 })}{r.threshold ? ` · ${t('temporalRuleThreshold', { count: r.threshold })}` : ''}</Typography.Text></Space>}{r.author && <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{t('ruleBy', { author: r.author })}</Typography.Text>}</>,
           },
           { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} />, sorter: (a, b) => a.severity - b.severity },
           { title: t('thClass'), dataIndex: 'classUid', width: 110, render: v => (CLASS_KEY[v] ? t(CLASS_KEY[v]) : v || t('allClasses')) },

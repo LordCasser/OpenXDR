@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -84,6 +85,12 @@ func Compile(data []byte, references map[string]bool) (*Rule, error) {
 	case "sequence":
 		if len(d.Rules) < 2 || len(d.Rules) > 8 || d.Threshold != 0 {
 			return nil, fmt.Errorf("sequence 需要 2 至 8 个步骤且不能设置 threshold")
+		}
+	case "temporal":
+		// 不要求顺序的共现：同一规则重复出现没有意义（多次出现用 event_count）
+		sorted := slices.Sorted(slices.Values(d.Rules))
+		if len(d.Rules) < 2 || len(d.Rules) > 8 || d.Threshold != 0 || len(slices.Compact(sorted)) != len(d.Rules) {
+			return nil, fmt.Errorf("temporal 需要 2 至 8 个互不相同的基础规则且不能设置 threshold")
 		}
 	default:
 		return nil, fmt.Errorf("不支持的时序规则类型 %q", d.Kind)

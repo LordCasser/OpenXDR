@@ -407,7 +407,7 @@ export interface ArchivedTemporalRule {
   id: string
   title: string
   author?: string
-  kind: 'event_count' | 'sequence'
+  kind: 'event_count' | 'sequence' | 'temporal'
   groupBy: 'asset' | 'account'
   severity: number
   windowSeconds: number
@@ -735,7 +735,7 @@ export interface AttackCoverage {
 export const fetchAttack = () => get<AttackCoverage>('/api/attack')
 
 export interface RuleRow {
-  kind?: 'event_count' | 'sequence'
+  kind?: 'event_count' | 'sequence' | 'temporal'
   windowSeconds?: number
   threshold?: number
   references?: string[]
@@ -745,6 +745,7 @@ export interface RuleRow {
   severity: number
   classUid: number
   product: string
+  signal?: boolean
   ingested: boolean
   source: string
 }

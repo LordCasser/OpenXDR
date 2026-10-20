@@ -96,8 +96,51 @@ func TestSequenceStrictOrderAndEvidence(t *testing.T) {
 	}
 }
 
+// temporal 不要求先后：兄弟进程几乎同时启动，采集到的先后不可信，同一时刻也算共现。
+func TestTemporalUnorderedCoOccurrence(t *testing.T) {
+	r := rule(t, "temporal", "a,b,c", 0)
+	ids := func(ns ...int) []uuid.UUID {
+		var out []uuid.UUID
+		for _, n := range ns {
+			out = append(out, event(n, 0).ID)
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name   string
+		events []Event
+		want   [][]uuid.UUID // 每个命中的证据，按终点时间排序
+	}{
+		{"顺序无关", []Event{event(1, 0, "c"), event(2, 1, "a"), event(3, 2, "b")}, [][]uuid.UUID{ids(1, 2, 3)}},
+		{"同一时刻也算", []Event{event(1, 5, "b"), event(2, 5, "c"), event(3, 5, "a")}, [][]uuid.UUID{ids(1, 2, 3)}},
+		{"一条不能占两条规则", []Event{event(1, 0, "a", "b"), event(2, 1, "c")}, nil},
+		// 第 1 条同时满足 a、b：先给 a 会卡住 b，增广路把它让给 b、a 改用第 2 条
+		{"重叠命中靠匹配分配", []Event{event(1, 0, "a", "b"), event(2, 1, "a"), event(3, 2, "c")}, [][]uuid.UUID{ids(1, 2, 3)}},
+		{"窗口之外", []Event{event(1, 0, "a"), event(2, 1, "b"), event(3, 601, "c")}, nil},
+		{"凑齐后持续出现只命中一次", []Event{event(1, 0, "a"), event(2, 1, "b"), event(3, 2, "c"), event(4, 3, "a"), event(5, 4, "c")}, [][]uuid.UUID{ids(1, 2, 3)}},
+		{"散开后再凑齐", []Event{event(1, 0, "a"), event(2, 1, "b"), event(3, 2, "c"), event(4, 1000, "c"), event(5, 1001, "b"), event(6, 1002, "a")}, [][]uuid.UUID{ids(1, 2, 3), ids(4, 5, 6)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := r.Evaluate(tc.events)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got [][]uuid.UUID
+			for _, match := range m {
+				if match.Anchor != match.Evidence[len(match.Evidence)-1] {
+					t.Fatalf("终点必须是证据最后一条: %+v", match)
+				}
+				got = append(got, match.Evidence)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("证据 %v，预期 %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestReorderingAndReplayAreDeterministic(t *testing.T) {
-	for _, r := range []*Rule{rule(t, "sequence", "a,b,c", 0), rule(t, "event_count", "a", 3)} {
+	for _, r := range []*Rule{rule(t, "sequence", "a,b,c", 0), rule(t, "event_count", "a", 3), rule(t, "temporal", "a,b,c", 0)} {
 		events := []Event{event(1, 0, "a"), event(2, 1, "a", "b"), event(3, 2, "a", "b"), event(4, 3, "c"), event(5, 4, "c")}
 		want, err := r.Evaluate(events)
 		if err != nil {
@@ -143,6 +186,10 @@ func TestCompileRejectsUnsupportedDefinitions(t *testing.T) {
 		"id: x\nkind: event_count\nwithin: 0s\nrules: [a]\nthreshold: 3",
 		"id: x\nkind: sequence\nwithin: 1m\nrules: [a,b]\n---\nid: second",
 		"id: a\nkind: event_count\nwithin: 1m\nrules: [a]\nthreshold: 3",
+		"id: x\nkind: temporal\nwithin: 1m\nrules: [a,a]",
+		"id: x\nkind: temporal\nwithin: 1m\nrules: [a]",
+		"id: x\nkind: temporal\nwithin: 1m\nrules: [a,b]\nthreshold: 2",
+		"id: x\nkind: temporal\nwithin: 1m\nrules: [a,b]\nmin_assets: 1",
 	} {
 		if _, err := Compile([]byte(text), map[string]bool{"a": true, "b": true}); err == nil {
 			t.Fatalf("应拒绝: %s", text)
