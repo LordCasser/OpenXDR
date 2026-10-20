@@ -33,6 +33,11 @@ func TestTemporalRuleSnapshotHistory(t *testing.T) {
 	if _, err := db.Exec(`DELETE FROM temporal_rule_snapshots`); err != nil {
 		t.Fatal(err)
 	}
+	// 本测试的旧归档会被其他包的归档清理测试计入，结束时删掉
+	t.Cleanup(func() {
+		db.Exec(`DELETE FROM temporal_detections`)
+		db.Exec(`DELETE FROM temporal_rule_snapshots`)
+	})
 	// 两个历史版本：当前仓库规则（较新）与一个较旧的空规则版本；外加一个被改动的归档
 	if _, err := db.Exec(`INSERT INTO temporal_rule_snapshots(revision,document,created_at) VALUES($1,$2::jsonb,now()-interval '1 day')`, snapshot.Revision(), string(snapshot.Archive())); err != nil {
 		t.Fatal(err)

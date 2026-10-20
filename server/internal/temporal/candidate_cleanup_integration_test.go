@@ -21,6 +21,10 @@ func TestPruneCandidatesKeepsLiveWindowsAndEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	// 共享测试库里别的测试留下的旧归档会计入下方归档清理数量
+	if _, err := db.Exec(`DELETE FROM temporal_rule_snapshots`); err != nil {
+		t.Fatal(err)
+	}
 	group := uuid.New()
 	asset := c.Asset.Create().SetHostname("candidate-cleanup").SetGroupID(group).SaveX(ctx)
 	current, other := "current-"+uuid.NewString(), "other-"+uuid.NewString()
