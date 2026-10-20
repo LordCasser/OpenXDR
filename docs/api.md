@@ -63,6 +63,20 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | POST | `/api/suppressions` | `{"ruleId","assetId"(空=全局),"reason","expiresInDays"(0=长期)}`；需该资产所在组的 analyst，全局抑制仅 admin，否则 403 |
 | DELETE | `/api/suppressions/{id}` | 撤销，权限同创建（按该抑制的资产判断） |
 
+## 可信自动化来源
+
+按 SSH 登录身份认出的运维自动化，命中的告警不进事件与研判（高危例外除外），见
+[检测链路 · 可信自动化来源](detection.md#可信自动化来源serverinternalautomation)。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/trusted-sources?groupId=` | 列表（含已撤销、已过期，带命中次数与最近命中）；组内成员可看，`groupId` 可省略（看全部可见组） |
+| GET | `/api/trusted-sources/candidates?groupId=` | 组内近 7 天 agent 核对过出处的 SSH 成功登录，按（用户、来源、指纹）归并，标出已被哪些生效来源覆盖；组管理员 |
+| POST | `/api/trusted-sources` | `{"groupId","name","reason","keyFingerprint","sourceCidr","loginUser","expiresInDays"(1–365)}`；指纹与网段至少一个，只填网段时不宽于 /24；组管理员，落审计 |
+| POST | `/api/trusted-sources/{id}/revoke` | 撤销（保留记录，立即生效）；组管理员，落审计，重复撤销 409 |
+
+`GET /api/events` 的条目与 `GET /api/incidents/{id}` 的告警带 `automation: {id, name, watch}`（来自可信来源时；`watch` 为高危例外）。
+
 ## 响应处置
 
 | 方法 | 路径 | 说明 |

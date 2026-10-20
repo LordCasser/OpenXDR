@@ -212,7 +212,8 @@ SQL 出错时把 PostgreSQL 报错原文（只取 message）返回给模型，�
 `PI_QUERY_DATABASE_URLS`（JSON：组 UUID → DSN）。手工配置的身份始终优先于自动开通，
 **而且不会随版本刷新**：升级后要重跑一遍脚本，否则模型拿到的视图与 skill 文档对不上；能自动开通就不要手工配置。
 两种方式建的视图相同，都按组固化过滤：assets（含 agent 版本、失联时间、AI 画像、监听端口、云环境与服务 / 外联调查结论）、
-events、alerts、alert_events（告警连同原始事件）、incidents、commands、findings（运维待办）、suppressions（本组主机上的抑制，不含全局抑制）、
+events、alerts、alert_events（告警连同原始事件；两者带可信来源标注 automation_id / automation_watch）、incidents、commands、findings（运维待办）、
+suppressions（本组主机上的抑制，不含全局抑制）、trusted_sources（本组登记的可信自动化来源，只读，Pi 没有登记或撤销的工具）、
 memories（长期记忆）、asset_links（本组主机发起的连接聚合）、ip_infos（只含本组主机连过的地址与本组告警里出现的地址）、
 reports（历史报告，供定时任务与上一轮对比）。incident 与 REST 同口径（全部告警都在本组才可见），
 角色只读、5 秒超时、最多 5 个连接。

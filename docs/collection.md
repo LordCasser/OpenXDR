@@ -145,6 +145,13 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
   （`authwatch.rs:29-31,124`）
 - 字段：`user.name`、`src_endpoint.ip`（ut_host）、`service.name`（ut_line）
   （`authwatch.rs:105-128`）
+- journald 的 sshd 日志用 `journalctl -o json` 读，带上 journald 从内核取的发送方凭据。认证成功且出自 root 身份的
+  `sshd` / `sshd-session`（`_UID` / `_COMM`，伪造需要 root）时，解析认证方式与公钥指纹（只认 publickey），
+  认证事件带 `login_session`，并把 sshd 特权监控进程登记给会话归属（`sshsession.rs`）
+- **SSH 会话归属**（`sshsession.rs`）：监控进程打开 PAM 会话后（pam_loginuid）的审计会话号就是整个会话的会话号；
+  进程采集给每个新进程读 `/proc/<pid>/sessionid`，对上就在事件顶层写 `login_session`（含会话号 `uid`）。
+  监控进程按启动时刻核对，防 pid 复用；进程已退场读不到时沿父进程继承；没有任何 SSH 登录时不读 /proc。
+  会话号未设置（无 pam_loginuid、非特权容器）或日志晚于进程到达都只是不打标。Windows 不做
 
 ### 网络采集（netwatch，仅 eBPF 构建）
 

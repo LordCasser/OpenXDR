@@ -5,6 +5,19 @@
 
 ## [未发布]
 
+### 可信自动化来源
+
+- 运维脚本与第三方 AI 运维插件（如 Termix 的 AI 运维）经 SSH 跑的巡检、探测命令不再变成 incident：组管理员在「可信自动化」页
+  按 SSH 登录身份（公钥指纹、来源网段、登录用户）登记可信来源，命中的告警照常入库、标注「来自可信自动化：<名称>」，
+  但不进关联、研判与推送，也不计入态势统计。只认登录事实，不提供按命令行或进程名放行。
+- 凭据窃取、清日志 / 清历史、削弱防御、破坏与情报命中属于高危例外，即使来自可信来源也照常研判——密钥被盗用时不能全盲。
+- 与抑制同等治理：按组生效、有效期必填（1–365 天）、可撤销、命中持续计数，登记与撤销落审计；只有组管理员能登记，Pi 没有对应工具。
+  页面列出组内近 7 天 agent 核对过出处的 SSH 登录，可直接从中登记。
+- agent（Linux）：journald 的 sshd 日志改用 JSON 读取，按内核凭据核对出自 root 身份的 sshd 后解析公钥指纹；
+  按内核审计会话号把登录归属（`login_session`）挂到会话里的每个进程上。需要 pam_loginuid；容器内的 sshd 与 Windows 不支持。
+- 数据库：新增 `trusted_sources` 表，`alerts` 新增 `automation_id`、`automation_watch` 列（启动时自动建）；
+  组只读视图 `alerts` / `alert_events` 带这两列，新增 `trusted_sources` 视图，手工开通查询身份的需重跑 `deploy/pi-query/group-views.sql`。
+
 ### 检测
 
 - 新增 Windows 规则「User-Level COM Hijack (HKCU CLSID Server)」（T1546.015）：HKCU CLSID 的 InprocServer32 / LocalServer32
