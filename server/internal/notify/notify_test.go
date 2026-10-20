@@ -36,6 +36,7 @@ func TestDecide(t *testing.T) {
 		{"已关闭跳过", incidentAt(fresh, "closed", ""), 3, false, "已人工处理"},
 		{"误报跳过", incidentAt(fresh, "false_positive", ""), 3, false, "已人工处理"},
 		{"未研判等待", incidentAt(fresh, "open", ""), 3, false, "wait"},
+		{"升级重开等重新研判", incidentAt(fresh, "open", `{"verdict":"benign"}`), 4, false, "wait"},
 		{"良性静默", incidentAt(fresh, "triaged", `{"verdict":"benign"}`), 3, false, "AI 判定良性"},
 		{"高危良性仍推送待复核", incidentAt(fresh, "triaged", `{"verdict":"benign"}`), 4, true, ""},
 		{"恶意推送", incidentAt(fresh, "triaged", `{"verdict":"malicious","confidence":90}`), 3, true, ""},

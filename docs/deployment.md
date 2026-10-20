@@ -339,6 +339,7 @@ server 全部通过环境变量配置，均有默认值：
 | `ALERT_DEDUP_WINDOW_MINUTES` | `5` | 告警去重窗口 |
 | `CORRELATE_WINDOW_MINUTES` | `30` | 关联时间窗 |
 | `CORRELATE_MAX_GRAPH_NODES` | `500` | 单个事件图节点上限 |
+| `CORRELATE_RECUR_HOURS` | `24`（0 关闭） | 同资产同规则同实体的复发并回未结案事件的最长跨度（从事件创建起算） |
 | `AI_MODEL` | 空（不启用） | 事件研判与资产标注的模型名。**`AI_*`、`PI_MODEL`、`VT_API_KEY`、`IPINFO_PTR`、`VT_ALERT_MIN_ENGINES` 也能在控制台「系统设置 → AI 模型 / 外部情报」里改**，保存过的项以控制台为准、十几秒内全集群生效，环境变量只是首次部署的默认值；控制台保存的密钥用 `HOST_CREDENTIAL_KEY` 加密，没配这把钥匙时只能用环境变量提供密钥 |
 | `AI_BASE_URL` | `http://localhost:11434/v1` | OpenAI 兼容端点 |
 | `SYSLOG_ADDR` | 空（不启用） | syslog 监听地址，如 `:514`。UDP 与 TCP 同时监听 |

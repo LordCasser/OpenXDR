@@ -119,11 +119,14 @@ func (n *Notifier) decide(inc *ent.Incident, severity int16) (bool, string) {
 	if inc.Status == "closed" || inc.Status == "false_positive" {
 		return false, "已人工处理"
 	}
-	if len(inc.AiVerdict) == 0 {
+	// 没研判过，或级别升高后重开、等着带新证据重新研判：旧结论不作数，先等
+	if len(inc.AiVerdict) == 0 || inc.Status == "open" {
 		if n.WaitTriage != nil && n.WaitTriage() {
 			return false, "wait"
 		}
-		return true, "" // AI 未启用，事件即推
+		if len(inc.AiVerdict) == 0 {
+			return true, "" // AI 未启用，事件即推
+		}
 	}
 	var v verdict
 	_ = json.Unmarshal(inc.AiVerdict, &v)

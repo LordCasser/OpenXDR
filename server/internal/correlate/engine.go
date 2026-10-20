@@ -1,5 +1,6 @@
 // Package correlate 关联引擎：周期性把未归属的告警聚合成 incident。
-// MVP 策略：同一资产、时间窗口内的告警归入同一个 open/triaged incident。
+// 策略：进程血缘、同一资产时间窗口内的告警、同资产同规则同实体的复发与横向移动
+// 归入同一个 open/triaged incident。
 package correlate
 
 import (
@@ -35,6 +36,8 @@ type Engine struct {
 	Window        time.Duration
 	Interval      time.Duration
 	MaxGraphNodes int
+	// RecurSpan 同资产同规则同实体的复发并回未结案 incident 的最长跨度（从 incident 创建起算），0 关闭
+	RecurSpan time.Duration
 }
 
 func (e *Engine) Run(ctx context.Context) {
@@ -77,6 +80,11 @@ func (e *Engine) batch(ctx context.Context) error {
 	// 标题跟随最高级别的告警：maxSev 是各 incident 当前最高级别，titles 是批内要改写的标题
 	maxSev := map[uuid.UUID]int16{}
 	titles := map[uuid.UUID]string{}
+	// 复发：byEntity 是批内同资产同规则同实体最近归属的 incident，seen 记各 incident 批内已有的实体
+	byEntity := map[string]*ent.Incident{}
+	seen := map[string]bool{}
+	// 级别升高的已有 incident：清掉推送标记，研判后按新级别重新决定是否推送
+	escalate := map[uuid.UUID]bool{}
 
 	for _, al := range pending {
 		// 匹配不到资产的告警（例如探针看到的外部 IP）统一归到 uuid.Nil 这个桶，
@@ -86,12 +94,20 @@ func (e *Engine) batch(ctx context.Context) error {
 			bucket = *al.AssetID
 		}
 
+		key := recurKey(al)
+		entity := ""
+		if key != "" && al.AssetID != nil {
+			entity = al.AssetID.String() + "|" + al.RuleID + "|" + key
+		}
+
 		// 进程血缘优先于时间窗：父进程所在的 incident 就是这条告警的归属，
 		// 攻击链因此能跨越时间窗——这是 XDR 区别于孤立告警系统的地方。
+		// 超出时间窗后，同资产同规则同实体的复发并回仍未结案的 incident（跨度有上限）。
 		// 本机没有故事可归时再看横向移动：时间窗内有别的主机连过来，
 		// 这台机器上的告警就是那台机器攻击故事的延续。
 		var inc *ent.Incident
 		var lateralFrom *ent.Asset
+		recurred := false
 		if found, err := e.findByLineage(ctx, al); err == nil {
 			inc = found
 		} else if cached, ok := byAsset[bucket]; ok &&
@@ -99,6 +115,10 @@ func (e *Engine) batch(ctx context.Context) error {
 			inc = cached.incident
 		} else if found, err := e.findOpen(ctx, al.AssetID, al.Ts.Add(-e.Window)); err == nil {
 			inc = found
+		} else if cached, ok := byEntity[entity]; ok && al.Ts.Sub(cached.CreatedAt) <= e.RecurSpan {
+			inc, recurred = cached, true
+		} else if found, err := e.findRecurrence(ctx, al, key); err == nil {
+			inc, recurred = found, true
 		} else if found, src, err := e.findByLateral(ctx, al); err == nil {
 			inc = found
 			lateralFrom = src
@@ -118,14 +138,28 @@ func (e *Engine) batch(ctx context.Context) error {
 				return err
 			}
 		}
-		if al.Severity > maxSev[inc.ID] {
+		escalated := al.Severity > maxSev[inc.ID]
+		if escalated {
 			maxSev[inc.ID] = al.Severity
 			titles[inc.ID] = e.title(al)
+			escalate[inc.ID] = true
 		}
 		byAsset[bucket] = cachedIncident{incident: inc, lastTs: al.Ts}
-		// 已研判的 incident 收到新证据：重开，研判引擎会带新证据重新定性
+		// 已研判的 incident 收到新证据：重开，研判引擎会带新证据重新定性。
+		// 同一实体同一规则又来一次不算新证据——周期扫描每来一次就重新研判一遍，
+		// 等于把拆开的 incident 换个形式又研判 N 次；级别升高才是要重新定性的信号
+		seenKey := inc.ID.String() + "|" + entity
 		if inc.Status == "triaged" {
-			reopen[inc.ID] = true
+			repeated := entity != "" && (recurred || seen[seenKey] || e.seenIn(ctx, inc.ID, al, key))
+			if escalated || !repeated {
+				reopen[inc.ID] = true
+			}
+		}
+		if entity != "" {
+			seen[seenKey] = true
+			if e.RecurSpan > 0 {
+				byEntity[entity] = inc
+			}
 		}
 
 		g, ok := graphs[inc.ID]
@@ -150,6 +184,9 @@ func (e *Engine) batch(ctx context.Context) error {
 		}
 		if title, ok := titles[incID]; ok {
 			upd.SetTitle(title)
+		}
+		if escalate[incID] {
+			upd.ClearNotifiedAt()
 		}
 		if err := upd.Exec(ctx); err != nil {
 			return err
@@ -340,6 +377,7 @@ func (e *Engine) ruleTitle(ruleID string) string {
 // OCSF class：网络活动 / DNS 活动，其余按端点事件处理
 const (
 	classFileActivity    = 1001
+	classProcessActivity = 1007
 	classNetworkActivity = 4001
 	classDNSActivity     = 4003
 )

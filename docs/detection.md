@@ -222,7 +222,15 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 2. **批内同资产缓存**
 3. **同资产时间窗**：`CORRELATE_WINDOW_MINUTES` 默认 30 分钟，含"无资产"
    桶（`engine.go:71-77,216-237`）
-4. **横向移动**：只在本机没有归属故事时才查——时间窗内别的主机有
+4. **复发**：超出时间窗后，同资产、同规则、同实体的告警并回仍未结案
+   （open/triaged）的 incident——周期扫描、轮询外联是同一件事反复发生，
+   每次新开 incident 等于让研判与人把同一件事看 N 遍（`recur.go`）。
+   实体键：情报规则的 rule_id 自带 IOC；其余按事件取 DNS 域名（不分大小写）、
+   网络对端 IP（入站取 src，出站与 sensor 取 dst）、文件路径、进程映像+完整命令行；
+   容器（LXC / docker）入键，同机不同容器不并。取不到实体（登录、合成告警等）不做复发归并。
+   跨度上限 `CORRELATE_RECUR_HOURS` 默认 24 小时，从 incident 创建起算，超出就新开；
+   已结案的不重开，复发另起 incident。每次最多比对 100 条候选，比不到按新建处理
+5. **横向移动**：只在本机没有归属故事时才查——时间窗内别的主机有
    conn_tuple 目的端是本机 IP 的会话事件，归并进对端 incident（每 IP 取
    最近 5 条），避免把巧合的网络连接当成攻击路径（`engine.go:184-214`）
 
@@ -233,7 +241,10 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
   connection，边 rel：hosts/triggered/spawned/lateral；上限
   `CORRELATE_MAX_GRAPH_NODES` 默认 500，触顶只累 overflow
   （`graph.go:5-25`、`engine.go:121-126,239-319`）
-- **重开**：triaged 的 incident 收到新告警重开为 open，等重新研判
+- **重开**：triaged 的 incident 收到新证据重开为 open，等重新研判。incident 里已有
+  同资产同规则同实体的告警时，再来一条不算新证据、不重开（否则周期扫描每来一次就重判一次）；
+  级别高于 incident 现有最高级别的告警一律重开，并清掉推送标记——重新研判后按新级别与新结论
+  再决定是否推送，通知在重开期间等研判（`notify.go` decide），升级信号不会被旧的「良性」吞掉
   （`engine.go:110-137`）
 - incident 标题：`"<规则标题> @ <hostname>"`（`engine.go:96-108`）
 
@@ -462,6 +473,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 | `CORRELATE_WINDOW_MINUTES` | `30` | 关联时间窗 |
 | `CORRELATE_INTERVAL_SECONDS` | `10` | 关联批次周期 |
 | `CORRELATE_MAX_GRAPH_NODES` | `500` | 事件图节点上限 |
+| `CORRELATE_RECUR_HOURS` | `24`（0 关闭） | 复发归并跨度上限 |
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测学习期 |
 | `UEBA_INTERVAL_SECONDS` | `30` | UEBA 批次周期 |
 | `BEACON_ENABLED` | `1` | 外联心跳检测开关，0 关闭 |
