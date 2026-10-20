@@ -267,7 +267,8 @@ static UDP_SEEN: LruHashMap<UdpKey, u64> = LruHashMap::with_max_entries(8192, 0)
 
 // include/net/sock.h struct sock_common 开头的布局多年未变：
 //   skc_daddr 0、skc_rcv_saddr 4、skc_dport 12（网络序）、skc_num 14（主机序）、skc_family 16；
-//   IPv6 地址紧跟在 skc_net 之后（发行版内核都开了 CONFIG_NET_NS 与 CONFIG_IPV6）
+//   IPv6 地址紧跟在 skc_net 之后（发行版内核都开了 CONFIG_NET_NS 与 CONFIG_IPV6）；
+//   偏移只取决于 64 位指针宽度，x86_64 与 arm64 相同。上面几个 tracepoint 的 format 也与架构无关
 const SK_DADDR: usize = 0;
 const SK_RCV_SADDR: usize = 4;
 const SK_DPORT: usize = 12;
@@ -300,7 +301,9 @@ pub fn kp_udpv6_sendmsg(ctx: ProbeContext) -> u32 {
 }
 
 /// udp_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)：目标优先取 msg_name
-/// （sendto 未连接的套接字），没有再取套接字上 connect 的对端
+/// （sendto 未连接的套接字），没有再取套接字上 connect 的对端。
+/// ctx.arg 按 pt_regs 取参数寄存器，随架构不同（x86_64 rdi/rsi，arm64 regs[0]/regs[1]）；
+/// aya-build 按 agent 的目标架构传 bpf_target_arch，交叉编译也对得上
 fn try_udp(ctx: &ProbeContext) -> Result<(), i64> {
     let sk: *const u8 = ctx.arg(0).ok_or(1i64)?;
     let msg: *const u8 = ctx.arg(1).ok_or(1i64)?;
