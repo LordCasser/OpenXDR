@@ -121,6 +121,7 @@ func attachDay(ctx context.Context, db *sql.DB, parent, def string, day time.Tim
 		// 先锁默认分区再 ATTACH：写入方是先父表后叶子，ATTACH 对父表的锁与写入不冲突，不会成环
 		stmts = append(stmts,
 			fmt.Sprintf(`LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE`, def),
+			movingRows,
 			fmt.Sprintf(`WITH moved AS (DELETE FROM %s WHERE ts >= %s AND ts < %s RETURNING %s)
  INSERT INTO %s (%s) SELECT %s FROM moved`, def, lo, hi, Columns, name, Columns, Columns))
 	}
@@ -204,6 +205,7 @@ func retireDay(ctx context.Context, db *sql.DB, set partitionSet, day time.Time)
 	if set.defName != "" {
 		for _, stmt := range []string{
 			fmt.Sprintf(`LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE`, set.defName),
+			movingRows,
 			fmt.Sprintf(`WITH moved AS (DELETE FROM %s WHERE ts >= %s AND ts < %s RETURNING %s)
  INSERT INTO %s (%s) SELECT %s FROM moved`, set.defName, lo, hi, Columns, staging, Columns, Columns),
 		} {

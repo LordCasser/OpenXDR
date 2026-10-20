@@ -99,28 +99,13 @@ func relkind(ctx context.Context, q querier, table string) (string, error) {
 	return kind.String, err
 }
 
-// createParent 建分区父表与默认分区。在线迁移的新表先不建二级索引：批量复制完再逐分区并发建，
-// 主键约束名随表名（events_next_pkey），切换时改回 events_pkey。
 func createParent(ctx context.Context, db *sql.DB, name string, withIndexes bool) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	stmts := []string{
-		fmt.Sprintf(`CREATE TABLE %s (%s,
- CONSTRAINT %s PRIMARY KEY (id, ts),
- CONSTRAINT events_assets_events FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
-) PARTITION BY RANGE (ts)`, name, columnDDL, name+"_pkey"),
-		fmt.Sprintf(`CREATE TABLE %s PARTITION OF %s DEFAULT`, DefaultName, name),
-	}
-	for _, idx := range indexes {
-		if !withIndexes {
-			break
-		}
-		stmts = append(stmts, fmt.Sprintf(`CREATE INDEX %s ON %s USING %s`, idx.name, name, idx.method))
-	}
-	for _, stmt := range stmts {
+	for _, stmt := range parentDDL(name, "", withIndexes) {
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
 			return err
 		}
@@ -128,13 +113,39 @@ func createParent(ctx context.Context, db *sql.DB, name string, withIndexes bool
 	return tx.Commit()
 }
 
+// parentDDL 是建分区父表与默认分区的语句。在线迁移的新表先不建二级索引：批量复制完再逐分区并发建；
+// 主键约束名带上 suffix（events_pkey_next），避免与老表重名，切换时去掉。
+func parentDDL(name, suffix string, withIndexes bool) []string {
+	stmts := []string{
+		fmt.Sprintf(`CREATE TABLE %s (%s,
+ CONSTRAINT %s PRIMARY KEY (id, ts),
+ CONSTRAINT events_assets_events FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
+) PARTITION BY RANGE (ts)`, name, columnDDL, "events_pkey"+suffix),
+		fmt.Sprintf(`CREATE TABLE %s PARTITION OF %s DEFAULT`, DefaultName, name),
+	}
+	for _, idx := range indexes {
+		if !withIndexes {
+			break
+		}
+		stmts = append(stmts, fmt.Sprintf(`CREATE INDEX %s ON %s USING %s`, idx.name+suffix, name, idx.method))
+	}
+	return stmts
+}
+
+// movingRows 在搬运事件行（默认分区 → 新分区）的事务里打开：行只是换了分区，不是被删除，
+// 级联、证据保护与迁移镜像触发器都要跳过。只用 SET LOCAL，事务结束即失效。
+const movingRows = `SET LOCAL openxdr.moving_rows = 'on'`
+
+const skipWhenMoving = ` IF current_setting('openxdr.moving_rows', true) = 'on' THEN RETURN NULL; END IF;
+`
+
 // releaseFunctions 代替原来指向 events(id) 的外键：分区表的唯一约束必须含 ts，单列外键建不起来。
 // 逐行删除事件时，派生状态随之清掉（原 ON DELETE CASCADE）；仍是时序证据的事件在提交时拒绝删除
 // （原 NO ACTION DEFERRABLE INITIALLY DEFERRED：同一语句先删锚点、级联掉证据的删除照常通过）。
 // 删分区不触发它们，退役流程显式做同样的事。表不存在（测试库只建了一部分模块）就跳过。
 const releaseFunctions = `CREATE OR REPLACE FUNCTION openxdr_events_release() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
- IF to_regclass('temporal_matches') IS NOT NULL THEN DELETE FROM temporal_matches WHERE event_id = OLD.id; END IF;
+` + skipWhenMoving + ` IF to_regclass('temporal_matches') IS NOT NULL THEN DELETE FROM temporal_matches WHERE event_id = OLD.id; END IF;
  IF to_regclass('temporal_candidates') IS NOT NULL THEN DELETE FROM temporal_candidates WHERE event_id = OLD.id; END IF;
  IF to_regclass('temporal_evaluation_gaps') IS NOT NULL THEN DELETE FROM temporal_evaluation_gaps WHERE event_id = OLD.id; END IF;
  IF to_regclass('temporal_detections') IS NOT NULL THEN DELETE FROM temporal_detections WHERE anchor_id = OLD.id; END IF;
@@ -144,7 +155,7 @@ BEGIN
 END $$;
 CREATE OR REPLACE FUNCTION openxdr_events_evidence() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
- IF to_regclass('temporal_evidence') IS NOT NULL AND EXISTS (SELECT 1 FROM temporal_evidence WHERE event_id = OLD.id) THEN
+` + skipWhenMoving + ` IF to_regclass('temporal_evidence') IS NOT NULL AND EXISTS (SELECT 1 FROM temporal_evidence WHERE event_id = OLD.id) THEN
   RAISE EXCEPTION USING ERRCODE = 'foreign_key_violation', MESSAGE = format('事件 %s 仍是时序命中证据，不能删除', OLD.id);
  END IF;
  RETURN NULL;

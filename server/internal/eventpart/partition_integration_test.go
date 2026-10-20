@@ -123,12 +123,18 @@ func TestEnsureDaysMovesDefaultRows(t *testing.T) {
 	if got := partitionOf(t, db, e.ID); got != eventpart.DefaultName {
 		t.Fatalf("预建范围外的事件应先落默认分区，实际 %s", got)
 	}
+	if _, err := db.Exec(`INSERT INTO temporal_matches(rule_id,event_id) VALUES('m',$1)`, e.ID); err != nil {
+		t.Fatal(err)
+	}
 	n, err := eventpart.EnsureDays(ctx, db, eventpart.Parent, day, 0)
 	if err != nil || n != 1 {
 		t.Fatalf("应新建 1 个分区: %d %v", n, err)
 	}
 	if got := partitionOf(t, db, e.ID); got != eventpart.DailyName(day) {
 		t.Fatalf("默认分区的行应搬进新日分区，实际 %s", got)
+	}
+	if !exists(t, db, `SELECT 1 FROM temporal_matches WHERE event_id = $1`, e.ID) {
+		t.Fatal("搬分区不是删除，派生状态不能被级联清掉")
 	}
 	if n, err := eventpart.EnsureDays(ctx, db, eventpart.Parent, day, 0); err != nil || n != 0 {
 		t.Fatalf("已有分区不应重建: %d %v", n, err)
