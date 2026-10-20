@@ -82,6 +82,12 @@ func main() {
 		slog.Error("检测规则快照加载失败", "err", err)
 		os.Exit(1)
 	}
+	if temporalRules != nil {
+		// 过期候选清理与 RETENTION_DAYS 无关：它决定候选表规模，不删原始事件或证据
+		go cluster.RunLeader(ctx, db, "temporal-candidates", func(ctx context.Context) {
+			temporalRules.PruneLoop(ctx, db, 5*time.Minute)
+		})
+	}
 	startAnalytics(ctx, db, client, rules, suppressions)
 
 	credentialVault := loadCredentialVault()

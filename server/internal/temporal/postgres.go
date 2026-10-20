@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS temporal_candidates (
  PRIMARY KEY(revision,event_id));
 CREATE INDEX IF NOT EXISTS temporal_candidates_window ON temporal_candidates(revision,asset_id,group_id,ts);
 ALTER TABLE temporal_candidates ADD COLUMN IF NOT EXISTS account text;
+CREATE INDEX IF NOT EXISTS temporal_candidates_ts ON temporal_candidates(ts);
 CREATE INDEX IF NOT EXISTS temporal_candidates_account ON temporal_candidates(revision,group_id,account,ts) WHERE account IS NOT NULL;
 CREATE TABLE IF NOT EXISTS temporal_evaluation_gaps (
  revision text NOT NULL, event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -84,7 +86,8 @@ END $$;`)
 
 type Observation struct {
 	// Skipped 是本事件的覆盖缺口原因，去重后逐项计入 openxdr_temporal_skipped_total：
-	// unscoped（无资产或未分组）、no_account（账号维度规则相关但事件无用户名）、candidate_limit（窗口候选超上限）。
+	// unscoped（无资产或未分组）、no_account（账号维度规则相关但事件无用户名）、candidate_limit（窗口候选超上限）、
+	// late（事件时间早于迟到余量，窗口内候选可能已被清理）。
 	Skipped []string
 	Matches []Match
 }
@@ -131,6 +134,26 @@ func (s *Snapshot) Observe(ctx context.Context, tx *sql.Tx, id uuid.UUID, ruleID
 		if !known[id] {
 			return Observation{}, fmt.Errorf("未知快照基础命中: %s", id)
 		}
+	}
+	// 迟到超过余量的事件：窗口内候选可能已被 PruneCandidates 清理，不在残缺窗口上求值，记缺口。
+	// 用数据库时间判断，与清理同一时钟。
+	var late bool
+	if err := tx.QueryRowContext(ctx, `SELECT $1::timestamptz < now() - make_interval(secs => $2)`, e.Time, LateGrace.Seconds()).Scan(&late); err != nil {
+		return Observation{}, err
+	}
+	if late {
+		if err := s.persistArchive(ctx, tx); err != nil {
+			return Observation{}, err
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO temporal_evaluation_gaps
+ (revision,event_id,asset_id,group_id,reason,candidate_count_lower_bound,window_from,window_to)
+ VALUES($1,$2,$3,$4,'late',0,$5,$6) ON CONFLICT(revision,event_id) DO NOTHING`,
+			s.revision, e.ID, assetID.UUID, groupID.UUID, e.Time.Add(-s.window), e.Time.Add(s.window))
+		if err != nil {
+			return Observation{}, err
+		}
+		result.skip("late")
+		return result, nil
 	}
 	assetScope := Scope{Group: groupID.UUID, Entity: assetID.UUID.String()}
 	accountScope := Scope{Group: groupID.UUID, Entity: AccountEntity(username.String)}
@@ -263,4 +286,26 @@ VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING`, match.Revision, match.
 		recorded = append(recorded, match)
 	}
 	return recorded, nil
+}
+
+// LateGrace 是事件迟到的容忍余量：事件时间早于数据库当前时间减此值时不再求值（记 late 缺口），
+// 候选也只需保留到「最大窗口 + LateGrace」。agent 离线缓冲更久的事件照常入库与单事件检测，但不参与时序关联。
+const LateGrace = 2 * time.Hour
+
+// pruneSlack 覆盖处理事务从开始（now() 取事务开始时间）到读窗口之间的耗时，清理多留这段余量。
+const pruneSlack = 10 * time.Minute
+
+// PruneCandidates 删除不会再被任何求值读取的候选，限批返回删除行数。
+// 当前版本：早于 now() - 最大窗口 - LateGrace - pruneSlack；更晚到的事件已按 late 缺口跳过，读不到被删的候选。
+// 其他版本可能仍被尚未重载的节点使用，按规则允许的最大窗口 24 小时计。候选不被证据或告警引用，
+// 删除不影响已落库命中、temporal_evidence 及原始事件；被删版本的归档随后可由 PruneArchives 释放。
+func PruneCandidates(ctx context.Context, db *sql.DB, revision string, window time.Duration) (int64, error) {
+	result, err := db.ExecContext(ctx, `DELETE FROM temporal_candidates WHERE ctid = ANY(ARRAY(
+ SELECT ctid FROM temporal_candidates WHERE ts < now() - make_interval(secs => $2)
+ AND (revision=$1 OR ts < now() - make_interval(secs => $3)) LIMIT 10000))`,
+		revision, (window + LateGrace + pruneSlack).Seconds(), (24*time.Hour + LateGrace + pruneSlack).Seconds())
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

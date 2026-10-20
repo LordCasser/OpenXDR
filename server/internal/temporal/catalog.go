@@ -2,6 +2,7 @@ package temporal
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"time"
 
@@ -79,6 +80,39 @@ func (s *Store) Watch(ctx context.Context, baseDir, temporalDir string, interval
 			if before == nil || before.Revision() != after.Revision() {
 				slog.Info("检测规则快照已更新", "revision", after.Revision(), "dir", after.Dir())
 			}
+		}
+	}
+}
+
+// PruneLoop 定期清理过期候选，必须经 cluster.RunLeader 运行以保证集群单活。
+// 每轮取一次当前快照，按其最大窗口清理；删满一批就继续，直到清完。
+func (s *Store) PruneLoop(ctx context.Context, db *sql.DB, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		current := s.Current()
+		if current == nil {
+			continue
+		}
+		var total int64
+		for {
+			n, err := PruneCandidates(ctx, db, current.Revision(), current.MaxWindow())
+			total += n
+			if err != nil {
+				slog.Error("清理过期时序候选失败", "err", err)
+				break
+			}
+			if n < 10000 {
+				break
+			}
+		}
+		if total > 0 {
+			slog.Info("清理过期时序候选", "deleted", total)
 		}
 	}
 }

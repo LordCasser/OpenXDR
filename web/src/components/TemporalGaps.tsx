@@ -39,8 +39,9 @@ export function TemporalGaps({ asset }: { asset: Asset }) {
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('temporalGapsEmpty')} /> }}
         columns={[
           { title: t('temporalGapsRecorded'), dataIndex: 'createdAt', width: 180, render: fmtTime },
-          { title: t('temporalGapsReason'), dataIndex: 'reason', render: (value: string) => <Tag color="warning">{t(value === 'candidate_limit' ? 'temporalGapsLimit' : 'temporalGapsUnknown')}</Tag> },
-          { title: t('temporalGapsCount'), dataIndex: 'candidateCountLowerBound', width: 160, render: (value: number) => `≥ ${value.toLocaleString()}` },
+          { title: t('temporalGapsReason'), dataIndex: 'reason', render: (value: string) => <Tag color="warning">{t(value === 'candidate_limit' ? 'temporalGapsLimit' : value === 'late' ? 'temporalGapsLate' : 'temporalGapsUnknown')}</Tag> },
+          // 迟到缺口没有读取窗口，不存在候选数量下限
+          { title: t('temporalGapsCount'), dataIndex: 'candidateCountLowerBound', width: 160, render: (value: number, row) => row.reason === 'late' ? '—' : `≥ ${value.toLocaleString()}` },
         ]}
         expandable={{ expandedRowRender: row => <Descriptions size="small" column={1} items={[
           { key: 'event', label: t('identitySourceEvent'), children: copy(row.eventId) },
