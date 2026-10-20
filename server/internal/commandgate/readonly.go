@@ -256,7 +256,8 @@ var readOnlyPrograms = map[string]func(args []string) bool{
 	"last": nil, "lastb": nil, "lastlog": nil, "getent": nil, "ps": nil, "pgrep": nil, "pidof": nil, "pstree": nil,
 	"ss": nil, "netstat": nil, "lsof": nil, "lsblk": nil, "findmnt": nil, "lscpu": nil, "lspci": nil, "lsusb": nil,
 	"lsmod": nil, "modinfo": nil, "vmstat": nil, "iostat": nil, "mpstat": nil, "getfacl": nil, "lsattr": nil,
-	"pveversion": nil, "printenv": nil, "locale": nil, "getconf": nil,
+	"pveversion": nil, "printenv": nil, "locale": nil, "getconf": nil, "atq": nil, "ipcs": nil, "lsns": nil,
+	"hostid": nil, "arch": nil, "systemd-detect-virt": nil, "lslogins": nil,
 	"find":        noArg("-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"),
 	"sort":        noArgPrefix("-o", "--output"),
 	"uniq":        atMostOneFile, // uniq 输入 输出：第二个文件名会被写
@@ -288,6 +289,7 @@ var readOnlyPrograms = map[string]func(args []string) bool{
 	"zfs":         subcommand(false, "list", "get"),
 	"chronyc":     subcommand(false, "tracking", "sources", "sourcestats", "activity"),
 	"sshd":        sshdTest,
+	"loginctl":    subcommand(true, "list-sessions", "list-users", "list-seats", "show-session", "show-user", "session-status", "user-status"),
 }
 
 // sshdTest sshd -T / -t 只打印或校验配置；不带它们就是起一个守护进程

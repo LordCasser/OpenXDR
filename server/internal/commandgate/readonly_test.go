@@ -24,6 +24,7 @@ func TestReadOnlyAccepts(t *testing.T) {
 		`docker ps --format '{{.Names}} {{.Status}}'`,
 		`stat -c %y /etc/shadow; cat /etc/hostname`,
 		`sshd -T 2>/dev/null | grep -E 'permitrootlogin|passwordauthentication'`,
+		`echo '=== ATQ ==='; atq 2>/dev/null; loginctl list-sessions --no-legend`,
 	} {
 		if !ReadOnly(cmd) {
 			t.Errorf("应判为只读：%s", cmd)
@@ -99,6 +100,7 @@ func TestReadOnlyRejects(t *testing.T) {
 		`top`,
 		`chage -d 0 root`,
 		`sshd`,
+		`loginctl terminate-session 3`,
 		`sshd -D -p 2222`,
 		`sshd -T -o PermitRootLogin=yes`,
 		`rpm -e pkg`,
