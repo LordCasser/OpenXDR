@@ -38,6 +38,8 @@ type Engine struct {
 	MaxGraphNodes int
 	// RecurSpan 同资产同规则同实体的复发并回未结案 incident 的最长跨度（从 incident 创建起算），0 关闭
 	RecurSpan time.Duration
+	// RecurCoarse 进程类告警再按粗键（映像+用户+父进程映像，命令行不入键）归并复发；解释器类仍按完整命令行
+	RecurCoarse bool
 }
 
 func (e *Engine) Run(ctx context.Context) {
@@ -80,7 +82,7 @@ func (e *Engine) batch(ctx context.Context) error {
 	// 标题跟随最高级别的告警：maxSev 是各 incident 当前最高级别，titles 是批内要改写的标题
 	maxSev := map[uuid.UUID]int16{}
 	titles := map[uuid.UUID]string{}
-	// 复发：byEntity 是批内同资产同规则同实体最近归属的 incident，seen 记各 incident 批内已有的实体
+	// 复发：byEntity 是批内同资产同规则同实体（精确键与粗键各一份）最近归属的 incident，seen 记各 incident 批内已有的实体
 	byEntity := map[string]*ent.Incident{}
 	seen := map[string]bool{}
 	// 级别升高的已有 incident：清掉推送标记，研判后按新级别重新决定是否推送
@@ -94,10 +96,16 @@ func (e *Engine) batch(ctx context.Context) error {
 			bucket = *al.AssetID
 		}
 
-		key := recurKey(al)
-		entity := ""
+		key, coarse := recurKeys(al)
+		if !e.RecurCoarse {
+			coarse = ""
+		}
+		entity, coarseEntity := "", ""
 		if key != "" && al.AssetID != nil {
 			entity = al.AssetID.String() + "|" + al.RuleID + "|" + key
+			if coarse != "" {
+				coarseEntity = al.AssetID.String() + "|" + al.RuleID + "|~" + coarse
+			}
 		}
 
 		// 进程血缘优先于时间窗：父进程所在的 incident 就是这条告警的归属，
@@ -107,7 +115,6 @@ func (e *Engine) batch(ctx context.Context) error {
 		// 这台机器上的告警就是那台机器攻击故事的延续。
 		var inc *ent.Incident
 		var lateralFrom *ent.Asset
-		recurred := false
 		if found, err := e.findByLineage(ctx, al); err == nil {
 			inc = found
 		} else if cached, ok := byAsset[bucket]; ok &&
@@ -115,10 +122,10 @@ func (e *Engine) batch(ctx context.Context) error {
 			inc = cached.incident
 		} else if found, err := e.findOpen(ctx, al.AssetID, al.Ts.Add(-e.Window)); err == nil {
 			inc = found
-		} else if cached, ok := byEntity[entity]; ok && al.Ts.Sub(cached.CreatedAt) <= e.RecurSpan {
-			inc, recurred = cached, true
-		} else if found, err := e.findRecurrence(ctx, al, key); err == nil {
-			inc, recurred = found, true
+		} else if cached := cmp.Or(byEntity[entity], byEntity[coarseEntity]); cached != nil && al.Ts.Sub(cached.CreatedAt) <= e.RecurSpan {
+			inc = cached
+		} else if found, err := e.findRecurrence(ctx, al, key, coarse); err == nil {
+			inc = found
 		} else if found, src, err := e.findByLateral(ctx, al); err == nil {
 			inc = found
 			lateralFrom = src
@@ -147,10 +154,11 @@ func (e *Engine) batch(ctx context.Context) error {
 		byAsset[bucket] = cachedIncident{incident: inc, lastTs: al.Ts}
 		// 已研判的 incident 收到新证据：重开，研判引擎会带新证据重新定性。
 		// 同一实体同一规则又来一次不算新证据——周期扫描每来一次就重新研判一遍，
-		// 等于把拆开的 incident 换个形式又研判 N 次；级别升高才是要重新定性的信号
+		// 等于把拆开的 incident 换个形式又研判 N 次；级别升高才是要重新定性的信号。
+		// 按粗键并进来的不是同一实体（命令行不同、新冒出的程序），照常重开重判
 		seenKey := inc.ID.String() + "|" + entity
 		if inc.Status == "triaged" {
-			repeated := entity != "" && (recurred || seen[seenKey] || e.seenIn(ctx, inc.ID, al, key))
+			repeated := entity != "" && (seen[seenKey] || e.seenIn(ctx, inc.ID, al, key))
 			if escalated || !repeated {
 				reopen[inc.ID] = true
 			}
@@ -159,6 +167,9 @@ func (e *Engine) batch(ctx context.Context) error {
 			seen[seenKey] = true
 			if e.RecurSpan > 0 {
 				byEntity[entity] = inc
+				if coarseEntity != "" {
+					byEntity[coarseEntity] = inc
+				}
 			}
 		}
 

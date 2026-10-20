@@ -230,6 +230,7 @@ func startAnalytics(ctx context.Context, db *sql.DB, client *ent.Client, rules s
 		Interval:      time.Duration(getenvInt("CORRELATE_INTERVAL_SECONDS", 10)) * time.Second,
 		MaxGraphNodes: getenvInt("CORRELATE_MAX_GRAPH_NODES", 500),
 		RecurSpan:     time.Duration(getenvInt("CORRELATE_RECUR_HOURS", 24)) * time.Hour,
+		RecurCoarse:   getenvInt("CORRELATE_RECUR_COARSE", 1) == 1,
 	}
 	go cluster.RunLeader(ctx, db, "correlate", correlator.Run)
 

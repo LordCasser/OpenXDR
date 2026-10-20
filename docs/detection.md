@@ -226,8 +226,15 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
    （open/triaged）的 incident——周期扫描、轮询外联是同一件事反复发生，
    每次新开 incident 等于让研判与人把同一件事看 N 遍（`recur.go`）。
    实体键：情报规则的 rule_id 自带 IOC；其余按事件取 DNS 域名（不分大小写）、
-   网络对端 IP（入站取 src，出站与 sensor 取 dst）、文件路径、进程映像+完整命令行；
+   网络对端 IP（入站取 src，出站与 sensor 取 dst）、文件路径、进程（执行用户 + 父进程映像 +
+   映像 + 完整命令行，映像路径按 merged-usr 归一、Windows 路径不分大小写）；
    容器（LXC / docker）入键，同机不同容器不并。取不到实体（登录、合成告警等）不做复发归并。
+   进程类再有一档**粗键**（`CORRELATE_RECUR_COARSE`，默认开）：去掉命令行，同用户、同父进程映像、
+   同映像的告警也并——同一程序被同一种父进程反复拉起，参数不同仍是同一类事。两个例外：
+   映像是解释器或命令包装器（sh/bash/python/perl/powershell/cmd/rundll32/timeout/sudo/xargs/ssh 等，
+   名单见 `recur.go`）时没有粗键，仍按完整命令行认——`bash -c` 后面跟什么都行，映像相同说明不了行为相同；
+   首次出现（`xdr:new-process`）按（资产, 映像）建基线、同一映像只告警一次，它的粗键去掉映像，
+   即同主机同用户同父进程下陆续冒出的新程序并成一件。
    跨度上限 `CORRELATE_RECUR_HOURS` 默认 24 小时，从 incident 创建起算，超出就新开；
    已结案的不重开，复发另起 incident。每次最多比对 100 条候选，比不到按新建处理
 5. **横向移动**：只在本机没有归属故事时才查——时间窗内别的主机有
@@ -242,7 +249,9 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
   `CORRELATE_MAX_GRAPH_NODES` 默认 500，触顶只累 overflow
   （`graph.go:5-25`、`engine.go:121-126,239-319`）
 - **重开**：triaged 的 incident 收到新证据重开为 open，等重新研判。incident 里已有
-  同资产同规则同实体的告警时，再来一条不算新证据、不重开（否则周期扫描每来一次就重判一次）；
+  同资产同规则同实体（精确键）的告警时，再来一条不算新证据、不重开（否则周期扫描每来一次就重判一次）；
+  按粗键并进来的是同类的另一件事（命令行不同、新冒出的程序），照常重开重判，但同级不清推送标记；
+  研判上下文按规则汇总全部告警条数与累计命中，明细只列前 50 条时也能看到同类重复了多少次；
   级别高于 incident 现有最高级别的告警一律重开，并清掉推送标记——重新研判后按新级别与新结论
   再决定是否推送，通知在重开期间等研判（`notify.go` decide），升级信号不会被旧的「良性」吞掉
   （`engine.go:110-137`）
@@ -474,6 +483,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 | `CORRELATE_INTERVAL_SECONDS` | `10` | 关联批次周期 |
 | `CORRELATE_MAX_GRAPH_NODES` | `500` | 事件图节点上限 |
 | `CORRELATE_RECUR_HOURS` | `24`（0 关闭） | 复发归并跨度上限 |
+| `CORRELATE_RECUR_COARSE` | `1` | 进程类告警按粗键（用户+父进程映像+映像）归并复发，0 只按完整命令行 |
 | `UEBA_LEARNING_DAYS` | `7` | 首次出现检测学习期 |
 | `UEBA_INTERVAL_SECONDS` | `30` | UEBA 批次周期 |
 | `BEACON_ENABLED` | `1` | 外联心跳检测开关，0 关闭 |
