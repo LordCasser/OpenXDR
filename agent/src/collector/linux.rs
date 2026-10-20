@@ -150,10 +150,6 @@ async fn run_ebpf(
     // exec 事件按 CPU 分发到多个任务，进程血缘是全局的，注册表要共享。
     // exec 频率远低于包速率，这把锁的争用可以忽略。
     let registry = std::sync::Arc::new(std::sync::Mutex::new(seeded_registry()));
-    let probe = registry.clone();
-    super::liveness::spawn(tx.clone(), &super::liveness::PROCESS, move || {
-        super::liveness::probe_process(&probe)
-    });
 
     for cpu in online_cpus().map_err(|(_, e)| e)? {
         let mut buf = events.open(cpu, None)?;
@@ -243,6 +239,13 @@ async fn run_ebpf(
             }
         }
     }
+
+    // 进程活性检测放在全部挂载成功之后：中途失败会回落 netlink，那条路径自己盯，
+    // 自检进程得登记在真正处理事件的那张注册表里
+    let probe = registry.clone();
+    super::liveness::spawn(tx.clone(), &super::liveness::PROCESS, move || {
+        super::liveness::probe_process(&probe)
+    });
 
     // 常驻：bpf 句柄在本栈上保活，程序保持挂载
     tx.closed().await;
