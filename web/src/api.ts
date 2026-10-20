@@ -305,6 +305,22 @@ export interface Suppression {
   reviewedAt: string | null
   // 字段条件（AND）：只压字段对得上的命中；为空表示整条规则
   conditions: SuppressCondition[] | null
+  // 误报统计草案（createdBy = fp-stats）的依据，其余为 null
+  evidence: SuppressEvidence | null
+}
+
+export interface SuppressEvidence {
+  // rule 整条规则（实体分散）/ entity 按实体收窄
+  scope: 'rule' | 'entity'
+  windowDays: number
+  falsePositives: number
+  truePositives: number
+  pending: number
+  ratioPercent: number
+  // 不计入的：采纳 AI 结案建议、系统自动结案
+  aiProposals: number
+  autoClosed: number
+  incidents: { id: string; title?: string; resolvedBy: string; resolvedAt: string; source?: string }[]
 }
 
 export interface SuppressCondition {
