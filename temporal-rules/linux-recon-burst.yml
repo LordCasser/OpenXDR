@@ -1,8 +1,0 @@
-id: temporal:linux-recon-burst
-title: 同主机短时侦察命令集中出现
-author: OpenXDR
-kind: event_count
-within: 2m
-rules: [d2f3f4a1-9c30-4d3e-b1e7-3f6a1c2b4d5e]
-threshold: 6
-level: medium

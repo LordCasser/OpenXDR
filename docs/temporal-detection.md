@@ -171,11 +171,11 @@ threshold: 5
 
 ## 仓库实验规则与回放
 
-[`temporal-rules/`](../temporal-rules/README.md) 提供 21 条规则：认证失败计数（主机 / 账号）、爆破后侦察、侦察集中、
+[`temporal-rules/`](../temporal-rules/README.md) 提供 20 条规则：认证失败计数（主机 / 账号）、爆破后侦察、Windows 侦察集中、
 下载执行后持久化、凭据读取后打包/外传/外联、防御削弱后可疑执行，以及 Windows 对应链路，需显式配置后启用。
 各条的窗口、阈值理由与已知误报写在该目录 README。规则仅作时间关联，不推断跨账号身份或进程因果链；
 窗口都不超过 15 分钟，避免放大候选回查范围（见「候选容量缺口」）。
-[`validation/temporal/`](../validation/temporal/README.md) 包含 72 个原文回放用例（每条规则至少一个正例与一个运维良性对照），
+[`validation/temporal/`](../validation/temporal/README.md) 包含 71 个原文回放用例（每条规则至少一个正例与一个运维良性对照），
 并配套最早三条规则的真实 PostgreSQL 迟到/重投/处理器恢复测试；不声称完成实机或生产误报率验收。
 
 ## 回测

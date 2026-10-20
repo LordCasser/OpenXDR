@@ -32,7 +32,6 @@
 | `temporal:linux-auth-burst` | 计数 / 主机 | 5 分钟 ≥ 5 | `lnx_login_failure` |
 | `temporal:linux-account-auth-burst` | 计数 / 账号，`min_assets: 2` | 10 分钟 ≥ 5 | `lnx_login_failure` |
 | `temporal:linux-bruteforce-then-recon` | 序列 / 账号 | 10 分钟，失败 ×5 → 侦察 | `lnx_login_failure` ×5、`lin_recon_commands` |
-| `temporal:linux-recon-burst` | 计数 / 主机 | 2 分钟 ≥ 6 | `lin_recon_commands` |
 | `temporal:windows-recon-burst` | 计数 / 主机 | 2 分钟 ≥ 6 | `win_recon_commands` |
 
 - `linux-auth-burst`：同组同主机 5 分钟内至少 5 次 Linux 失败认证。不按账号或源 IP 分组，不同用户的失败也会累计。
@@ -47,7 +46,8 @@
   是「失败集中 → 侦察」而不是严格的「失败 → 成功 → 侦察」。
   已知误报：被公网持续扫描 root 的主机上，root 的 cron / 监控脚本恰好在窗口内调用 `whoami` 或 `uname -a`；
   自己反复输错密码 5 次后登录执行 `whoami`。前者回测命中多时，按主机对 root 账号窄抑制。
-- `linux-recon-burst` / `windows-recon-burst`：同主机 2 分钟内至少 6 次侦察命令。引擎只能数事件、不能数「不同命令种类」，
+- `windows-recon-burst`：同主机 2 分钟内至少 6 次侦察命令。Linux 版同口径的 `linux-recon-burst` 在生产 7 天数据上回测命中 12 次，
+  全是运维自动化（AI 运维插件成批跑 `uname` / `cat /etc/os-release`），没有上线；要重新加，得先有能排除自动化来源的信号。引擎只能数事件、不能数「不同命令种类」，
   所以阈值定在手工排查（三五条）之上，只抓脚本化的密集侦察；手工侦察会漏，这是刻意取舍。
   已知误报：每分钟多次调用 `whoami` 判断身份的 cron 脚本（Linux 规则按子串匹配 `whoami`，`sh -c "whoami; …"` 父子进程各算一次）；
   RMM / 资产盘点代理成批跑 `ipconfig`、`systeminfo`、`netstat`（Windows）；平台 Pi 运维会话已按平台指令归属另行处理，
