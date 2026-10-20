@@ -140,8 +140,8 @@ export function AssetsPage() {
                 ? <Select size="small" style={{ width: 170 }} value={v ?? UNGROUPED} options={groupOptions} onChange={g => move(a, g)} />
                 : groups.find(g => g.id === v)?.name ?? <Tag>{t('ungrouped')}</Tag>,
             },
-            { responsive: WIDE_ONLY, title: t('thSource'), dataIndex: 'agentId', width: 90, render: (v, a) => v || a.sensorSeen ? <>{v && <Tag>agent</Tag>}{a.sensorSeen && <Tag>sensor</Tag>}</> : <Tag>{t(imported(a) ? 'hostImportedSource' : 'sourceLog')}</Tag> },
-            { title: t('thLastSeen'), dataIndex: 'lastSeen', width: 180, render: (_, a) => imported(a) ? '—' : <Ago iso={hostSeen(a)} />, sorter: (a, b) => hostSeen(a).localeCompare(hostSeen(b)) },
+            { responsive: WIDE_ONLY, title: t('thSource'), dataIndex: 'agentId', width: 140, render: (v, a) => v || a.sensorSeen ? <Space size={4}>{v && <Tag>agent</Tag>}{a.sensorSeen && <Tag>sensor</Tag>}</Space> : <Tag>{t(imported(a) ? 'hostImportedSource' : 'sourceLog')}</Tag> },
+            { title: t('thLastSeen'), dataIndex: 'lastSeen', width: wideTable ? 180 : 120, render: (_, a) => imported(a) ? '—' : <Ago iso={hostSeen(a)} />, sorter: (a, b) => hostSeen(a).localeCompare(hostSeen(b)) },
           ]}
         />}
       </FilterCard>

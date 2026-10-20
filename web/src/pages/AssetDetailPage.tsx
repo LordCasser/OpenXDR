@@ -25,7 +25,7 @@ import { LoadError } from '../components/LoadError'
 import { Page, WIDE_ONLY, useWideTable } from '../components/Page'
 import { eventSummary } from '../components/eventSummary'
 import {
-  CLASS_KEY, CommandStatusTag, HostStateBadge, IncidentStatusTag, SeverityTag, commandKind, errText, fmtTime,
+  CLASS_KEY, CommandStatusTag, HostStateBadge, IncidentStatusTag, SeverityTag, commandKind, errText, fmtTime, hostSeen,
 } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
@@ -179,7 +179,7 @@ export function AssetDetailPage() {
           <Stat label={t('tabEvents')} value={eventCount} onClick={() => setTab('events')} />
         </Col>
         <Col xs={12} xl={6}>
-          <Stat label={t('thLastSeen')} value={<span style={{ fontSize: 17 }}>{asset.agentId ? fmtTime(asset.lastSeen).slice(5) : '—'}</span>} />
+          <Stat label={t('thLastSeen')} value={<span style={{ fontSize: 17 }}>{asset.agentId || asset.sensorSeen ? fmtTime(hostSeen(asset)).slice(5) : '—'}</span>} />
         </Col>
 
         {(asset.agentId || !asset.sensorSeen) && <Col span={24}><CollectorHealth asset={asset} /></Col>}
@@ -199,7 +199,7 @@ export function AssetDetailPage() {
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIncidents')} /> }}
                       columns={[
                         { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
-                        { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
+                        { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: (v, r) => <Link to={`/incidents/${r.id}`} style={{ overflowWrap: 'anywhere' }}>{v ?? r.id}</Link> },
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
                         { responsive: WIDE_ONLY, title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
                       ]} />
@@ -277,10 +277,10 @@ export function AssetDetailPage() {
               <Descriptions.Item label="OS">{asset.osDisplay ?? asset.os ?? '-'}</Descriptions.Item>
               <Descriptions.Item label={t('thIP')}>{asset.ipAddrs?.join(', ') ?? '-'}</Descriptions.Item>
               <Descriptions.Item label={t('group')}>{group?.name ?? <Tag>{t('ungrouped')}</Tag>}</Descriptions.Item>
-              <Descriptions.Item label={t('thSource')}>{asset.agentId ? 'agent' : t('sourceLog')}</Descriptions.Item>
+              <Descriptions.Item label={t('thSource')}>{asset.agentId || asset.sensorSeen ? [asset.agentId && 'agent', asset.sensorSeen && 'sensor'].filter(Boolean).join(' + ') : t('sourceLog')}</Descriptions.Item>
               <Descriptions.Item label={t('agentVersion')}>{asset.agentVersion ?? '-'}</Descriptions.Item>
               <Descriptions.Item label={t('firstSeen')}>{fmtTime(asset.firstSeen)}</Descriptions.Item>
-              <Descriptions.Item label={t('thLastSeen')}>{asset.agentId ? fmtTime(asset.lastSeen) : '—'}</Descriptions.Item>
+              <Descriptions.Item label={t('thLastSeen')}>{asset.agentId || asset.sensorSeen ? fmtTime(hostSeen(asset)) : '—'}</Descriptions.Item>
               <Descriptions.Item label="Agent ID">{asset.agentId ? <Typography.Text className="mono" copyable ellipsis style={{ maxWidth: 200 }}>{asset.agentId}</Typography.Text> : '-'}</Descriptions.Item>
               <Descriptions.Item label="ID"><Typography.Text className="mono" copyable ellipsis style={{ maxWidth: 200 }}>{asset.id}</Typography.Text></Descriptions.Item>
             </Descriptions>
