@@ -39,6 +39,19 @@
 - 行为变化：sensor 会话的源地址不是纳管资产时归到目的端资产（公网打进反代网关的会话归到网关上），组视图与研判由此可见；
   资产图谱按入站记这类会话。此前这些会话不挂资产。
 - 修复：AF_PACKET 内核丢包计数按读取清零的增量当成累计值上报，多 worker 时还互相覆盖。
+### 采集
+
+- 采集活性检测：进程（ETW / eBPF / netlink）、网络（ETW / eBPF）、文件（fanotify / inotify / RDCW）三条通道记录最近一次收到原始事件的时刻，
+  静默久了先自检（拉起一个立即退出的系统程序、回环自连一次 TCP、改写状态目录下的自检文件），自检也看不到就把能力降为 degraded
+  并带原因（进程 5 分钟、网络 10 分钟、文件 30 分钟），事件恢复后自动回到 active。自检事件在 agent 内认出并丢弃，不进库、不触发规则。
+  以前 ETW 会话还在、事件全无时健康状态照报 active。降级原因进「主机采集异常」通知与资产页采集状态；新增 Prometheus 指标
+  `openxdr_collector_capability_problem_hosts{capability,state,silent}` 与告警规则 `OpenXDRCollectorSilent`。
+  **先升级 server 再升级 agent**：旧 server 会拒收带降级原因的采集状态。
+- Windows 网络采集补齐 TCP 入站（TcpAccept，归属到监听进程）、UDP 出站与 IPv6 的 TCP 出站，能力改报 `network: etw / active`；
+  发往 UDP 53 的出站按进程采样，绕过系统解析器自己发 DNS 报文的程序（nslookup 等）不再被 Dnscache 服务的查询压掉。
+- Windows DNS 采集：ETW DNS-Client 的查询完成事件（3008）按发起进程归属，归一化成与 Linux 同构的 4003 事件，
+  出站连接按本机见过的应答回填域名。看到的是系统解析器 API 层（含缓存命中），没有服务器地址与 TTL。
+- Windows 短命进程的连接 / DNS 事件先于它的启动事件到达时，启动事件沿用先到事件占位的进程 GUID，血缘不再断开。
 
 ### 修复
 

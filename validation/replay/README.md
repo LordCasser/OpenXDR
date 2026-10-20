@@ -40,8 +40,9 @@ where ts > now() - interval '15 minutes' group by 1;
 | 文件监控（RDCW / fanotify / inotify） | ✅ RDCW 增改删 | ✅ fanotify 全生命周期+肇事进程 | — | ✅ fanotify 增改删+肇事进程 |
 | 持久化点（注册表/Startup/服务/计划任务） | ✅ 增删，删除带旧值 | ✅（经 fanotify 覆盖 systemd/cron/.ssh） | — | — |
 | 网络（ETW / eBPF 出站） | ✅ ETW TcpConnect + 进程 GUID | ✅ eBPF 捕获 10.0.0.1:4444 | — | ✅ eBPF 完整五元组+进程 GUID |
-| 网络入站 / UDP 出站（eBPF SYN_RECV→ESTABLISHED、kprobe udp_sendmsg） | — | ✅ 入站归属到监听进程（python3 :8000）、UDP 出站 1.1.1.1:123 带进程（docker 特权容器 `--pid=host --cgroupns=host`，6.6 内核，2026-10-18） | — | 未验证 |
-| DNS（AF_PACKET + 经典 BPF） | — | ✅ 问答配对、rcode / 应答入库，按源端口归属到发起 pid，出站连接回填域名（curl → example.org） | — | 未验证 |
+| 网络入站 / UDP 出站（eBPF SYN_RECV→ESTABLISHED、kprobe udp_sendmsg；ETW TcpAccept / UDP 发送） | ✅ Win10 测试机：入站归属到监听进程、UDP 出站带进程、nslookup 直发 UDP 53 按进程上报（第五轮） | ✅ 入站归属到监听进程（python3 :8000）、UDP 出站 1.1.1.1:123 带进程（docker 特权容器 `--pid=host --cgroupns=host`，6.6 内核，2026-10-18） | — | 未验证 |
+| DNS（AF_PACKET + 经典 BPF；Windows ETW DNS-Client 3008） | ✅ Win10 测试机：问答、NXDOMAIN（rcode 3 + SOA）、CNAME 链入库，按发起进程归属，出站连接回填域名（curl → www.baidu.com）（第五轮） | ✅ 问答配对、rcode / 应答入库，按源端口归属到发起 pid，出站连接回填域名（curl → example.org） | — | 未验证 |
+| 采集活性检测（静默降级、自检不外发） | ✅ Win10 测试机：外部停掉 `OpenXDR-Process` 会话，5 分钟后进程能力降为 degraded 并带原因（第五轮） | — | — | 见第五轮 |
 | 退出码与运行时长（eBPF exit_group） | — | ✅ `sh -c "sleep 2; exit 7"` → 退出码 7、2001 ms | — | 未验证 |
 | 容器归属（cgroup） | — | ✅ docker 容器 ID（需 `--cgroupns=host`，否则看到相对路径） | — | 未验证（PVE LXC / QEMU） |
 | 登录（4624/4625 / wtmp-btmp） | ✅ 4625 含失败原因码 | 不适用（WSL 无 wtmp 写入） | 未验证 | ✅ wtmp SSH 登录 |
@@ -150,9 +151,29 @@ agent 为 v0.2.0 musl 静态 / mingw 构建。
   4. 生产 JetStream 的一个消费者（`ingest-0a`）leader 漂到公网 witness 且其流副本落后，该分片停止投递约 10 分钟、积压 2 万条；
      挪回内网节点后几分钟内追平。中心 Grafana 的队列积压告警覆盖了这种情况。
 
+## 第五轮：采集活性检测与 Windows 网络 / DNS 补全（2026-10-20）
+
+环境：同第四轮的 pve1 Windows 10 22H2 测试机与 pve2 Debian 12 测试机，接入生产 HA 控制台。测试版 agent 为当前分支构建，
+临时去掉了二进制哈希上报（否则注册时会被生产分发目录自动升级回去），测完换回原版。
+
+- Windows DNS（ETW DNS-Client 3008）：`Resolve-DnsName`、.NET 解析、curl 的查询均以 4003 入库并归属到发起进程；
+  NXDOMAIN 报 rcode 3 带回 SOA，CNAME 链与 IPv4 映射地址还原正确；只查缓存的试探、getaddrinfo 取消的一路、localhost 不报。
+- Windows 网络：TcpAccept 入站归属到监听的 powershell 进程，`conn_tuple` 发起方在前；UDP 出站带进程；
+  nslookup 绕过系统解析器直发的 UDP 53 按进程上报，不再被 Dnscache 服务对同一服务器的查询压掉；
+  curl 的出站连接回填了 DNS 采集见过的域名。
+- 抓到的缺陷：Windows 的进程、网络、DNS 是三个 ETW 会话，短命进程（nslookup、curl）的连接与查询比它的启动事件早到
+  约 1.5 秒，网络侧现场登记的 GUID 随后被启动事件换掉，血缘断开、事件没有进程名。改为先到的事件占位、10 秒内到达的
+  启动事件沿用占位 GUID，实机确认 curl 的连接、DNS、启动、退出四条事件同一 GUID。
+- 活性检测：外部 `logman stop OpenXDR-Process -ets` 模拟第四轮的「会话在、事件无」——之前健康状态会一直报
+  `etw/active`；新 agent 5 分钟后报「持续 5 分钟收不到进程事件，自检进程也没被看到」。生产 server 尚是旧版，
+  按设计拒收带 `reason` 的快照（`采集状态上报失败：InvalidArgument`），印证了先升 server 后升 agent 的顺序要求。
+  agent 重启后会话重建，能力回到 active。
+- 测试机上 persistwatch 每 30 秒拉起一次 WMI 查询的 powershell，进程通道在 Windows 上不会静默到触发自检；
+  自检进程不外发由单测与 Linux 测试机验证。
+
 ## 已知边界
 
-- ~~agent 异常退出会泄漏 ETW 会话~~：已修（2026-10-20），会话改用固定名 `OpenXDR-Process` / `OpenXDR-Network`，
+- ~~agent 异常退出会泄漏 ETW 会话~~：已修（2026-10-20），会话改用固定名 `OpenXDR-Process` / `OpenXDR-Network`（后加的 DNS 采集同样固定为 `OpenXDR-DNS`），
   启动前先停同名旧会话。旧版本漏下的 `n4r1b-trace-*` 要重启一次主机或手动 `logman stop <name> -ets` 清掉——
   不自动清，因为那是 ferrisetw 的默认命名，别的软件也可能在用。
 - WSL2 不能验证：netlink proc connector（命名空间，agent 正确降级）、wtmp

@@ -226,19 +226,42 @@ region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实�
   （`windows.rs:95` `to_win32_path`）
 - 需要管理员权限；失败回落**轮询**（`windows.rs:5`）。轮询路径下
   username 是 SID 字符串而非用户名（`poll.rs`）
+- 固定会话名 `OpenXDR-Process`，启动前先停同名旧会话；会话起得来不等于有事件，由活性检测兜住
+  （见[采集活性检测](#采集活性检测通道开着却没有数据)）
 
 ### 网络采集（netwatch_win，ETW Kernel-Network）
 
-- 订阅 `Microsoft-Windows-Kernel-Network`（GUID `7dd42a49-...`），只取
-  **event ID 12（TcpConnect）**——本机主动 connect 才触发；端口字段是网络
-  字节序，已换算（`netwatch_win.rs`，实机勘定）
-- 归一化与 Linux eBPF 路径完全同构：共用 `netwatch::conn_event` 组装
-  （class_uid=4001、conn_tuple 同格式、60s 同目标采样去重、loopback/
-  未指定地址不报）；UDP 不做（该 provider 的 UDP 只有逐报文事件，无连接语义）
-- **与进程采集共享同一张 GUID 注册表**——网络事件的 process_guid 与进程
-  血缘严格一致（`mod.rs` 把 Arc<Mutex<ProcessRegistry>> 同时交给
-  netwatch_win 与 windows::run）
-- 独立 trace session，订阅失败只打日志降级，不影响进程采集主路
+- 订阅 `Microsoft-Windows-Kernel-Network`（GUID `7dd42a49-...`），固定会话名 `OpenXDR-Network`。
+  事件号实机勘定（Win10 22H2）：**12 / 28** TcpConnect（IPv4 / IPv6，本机主动 connect）、
+  **15 / 31** TcpAccept（入站建立；事件头记在 System 上，PID 字段是接受连接的监听进程）、
+  **42 / 58** UDP 发送（每个数据报一条）；收发、断连、重传等其余事件号不要
+- 字段统一为 PID/saddr/daddr/sport/dport：saddr/sport 恒为本机一侧（入站也是），端口是网络字节序，已换算
+- 归一化与 Linux eBPF 路径完全同构：共用 `netwatch::conn_event` 组装（class_uid=4001、conn_tuple
+  发起方在前、60s 采样去重，出站按（对端, 端口）、入站按（对端, 本机服务端口））；回环、未指定地址、
+  组播与受限广播不报；出站带 `dst_endpoint.hostname`（DNS 采集见过的域名）
+- UDP 出站：从本机 UDP 服务端口（监听表，30 秒刷新）发出的是回包，不算出站；**发往 53 的照报且按进程采样**——
+  DNS 采集只看系统解析器的 API 层，nslookup 这类自己发 DNS 报文的程序只能在这里看见，不能被 Dnscache 服务
+  对同一台 DNS 服务器的查询压掉
+- **与进程采集共享同一张 GUID 注册表**——网络事件的 process_guid 与进程血缘严格一致（`mod.rs` 把
+  Arc<Mutex<ProcessRegistry>> 同时交给 netwatch_win、dnswatch_win 与 windows::run）。三个 ETW 会话各自投递，
+  短命进程的连接常比它的启动事件先到：先到的事件给 pid 占位，10 秒内到达的启动事件沿用占位的 GUID
+- 能力上报 `network` = `etw` / active（TCP 出入站与 UDP 出站同一会话，起来就是全覆盖）；独立 trace session，
+  订阅失败报 unavailable，不影响进程采集主路
+
+### DNS 采集（dnswatch_win，ETW DNS-Client）
+
+- 订阅 `Microsoft-Windows-DNS-Client`（GUID `1c95126e-...`），固定会话名 `OpenXDR-DNS`，只取 **3008（查询完成）**：
+  它由发起解析的进程自己的 dnsapi 记录，事件头 PID 即发起进程（3006 没有结果，3020 记在 Dnscache 服务里归属不到调用方）
+- 字段 QueryName / QueryType / QueryOptions / QueryStatus / QueryResults；结果是 `type:  5 cname;1.2.3.4;::ffff:5.6.7.8;`
+  这样的分号串，CNAME 带类型前缀，getaddrinfo 双栈查询的 IPv4 结果写成映射地址（还原成 IPv4）。没有 TTL、
+  没有 DNS 服务器地址与源端口
+- 不报：QueryOptions 带 `DNS_QUERY_NO_WIRE_QUERY`（0x10，只查缓存的试探）、状态 87 / 1223（getaddrinfo 并行 A/AAAA
+  里被取消的一路）、名字是 IP 字面量、`localhost`（系统内置解析，不出本机）
+- 状态映射：0、9501、9701 → rcode 0；9001–9005 → rcode 1–5（9003 即 NXDOMAIN）；其余（超时等）按没等到应答报
+  （activity_id=1）
+- 同一进程对同一 (域名, 类型) 60 秒只报一次；应答地址记 5 分钟，供出站连接回填域名
+- 与 Linux 的差别：看到的是 API 层的解析（含缓存命中），不是线上报文——绕过系统解析器的程序由上面的 UDP 53 出站事件兜住
+- 能力上报 `dns` = `etw-dns-client`；独立 trace session，失败报 unavailable，不影响其余采集
 
 ### 持久化点快照（persistwatch）
 
@@ -425,11 +448,42 @@ agent 的 `respond/` 模块执行 server 下发的指令：结束进程、主机
 队列丢失数仅覆盖本次进程运行期间的内存出口溢出，跨配置切换累计；不统计内核缓冲丢失与尚未刷盘数据。
 上报时间偏差超过 5 分钟会拒绝保存，应先校准 Agent 时钟。服务端保存接收时间，拒绝旧序号覆盖新状态，并继续按组限制读取。
 
+### 采集活性检测（通道开着却没有数据）
+
+实机回放见过 Windows 进程 ETW 会话还在、事件一条都收不到，状态却一直报 `etw/active`。`agent/src/collector/liveness.rs`
+给「正常主机上必然持续有事件」的三条通道记最近一次收到**原始事件**的时刻（周期折叠、采样去重、回环过滤之前就记），
+静默久了先自检，自检也看不到就把能力降为 degraded 并带 `reason`，事件一恢复就撤掉、回到采集路径自报的状态
+（`health.rs` 的静默叠加只作用于自报 active / degraded 的能力）：
+
+| 通道 | 覆盖路径 | 静默多久自检 | 静默多久降级 | 自检办法 |
+|---|---|---|---|---|
+| process | ETW、eBPF、netlink（轮询本身已报 degraded，不盯） | 2 分钟 | 5 分钟 | 拉起一个立即退出的系统程序（Linux `/bin/true`，Windows `cmd /d /c exit 0`，不建控制台） |
+| network | Windows ETW、Linux eBPF | 2 分钟 | 10 分钟 | 本机回环上自连一次 TCP |
+| files | fanotify、inotify、ReadDirectoryChangesW | 10 分钟 | 30 分钟 | 改写状态目录下 `selfcheck/probe`（该目录随监控目标一起挂上） |
+
+阈值取舍：降级时至少已有两次自检落空，瞬时抖动不会误报；进程自检毫秒级就该被看到，所以进程最短；空闲主机可以很久
+没有新连接、敏感目录可以几天不变，所以不靠「正常业务一定有事件」，靠自检兜底，文件自检要落盘、间隔放得最长。
+只在静默时才自检，忙碌的主机不会多出自检进程或自连。
+
+自检只制造 agent 自己认得出的动静，在 agent 内丢掉，不进上报、不碰规则和 AI：自检进程由巡检线程**持进程注册表锁**
+拉起并登记 pid，采集回调处理任何进程事件都要先拿这把锁，拿到时登记已经在了；按 pid 认出它与后代（登记 30 秒有效、
+父进程须是 agent 自己，pid 被复用也藏不掉别人的进程）。回环连接本来就不报；自检文件按路径认出。
+选 agent 内丢弃而不是 cmdorigin 式打标交 server 核对：自检事件对检测和研判没有任何信息量，送出去只会占队列、占库，
+还要每个消费方都记得排除。
+
+降级原因随快照上报（`capabilities.<name>.reason`）。**升级顺序须先 server 后 agent**：旧 server 严格校验快照字段，
+会拒收带 `reason` 的快照（快照随之过期、不被评估），自动升级的分发包本来就随 server 镜像发布，正常流程不受影响。
+
 **主动通知**（`server/internal/liveness/health.go`，与失联巡视同一个单活循环，每分钟一轮）：在线主机的快照里有采集器
 「降级 / 不可用」、本地缓存写不进去、或一轮内丢弃事件超过 `COLLECTOR_DROP_ALERT`（默认 1000，0 不看）时，按 Webhook
 推「N 台主机采集异常」，写明哪台、哪个采集器、走的什么路径；问题集合变了才再推，恢复了推一次「采集恢复正常」。
 丢事件超过阈值后持续一小时才算恢复，避免一阵一阵地来回推；agent 重启累计数归零按重新起算。已失联的主机交给失联通知，
-快照超过 5 分钟没更新（旧 agent、快照停了）的不评估。
+快照超过 5 分钟没更新（旧 agent、快照停了）的不评估。活性检测给出的降级原因写进通知（「进程采集降级（etw）：持续 5 分钟收不到进程事件，自检进程也没被看到」），
+并计入问题签名：同一能力从自报降级变成静默降级会重新推送。
+
+Prometheus 指标 `openxdr_collector_capability_problem_hosts{capability,state,silent}`（`telemetry/collector_health.go`）
+与通知同一口径（在线、快照 5 分钟内），抓取时现查数据库，每个节点报的是同一份；`silent="true"` 即活性检测判定的静默。
+`deploy/cluster/openxdr-alerts.yml` 的 `OpenXDRCollectorSilent` 在静默持续 5 分钟后告警。
 
 ### 缓存损坏与身份变化
 

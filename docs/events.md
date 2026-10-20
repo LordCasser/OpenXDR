@@ -10,8 +10,8 @@ OpenXDR 采用 OCSF 风格事件模型。本文列出所有事件类别、字段
 | 1001 | 文件活动（File System Activity） | agent | Linux fswatch（fanotify/inotify）、Windows fswatch_win、persistwatch 文件/计划任务部分 |
 | 1007 | 进程活动（Process Activity） | agent | Linux eBPF/netlink/轮询、Windows ETW/轮询（启动+退出） |
 | 3002 | 认证（Authentication） | agent | Linux wtmp/btmp；Windows Security 4624/4625/4720/4726/4732/1102/4648/4719 |
-| 4001 | 网络活动（Network Activity） | agent / sensor | agent netwatch 连接（Linux eBPF：TCP 出入站、UDP 出站；Windows ETW Kernel-Network：TCP 出站）；sensor 非 DNS 会话 |
-| 4003 | DNS 活动（DNS Activity） | agent / sensor | agent dnswatch 本机与容器的 DNS 问答（Linux）；sensor 会话带 dns_query 时判定 |
+| 4001 | 网络活动（Network Activity） | agent / sensor | agent netwatch 连接（Linux eBPF、Windows ETW Kernel-Network：TCP 出入站、UDP 出站）；sensor 非 DNS 会话 |
+| 4003 | DNS 活动（DNS Activity） | agent / sensor | agent dnswatch 本机与容器的 DNS 问答（Linux AF_PACKET）、dnswatch_win 系统解析器的查询（Windows ETW DNS-Client）；sensor 会话带 dns_query 时判定 |
 | 1005 | 模块活动（Module Activity） | agent | Linux kmodwatch（/proc/modules diff） |
 | 5001 | 设备清单（Device Inventory Info） | agent | inventory：监听端口（含服务进程所属的包）与云环境快照，供资产图谱与攻击面 |
 | 5020 | 软件清单（Software Inventory Info） | agent | software：发行版与 dpkg 已装包（包名、版本、源码包、源码版本），供漏洞匹配，见 [vulns.md](vulns.md) |
@@ -133,11 +133,10 @@ CommandLine 匹配因此可以直接作用于脚本内容。分片（MessageTota
 两个来源，字段不同：
 
 **agent netwatch**（Linux eBPF 构建 `netwatch.rs:57-81`；Windows ETW
-Kernel-Network `netwatch_win.rs`，订阅 TcpConnect 事件 12，端口为网络字节序
+Kernel-Network `netwatch_win.rs`，TcpConnect 12/28、TcpAccept 15/31、UDP 发送 42/58，端口为网络字节序
 已换算）——两路归一化完全同构（共用 `netwatch::conn_event` 组装与 60s
 同目标采样去重），带进程血缘。Windows 侧与进程采集共享同一张 GUID 注册表，
-网络事件的 process_guid 与进程血缘一致；loopback/未指定地址不报。Windows 只有 TCP 出站，
-Linux 另有 TCP 入站与 UDP 出站：
+网络事件的 process_guid 与进程血缘一致；loopback/未指定地址不报。两个平台都有 TCP 出站、TCP 入站与 UDP 出站：
 
 ```json
 {
@@ -151,7 +150,9 @@ Linux 另有 TCP 入站与 UDP 出站：
 ```
 
 - `direction`：`outbound` 时 src 是本机、进程是发起方；`inbound` 时 src 是对端、dst 是本机服务，
-  进程是监听该端口的服务进程（按监听表查，查不到省略）
+  进程是监听该端口的服务进程（Linux 按监听表查，查不到省略；Windows 取 TcpAccept 事件的 PID 字段）
+- Windows 发往 UDP 53 的出站按进程采样：绕过系统解析器自己发 DNS 报文的程序（nslookup 等）在这里出现，
+  系统解析器（Dnscache 服务）的查询见 4003
 - `protocol_name`：`tcp` / `udp`，与 `conn_tuple` 前缀一致；UDP 的源端口可能是 0（首个数据报才绑定端口）
 - UDP 出站的源地址：未连接套接字按路由查出口地址；查不到时**省略** `src_endpoint.ip`，`conn_tuple` 源地址留空
   （`udp::41641>110.42.47.158:41641`），不报 0.0.0.0 / ::——未指定地址不是一台主机。
@@ -219,6 +220,23 @@ Linux 另有 TCP 入站与 UDP 出站：
 - 只收本机与本机容器发起的查询；同一 (客户端, 域名, 类型) 60 秒内只报一次
 - `requester.ip`：容器里的解析器（AdGuard、dnsmasq）转发上游时，5 秒内送进同一容器的同名同类型查询的客户端地址，即真正问的一方；没有就省略
 - `process` 只在 eBPF 构建里有（按源端口取 UDP 发送事件的进程）；`conn_tuple` 为 `udp:客户端>服务器:53`
+
+**agent dnswatch_win**（Windows，`agent/src/collector/dnswatch_win.rs`，ETW DNS-Client 3008）——字段同上，差别：
+
+```json
+{
+  "activity_id": 6,
+  "query": { "hostname": "www.baidu.com", "type": "A", "rcode_id": 0 },
+  "answers": [ { "type": "CNAME", "rdata": "www.a.shifen.com" }, { "type": "A", "ip": "183.2.172.177" } ],
+  "process": { "pid": 3868, "uid": "<进程 GUID>", "name": "powershell.exe", "file": { "path": "C:\\...\\powershell.exe" } }
+}
+```
+
+- 看的是系统解析器 API 层的解析（含缓存命中），发起进程取自事件本身，必有 `process`
+- 拿不到 DNS 服务器地址、源端口与 TTL：不写 `src_endpoint` / `dst_endpoint`、`answers[].ttl`，`conn_tuple` 为空
+- `answers[].type` 按地址族给（A / AAAA）：getaddrinfo 的双栈查询会把 IPv4 结果放在 AAAA 查询里返回，
+  `query.type` 保留原查询类型
+- 同一进程对同一 (域名, 类型) 60 秒只报一次；只查缓存的试探、getaddrinfo 内部取消的一路不报
 
 **sensor 会话**中 `dns_query` 非空时判定为 4003（`sensor.go:24-28,79-82`），
 在 4001 字段基础上加：
