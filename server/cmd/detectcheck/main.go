@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -38,6 +39,9 @@ type corpusFile struct {
 		// expect: detected（默认）| undetected（已知缺口，显式记录）
 		// | signal（不出告警，但有标了该技术的信号规则命中，供时序规则关联，见 temporal-rules/README.md）
 		Expect string `yaml:"expect"`
+		// level 可选：命中规则里最高的级别必须正好是它——降噪后的维护动作必须停在 low，
+		// 劫持必须还是 high，只看"有没有响"验证不了分级
+		Level string `yaml:"level"`
 	} `yaml:"cases"`
 }
 
@@ -50,7 +54,12 @@ type result struct {
 	detected  bool
 	signal    bool // 没有告警规则命中、但标了该技术的信号规则命中
 	by        string
+	wantLevel string // 语料要求的最高级别，空表示不检查
+	gotLevel  string // 命中规则里的最高级别，没有命中为空
 }
+
+// levelNames 规则 severity（1–5）对应的 Sigma level 名
+var levelNames = []string{"", "informational", "low", "medium", "high", "critical"}
 
 func main() {
 	args := os.Args[1:]
@@ -106,8 +115,16 @@ func main() {
 				fmt.Fprintf(os.Stderr, "%s / %s: 未知 expect %q\n", path, c.Name, expect)
 				os.Exit(2)
 			}
-			r := result{technique: technique, group: group, caseName: c.Name, source: c.Source, expect: expect}
-			if r.by = matchedBy(engine.Evaluate(c.Class, c.OS, c.Event), technique); r.by != "" {
+			if c.Level != "" && !slices.Contains(levelNames[1:], c.Level) {
+				fmt.Fprintf(os.Stderr, "%s / %s: 未知 level %q\n", path, c.Name, c.Level)
+				os.Exit(2)
+			}
+			r := result{technique: technique, group: group, caseName: c.Name, source: c.Source, expect: expect, wantLevel: c.Level}
+			hits := engine.Evaluate(c.Class, c.OS, c.Event)
+			if c.Level != "" {
+				r.gotLevel = maxLevel(hits)
+			}
+			if r.by = matchedBy(hits, technique); r.by != "" {
 				r.detected = true
 			} else if r.by = matchedBy(engine.EvaluateSignals(c.Class, c.OS, c.Event), technique); r.by != "" {
 				r.signal = true
@@ -135,6 +152,15 @@ func matchedBy(hits []*sigma.Rule, technique string) string {
 	return ""
 }
 
+// maxLevel 命中规则里的最高级别，没有命中为空。
+func maxLevel(hits []*sigma.Rule) string {
+	var top int16
+	for _, rule := range hits {
+		top = max(top, rule.Severity)
+	}
+	return levelNames[top]
+}
+
 func techniqueMatch(ruleTech, caseTech string) bool {
 	ruleTech, caseTech = strings.ToUpper(ruleTech), strings.ToUpper(caseTech)
 	return ruleTech == caseTech ||
@@ -158,6 +184,8 @@ func printReport(results []result) {
 		fmt.Printf("\n%s %s\n", tech, group[0].group)
 		for _, r := range group {
 			switch got := r.outcome(); {
+			case got == r.expect && r.wantLevel != r.gotLevel:
+				fmt.Printf("  ! %-46s 最高级别 %q，预期 %q\n", trim(r.caseName), r.gotLevel, r.wantLevel)
 			case got == r.expect && got == "detected":
 				fmt.Printf("  ✓ %-46s → %s\n", trim(r.caseName), r.by)
 			case got == r.expect && got == "signal":
@@ -176,7 +204,7 @@ func printReport(results []result) {
 	techCovered := map[string]bool{}
 	for _, r := range results {
 		switch got := r.outcome(); {
-		case got != r.expect:
+		case got != r.expect || r.wantLevel != r.gotLevel:
 			mismatch++
 		case got == "detected":
 			detected++
@@ -209,7 +237,7 @@ func (r result) outcome() string {
 func countMismatch(results []result) int {
 	n := 0
 	for _, r := range results {
-		if r.outcome() != r.expect {
+		if r.outcome() != r.expect || r.wantLevel != r.gotLevel {
 			n++
 		}
 	}

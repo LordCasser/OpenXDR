@@ -43,6 +43,9 @@ cases:
     expect: detected      # 默认 detected；undetected = 已知缺口，显式记录；signal = 仅信号规则命中
 ```
 
+`level`（可选）：命中规则里的**最高级别**必须正好是它（informational / low / medium / high / critical）。
+降噪只降级不删除时，维护动作的良性对照写 `level: low`，同类劫持写 `level: high`——只看"有没有响"守不住分级。
+
 `expect: undetected` 有两个用途：记录尚未覆盖的手法，
 以及**良性对照**——`sh -c 'echo hello'` 这类正常命令必须不告警，
 它变成"命中"同样是回归。
