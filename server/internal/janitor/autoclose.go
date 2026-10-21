@@ -6,8 +6,11 @@ import (
 	"log/slog"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"openxdr/server/ent"
+	"openxdr/server/ent/incident"
 	"openxdr/server/internal/audit"
+	"openxdr/server/internal/incidentstate"
 	"openxdr/server/internal/review"
 )
 
@@ -37,19 +40,39 @@ func (a *AutoClose) Run(ctx context.Context) {
 	}
 }
 
-// sweep 单条 UPDATE，条件里带着状态：多节点重复执行也只会关一次。
+// sweep 锁住候选后将结案、审计和发件箱一起提交，批量有界。
 func (a *AutoClose) sweep(ctx context.Context) (int, error) {
 	if a.Days <= 0 {
 		return 0, nil
 	}
 	now := time.Now()
 	note := fmt.Sprintf("AI 判良性、级别低于高危、%d 天无人处理，系统自动结案", a.Days)
-	n, err := a.DB.Incident.Update().
-		Where(review.StaleBenign(now.AddDate(0, 0, -a.Days))).
-		SetStatus("false_positive").SetResolution(note).SetResolvedBy(review.ClosedBy).SetResolvedAt(now).
-		Save(ctx)
-	if err == nil && n > 0 {
-		audit.System(ctx, a.DB, "incident_auto_closed", "", fmt.Sprintf("自动结案 %d 个事件（%d 天无人处理的低危良性事件）", n, a.Days))
+	tx, err := a.DB.Tx(ctx)
+	if err != nil {
+		return 0, err
 	}
-	return n, err
+	defer tx.Rollback()
+	rows, err := tx.Incident.Query().Where(review.StaleBenign(now.AddDate(0, 0, -a.Days))).Order(ent.Asc(incident.FieldID)).Limit(500).
+		Where(func(s *sql.Selector) { s.ForUpdate(sql.WithLockAction(sql.SkipLocked)) }).All(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, row := range rows {
+		err := tx.Incident.UpdateOneID(row.ID).SetStatus("false_positive").SetResolution(note).SetResolvedBy(review.ClosedBy).SetResolvedAt(now).ClearClosureProposal().Exec(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if err := incidentstate.Record(ctx, tx, row.ID, incidentstate.StatusChanged, incidentstate.Origin{Kind: "system"}, row.Status); err != nil {
+			return 0, err
+		}
+	}
+	if len(rows) > 0 {
+		if err := audit.Checked(ctx, tx.AuditLog.Create(), "system", "server", "incident_auto_closed", "", fmt.Sprintf("自动结案 %d 个事件（%d 天无人处理的低危良性事件）", len(rows), a.Days)); err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return len(rows), nil
 }

@@ -188,6 +188,18 @@ func (f EventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventMutation", m)
 }
 
+// The ExternalTicketFunc type is an adapter to allow the use of ordinary
+// function as ExternalTicket mutator.
+type ExternalTicketFunc func(context.Context, *ent.ExternalTicketMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ExternalTicketFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ExternalTicketMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExternalTicketMutation", m)
+}
+
 // The FindingFunc type is an adapter to allow the use of ordinary
 // function as Finding mutator.
 type FindingFunc func(context.Context, *ent.FindingMutation) (ent.Value, error)
@@ -258,6 +270,102 @@ func (f IncidentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IncidentMutation", m)
+}
+
+// The IntegrationFunc type is an adapter to allow the use of ordinary
+// function as Integration mutator.
+type IntegrationFunc func(context.Context, *ent.IntegrationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationMutation", m)
+}
+
+// The IntegrationAttemptFunc type is an adapter to allow the use of ordinary
+// function as IntegrationAttempt mutator.
+type IntegrationAttemptFunc func(context.Context, *ent.IntegrationAttemptMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationAttemptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationAttemptMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationAttemptMutation", m)
+}
+
+// The IntegrationDeliveryFunc type is an adapter to allow the use of ordinary
+// function as IntegrationDelivery mutator.
+type IntegrationDeliveryFunc func(context.Context, *ent.IntegrationDeliveryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationDeliveryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationDeliveryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationDeliveryMutation", m)
+}
+
+// The IntegrationEventFunc type is an adapter to allow the use of ordinary
+// function as IntegrationEvent mutator.
+type IntegrationEventFunc func(context.Context, *ent.IntegrationEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationEventMutation", m)
+}
+
+// The IntegrationGroupFunc type is an adapter to allow the use of ordinary
+// function as IntegrationGroup mutator.
+type IntegrationGroupFunc func(context.Context, *ent.IntegrationGroupMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationGroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationGroupMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationGroupMutation", m)
+}
+
+// The IntegrationIdempotencyFunc type is an adapter to allow the use of ordinary
+// function as IntegrationIdempotency mutator.
+type IntegrationIdempotencyFunc func(context.Context, *ent.IntegrationIdempotencyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationIdempotencyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationIdempotencyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationIdempotencyMutation", m)
+}
+
+// The IntegrationSubscriptionFunc type is an adapter to allow the use of ordinary
+// function as IntegrationSubscription mutator.
+type IntegrationSubscriptionFunc func(context.Context, *ent.IntegrationSubscriptionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationSubscriptionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationSubscriptionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationSubscriptionMutation", m)
+}
+
+// The IntegrationTokenFunc type is an adapter to allow the use of ordinary
+// function as IntegrationToken mutator.
+type IntegrationTokenFunc func(context.Context, *ent.IntegrationTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntegrationTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntegrationTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntegrationTokenMutation", m)
 }
 
 // The IntelFunc type is an adapter to allow the use of ordinary

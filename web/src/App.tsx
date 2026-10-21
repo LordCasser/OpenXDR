@@ -81,6 +81,7 @@ const router = createBrowserRouter([
       { path: 'suppressions', ...page(() => import('./pages/SuppressionsPage'), 'SuppressionsPage') },
       { path: 'trusted-sources', ...page(() => import('./pages/TrustedSourcesPage'), 'TrustedSourcesPage') },
       { path: 'intel', ...page(() => import('./pages/IntelPage'), 'IntelPage') },
+      { path: 'integrations', ...page(() => import('./pages/IntegrationsPage'), 'IntegrationsPage', true) },
       { path: 'users', ...page(() => import('./pages/UsersPage'), 'UsersPage', true) },
       { path: 'groups', ...page(() => import('./pages/GroupsPage'), 'GroupsPage', true) },
       { path: 'audit', ...page(() => import('./pages/AuditPage'), 'AuditPage', true) },

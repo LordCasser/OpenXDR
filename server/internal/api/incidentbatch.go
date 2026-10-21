@@ -21,6 +21,7 @@ import (
 	"openxdr/server/ent/incident"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
+	"openxdr/server/internal/incidentstate"
 	"openxdr/server/internal/sigma"
 )
 
@@ -289,6 +290,9 @@ func resolveIncidents(db *ent.Client) http.HandlerFunc {
 			err := tx.Incident.UpdateOneID(inc.ID).SetStatus(body.Status).ClearClosureProposal().
 				SetResolution(resolution).SetNillableResolutionSource(source).
 				SetResolvedBy(user).SetResolvedAt(now).Exec(ctx)
+			if err == nil {
+				err = incidentstate.Record(ctx, tx, inc.ID, incidentstate.StatusChanged, incidentstate.Origin{Kind: "user", ID: auth.From(ctx).ID.String()}, inc.Status)
+			}
 			if err == nil {
 				err = audit.Checked(ctx, tx.AuditLog.Create(), user, remote, "incident_status", inc.ID.String(),
 					strings.TrimSpace(fmt.Sprintf("%s %s", body.Status, note))+fmt.Sprintf("（批量结案 %d 个）", len(incs)))

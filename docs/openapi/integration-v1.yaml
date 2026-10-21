@@ -1,0 +1,597 @@
+openapi: 3.0.3
+info:
+  title: OpenXDR Integration API
+  version: 1.0.0
+  description: 独立 Bearer 身份、按组授权的资产与事件读取、工单关联和受控结果回写。事件订阅通过管理员 cookie API 配置。
+servers:
+- url: /api/integration/v1
+paths:
+  /assets:
+    get:
+      tags: &id001
+      - assets
+      security: &id002
+      - BearerToken: []
+      description: 需要 assets:read，并受集成及 Token 当前授权组约束。
+      responses:
+        '200':
+          description: 当前页，不是跨页一致性快照
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetPage'
+        '400': &id003
+          description: 参数或游标无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': &id004
+          description: 凭据无效、过期或吊销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403': &id005
+          description: 缺少所需 scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404': &id006
+          description: 资源不存在或不可见
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': &id007
+          description: 节点级限流，Retry-After 为秒
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503': &id008
+          description: API 未启用或暂时不可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      operationId: listAssets
+      summary: 分页读取资产
+      parameters:
+      - name: limit
+        in: query
+        description: 每页条数
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+      - name: cursor
+        in: query
+        description: 签名游标，1 小时有效；权限或过滤条件改变后重新分页
+        schema: &id010
+          type: string
+      - name: q
+        in: query
+        description: 主机名忽略大小写或 IP 子串
+        schema:
+          type: string
+          maxLength: 1000
+      - name: groupId
+        in: query
+        description: 限制组，仍受 Token 授权约束
+        schema: &id009
+          type: string
+          format: uuid
+  /assets/{id}:
+    get:
+      tags: *id001
+      security: *id002
+      description: 需要 assets:read，并受集成及 Token 当前授权组约束。
+      responses:
+        '200':
+          description: 白名单字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400': *id003
+        '401': *id004
+        '403': *id005
+        '404': *id006
+        '429': *id007
+        '503': *id008
+      operationId: getAsset
+      summary: 读取单个资产
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id009
+  /incidents:
+    get:
+      tags: &id012
+      - incidents
+      security: &id013
+      - BearerToken: []
+      description: 需要 incidents:read，并受集成及 Token 当前授权组约束。
+      responses:
+        '200':
+          description: 当前页，不是跨页一致性快照
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentPage'
+        '400': *id003
+        '401': *id004
+        '403': *id005
+        '404': *id006
+        '429': *id007
+        '503': *id008
+      operationId: listIncidents
+      summary: 分页读取事件
+      parameters:
+      - name: limit
+        in: query
+        description: 每页条数
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+      - name: cursor
+        in: query
+        description: 签名游标，1 小时有效；权限或过滤条件改变后重新分页
+        schema: *id010
+      - name: status
+        in: query
+        description: 事件状态
+        schema: &id023
+          type: string
+          enum:
+          - open
+          - triaged
+          - closed
+          - false_positive
+      - name: createdFrom
+        in: query
+        description: 创建时间下界，含
+        schema: &id011
+          type: string
+          format: date-time
+      - name: createdTo
+        in: query
+        description: 创建时间上界，不含
+        schema: *id011
+  /incidents/{id}:
+    get:
+      tags: *id012
+      security: *id013
+      description: 需要 incidents:read，并受集成及 Token 当前授权组约束。
+      responses:
+        '200':
+          description: 白名单字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '400': *id003
+        '401': *id004
+        '403': *id005
+        '404': *id006
+        '429': *id007
+        '503': *id008
+      operationId: getIncident
+      summary: 读取单个事件
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: *id009
+  /incidents/{id}/tickets/{externalId}:
+    put:
+      operationId: putExternalTicket
+      tags:
+      - incidents
+      security:
+      - BearerToken: []
+      description: 需要 tickets:write。当前权限在幂等结果复用前仍会检查。状态回写还需要管理员单独开启回写，并允许该状态。
+      parameters:
+      - &id014
+        name: id
+        in: path
+        required: true
+        schema: &id024
+          type: string
+          format: uuid
+      - &id015
+        name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description: 按身份、方法与路径隔离，保留 7 天；同键不同请求 409
+      - name: externalId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketInput'
+      responses:
+        '200':
+          description: 成功或幂等结果复用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+        '400': &id016
+          description: 请求格式无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401': &id017
+          description: 凭据无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403': &id018
+          description: 缺少 scope 或状态回写权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404': &id019
+          description: 资源不可见
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409': &id020
+          description: 幂等键、工单关联或事件版本冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': &id021
+          description: 限流；写接口每节点每集成 10 次/分钟，Retry-After 秒
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503': &id022
+          description: 暂时不可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '201':
+          description: 首次关联成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+  /incidents/{id}/resolution:
+    post:
+      operationId: resolveIncident
+      tags:
+      - incidents
+      security:
+      - BearerToken: []
+      description: 需要 incidents:resolve。当前权限在幂等结果复用前仍会检查。状态回写还需要管理员单独开启回写，并允许该状态。
+      parameters:
+      - *id014
+      - *id015
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolutionInput'
+      responses:
+        '200':
+          description: 成功或幂等结果复用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resolution'
+        '400': *id016
+        '401': *id017
+        '403': *id018
+        '404': *id019
+        '409': *id020
+        '429': *id021
+        '503': *id022
+  /suricata/events:
+    post:
+      operationId: postSuricataEvent
+      tags:
+      - suricata
+      security:
+      - BearerToken: []
+      description: 需要 suricata:write，且集成恰好授权一个组；告警归属该组，探针身份为集成 ID。每次一个 EVE alert JSON 对象，上限 256 KiB，不受人工调用限流。见 docs/suricata.md。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Suricata EVE JSON 中 event_type=alert 的单条事件
+              additionalProperties: true
+      responses:
+        '202':
+          description: 持久队列已接收；不表示已落库或已研判
+        '400':
+          description: 事件无效，修正后再发，不要盲目重试
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 凭据无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 缺 suricata:write 或授权组不是恰好一个
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: 报文超过 256 KiB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 暂时不可用，保留原始事件后重传
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    BearerToken:
+      type: http
+      scheme: bearer
+      description: 管理员签发的 oxi_ 随机令牌，仅创建时显示一次
+  schemas:
+    Asset:
+      type: object
+      required:
+      - id
+      - hostname
+      - os
+      - osDisplay
+      - ipAddrs
+      - groupId
+      - agentId
+      - agentVersion
+      - sensorVersion
+      - firstSeen
+      - lastSeen
+      - sensorSeen
+      properties:
+        id: *id009
+        hostname: *id010
+        os:
+          type: string
+          nullable: true
+        osDisplay:
+          type: string
+          nullable: true
+        ipAddrs:
+          type: array
+          items: *id010
+          nullable: true
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        agentId:
+          type: string
+          format: uuid
+          nullable: true
+        agentVersion:
+          type: string
+          nullable: true
+        sensorVersion:
+          type: string
+          nullable: true
+        firstSeen: *id011
+        lastSeen: *id011
+        sensorSeen:
+          type: string
+          format: date-time
+          nullable: true
+    Incident:
+      type: object
+      required:
+      - id
+      - createdAt
+      - status
+      - title
+      - resolution
+      - resolvedBy
+      - resolvedAt
+      - revision
+      properties:
+        id: *id009
+        createdAt: *id011
+        status: *id023
+        title:
+          type: string
+          nullable: true
+        resolution:
+          type: string
+          nullable: true
+        resolvedBy:
+          type: string
+          nullable: true
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+    Error:
+      type: object
+      example:
+        error: {code: conflict, message: 事件版本已变化，请重新读取, requestId: 11111111-1111-4111-8111-111111111111}
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          - requestId
+          properties:
+            code: *id010
+            message: *id010
+            requestId: *id010
+    AssetPage:
+      type: object
+      required:
+      - items
+      - nextCursor
+      - hasMore
+      - observedAt
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Asset'
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+        observedAt: *id011
+    IncidentPage:
+      type: object
+      required:
+      - items
+      - nextCursor
+      - hasMore
+      - observedAt
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incident'
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+        observedAt: *id011
+    TicketInput:
+      type: object
+      example: {url: 'https://desk.example.test/SEC-1234', status: resolved, title: 已完成安全事件处置}
+      additionalProperties: false
+      required:
+      - url
+      - status
+      - title
+      properties:
+        url: &id025
+          type: string
+          format: uri
+          maxLength: 2048
+          description: http/https，无 userinfo；服务端不访问该 URL
+        status: &id026
+          type: string
+          maxLength: 100
+        title: &id027
+          type: string
+          maxLength: 500
+    Ticket:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - integrationId
+      - incidentId
+      - externalId
+      - url
+      - status
+      - title
+      - updatedAt
+      - sourceDeleted
+      properties:
+        id: *id024
+        integrationId: *id024
+        incidentId: *id024
+        externalId: &id028
+          type: string
+        url: *id025
+        status: *id026
+        title: *id027
+        updatedAt:
+          type: string
+          format: date-time
+        sourceDeleted:
+          type: boolean
+    ResolutionInput:
+      type: object
+      example: {externalId: SEC-1234, expectedRevision: 12, status: closed, note: 已完成修复并复核, operator: external-user-42}
+      additionalProperties: false
+      required:
+      - externalId
+      - expectedRevision
+      - status
+      properties:
+        externalId:
+          type: string
+          maxLength: 200
+        expectedRevision:
+          type: integer
+          format: int64
+          minimum: 0
+        status:
+          type: string
+          enum:
+          - closed
+          - false_positive
+          - open
+        note:
+          type: string
+          maxLength: 2000
+          description: 关闭和误报必须填写非空处置说明
+        operator:
+          type: string
+          maxLength: 200
+          description: 调用方声明的操作人，非平台已认证身份
+        confirmMalicious:
+          type: boolean
+          default: false
+    Resolution:
+      type: object
+      additionalProperties: false
+      required:
+      - incidentId
+      - revision
+      - status
+      properties:
+        incidentId: *id024
+        revision:
+          type: integer
+          format: int64
+        status: *id028

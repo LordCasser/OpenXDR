@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"openxdr/server/internal/suricata"
 )
 
 const EnvelopeVersion = 1
@@ -15,23 +16,30 @@ const EnvelopeVersion = 1
 // Envelope 是队列中的唯一事件契约。接入节点只负责归一化与资产归属，
 // 检测节点负责规则、情报、抑制、去重和落库。
 type Envelope struct {
-	Version           int             `json:"version"`
-	ID                uuid.UUID       `json:"id"`
-	PartitionKey      string          `json:"partition_key"`
-	Timestamp         time.Time       `json:"timestamp"`
-	ClassUID          int             `json:"class_uid"`
-	Source            string          `json:"source"`
-	AssetID           *uuid.UUID      `json:"asset_id,omitempty"`
-	AssetOS           string          `json:"asset_os,omitempty"`
-	ProcessGUID       *uuid.UUID      `json:"process_guid,omitempty"`
-	ParentProcessGUID *uuid.UUID      `json:"parent_process_guid,omitempty"`
-	Username          string          `json:"username,omitempty"`
-	ConnTuple         string          `json:"conn_tuple,omitempty"`
-	FingerprintSuffix string          `json:"fingerprint_suffix,omitempty"`
-	Raw               json.RawMessage `json:"raw"`
+	Version           int              `json:"version"`
+	ID                uuid.UUID        `json:"id"`
+	PartitionKey      string           `json:"partition_key"`
+	Timestamp         time.Time        `json:"timestamp"`
+	ClassUID          int              `json:"class_uid"`
+	Source            string           `json:"source"`
+	AssetID           *uuid.UUID       `json:"asset_id,omitempty"`
+	AssetOS           string           `json:"asset_os,omitempty"`
+	ProcessGUID       *uuid.UUID       `json:"process_guid,omitempty"`
+	ParentProcessGUID *uuid.UUID       `json:"parent_process_guid,omitempty"`
+	Username          string           `json:"username,omitempty"`
+	ConnTuple         string           `json:"conn_tuple,omitempty"`
+	FingerprintSuffix string           `json:"fingerprint_suffix,omitempty"`
+	Raw               json.RawMessage  `json:"raw"`
+	Suricata          *suricata.Origin `json:"suricata,omitempty"`
 }
 
 func (e Envelope) Validate() error {
+	if e.Source == "suricata" && (e.Suricata == nil || e.Suricata.GroupID == uuid.Nil || e.Suricata.Observer == "" || e.Suricata.Received.IsZero()) {
+		return fmt.Errorf("Suricata 信封缺少可信接入来源")
+	}
+	if e.Source != "suricata" && e.Suricata != nil {
+		return fmt.Errorf("非 Suricata 事件不得携带其接入来源")
+	}
 	if e.Version != EnvelopeVersion {
 		return fmt.Errorf("不支持的事件信封版本 %d", e.Version)
 	}

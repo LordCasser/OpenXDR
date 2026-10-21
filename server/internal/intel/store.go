@@ -28,11 +28,12 @@ func Detections(rules []*sigma.Rule, iocs []Hit) []Hit {
 	return append(hits, iocs...)
 }
 
-// Hit 一次 IOC 命中。RuleID 形如 intel:ip:1.2.3.4，
-// 与规则告警共用去重、抑制、关联链路，无需特殊处理。
+// Hit 一次规则、情报或外部检测命中，共用去重、抑制与关联链路。
+// Detail 保留外部签名及版本等依据，不依赖本地规则目录。
 type Hit struct {
 	RuleID   string
 	Severity int16
+	Detail   string
 }
 
 type entry struct {

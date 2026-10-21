@@ -13,6 +13,7 @@ export function useClassStyle() {
     switch (classUid) {
       case 1007: return { icon: <CodeOutlined />, color: token.purple }
       case 1001: return { icon: <FileOutlined />, color: token.cyan }
+      case 2004: return { icon: <ApiOutlined />, color: token.colorWarning }
       case 4001: return { icon: <ApiOutlined />, color: token.colorSuccess }
       case 4003: return { icon: <GlobalOutlined />, color: token.geekblue }
       case 3002: return { icon: <LoginOutlined />, color: token.orange }

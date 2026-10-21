@@ -3,6 +3,8 @@
 一台 Linux 服务器、一行命令。本文同时写给人和 AI agent：按顺序做，每一步都有可核对的结果。
 从源码构建、高可用部署与全部配置项见 [部署与使用手册](deployment.md)、[高可用部署](../deploy/ha/README.md)。
 
+已有 Suricata 的环境可选用 [EVE 告警接入](suricata.md)：在「系统集成」为探针建一个带 `suricata:write`、只授权一个组的集成，用它的 Token 通过 HTTPS 投递。
+
 ## 1. 准备
 
 | 项 | 要求 |

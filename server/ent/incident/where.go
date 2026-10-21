@@ -66,6 +66,11 @@ func Status(v string) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldStatus, v))
 }
 
+// IntegrationRevision applies equality check predicate on the "integration_revision" field. It's identical to IntegrationRevisionEQ.
+func IntegrationRevision(v int64) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldIntegrationRevision, v))
+}
+
 // Title applies equality check predicate on the "title" field. It's identical to TitleEQ.
 func Title(v string) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldTitle, v))
@@ -229,6 +234,46 @@ func StatusEqualFold(v string) predicate.Incident {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Incident {
 	return predicate.Incident(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// IntegrationRevisionEQ applies the EQ predicate on the "integration_revision" field.
+func IntegrationRevisionEQ(v int64) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldIntegrationRevision, v))
+}
+
+// IntegrationRevisionNEQ applies the NEQ predicate on the "integration_revision" field.
+func IntegrationRevisionNEQ(v int64) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldIntegrationRevision, v))
+}
+
+// IntegrationRevisionIn applies the In predicate on the "integration_revision" field.
+func IntegrationRevisionIn(vs ...int64) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldIntegrationRevision, vs...))
+}
+
+// IntegrationRevisionNotIn applies the NotIn predicate on the "integration_revision" field.
+func IntegrationRevisionNotIn(vs ...int64) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldIntegrationRevision, vs...))
+}
+
+// IntegrationRevisionGT applies the GT predicate on the "integration_revision" field.
+func IntegrationRevisionGT(v int64) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldIntegrationRevision, v))
+}
+
+// IntegrationRevisionGTE applies the GTE predicate on the "integration_revision" field.
+func IntegrationRevisionGTE(v int64) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldIntegrationRevision, v))
+}
+
+// IntegrationRevisionLT applies the LT predicate on the "integration_revision" field.
+func IntegrationRevisionLT(v int64) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldIntegrationRevision, v))
+}
+
+// IntegrationRevisionLTE applies the LTE predicate on the "integration_revision" field.
+func IntegrationRevisionLTE(v int64) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldIntegrationRevision, v))
 }
 
 // AiVerdictIsNil applies the IsNil predicate on the "ai_verdict" field.

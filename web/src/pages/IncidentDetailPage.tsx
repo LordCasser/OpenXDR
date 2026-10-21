@@ -21,6 +21,7 @@ import { SuppressModal } from '../components/SuppressModal'
 import { TemporalRuleAtAlert } from '../components/TemporalRuleAtAlert'
 import { VerdictCard } from '../components/VerdictCard'
 import { IncidentStatusTag, SeverityTag, fmtTime, errText } from '../components/format'
+import { ExternalTickets } from '../components/ExternalTickets'
 import { useI18n } from '../i18n'
 
 // 告警里最能说明发生了什么的那一项：命令行 / 文件路径 / 连接目标
@@ -261,6 +262,7 @@ export function IncidentDetailPage() {
                 {inc.resolvedAt && <Descriptions.Item label={t('resolvedBy')}>{inc.resolvedBy} · {fmtTime(inc.resolvedAt)}</Descriptions.Item>}
               </Descriptions>
             </Card>
+            <ExternalTickets incidentId={inc.id} />
             <ResponsePanel incidentId={inc.id} assetId={inc.assetId} canAct={canAct} />
           </Space>
         </Col>

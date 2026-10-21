@@ -187,3 +187,90 @@ curl -b cookie.txt -X POST http://xdr:8080/api/intel/import \
   -H 'Content-Type: application/json' \
   -d "{\"text\": \"$(tr '\n' '\\n' < feed.txt)\", \"source\": \"feed-x\", \"expiresInDays\": 30}"
 ```
+
+## 资产台账导出
+
+`POST /api/assets/export` 使用登录 cookie，viewer 可导出可见组内资产。请求：
+
+```json
+{"format":"csv","selection":{"mode":"filter","q":"web","groupId":""}}
+```
+
+`format` 为 `csv` 或 `json`。筛选模式匹配主机名（不区分大小写）或 IP 子串，
+`groupId` 空表示全部可见组，`ungrouped` 表示未分组（仅全局 admin 可见）。
+勾选模式改为 `selection: {"mode":"ids","ids":["UUID"]}`，不能混用筛选条件。
+若勾选了无权访问或已删除资产，整次返回 404，不能部分导出。
+
+最多 10,000 条、编码后最多 32 MiB；超过返回 422，应缩小范围，不静默截断。
+CSV 为 UTF-8 BOM，固定英文表头，多个 IP 用分号分隔，危险表格公式前加单引号；
+JSON 保留原值，结构为 `{schemaVersion, exportedAt, filters, count, items}`。
+字段仅含资产标识、主机名、OS、IP、组、agent/sensor 版本与最近心跳及主机状态，
+不包含密码、私钥、配置或原始健康数据。
+
+响应带附件文件名、`X-Exported-At`、`X-Export-Count`、`X-Request-ID` 和 `Cache-Control: no-store`。
+导出审计表示服务端生成并开始交付，不代表客户端保存成功。
+
+## 外部系统只读 API
+
+机器接口使用 `/api/integration/v1/`，仅接受 `Authorization: Bearer oxi_...`，不接受浏览器 cookie；
+该令牌也不能访问浏览器管理 API。契约见 [integration-v1.yaml](openapi/integration-v1.yaml)。
+
+部署时设置 `INTEGRATION_API_ENABLED=true` 和 `INTEGRATION_CURSOR_KEY`（至少 32 字节随机值的 base64 编码）。
+集群各节点使用相同游标签名密钥；更换密钥使旧游标失效，但不会吊销 Token。默认关闭 API。
+管理员在「系统集成」创建身份、负责人、授权组和 scope，再签发 1–365 天 Token（默认 90 天）。
+空组列表不授予任何资源权限。Token 秘密仅显示一次，后端只存摘要；轮换采用签发新令牌后吊销旧令牌。
+
+| 方法 | 路径 | Scope |
+|---|---|---|
+| GET | `/api/integration/v1/assets?q=&groupId=&limit=&cursor=` | `assets:read` |
+| GET | `/api/integration/v1/assets/{id}` | `assets:read` |
+| GET | `/api/integration/v1/incidents?status=&createdFrom=&createdTo=&limit=&cursor=` | `incidents:read` |
+| GET | `/api/integration/v1/incidents/{id}` | `incidents:read` |
+
+分页默认 100、最大 500，按 ID 排序，响应含 `items,nextCursor,hasMore,observedAt`。
+创建时间范围采用含下界、不含上界。游标有效期一小时，绑定身份、Token、过滤条件、组及权限版本；
+权限变化后从第一页重新查询。跨页不保证一致快照，不能仅因一次全量读取缺失就自动删除 CMDB 资产。
+跨组 incident 只有全部告警资产都在授权组内才可见；无告警或无归属告警不开放。
+每个集成在每个节点平均 60 请求/分钟、突发 20，429 带 `Retry-After`；不等于集群全局硬额度。
+
+浏览器管理入口（全局 admin，cookie）：`GET/POST /api/system-integrations`、
+`PUT /api/system-integrations/{id}`、`GET/POST /api/system-integrations/{id}/tokens`、
+`DELETE /api/system-integrations/{id}/tokens/{tokenId}`。集成更新为完整替换，包含
+`name,purpose,ownerId,enabled,scopes,groupIds`；令牌签发包含 `days,scopes`。
+删除仍负责启用中集成的用户返回 409，须先转交或停用。
+
+### 事件订阅与工单回写
+
+集成增加 `tickets:write` 和 `incidents:resolve` scope。启用回写还必须在集成管理中设置
+`resolutionEnabled=true`、`allowedResolutions`（closed/false_positive/open 的子集）。
+恶意判定按误报关闭还需要 `allowMaliciousFalsePositive` 和调用方 `confirmMalicious=true`。
+
+- `PUT /api/integration/v1/incidents/{id}/tickets/{externalId}`：`{url,status,title}`，只修改本集成工单关联，不改变事件状态。
+- `POST /api/integration/v1/incidents/{id}/resolution`：`{externalId,expectedRevision,status,note,operator?,confirmMalicious?}`；必须先关联本集成工单，关闭或误报说明不可为空。
+- 两个写接口均要求 `Idempotency-Key`；同键同请求复用结果，同键不同请求返回 409。
+  幂等窗口 7 天，复用前重新核验当前权限；过期后仍有版本与工单唯一约束保护。
+- `GET /api/incidents/{id}/tickets` 为浏览器查看关联工单的接口，权限与事件详情相同。
+
+`suricata:write` scope 供 Suricata 探针写入告警：`POST /api/integration/v1/suricata/events`，集成须恰好授权一个组，
+不受上述限流，详见 [suricata.md](suricata.md)。
+
+管理员 cookie API：
+
+| 方法 | 路径，相对 `/api/system-integrations/{id}` | 说明 |
+|---|---|---|
+| GET / POST | `/subscriptions` | 列表/创建；创建返回一次性 base64 签名秘密及 keyId |
+| PUT | `/subscriptions/{subscriptionId}` | 完整更新 name/url/groupIds/kinds/enabled；movePending 默认 false |
+| DELETE | `/subscriptions/{subscriptionId}` | 停用并软删除，取消积压，历史记录保留 |
+| POST | `/subscriptions/{subscriptionId}/rotate` | 暂停且无活跃在途租约后轮换密钥，仅返回一次秘密；待发消息改用新密钥 |
+| POST | `/subscriptions/{subscriptionId}/test` | 排队 integration.test 消息，不生成真实 incident |
+| GET | `/deliveries?status=&subscriptionId=&from=&to=&limit=&offset=` | 状态、订阅与 RFC3339 时间筛选；默认 50 条、最大 200，返回 items/total/limit/offset/truncated 及全集成积压 summary；送达不代表工单创建成功 |
+| GET | `/deliveries/{deliveryId}/attempts` | 最近 100 次投递尝试，不存远端完整响应 |
+| POST | `/deliveries/{deliveryId}/retry` | 重放 dead 投递，保留 eventId，重置 24 小时尝试窗口 |
+
+订阅事件为 incident.created、incident.triaged、incident.evidence_updated、incident.status_changed。
+默认建议订阅 triaged，无 AI 部署可订阅 created。暂停期间新事件不补发；旧积压保留。
+URL 更改默认保留旧积压目标；movePending=true 显式改投尚未发送和失败记录，在途请求无法撤回。
+签名头为 `X-OpenXDR-Event-ID`、`X-OpenXDR-Timestamp`（Unix 秒）、`X-OpenXDR-Key-ID`、
+`X-OpenXDR-Signature`。使用 base64 解码后的秘密，对 UTF-8
+`timestamp + "." + eventId + "." + rawBody` 计算 HMAC-SHA256，签名为小写十六进制。
+接收方须校验时间窗口（建议 5 分钟）、签名并持久去重。事件可能重复及乱序，使用 revision 防止旧状态覆盖新状态。

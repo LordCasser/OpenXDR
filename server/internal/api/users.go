@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"openxdr/server/ent"
 	entauditlog "openxdr/server/ent/auditlog"
 	"openxdr/server/ent/groupmember"
+	"openxdr/server/ent/integration"
 	entsession "openxdr/server/ent/session"
 	entuser "openxdr/server/ent/user"
 	"openxdr/server/internal/audit"
@@ -89,7 +91,13 @@ func mapUsers(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, "不能删除当前登录的账号", http.StatusBadRequest)
 			return
 		}
-		u, err := db.User.Get(r.Context(), id)
+		tx, err := db.Tx(r.Context())
+		if err != nil {
+			http.Error(w, "删除用户事务创建失败", 500)
+			return
+		}
+		defer tx.Rollback()
+		u, err := tx.User.Query().Where(entuser.IDEQ(id)).Where(func(s *sql.Selector) { s.ForUpdate() }).Only(r.Context())
 		if ent.IsNotFound(err) {
 			http.NotFound(w, r)
 			return
@@ -98,20 +106,36 @@ func mapUsers(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		active, err := tx.Integration.Query().Where(integration.OwnerIDEQ(id), integration.EnabledEQ(true)).Exist(r.Context())
+		if err != nil {
+			http.Error(w, "检查集成负责人失败", 500)
+			return
+		}
+		if active {
+			http.Error(w, "请先转交或停用该用户负责的系统集成", 409)
+			return
+		}
 		// 会话与组成员关系一并清掉，删号即离场
-		if _, err := db.Session.Delete().Where(entsession.UserIDEQ(id)).Exec(r.Context()); err != nil {
+		if _, err := tx.Session.Delete().Where(entsession.UserIDEQ(id)).Exec(r.Context()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if _, err := db.GroupMember.Delete().Where(groupmember.UserIDEQ(id)).Exec(r.Context()); err != nil {
+		if _, err := tx.GroupMember.Delete().Where(groupmember.UserIDEQ(id)).Exec(r.Context()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if err := db.User.DeleteOneID(id).Exec(r.Context()); err != nil {
+		if err := tx.User.DeleteOneID(id).Exec(r.Context()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		audit.Log(r.Context(), db, r, "user_deleted", u.Username, "")
+		if err := audit.Checked(r.Context(), tx.AuditLog.Create(), audit.Actor(r.Context()), audit.RemoteAddr(r), "user_deleted", u.Username, ""); err != nil {
+			http.Error(w, "删除审计失败", 500)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			http.Error(w, "删除用户事务提交失败", 500)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 

@@ -22,6 +22,7 @@ import (
 	"openxdr/server/ent/incident"
 	"openxdr/server/ent/ipinfo"
 	"openxdr/server/ent/predicate"
+	"openxdr/server/internal/incidentstate"
 	"openxdr/server/internal/review"
 )
 
@@ -175,7 +176,12 @@ func (e *Engine) triageOne(ctx context.Context, inc *ent.Incident) error {
 		return err
 	}
 	verdict := withModel(parseVerdict(inc.ID.String(), answer), model)
-	upd := e.DB.Incident.UpdateOneID(inc.ID).SetAiVerdict(verdict).
+	tx, err := e.DB.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	upd := tx.Incident.UpdateOneID(inc.ID).SetAiVerdict(verdict).
 		SetTriagedAt(snapshot).AddTriageCount(1).SetTriageFailures(0).ClearTriageRetryAt()
 	// 重研判从良性翻成可疑或恶意：之前按良性静默过的要重新决定推送，升级信号不能被旧结论吞掉
 	if verdictLabel(inc.AiVerdict) == "benign" && verdictLabel(verdict) != "benign" {
@@ -185,8 +191,14 @@ func (e *Engine) triageOne(ctx context.Context, inc *ent.Incident) error {
 		return err
 	}
 	// 研判期间被分析师结案的不改回来
-	if err := e.DB.Incident.Update().Where(incident.IDEQ(inc.ID), incident.StatusEQ("open")).
+	if err := tx.Incident.Update().Where(incident.IDEQ(inc.ID), incident.StatusEQ("open")).
 		SetStatus("triaged").Exec(ctx); err != nil {
+		return err
+	}
+	if err := incidentstate.Record(ctx, tx, inc.ID, incidentstate.Triaged, incidentstate.Origin{Kind: "system"}, ""); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	slog.Info("incident 研判完成", "id", inc.ID, "round", inc.TriageCount+1)

@@ -18,11 +18,20 @@ import (
 	"openxdr/server/ent/decoyobservation"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
+	"openxdr/server/ent/externalticket"
 	"openxdr/server/ent/finding"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
+	"openxdr/server/ent/integration"
+	"openxdr/server/ent/integrationattempt"
+	"openxdr/server/ent/integrationdelivery"
+	"openxdr/server/ent/integrationevent"
+	"openxdr/server/ent/integrationgroup"
+	"openxdr/server/ent/integrationidempotency"
+	"openxdr/server/ent/integrationsubscription"
+	"openxdr/server/ent/integrationtoken"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
 	"openxdr/server/ent/memory"
@@ -270,6 +279,36 @@ func init() {
 	eventDescID := eventFields[0].Descriptor()
 	// event.DefaultID holds the default value on creation for the id field.
 	event.DefaultID = eventDescID.Default.(func() uuid.UUID)
+	externalticketFields := schema.ExternalTicket{}.Fields()
+	_ = externalticketFields
+	// externalticketDescExternalID is the schema descriptor for external_id field.
+	externalticketDescExternalID := externalticketFields[3].Descriptor()
+	// externalticket.ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
+	externalticket.ExternalIDValidator = externalticketDescExternalID.Validators[0].(func(string) error)
+	// externalticketDescURL is the schema descriptor for url field.
+	externalticketDescURL := externalticketFields[4].Descriptor()
+	// externalticket.URLValidator is a validator for the "url" field. It is called by the builders before save.
+	externalticket.URLValidator = externalticketDescURL.Validators[0].(func(string) error)
+	// externalticketDescStatus is the schema descriptor for status field.
+	externalticketDescStatus := externalticketFields[5].Descriptor()
+	// externalticket.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	externalticket.StatusValidator = externalticketDescStatus.Validators[0].(func(string) error)
+	// externalticketDescTitle is the schema descriptor for title field.
+	externalticketDescTitle := externalticketFields[6].Descriptor()
+	// externalticket.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	externalticket.TitleValidator = externalticketDescTitle.Validators[0].(func(string) error)
+	// externalticketDescUpdatedAt is the schema descriptor for updated_at field.
+	externalticketDescUpdatedAt := externalticketFields[7].Descriptor()
+	// externalticket.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	externalticket.DefaultUpdatedAt = externalticketDescUpdatedAt.Default.(func() time.Time)
+	// externalticketDescSourceDeleted is the schema descriptor for source_deleted field.
+	externalticketDescSourceDeleted := externalticketFields[8].Descriptor()
+	// externalticket.DefaultSourceDeleted holds the default value on creation for the source_deleted field.
+	externalticket.DefaultSourceDeleted = externalticketDescSourceDeleted.Default.(bool)
+	// externalticketDescID is the schema descriptor for id field.
+	externalticketDescID := externalticketFields[0].Descriptor()
+	// externalticket.DefaultID holds the default value on creation for the id field.
+	externalticket.DefaultID = externalticketDescID.Default.(func() uuid.UUID)
 	findingFields := schema.Finding{}.Fields()
 	_ = findingFields
 	// findingDescKey is the schema descriptor for key field.
@@ -394,18 +433,178 @@ func init() {
 	incidentDescStatus := incidentFields[2].Descriptor()
 	// incident.DefaultStatus holds the default value on creation for the status field.
 	incident.DefaultStatus = incidentDescStatus.Default.(string)
+	// incidentDescIntegrationRevision is the schema descriptor for integration_revision field.
+	incidentDescIntegrationRevision := incidentFields[3].Descriptor()
+	// incident.DefaultIntegrationRevision holds the default value on creation for the integration_revision field.
+	incident.DefaultIntegrationRevision = incidentDescIntegrationRevision.Default.(int64)
 	// incidentDescTriageCount is the schema descriptor for triage_count field.
-	incidentDescTriageCount := incidentFields[12].Descriptor()
+	incidentDescTriageCount := incidentFields[13].Descriptor()
 	// incident.DefaultTriageCount holds the default value on creation for the triage_count field.
 	incident.DefaultTriageCount = incidentDescTriageCount.Default.(int)
 	// incidentDescTriageFailures is the schema descriptor for triage_failures field.
-	incidentDescTriageFailures := incidentFields[15].Descriptor()
+	incidentDescTriageFailures := incidentFields[16].Descriptor()
 	// incident.DefaultTriageFailures holds the default value on creation for the triage_failures field.
 	incident.DefaultTriageFailures = incidentDescTriageFailures.Default.(int)
 	// incidentDescID is the schema descriptor for id field.
 	incidentDescID := incidentFields[0].Descriptor()
 	// incident.DefaultID holds the default value on creation for the id field.
 	incident.DefaultID = incidentDescID.Default.(func() uuid.UUID)
+	integrationFields := schema.Integration{}.Fields()
+	_ = integrationFields
+	// integrationDescName is the schema descriptor for name field.
+	integrationDescName := integrationFields[1].Descriptor()
+	// integration.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	integration.NameValidator = integrationDescName.Validators[0].(func(string) error)
+	// integrationDescPurpose is the schema descriptor for purpose field.
+	integrationDescPurpose := integrationFields[2].Descriptor()
+	// integration.PurposeValidator is a validator for the "purpose" field. It is called by the builders before save.
+	integration.PurposeValidator = integrationDescPurpose.Validators[0].(func(string) error)
+	// integrationDescEnabled is the schema descriptor for enabled field.
+	integrationDescEnabled := integrationFields[4].Descriptor()
+	// integration.DefaultEnabled holds the default value on creation for the enabled field.
+	integration.DefaultEnabled = integrationDescEnabled.Default.(bool)
+	// integrationDescPermissionVersion is the schema descriptor for permission_version field.
+	integrationDescPermissionVersion := integrationFields[6].Descriptor()
+	// integration.DefaultPermissionVersion holds the default value on creation for the permission_version field.
+	integration.DefaultPermissionVersion = integrationDescPermissionVersion.Default.(int64)
+	// integrationDescResolutionEnabled is the schema descriptor for resolution_enabled field.
+	integrationDescResolutionEnabled := integrationFields[7].Descriptor()
+	// integration.DefaultResolutionEnabled holds the default value on creation for the resolution_enabled field.
+	integration.DefaultResolutionEnabled = integrationDescResolutionEnabled.Default.(bool)
+	// integrationDescAllowMaliciousFalsePositive is the schema descriptor for allow_malicious_false_positive field.
+	integrationDescAllowMaliciousFalsePositive := integrationFields[9].Descriptor()
+	// integration.DefaultAllowMaliciousFalsePositive holds the default value on creation for the allow_malicious_false_positive field.
+	integration.DefaultAllowMaliciousFalsePositive = integrationDescAllowMaliciousFalsePositive.Default.(bool)
+	// integrationDescCreatedAt is the schema descriptor for created_at field.
+	integrationDescCreatedAt := integrationFields[10].Descriptor()
+	// integration.DefaultCreatedAt holds the default value on creation for the created_at field.
+	integration.DefaultCreatedAt = integrationDescCreatedAt.Default.(func() time.Time)
+	// integrationDescID is the schema descriptor for id field.
+	integrationDescID := integrationFields[0].Descriptor()
+	// integration.DefaultID holds the default value on creation for the id field.
+	integration.DefaultID = integrationDescID.Default.(func() uuid.UUID)
+	integrationattemptFields := schema.IntegrationAttempt{}.Fields()
+	_ = integrationattemptFields
+	// integrationattemptDescHTTPStatus is the schema descriptor for http_status field.
+	integrationattemptDescHTTPStatus := integrationattemptFields[4].Descriptor()
+	// integrationattempt.DefaultHTTPStatus holds the default value on creation for the http_status field.
+	integrationattempt.DefaultHTTPStatus = integrationattemptDescHTTPStatus.Default.(int)
+	// integrationattemptDescID is the schema descriptor for id field.
+	integrationattemptDescID := integrationattemptFields[0].Descriptor()
+	// integrationattempt.DefaultID holds the default value on creation for the id field.
+	integrationattempt.DefaultID = integrationattemptDescID.Default.(func() uuid.UUID)
+	integrationdeliveryFields := schema.IntegrationDelivery{}.Fields()
+	_ = integrationdeliveryFields
+	// integrationdeliveryDescStatus is the schema descriptor for status field.
+	integrationdeliveryDescStatus := integrationdeliveryFields[3].Descriptor()
+	// integrationdelivery.DefaultStatus holds the default value on creation for the status field.
+	integrationdelivery.DefaultStatus = integrationdeliveryDescStatus.Default.(string)
+	// integrationdeliveryDescCreatedAt is the schema descriptor for created_at field.
+	integrationdeliveryDescCreatedAt := integrationdeliveryFields[4].Descriptor()
+	// integrationdelivery.DefaultCreatedAt holds the default value on creation for the created_at field.
+	integrationdelivery.DefaultCreatedAt = integrationdeliveryDescCreatedAt.Default.(func() time.Time)
+	// integrationdeliveryDescRetryWindowAt is the schema descriptor for retry_window_at field.
+	integrationdeliveryDescRetryWindowAt := integrationdeliveryFields[5].Descriptor()
+	// integrationdelivery.DefaultRetryWindowAt holds the default value on creation for the retry_window_at field.
+	integrationdelivery.DefaultRetryWindowAt = integrationdeliveryDescRetryWindowAt.Default.(func() time.Time)
+	// integrationdeliveryDescNextAt is the schema descriptor for next_at field.
+	integrationdeliveryDescNextAt := integrationdeliveryFields[6].Descriptor()
+	// integrationdelivery.DefaultNextAt holds the default value on creation for the next_at field.
+	integrationdelivery.DefaultNextAt = integrationdeliveryDescNextAt.Default.(func() time.Time)
+	// integrationdeliveryDescLeaseGeneration is the schema descriptor for lease_generation field.
+	integrationdeliveryDescLeaseGeneration := integrationdeliveryFields[8].Descriptor()
+	// integrationdelivery.DefaultLeaseGeneration holds the default value on creation for the lease_generation field.
+	integrationdelivery.DefaultLeaseGeneration = integrationdeliveryDescLeaseGeneration.Default.(int64)
+	// integrationdeliveryDescAttempts is the schema descriptor for attempts field.
+	integrationdeliveryDescAttempts := integrationdeliveryFields[9].Descriptor()
+	// integrationdelivery.DefaultAttempts holds the default value on creation for the attempts field.
+	integrationdelivery.DefaultAttempts = integrationdeliveryDescAttempts.Default.(int)
+	// integrationdeliveryDescLastError is the schema descriptor for last_error field.
+	integrationdeliveryDescLastError := integrationdeliveryFields[14].Descriptor()
+	// integrationdelivery.DefaultLastError holds the default value on creation for the last_error field.
+	integrationdelivery.DefaultLastError = integrationdeliveryDescLastError.Default.(string)
+	// integrationdeliveryDescID is the schema descriptor for id field.
+	integrationdeliveryDescID := integrationdeliveryFields[0].Descriptor()
+	// integrationdelivery.DefaultID holds the default value on creation for the id field.
+	integrationdelivery.DefaultID = integrationdeliveryDescID.Default.(func() uuid.UUID)
+	integrationeventFields := schema.IntegrationEvent{}.Fields()
+	_ = integrationeventFields
+	// integrationeventDescOccurredAt is the schema descriptor for occurred_at field.
+	integrationeventDescOccurredAt := integrationeventFields[4].Descriptor()
+	// integrationevent.DefaultOccurredAt holds the default value on creation for the occurred_at field.
+	integrationevent.DefaultOccurredAt = integrationeventDescOccurredAt.Default.(func() time.Time)
+	// integrationeventDescDispatched is the schema descriptor for dispatched field.
+	integrationeventDescDispatched := integrationeventFields[7].Descriptor()
+	// integrationevent.DefaultDispatched holds the default value on creation for the dispatched field.
+	integrationevent.DefaultDispatched = integrationeventDescDispatched.Default.(bool)
+	// integrationeventDescID is the schema descriptor for id field.
+	integrationeventDescID := integrationeventFields[0].Descriptor()
+	// integrationevent.DefaultID holds the default value on creation for the id field.
+	integrationevent.DefaultID = integrationeventDescID.Default.(func() uuid.UUID)
+	integrationgroupFields := schema.IntegrationGroup{}.Fields()
+	_ = integrationgroupFields
+	// integrationgroupDescID is the schema descriptor for id field.
+	integrationgroupDescID := integrationgroupFields[0].Descriptor()
+	// integrationgroup.DefaultID holds the default value on creation for the id field.
+	integrationgroup.DefaultID = integrationgroupDescID.Default.(func() uuid.UUID)
+	integrationidempotencyFields := schema.IntegrationIdempotency{}.Fields()
+	_ = integrationidempotencyFields
+	// integrationidempotencyDescPath is the schema descriptor for path field.
+	integrationidempotencyDescPath := integrationidempotencyFields[3].Descriptor()
+	// integrationidempotency.PathValidator is a validator for the "path" field. It is called by the builders before save.
+	integrationidempotency.PathValidator = integrationidempotencyDescPath.Validators[0].(func(string) error)
+	// integrationidempotencyDescKey is the schema descriptor for key field.
+	integrationidempotencyDescKey := integrationidempotencyFields[4].Descriptor()
+	// integrationidempotency.KeyValidator is a validator for the "key" field. It is called by the builders before save.
+	integrationidempotency.KeyValidator = integrationidempotencyDescKey.Validators[0].(func(string) error)
+	// integrationidempotencyDescID is the schema descriptor for id field.
+	integrationidempotencyDescID := integrationidempotencyFields[0].Descriptor()
+	// integrationidempotency.DefaultID holds the default value on creation for the id field.
+	integrationidempotency.DefaultID = integrationidempotencyDescID.Default.(func() uuid.UUID)
+	integrationsubscriptionFields := schema.IntegrationSubscription{}.Fields()
+	_ = integrationsubscriptionFields
+	// integrationsubscriptionDescName is the schema descriptor for name field.
+	integrationsubscriptionDescName := integrationsubscriptionFields[2].Descriptor()
+	// integrationsubscription.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	integrationsubscription.NameValidator = integrationsubscriptionDescName.Validators[0].(func(string) error)
+	// integrationsubscriptionDescURL is the schema descriptor for url field.
+	integrationsubscriptionDescURL := integrationsubscriptionFields[3].Descriptor()
+	// integrationsubscription.URLValidator is a validator for the "url" field. It is called by the builders before save.
+	integrationsubscription.URLValidator = integrationsubscriptionDescURL.Validators[0].(func(string) error)
+	// integrationsubscriptionDescVersion is the schema descriptor for version field.
+	integrationsubscriptionDescVersion := integrationsubscriptionFields[4].Descriptor()
+	// integrationsubscription.DefaultVersion holds the default value on creation for the version field.
+	integrationsubscription.DefaultVersion = integrationsubscriptionDescVersion.Default.(int64)
+	// integrationsubscriptionDescEnabled is the schema descriptor for enabled field.
+	integrationsubscriptionDescEnabled := integrationsubscriptionFields[7].Descriptor()
+	// integrationsubscription.DefaultEnabled holds the default value on creation for the enabled field.
+	integrationsubscription.DefaultEnabled = integrationsubscriptionDescEnabled.Default.(bool)
+	// integrationsubscriptionDescCreatedAt is the schema descriptor for created_at field.
+	integrationsubscriptionDescCreatedAt := integrationsubscriptionFields[9].Descriptor()
+	// integrationsubscription.DefaultCreatedAt holds the default value on creation for the created_at field.
+	integrationsubscription.DefaultCreatedAt = integrationsubscriptionDescCreatedAt.Default.(func() time.Time)
+	// integrationsubscriptionDescDeleted is the schema descriptor for deleted field.
+	integrationsubscriptionDescDeleted := integrationsubscriptionFields[13].Descriptor()
+	// integrationsubscription.DefaultDeleted holds the default value on creation for the deleted field.
+	integrationsubscription.DefaultDeleted = integrationsubscriptionDescDeleted.Default.(bool)
+	// integrationsubscriptionDescID is the schema descriptor for id field.
+	integrationsubscriptionDescID := integrationsubscriptionFields[0].Descriptor()
+	// integrationsubscription.DefaultID holds the default value on creation for the id field.
+	integrationsubscription.DefaultID = integrationsubscriptionDescID.Default.(func() uuid.UUID)
+	integrationtokenFields := schema.IntegrationToken{}.Fields()
+	_ = integrationtokenFields
+	// integrationtokenDescCreatedAt is the schema descriptor for created_at field.
+	integrationtokenDescCreatedAt := integrationtokenFields[5].Descriptor()
+	// integrationtoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	integrationtoken.DefaultCreatedAt = integrationtokenDescCreatedAt.Default.(func() time.Time)
+	// integrationtokenDescRevoked is the schema descriptor for revoked field.
+	integrationtokenDescRevoked := integrationtokenFields[7].Descriptor()
+	// integrationtoken.DefaultRevoked holds the default value on creation for the revoked field.
+	integrationtoken.DefaultRevoked = integrationtokenDescRevoked.Default.(bool)
+	// integrationtokenDescID is the schema descriptor for id field.
+	integrationtokenDescID := integrationtokenFields[0].Descriptor()
+	// integrationtoken.DefaultID holds the default value on creation for the id field.
+	integrationtoken.DefaultID = integrationtokenDescID.Default.(func() uuid.UUID)
 	intelFields := schema.Intel{}.Fields()
 	_ = intelFields
 	// intelDescCreatedAt is the schema descriptor for created_at field.

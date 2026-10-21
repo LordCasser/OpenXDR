@@ -12,6 +12,7 @@ import (
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/decoy"
+	"openxdr/server/internal/incidentstate"
 )
 
 func mapDecoyReview(mux *http.ServeMux, db *ent.Client) {
@@ -98,6 +99,9 @@ func openDecoyIncident(ctx context.Context, tx *ent.Tx, deployment *ent.DecoyDep
 	}
 	graph, _ := json.Marshal(map[string]any{"nodes": []map[string]string{{"id": "asset:" + host.ID.String(), "type": "asset", "label": host.Hostname}, {"id": "alert:" + al.ID.String(), "type": "alert", "label": "诱饵观察（归因未确认）"}}, "edges": []map[string]string{{"from": "asset:" + host.ID.String(), "to": "alert:" + al.ID.String(), "rel": "observed"}}, "overflow": 0})
 	if err = tx.Incident.UpdateOneID(incident.ID).SetGraph(graph).Exec(ctx); err != nil {
+		return uuid.Nil, err
+	}
+	if err := incidentstate.Record(ctx, tx, incident.ID, incidentstate.Created, incidentstate.Origin{Kind: "system"}, ""); err != nil {
 		return uuid.Nil, err
 	}
 	return incident.ID, tx.DecoyObservation.UpdateOneID(observation.ID).SetIncidentID(incident.ID).Exec(ctx)

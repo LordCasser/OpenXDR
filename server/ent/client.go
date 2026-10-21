@@ -26,11 +26,20 @@ import (
 	"openxdr/server/ent/decoyobservation"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
+	"openxdr/server/ent/externalticket"
 	"openxdr/server/ent/finding"
 	"openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/hostcredential"
 	"openxdr/server/ent/incident"
+	"openxdr/server/ent/integration"
+	"openxdr/server/ent/integrationattempt"
+	"openxdr/server/ent/integrationdelivery"
+	"openxdr/server/ent/integrationevent"
+	"openxdr/server/ent/integrationgroup"
+	"openxdr/server/ent/integrationidempotency"
+	"openxdr/server/ent/integrationsubscription"
+	"openxdr/server/ent/integrationtoken"
 	"openxdr/server/ent/intel"
 	"openxdr/server/ent/ipinfo"
 	"openxdr/server/ent/memory"
@@ -91,6 +100,8 @@ type Client struct {
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
+	// ExternalTicket is the client for interacting with the ExternalTicket builders.
+	ExternalTicket *ExternalTicketClient
 	// Finding is the client for interacting with the Finding builders.
 	Finding *FindingClient
 	// Group is the client for interacting with the Group builders.
@@ -103,6 +114,22 @@ type Client struct {
 	IPInfo *IPInfoClient
 	// Incident is the client for interacting with the Incident builders.
 	Incident *IncidentClient
+	// Integration is the client for interacting with the Integration builders.
+	Integration *IntegrationClient
+	// IntegrationAttempt is the client for interacting with the IntegrationAttempt builders.
+	IntegrationAttempt *IntegrationAttemptClient
+	// IntegrationDelivery is the client for interacting with the IntegrationDelivery builders.
+	IntegrationDelivery *IntegrationDeliveryClient
+	// IntegrationEvent is the client for interacting with the IntegrationEvent builders.
+	IntegrationEvent *IntegrationEventClient
+	// IntegrationGroup is the client for interacting with the IntegrationGroup builders.
+	IntegrationGroup *IntegrationGroupClient
+	// IntegrationIdempotency is the client for interacting with the IntegrationIdempotency builders.
+	IntegrationIdempotency *IntegrationIdempotencyClient
+	// IntegrationSubscription is the client for interacting with the IntegrationSubscription builders.
+	IntegrationSubscription *IntegrationSubscriptionClient
+	// IntegrationToken is the client for interacting with the IntegrationToken builders.
+	IntegrationToken *IntegrationTokenClient
 	// Intel is the client for interacting with the Intel builders.
 	Intel *IntelClient
 	// Memory is the client for interacting with the Memory builders.
@@ -161,12 +188,21 @@ func (c *Client) init() {
 	c.DecoyObservation = NewDecoyObservationClient(c.config)
 	c.EnrollToken = NewEnrollTokenClient(c.config)
 	c.Event = NewEventClient(c.config)
+	c.ExternalTicket = NewExternalTicketClient(c.config)
 	c.Finding = NewFindingClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupMember = NewGroupMemberClient(c.config)
 	c.HostCredential = NewHostCredentialClient(c.config)
 	c.IPInfo = NewIPInfoClient(c.config)
 	c.Incident = NewIncidentClient(c.config)
+	c.Integration = NewIntegrationClient(c.config)
+	c.IntegrationAttempt = NewIntegrationAttemptClient(c.config)
+	c.IntegrationDelivery = NewIntegrationDeliveryClient(c.config)
+	c.IntegrationEvent = NewIntegrationEventClient(c.config)
+	c.IntegrationGroup = NewIntegrationGroupClient(c.config)
+	c.IntegrationIdempotency = NewIntegrationIdempotencyClient(c.config)
+	c.IntegrationSubscription = NewIntegrationSubscriptionClient(c.config)
+	c.IntegrationToken = NewIntegrationTokenClient(c.config)
 	c.Intel = NewIntelClient(c.config)
 	c.Memory = NewMemoryClient(c.config)
 	c.ProcessBaseline = NewProcessBaselineClient(c.config)
@@ -273,45 +309,54 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		AIJob:            NewAIJobClient(cfg),
-		AIUsage:          NewAIUsageClient(cfg),
-		AgentSession:     NewAgentSessionClient(cfg),
-		Alert:            NewAlertClient(cfg),
-		Approval:         NewApprovalClient(cfg),
-		Asset:            NewAssetClient(cfg),
-		AssetLink:        NewAssetLinkClient(cfg),
-		AuditLog:         NewAuditLogClient(cfg),
-		BeaconBaseline:   NewBeaconBaselineClient(cfg),
-		Command:          NewCommandClient(cfg),
-		CommandPolicy:    NewCommandPolicyClient(cfg),
-		DecoyDeployment:  NewDecoyDeploymentClient(cfg),
-		DecoyObservation: NewDecoyObservationClient(cfg),
-		EnrollToken:      NewEnrollTokenClient(cfg),
-		Event:            NewEventClient(cfg),
-		Finding:          NewFindingClient(cfg),
-		Group:            NewGroupClient(cfg),
-		GroupMember:      NewGroupMemberClient(cfg),
-		HostCredential:   NewHostCredentialClient(cfg),
-		IPInfo:           NewIPInfoClient(cfg),
-		Incident:         NewIncidentClient(cfg),
-		Intel:            NewIntelClient(cfg),
-		Memory:           NewMemoryClient(cfg),
-		ProcessBaseline:  NewProcessBaselineClient(cfg),
-		Report:           NewReportClient(cfg),
-		ReportRead:       NewReportReadClient(cfg),
-		SSHLogin:         NewSSHLoginClient(cfg),
-		Session:          NewSessionClient(cfg),
-		SessionMessage:   NewSessionMessageClient(cfg),
-		Setting:          NewSettingClient(cfg),
-		Suppression:      NewSuppressionClient(cfg),
-		Task:             NewTaskClient(cfg),
-		TaskRun:          NewTaskRunClient(cfg),
-		TrustedSource:    NewTrustedSourceClient(cfg),
-		User:             NewUserClient(cfg),
-		VulnRecord:       NewVulnRecordClient(cfg),
-		Zone:             NewZoneClient(cfg),
+		ctx:                     ctx,
+		config:                  cfg,
+		AIJob:                   NewAIJobClient(cfg),
+		AIUsage:                 NewAIUsageClient(cfg),
+		AgentSession:            NewAgentSessionClient(cfg),
+		Alert:                   NewAlertClient(cfg),
+		Approval:                NewApprovalClient(cfg),
+		Asset:                   NewAssetClient(cfg),
+		AssetLink:               NewAssetLinkClient(cfg),
+		AuditLog:                NewAuditLogClient(cfg),
+		BeaconBaseline:          NewBeaconBaselineClient(cfg),
+		Command:                 NewCommandClient(cfg),
+		CommandPolicy:           NewCommandPolicyClient(cfg),
+		DecoyDeployment:         NewDecoyDeploymentClient(cfg),
+		DecoyObservation:        NewDecoyObservationClient(cfg),
+		EnrollToken:             NewEnrollTokenClient(cfg),
+		Event:                   NewEventClient(cfg),
+		ExternalTicket:          NewExternalTicketClient(cfg),
+		Finding:                 NewFindingClient(cfg),
+		Group:                   NewGroupClient(cfg),
+		GroupMember:             NewGroupMemberClient(cfg),
+		HostCredential:          NewHostCredentialClient(cfg),
+		IPInfo:                  NewIPInfoClient(cfg),
+		Incident:                NewIncidentClient(cfg),
+		Integration:             NewIntegrationClient(cfg),
+		IntegrationAttempt:      NewIntegrationAttemptClient(cfg),
+		IntegrationDelivery:     NewIntegrationDeliveryClient(cfg),
+		IntegrationEvent:        NewIntegrationEventClient(cfg),
+		IntegrationGroup:        NewIntegrationGroupClient(cfg),
+		IntegrationIdempotency:  NewIntegrationIdempotencyClient(cfg),
+		IntegrationSubscription: NewIntegrationSubscriptionClient(cfg),
+		IntegrationToken:        NewIntegrationTokenClient(cfg),
+		Intel:                   NewIntelClient(cfg),
+		Memory:                  NewMemoryClient(cfg),
+		ProcessBaseline:         NewProcessBaselineClient(cfg),
+		Report:                  NewReportClient(cfg),
+		ReportRead:              NewReportReadClient(cfg),
+		SSHLogin:                NewSSHLoginClient(cfg),
+		Session:                 NewSessionClient(cfg),
+		SessionMessage:          NewSessionMessageClient(cfg),
+		Setting:                 NewSettingClient(cfg),
+		Suppression:             NewSuppressionClient(cfg),
+		Task:                    NewTaskClient(cfg),
+		TaskRun:                 NewTaskRunClient(cfg),
+		TrustedSource:           NewTrustedSourceClient(cfg),
+		User:                    NewUserClient(cfg),
+		VulnRecord:              NewVulnRecordClient(cfg),
+		Zone:                    NewZoneClient(cfg),
 	}, nil
 }
 
@@ -329,45 +374,54 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		AIJob:            NewAIJobClient(cfg),
-		AIUsage:          NewAIUsageClient(cfg),
-		AgentSession:     NewAgentSessionClient(cfg),
-		Alert:            NewAlertClient(cfg),
-		Approval:         NewApprovalClient(cfg),
-		Asset:            NewAssetClient(cfg),
-		AssetLink:        NewAssetLinkClient(cfg),
-		AuditLog:         NewAuditLogClient(cfg),
-		BeaconBaseline:   NewBeaconBaselineClient(cfg),
-		Command:          NewCommandClient(cfg),
-		CommandPolicy:    NewCommandPolicyClient(cfg),
-		DecoyDeployment:  NewDecoyDeploymentClient(cfg),
-		DecoyObservation: NewDecoyObservationClient(cfg),
-		EnrollToken:      NewEnrollTokenClient(cfg),
-		Event:            NewEventClient(cfg),
-		Finding:          NewFindingClient(cfg),
-		Group:            NewGroupClient(cfg),
-		GroupMember:      NewGroupMemberClient(cfg),
-		HostCredential:   NewHostCredentialClient(cfg),
-		IPInfo:           NewIPInfoClient(cfg),
-		Incident:         NewIncidentClient(cfg),
-		Intel:            NewIntelClient(cfg),
-		Memory:           NewMemoryClient(cfg),
-		ProcessBaseline:  NewProcessBaselineClient(cfg),
-		Report:           NewReportClient(cfg),
-		ReportRead:       NewReportReadClient(cfg),
-		SSHLogin:         NewSSHLoginClient(cfg),
-		Session:          NewSessionClient(cfg),
-		SessionMessage:   NewSessionMessageClient(cfg),
-		Setting:          NewSettingClient(cfg),
-		Suppression:      NewSuppressionClient(cfg),
-		Task:             NewTaskClient(cfg),
-		TaskRun:          NewTaskRunClient(cfg),
-		TrustedSource:    NewTrustedSourceClient(cfg),
-		User:             NewUserClient(cfg),
-		VulnRecord:       NewVulnRecordClient(cfg),
-		Zone:             NewZoneClient(cfg),
+		ctx:                     ctx,
+		config:                  cfg,
+		AIJob:                   NewAIJobClient(cfg),
+		AIUsage:                 NewAIUsageClient(cfg),
+		AgentSession:            NewAgentSessionClient(cfg),
+		Alert:                   NewAlertClient(cfg),
+		Approval:                NewApprovalClient(cfg),
+		Asset:                   NewAssetClient(cfg),
+		AssetLink:               NewAssetLinkClient(cfg),
+		AuditLog:                NewAuditLogClient(cfg),
+		BeaconBaseline:          NewBeaconBaselineClient(cfg),
+		Command:                 NewCommandClient(cfg),
+		CommandPolicy:           NewCommandPolicyClient(cfg),
+		DecoyDeployment:         NewDecoyDeploymentClient(cfg),
+		DecoyObservation:        NewDecoyObservationClient(cfg),
+		EnrollToken:             NewEnrollTokenClient(cfg),
+		Event:                   NewEventClient(cfg),
+		ExternalTicket:          NewExternalTicketClient(cfg),
+		Finding:                 NewFindingClient(cfg),
+		Group:                   NewGroupClient(cfg),
+		GroupMember:             NewGroupMemberClient(cfg),
+		HostCredential:          NewHostCredentialClient(cfg),
+		IPInfo:                  NewIPInfoClient(cfg),
+		Incident:                NewIncidentClient(cfg),
+		Integration:             NewIntegrationClient(cfg),
+		IntegrationAttempt:      NewIntegrationAttemptClient(cfg),
+		IntegrationDelivery:     NewIntegrationDeliveryClient(cfg),
+		IntegrationEvent:        NewIntegrationEventClient(cfg),
+		IntegrationGroup:        NewIntegrationGroupClient(cfg),
+		IntegrationIdempotency:  NewIntegrationIdempotencyClient(cfg),
+		IntegrationSubscription: NewIntegrationSubscriptionClient(cfg),
+		IntegrationToken:        NewIntegrationTokenClient(cfg),
+		Intel:                   NewIntelClient(cfg),
+		Memory:                  NewMemoryClient(cfg),
+		ProcessBaseline:         NewProcessBaselineClient(cfg),
+		Report:                  NewReportClient(cfg),
+		ReportRead:              NewReportReadClient(cfg),
+		SSHLogin:                NewSSHLoginClient(cfg),
+		Session:                 NewSessionClient(cfg),
+		SessionMessage:          NewSessionMessageClient(cfg),
+		Setting:                 NewSettingClient(cfg),
+		Suppression:             NewSuppressionClient(cfg),
+		Task:                    NewTaskClient(cfg),
+		TaskRun:                 NewTaskRunClient(cfg),
+		TrustedSource:           NewTrustedSourceClient(cfg),
+		User:                    NewUserClient(cfg),
+		VulnRecord:              NewVulnRecordClient(cfg),
+		Zone:                    NewZoneClient(cfg),
 	}, nil
 }
 
@@ -399,9 +453,12 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AIJob, c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
 		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.DecoyDeployment,
-		c.DecoyObservation, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
-		c.HostCredential, c.IPInfo, c.Incident, c.Intel, c.Memory, c.ProcessBaseline,
-		c.Report, c.ReportRead, c.SSHLogin, c.Session, c.SessionMessage, c.Setting,
+		c.DecoyObservation, c.EnrollToken, c.Event, c.ExternalTicket, c.Finding,
+		c.Group, c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Integration,
+		c.IntegrationAttempt, c.IntegrationDelivery, c.IntegrationEvent,
+		c.IntegrationGroup, c.IntegrationIdempotency, c.IntegrationSubscription,
+		c.IntegrationToken, c.Intel, c.Memory, c.ProcessBaseline, c.Report,
+		c.ReportRead, c.SSHLogin, c.Session, c.SessionMessage, c.Setting,
 		c.Suppression, c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord,
 		c.Zone,
 	} {
@@ -415,9 +472,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AIJob, c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
 		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.DecoyDeployment,
-		c.DecoyObservation, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
-		c.HostCredential, c.IPInfo, c.Incident, c.Intel, c.Memory, c.ProcessBaseline,
-		c.Report, c.ReportRead, c.SSHLogin, c.Session, c.SessionMessage, c.Setting,
+		c.DecoyObservation, c.EnrollToken, c.Event, c.ExternalTicket, c.Finding,
+		c.Group, c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Integration,
+		c.IntegrationAttempt, c.IntegrationDelivery, c.IntegrationEvent,
+		c.IntegrationGroup, c.IntegrationIdempotency, c.IntegrationSubscription,
+		c.IntegrationToken, c.Intel, c.Memory, c.ProcessBaseline, c.Report,
+		c.ReportRead, c.SSHLogin, c.Session, c.SessionMessage, c.Setting,
 		c.Suppression, c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord,
 		c.Zone,
 	} {
@@ -458,6 +518,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.EnrollToken.mutate(ctx, m)
 	case *EventMutation:
 		return c.Event.mutate(ctx, m)
+	case *ExternalTicketMutation:
+		return c.ExternalTicket.mutate(ctx, m)
 	case *FindingMutation:
 		return c.Finding.mutate(ctx, m)
 	case *GroupMutation:
@@ -470,6 +532,22 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IPInfo.mutate(ctx, m)
 	case *IncidentMutation:
 		return c.Incident.mutate(ctx, m)
+	case *IntegrationMutation:
+		return c.Integration.mutate(ctx, m)
+	case *IntegrationAttemptMutation:
+		return c.IntegrationAttempt.mutate(ctx, m)
+	case *IntegrationDeliveryMutation:
+		return c.IntegrationDelivery.mutate(ctx, m)
+	case *IntegrationEventMutation:
+		return c.IntegrationEvent.mutate(ctx, m)
+	case *IntegrationGroupMutation:
+		return c.IntegrationGroup.mutate(ctx, m)
+	case *IntegrationIdempotencyMutation:
+		return c.IntegrationIdempotency.mutate(ctx, m)
+	case *IntegrationSubscriptionMutation:
+		return c.IntegrationSubscription.mutate(ctx, m)
+	case *IntegrationTokenMutation:
+		return c.IntegrationToken.mutate(ctx, m)
 	case *IntelMutation:
 		return c.Intel.mutate(ctx, m)
 	case *MemoryMutation:
@@ -2646,6 +2724,139 @@ func (c *EventClient) mutate(ctx context.Context, m *EventMutation) (Value, erro
 	}
 }
 
+// ExternalTicketClient is a client for the ExternalTicket schema.
+type ExternalTicketClient struct {
+	config
+}
+
+// NewExternalTicketClient returns a client for the ExternalTicket from the given config.
+func NewExternalTicketClient(c config) *ExternalTicketClient {
+	return &ExternalTicketClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `externalticket.Hooks(f(g(h())))`.
+func (c *ExternalTicketClient) Use(hooks ...Hook) {
+	c.hooks.ExternalTicket = append(c.hooks.ExternalTicket, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `externalticket.Intercept(f(g(h())))`.
+func (c *ExternalTicketClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ExternalTicket = append(c.inters.ExternalTicket, interceptors...)
+}
+
+// Create returns a builder for creating a ExternalTicket entity.
+func (c *ExternalTicketClient) Create() *ExternalTicketCreate {
+	mutation := newExternalTicketMutation(c.config, OpCreate)
+	return &ExternalTicketCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ExternalTicket entities.
+func (c *ExternalTicketClient) CreateBulk(builders ...*ExternalTicketCreate) *ExternalTicketCreateBulk {
+	return &ExternalTicketCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ExternalTicketClient) MapCreateBulk(slice any, setFunc func(*ExternalTicketCreate, int)) *ExternalTicketCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ExternalTicketCreateBulk{err: fmt.Errorf("calling to ExternalTicketClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ExternalTicketCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ExternalTicketCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ExternalTicket.
+func (c *ExternalTicketClient) Update() *ExternalTicketUpdate {
+	mutation := newExternalTicketMutation(c.config, OpUpdate)
+	return &ExternalTicketUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ExternalTicketClient) UpdateOne(_m *ExternalTicket) *ExternalTicketUpdateOne {
+	mutation := newExternalTicketMutation(c.config, OpUpdateOne, withExternalTicket(_m))
+	return &ExternalTicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ExternalTicketClient) UpdateOneID(id uuid.UUID) *ExternalTicketUpdateOne {
+	mutation := newExternalTicketMutation(c.config, OpUpdateOne, withExternalTicketID(id))
+	return &ExternalTicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ExternalTicket.
+func (c *ExternalTicketClient) Delete() *ExternalTicketDelete {
+	mutation := newExternalTicketMutation(c.config, OpDelete)
+	return &ExternalTicketDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ExternalTicketClient) DeleteOne(_m *ExternalTicket) *ExternalTicketDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ExternalTicketClient) DeleteOneID(id uuid.UUID) *ExternalTicketDeleteOne {
+	builder := c.Delete().Where(externalticket.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ExternalTicketDeleteOne{builder}
+}
+
+// Query returns a query builder for ExternalTicket.
+func (c *ExternalTicketClient) Query() *ExternalTicketQuery {
+	return &ExternalTicketQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeExternalTicket},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ExternalTicket entity by its id.
+func (c *ExternalTicketClient) Get(ctx context.Context, id uuid.UUID) (*ExternalTicket, error) {
+	return c.Query().Where(externalticket.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ExternalTicketClient) GetX(ctx context.Context, id uuid.UUID) *ExternalTicket {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ExternalTicketClient) Hooks() []Hook {
+	return c.hooks.ExternalTicket
+}
+
+// Interceptors returns the client interceptors.
+func (c *ExternalTicketClient) Interceptors() []Interceptor {
+	return c.inters.ExternalTicket
+}
+
+func (c *ExternalTicketClient) mutate(ctx context.Context, m *ExternalTicketMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ExternalTicketCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ExternalTicketUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ExternalTicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ExternalTicketDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ExternalTicket mutation op: %q", m.Op())
+	}
+}
+
 // FindingClient is a client for the Finding schema.
 type FindingClient struct {
 	config
@@ -3457,6 +3668,1070 @@ func (c *IncidentClient) mutate(ctx context.Context, m *IncidentMutation) (Value
 		return (&IncidentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Incident mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationClient is a client for the Integration schema.
+type IntegrationClient struct {
+	config
+}
+
+// NewIntegrationClient returns a client for the Integration from the given config.
+func NewIntegrationClient(c config) *IntegrationClient {
+	return &IntegrationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integration.Hooks(f(g(h())))`.
+func (c *IntegrationClient) Use(hooks ...Hook) {
+	c.hooks.Integration = append(c.hooks.Integration, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integration.Intercept(f(g(h())))`.
+func (c *IntegrationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Integration = append(c.inters.Integration, interceptors...)
+}
+
+// Create returns a builder for creating a Integration entity.
+func (c *IntegrationClient) Create() *IntegrationCreate {
+	mutation := newIntegrationMutation(c.config, OpCreate)
+	return &IntegrationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Integration entities.
+func (c *IntegrationClient) CreateBulk(builders ...*IntegrationCreate) *IntegrationCreateBulk {
+	return &IntegrationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationClient) MapCreateBulk(slice any, setFunc func(*IntegrationCreate, int)) *IntegrationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationCreateBulk{err: fmt.Errorf("calling to IntegrationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Integration.
+func (c *IntegrationClient) Update() *IntegrationUpdate {
+	mutation := newIntegrationMutation(c.config, OpUpdate)
+	return &IntegrationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationClient) UpdateOne(_m *Integration) *IntegrationUpdateOne {
+	mutation := newIntegrationMutation(c.config, OpUpdateOne, withIntegration(_m))
+	return &IntegrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationClient) UpdateOneID(id uuid.UUID) *IntegrationUpdateOne {
+	mutation := newIntegrationMutation(c.config, OpUpdateOne, withIntegrationID(id))
+	return &IntegrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Integration.
+func (c *IntegrationClient) Delete() *IntegrationDelete {
+	mutation := newIntegrationMutation(c.config, OpDelete)
+	return &IntegrationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationClient) DeleteOne(_m *Integration) *IntegrationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationClient) DeleteOneID(id uuid.UUID) *IntegrationDeleteOne {
+	builder := c.Delete().Where(integration.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationDeleteOne{builder}
+}
+
+// Query returns a query builder for Integration.
+func (c *IntegrationClient) Query() *IntegrationQuery {
+	return &IntegrationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegration},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Integration entity by its id.
+func (c *IntegrationClient) Get(ctx context.Context, id uuid.UUID) (*Integration, error) {
+	return c.Query().Where(integration.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationClient) GetX(ctx context.Context, id uuid.UUID) *Integration {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationClient) Hooks() []Hook {
+	return c.hooks.Integration
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationClient) Interceptors() []Interceptor {
+	return c.inters.Integration
+}
+
+func (c *IntegrationClient) mutate(ctx context.Context, m *IntegrationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Integration mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationAttemptClient is a client for the IntegrationAttempt schema.
+type IntegrationAttemptClient struct {
+	config
+}
+
+// NewIntegrationAttemptClient returns a client for the IntegrationAttempt from the given config.
+func NewIntegrationAttemptClient(c config) *IntegrationAttemptClient {
+	return &IntegrationAttemptClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationattempt.Hooks(f(g(h())))`.
+func (c *IntegrationAttemptClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationAttempt = append(c.hooks.IntegrationAttempt, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationattempt.Intercept(f(g(h())))`.
+func (c *IntegrationAttemptClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationAttempt = append(c.inters.IntegrationAttempt, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationAttempt entity.
+func (c *IntegrationAttemptClient) Create() *IntegrationAttemptCreate {
+	mutation := newIntegrationAttemptMutation(c.config, OpCreate)
+	return &IntegrationAttemptCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationAttempt entities.
+func (c *IntegrationAttemptClient) CreateBulk(builders ...*IntegrationAttemptCreate) *IntegrationAttemptCreateBulk {
+	return &IntegrationAttemptCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationAttemptClient) MapCreateBulk(slice any, setFunc func(*IntegrationAttemptCreate, int)) *IntegrationAttemptCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationAttemptCreateBulk{err: fmt.Errorf("calling to IntegrationAttemptClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationAttemptCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationAttemptCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationAttempt.
+func (c *IntegrationAttemptClient) Update() *IntegrationAttemptUpdate {
+	mutation := newIntegrationAttemptMutation(c.config, OpUpdate)
+	return &IntegrationAttemptUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationAttemptClient) UpdateOne(_m *IntegrationAttempt) *IntegrationAttemptUpdateOne {
+	mutation := newIntegrationAttemptMutation(c.config, OpUpdateOne, withIntegrationAttempt(_m))
+	return &IntegrationAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationAttemptClient) UpdateOneID(id uuid.UUID) *IntegrationAttemptUpdateOne {
+	mutation := newIntegrationAttemptMutation(c.config, OpUpdateOne, withIntegrationAttemptID(id))
+	return &IntegrationAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationAttempt.
+func (c *IntegrationAttemptClient) Delete() *IntegrationAttemptDelete {
+	mutation := newIntegrationAttemptMutation(c.config, OpDelete)
+	return &IntegrationAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationAttemptClient) DeleteOne(_m *IntegrationAttempt) *IntegrationAttemptDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationAttemptClient) DeleteOneID(id uuid.UUID) *IntegrationAttemptDeleteOne {
+	builder := c.Delete().Where(integrationattempt.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationAttemptDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationAttempt.
+func (c *IntegrationAttemptClient) Query() *IntegrationAttemptQuery {
+	return &IntegrationAttemptQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationAttempt},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationAttempt entity by its id.
+func (c *IntegrationAttemptClient) Get(ctx context.Context, id uuid.UUID) (*IntegrationAttempt, error) {
+	return c.Query().Where(integrationattempt.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationAttemptClient) GetX(ctx context.Context, id uuid.UUID) *IntegrationAttempt {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationAttemptClient) Hooks() []Hook {
+	return c.hooks.IntegrationAttempt
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationAttemptClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationAttempt
+}
+
+func (c *IntegrationAttemptClient) mutate(ctx context.Context, m *IntegrationAttemptMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationAttemptCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationAttemptUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationAttempt mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationDeliveryClient is a client for the IntegrationDelivery schema.
+type IntegrationDeliveryClient struct {
+	config
+}
+
+// NewIntegrationDeliveryClient returns a client for the IntegrationDelivery from the given config.
+func NewIntegrationDeliveryClient(c config) *IntegrationDeliveryClient {
+	return &IntegrationDeliveryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationdelivery.Hooks(f(g(h())))`.
+func (c *IntegrationDeliveryClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationDelivery = append(c.hooks.IntegrationDelivery, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationdelivery.Intercept(f(g(h())))`.
+func (c *IntegrationDeliveryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationDelivery = append(c.inters.IntegrationDelivery, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationDelivery entity.
+func (c *IntegrationDeliveryClient) Create() *IntegrationDeliveryCreate {
+	mutation := newIntegrationDeliveryMutation(c.config, OpCreate)
+	return &IntegrationDeliveryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationDelivery entities.
+func (c *IntegrationDeliveryClient) CreateBulk(builders ...*IntegrationDeliveryCreate) *IntegrationDeliveryCreateBulk {
+	return &IntegrationDeliveryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationDeliveryClient) MapCreateBulk(slice any, setFunc func(*IntegrationDeliveryCreate, int)) *IntegrationDeliveryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationDeliveryCreateBulk{err: fmt.Errorf("calling to IntegrationDeliveryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationDeliveryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationDeliveryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationDelivery.
+func (c *IntegrationDeliveryClient) Update() *IntegrationDeliveryUpdate {
+	mutation := newIntegrationDeliveryMutation(c.config, OpUpdate)
+	return &IntegrationDeliveryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationDeliveryClient) UpdateOne(_m *IntegrationDelivery) *IntegrationDeliveryUpdateOne {
+	mutation := newIntegrationDeliveryMutation(c.config, OpUpdateOne, withIntegrationDelivery(_m))
+	return &IntegrationDeliveryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationDeliveryClient) UpdateOneID(id uuid.UUID) *IntegrationDeliveryUpdateOne {
+	mutation := newIntegrationDeliveryMutation(c.config, OpUpdateOne, withIntegrationDeliveryID(id))
+	return &IntegrationDeliveryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationDelivery.
+func (c *IntegrationDeliveryClient) Delete() *IntegrationDeliveryDelete {
+	mutation := newIntegrationDeliveryMutation(c.config, OpDelete)
+	return &IntegrationDeliveryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationDeliveryClient) DeleteOne(_m *IntegrationDelivery) *IntegrationDeliveryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationDeliveryClient) DeleteOneID(id uuid.UUID) *IntegrationDeliveryDeleteOne {
+	builder := c.Delete().Where(integrationdelivery.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationDeliveryDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationDelivery.
+func (c *IntegrationDeliveryClient) Query() *IntegrationDeliveryQuery {
+	return &IntegrationDeliveryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationDelivery},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationDelivery entity by its id.
+func (c *IntegrationDeliveryClient) Get(ctx context.Context, id uuid.UUID) (*IntegrationDelivery, error) {
+	return c.Query().Where(integrationdelivery.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationDeliveryClient) GetX(ctx context.Context, id uuid.UUID) *IntegrationDelivery {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationDeliveryClient) Hooks() []Hook {
+	return c.hooks.IntegrationDelivery
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationDeliveryClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationDelivery
+}
+
+func (c *IntegrationDeliveryClient) mutate(ctx context.Context, m *IntegrationDeliveryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationDeliveryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationDeliveryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationDeliveryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationDeliveryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationDelivery mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationEventClient is a client for the IntegrationEvent schema.
+type IntegrationEventClient struct {
+	config
+}
+
+// NewIntegrationEventClient returns a client for the IntegrationEvent from the given config.
+func NewIntegrationEventClient(c config) *IntegrationEventClient {
+	return &IntegrationEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationevent.Hooks(f(g(h())))`.
+func (c *IntegrationEventClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationEvent = append(c.hooks.IntegrationEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationevent.Intercept(f(g(h())))`.
+func (c *IntegrationEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationEvent = append(c.inters.IntegrationEvent, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationEvent entity.
+func (c *IntegrationEventClient) Create() *IntegrationEventCreate {
+	mutation := newIntegrationEventMutation(c.config, OpCreate)
+	return &IntegrationEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationEvent entities.
+func (c *IntegrationEventClient) CreateBulk(builders ...*IntegrationEventCreate) *IntegrationEventCreateBulk {
+	return &IntegrationEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationEventClient) MapCreateBulk(slice any, setFunc func(*IntegrationEventCreate, int)) *IntegrationEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationEventCreateBulk{err: fmt.Errorf("calling to IntegrationEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationEvent.
+func (c *IntegrationEventClient) Update() *IntegrationEventUpdate {
+	mutation := newIntegrationEventMutation(c.config, OpUpdate)
+	return &IntegrationEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationEventClient) UpdateOne(_m *IntegrationEvent) *IntegrationEventUpdateOne {
+	mutation := newIntegrationEventMutation(c.config, OpUpdateOne, withIntegrationEvent(_m))
+	return &IntegrationEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationEventClient) UpdateOneID(id uuid.UUID) *IntegrationEventUpdateOne {
+	mutation := newIntegrationEventMutation(c.config, OpUpdateOne, withIntegrationEventID(id))
+	return &IntegrationEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationEvent.
+func (c *IntegrationEventClient) Delete() *IntegrationEventDelete {
+	mutation := newIntegrationEventMutation(c.config, OpDelete)
+	return &IntegrationEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationEventClient) DeleteOne(_m *IntegrationEvent) *IntegrationEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationEventClient) DeleteOneID(id uuid.UUID) *IntegrationEventDeleteOne {
+	builder := c.Delete().Where(integrationevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationEventDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationEvent.
+func (c *IntegrationEventClient) Query() *IntegrationEventQuery {
+	return &IntegrationEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationEvent entity by its id.
+func (c *IntegrationEventClient) Get(ctx context.Context, id uuid.UUID) (*IntegrationEvent, error) {
+	return c.Query().Where(integrationevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationEventClient) GetX(ctx context.Context, id uuid.UUID) *IntegrationEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationEventClient) Hooks() []Hook {
+	return c.hooks.IntegrationEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationEventClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationEvent
+}
+
+func (c *IntegrationEventClient) mutate(ctx context.Context, m *IntegrationEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationEvent mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationGroupClient is a client for the IntegrationGroup schema.
+type IntegrationGroupClient struct {
+	config
+}
+
+// NewIntegrationGroupClient returns a client for the IntegrationGroup from the given config.
+func NewIntegrationGroupClient(c config) *IntegrationGroupClient {
+	return &IntegrationGroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationgroup.Hooks(f(g(h())))`.
+func (c *IntegrationGroupClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationGroup = append(c.hooks.IntegrationGroup, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationgroup.Intercept(f(g(h())))`.
+func (c *IntegrationGroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationGroup = append(c.inters.IntegrationGroup, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationGroup entity.
+func (c *IntegrationGroupClient) Create() *IntegrationGroupCreate {
+	mutation := newIntegrationGroupMutation(c.config, OpCreate)
+	return &IntegrationGroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationGroup entities.
+func (c *IntegrationGroupClient) CreateBulk(builders ...*IntegrationGroupCreate) *IntegrationGroupCreateBulk {
+	return &IntegrationGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationGroupClient) MapCreateBulk(slice any, setFunc func(*IntegrationGroupCreate, int)) *IntegrationGroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationGroupCreateBulk{err: fmt.Errorf("calling to IntegrationGroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationGroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationGroup.
+func (c *IntegrationGroupClient) Update() *IntegrationGroupUpdate {
+	mutation := newIntegrationGroupMutation(c.config, OpUpdate)
+	return &IntegrationGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationGroupClient) UpdateOne(_m *IntegrationGroup) *IntegrationGroupUpdateOne {
+	mutation := newIntegrationGroupMutation(c.config, OpUpdateOne, withIntegrationGroup(_m))
+	return &IntegrationGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationGroupClient) UpdateOneID(id uuid.UUID) *IntegrationGroupUpdateOne {
+	mutation := newIntegrationGroupMutation(c.config, OpUpdateOne, withIntegrationGroupID(id))
+	return &IntegrationGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationGroup.
+func (c *IntegrationGroupClient) Delete() *IntegrationGroupDelete {
+	mutation := newIntegrationGroupMutation(c.config, OpDelete)
+	return &IntegrationGroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationGroupClient) DeleteOne(_m *IntegrationGroup) *IntegrationGroupDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationGroupClient) DeleteOneID(id uuid.UUID) *IntegrationGroupDeleteOne {
+	builder := c.Delete().Where(integrationgroup.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationGroupDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationGroup.
+func (c *IntegrationGroupClient) Query() *IntegrationGroupQuery {
+	return &IntegrationGroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationGroup entity by its id.
+func (c *IntegrationGroupClient) Get(ctx context.Context, id uuid.UUID) (*IntegrationGroup, error) {
+	return c.Query().Where(integrationgroup.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationGroupClient) GetX(ctx context.Context, id uuid.UUID) *IntegrationGroup {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationGroupClient) Hooks() []Hook {
+	return c.hooks.IntegrationGroup
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationGroupClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationGroup
+}
+
+func (c *IntegrationGroupClient) mutate(ctx context.Context, m *IntegrationGroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationGroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationGroup mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationIdempotencyClient is a client for the IntegrationIdempotency schema.
+type IntegrationIdempotencyClient struct {
+	config
+}
+
+// NewIntegrationIdempotencyClient returns a client for the IntegrationIdempotency from the given config.
+func NewIntegrationIdempotencyClient(c config) *IntegrationIdempotencyClient {
+	return &IntegrationIdempotencyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationidempotency.Hooks(f(g(h())))`.
+func (c *IntegrationIdempotencyClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationIdempotency = append(c.hooks.IntegrationIdempotency, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationidempotency.Intercept(f(g(h())))`.
+func (c *IntegrationIdempotencyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationIdempotency = append(c.inters.IntegrationIdempotency, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationIdempotency entity.
+func (c *IntegrationIdempotencyClient) Create() *IntegrationIdempotencyCreate {
+	mutation := newIntegrationIdempotencyMutation(c.config, OpCreate)
+	return &IntegrationIdempotencyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationIdempotency entities.
+func (c *IntegrationIdempotencyClient) CreateBulk(builders ...*IntegrationIdempotencyCreate) *IntegrationIdempotencyCreateBulk {
+	return &IntegrationIdempotencyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationIdempotencyClient) MapCreateBulk(slice any, setFunc func(*IntegrationIdempotencyCreate, int)) *IntegrationIdempotencyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationIdempotencyCreateBulk{err: fmt.Errorf("calling to IntegrationIdempotencyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationIdempotencyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationIdempotencyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationIdempotency.
+func (c *IntegrationIdempotencyClient) Update() *IntegrationIdempotencyUpdate {
+	mutation := newIntegrationIdempotencyMutation(c.config, OpUpdate)
+	return &IntegrationIdempotencyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationIdempotencyClient) UpdateOne(_m *IntegrationIdempotency) *IntegrationIdempotencyUpdateOne {
+	mutation := newIntegrationIdempotencyMutation(c.config, OpUpdateOne, withIntegrationIdempotency(_m))
+	return &IntegrationIdempotencyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationIdempotencyClient) UpdateOneID(id uuid.UUID) *IntegrationIdempotencyUpdateOne {
+	mutation := newIntegrationIdempotencyMutation(c.config, OpUpdateOne, withIntegrationIdempotencyID(id))
+	return &IntegrationIdempotencyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationIdempotency.
+func (c *IntegrationIdempotencyClient) Delete() *IntegrationIdempotencyDelete {
+	mutation := newIntegrationIdempotencyMutation(c.config, OpDelete)
+	return &IntegrationIdempotencyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationIdempotencyClient) DeleteOne(_m *IntegrationIdempotency) *IntegrationIdempotencyDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationIdempotencyClient) DeleteOneID(id uuid.UUID) *IntegrationIdempotencyDeleteOne {
+	builder := c.Delete().Where(integrationidempotency.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationIdempotencyDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationIdempotency.
+func (c *IntegrationIdempotencyClient) Query() *IntegrationIdempotencyQuery {
+	return &IntegrationIdempotencyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationIdempotency},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationIdempotency entity by its id.
+func (c *IntegrationIdempotencyClient) Get(ctx context.Context, id uuid.UUID) (*IntegrationIdempotency, error) {
+	return c.Query().Where(integrationidempotency.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationIdempotencyClient) GetX(ctx context.Context, id uuid.UUID) *IntegrationIdempotency {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationIdempotencyClient) Hooks() []Hook {
+	return c.hooks.IntegrationIdempotency
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationIdempotencyClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationIdempotency
+}
+
+func (c *IntegrationIdempotencyClient) mutate(ctx context.Context, m *IntegrationIdempotencyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationIdempotencyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationIdempotencyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationIdempotencyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationIdempotencyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationIdempotency mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationSubscriptionClient is a client for the IntegrationSubscription schema.
+type IntegrationSubscriptionClient struct {
+	config
+}
+
+// NewIntegrationSubscriptionClient returns a client for the IntegrationSubscription from the given config.
+func NewIntegrationSubscriptionClient(c config) *IntegrationSubscriptionClient {
+	return &IntegrationSubscriptionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationsubscription.Hooks(f(g(h())))`.
+func (c *IntegrationSubscriptionClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationSubscription = append(c.hooks.IntegrationSubscription, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationsubscription.Intercept(f(g(h())))`.
+func (c *IntegrationSubscriptionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationSubscription = append(c.inters.IntegrationSubscription, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationSubscription entity.
+func (c *IntegrationSubscriptionClient) Create() *IntegrationSubscriptionCreate {
+	mutation := newIntegrationSubscriptionMutation(c.config, OpCreate)
+	return &IntegrationSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationSubscription entities.
+func (c *IntegrationSubscriptionClient) CreateBulk(builders ...*IntegrationSubscriptionCreate) *IntegrationSubscriptionCreateBulk {
+	return &IntegrationSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationSubscriptionClient) MapCreateBulk(slice any, setFunc func(*IntegrationSubscriptionCreate, int)) *IntegrationSubscriptionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationSubscriptionCreateBulk{err: fmt.Errorf("calling to IntegrationSubscriptionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationSubscriptionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationSubscription.
+func (c *IntegrationSubscriptionClient) Update() *IntegrationSubscriptionUpdate {
+	mutation := newIntegrationSubscriptionMutation(c.config, OpUpdate)
+	return &IntegrationSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationSubscriptionClient) UpdateOne(_m *IntegrationSubscription) *IntegrationSubscriptionUpdateOne {
+	mutation := newIntegrationSubscriptionMutation(c.config, OpUpdateOne, withIntegrationSubscription(_m))
+	return &IntegrationSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationSubscriptionClient) UpdateOneID(id uuid.UUID) *IntegrationSubscriptionUpdateOne {
+	mutation := newIntegrationSubscriptionMutation(c.config, OpUpdateOne, withIntegrationSubscriptionID(id))
+	return &IntegrationSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationSubscription.
+func (c *IntegrationSubscriptionClient) Delete() *IntegrationSubscriptionDelete {
+	mutation := newIntegrationSubscriptionMutation(c.config, OpDelete)
+	return &IntegrationSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationSubscriptionClient) DeleteOne(_m *IntegrationSubscription) *IntegrationSubscriptionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationSubscriptionClient) DeleteOneID(id uuid.UUID) *IntegrationSubscriptionDeleteOne {
+	builder := c.Delete().Where(integrationsubscription.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationSubscriptionDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationSubscription.
+func (c *IntegrationSubscriptionClient) Query() *IntegrationSubscriptionQuery {
+	return &IntegrationSubscriptionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationSubscription},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationSubscription entity by its id.
+func (c *IntegrationSubscriptionClient) Get(ctx context.Context, id uuid.UUID) (*IntegrationSubscription, error) {
+	return c.Query().Where(integrationsubscription.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationSubscriptionClient) GetX(ctx context.Context, id uuid.UUID) *IntegrationSubscription {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationSubscriptionClient) Hooks() []Hook {
+	return c.hooks.IntegrationSubscription
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationSubscriptionClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationSubscription
+}
+
+func (c *IntegrationSubscriptionClient) mutate(ctx context.Context, m *IntegrationSubscriptionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationSubscription mutation op: %q", m.Op())
+	}
+}
+
+// IntegrationTokenClient is a client for the IntegrationToken schema.
+type IntegrationTokenClient struct {
+	config
+}
+
+// NewIntegrationTokenClient returns a client for the IntegrationToken from the given config.
+func NewIntegrationTokenClient(c config) *IntegrationTokenClient {
+	return &IntegrationTokenClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `integrationtoken.Hooks(f(g(h())))`.
+func (c *IntegrationTokenClient) Use(hooks ...Hook) {
+	c.hooks.IntegrationToken = append(c.hooks.IntegrationToken, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `integrationtoken.Intercept(f(g(h())))`.
+func (c *IntegrationTokenClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntegrationToken = append(c.inters.IntegrationToken, interceptors...)
+}
+
+// Create returns a builder for creating a IntegrationToken entity.
+func (c *IntegrationTokenClient) Create() *IntegrationTokenCreate {
+	mutation := newIntegrationTokenMutation(c.config, OpCreate)
+	return &IntegrationTokenCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntegrationToken entities.
+func (c *IntegrationTokenClient) CreateBulk(builders ...*IntegrationTokenCreate) *IntegrationTokenCreateBulk {
+	return &IntegrationTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntegrationTokenClient) MapCreateBulk(slice any, setFunc func(*IntegrationTokenCreate, int)) *IntegrationTokenCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntegrationTokenCreateBulk{err: fmt.Errorf("calling to IntegrationTokenClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntegrationTokenCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntegrationTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntegrationToken.
+func (c *IntegrationTokenClient) Update() *IntegrationTokenUpdate {
+	mutation := newIntegrationTokenMutation(c.config, OpUpdate)
+	return &IntegrationTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntegrationTokenClient) UpdateOne(_m *IntegrationToken) *IntegrationTokenUpdateOne {
+	mutation := newIntegrationTokenMutation(c.config, OpUpdateOne, withIntegrationToken(_m))
+	return &IntegrationTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntegrationTokenClient) UpdateOneID(id uuid.UUID) *IntegrationTokenUpdateOne {
+	mutation := newIntegrationTokenMutation(c.config, OpUpdateOne, withIntegrationTokenID(id))
+	return &IntegrationTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntegrationToken.
+func (c *IntegrationTokenClient) Delete() *IntegrationTokenDelete {
+	mutation := newIntegrationTokenMutation(c.config, OpDelete)
+	return &IntegrationTokenDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntegrationTokenClient) DeleteOne(_m *IntegrationToken) *IntegrationTokenDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntegrationTokenClient) DeleteOneID(id uuid.UUID) *IntegrationTokenDeleteOne {
+	builder := c.Delete().Where(integrationtoken.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntegrationTokenDeleteOne{builder}
+}
+
+// Query returns a query builder for IntegrationToken.
+func (c *IntegrationTokenClient) Query() *IntegrationTokenQuery {
+	return &IntegrationTokenQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntegrationToken},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntegrationToken entity by its id.
+func (c *IntegrationTokenClient) Get(ctx context.Context, id uuid.UUID) (*IntegrationToken, error) {
+	return c.Query().Where(integrationtoken.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntegrationTokenClient) GetX(ctx context.Context, id uuid.UUID) *IntegrationToken {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntegrationTokenClient) Hooks() []Hook {
+	return c.hooks.IntegrationToken
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntegrationTokenClient) Interceptors() []Interceptor {
+	return c.inters.IntegrationToken
+}
+
+func (c *IntegrationTokenClient) mutate(ctx context.Context, m *IntegrationTokenMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntegrationTokenCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntegrationTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntegrationTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntegrationTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntegrationToken mutation op: %q", m.Op())
 	}
 }
 
@@ -5593,17 +6868,23 @@ type (
 	hooks struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
 		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
-		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, IPInfo,
-		Incident, Intel, Memory, ProcessBaseline, Report, ReportRead, SSHLogin,
-		Session, SessionMessage, Setting, Suppression, Task, TaskRun, TrustedSource,
-		User, VulnRecord, Zone []ent.Hook
+		EnrollToken, Event, ExternalTicket, Finding, Group, GroupMember,
+		HostCredential, IPInfo, Incident, Integration, IntegrationAttempt,
+		IntegrationDelivery, IntegrationEvent, IntegrationGroup,
+		IntegrationIdempotency, IntegrationSubscription, IntegrationToken, Intel,
+		Memory, ProcessBaseline, Report, ReportRead, SSHLogin, Session, SessionMessage,
+		Setting, Suppression, Task, TaskRun, TrustedSource, User, VulnRecord,
+		Zone []ent.Hook
 	}
 	inters struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
 		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
-		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, IPInfo,
-		Incident, Intel, Memory, ProcessBaseline, Report, ReportRead, SSHLogin,
-		Session, SessionMessage, Setting, Suppression, Task, TaskRun, TrustedSource,
-		User, VulnRecord, Zone []ent.Interceptor
+		EnrollToken, Event, ExternalTicket, Finding, Group, GroupMember,
+		HostCredential, IPInfo, Incident, Integration, IntegrationAttempt,
+		IntegrationDelivery, IntegrationEvent, IntegrationGroup,
+		IntegrationIdempotency, IntegrationSubscription, IntegrationToken, Intel,
+		Memory, ProcessBaseline, Report, ReportRead, SSHLogin, Session, SessionMessage,
+		Setting, Suppression, Task, TaskRun, TrustedSource, User, VulnRecord,
+		Zone []ent.Interceptor
 	}
 )

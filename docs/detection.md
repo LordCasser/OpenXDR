@@ -119,6 +119,11 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 
 ## 威胁情报（`server/internal/intel`）
 
+外部网络检测告警可通过 [Suricata EVE 接入](suricata.md)进入同一条处理链。
+`ingest` 在事务内核对来源组和资产，将外部签名转为 `suricata:<gid>:<sid>` 命中，
+随后复用下述抑制、持久去重与事件关联；不要求先写一条 Sigma 规则重新匹配告警文本。
+原始 EVE 留在 `events.raw.suricata`，签名与修订号写入告警依据并进入 AI 研判上下文。
+
 - **IOC 类型**：`ip / domain / hash` 三类（`ent/schema/intel.go:23`）。
   无独立 JA3 类型，但事件提取时 `ja3_hash` 键归入 hash 碰撞，JA3 实际
   走 hash 通道（`store.go:208`）

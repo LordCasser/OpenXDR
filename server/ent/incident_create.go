@@ -52,6 +52,20 @@ func (_c *IncidentCreate) SetNillableStatus(v *string) *IncidentCreate {
 	return _c
 }
 
+// SetIntegrationRevision sets the "integration_revision" field.
+func (_c *IncidentCreate) SetIntegrationRevision(v int64) *IncidentCreate {
+	_c.mutation.SetIntegrationRevision(v)
+	return _c
+}
+
+// SetNillableIntegrationRevision sets the "integration_revision" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableIntegrationRevision(v *int64) *IncidentCreate {
+	if v != nil {
+		_c.SetIntegrationRevision(*v)
+	}
+	return _c
+}
+
 // SetGraph sets the "graph" field.
 func (_c *IncidentCreate) SetGraph(v json.RawMessage) *IncidentCreate {
 	_c.mutation.SetGraph(v)
@@ -310,6 +324,10 @@ func (_c *IncidentCreate) defaults() {
 		v := incident.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.IntegrationRevision(); !ok {
+		v := incident.DefaultIntegrationRevision
+		_c.mutation.SetIntegrationRevision(v)
+	}
 	if _, ok := _c.mutation.TriageCount(); !ok {
 		v := incident.DefaultTriageCount
 		_c.mutation.SetTriageCount(v)
@@ -331,6 +349,9 @@ func (_c *IncidentCreate) check() error {
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Incident.status"`)}
+	}
+	if _, ok := _c.mutation.IntegrationRevision(); !ok {
+		return &ValidationError{Name: "integration_revision", err: errors.New(`ent: missing required field "Incident.integration_revision"`)}
 	}
 	if _, ok := _c.mutation.Graph(); !ok {
 		return &ValidationError{Name: "graph", err: errors.New(`ent: missing required field "Incident.graph"`)}
@@ -383,6 +404,10 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(incident.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.IntegrationRevision(); ok {
+		_spec.SetField(incident.FieldIntegrationRevision, field.TypeInt64, value)
+		_node.IntegrationRevision = value
 	}
 	if value, ok := _c.mutation.Graph(); ok {
 		_spec.SetField(incident.FieldGraph, field.TypeJSON, value)

@@ -23,6 +23,7 @@ func (Incident) Fields() []ent.Field {
 		field.UUID("id", uuid.UUID{}).Default(newV7),
 		field.Time("created_at").Default(time.Now),
 		field.String("status").Default("open"),
+		field.Int64("integration_revision").Default(0),
 		field.JSON("graph", json.RawMessage{}),
 		field.JSON("ai_verdict", json.RawMessage{}).Optional(),
 		field.String("title").Optional().Nillable(),

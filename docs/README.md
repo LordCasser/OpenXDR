@@ -17,8 +17,10 @@
 | [architecture.md](architecture.md) | 总体架构：数据通路、降噪四道闸、关键设计决策、身份与安全、模块地图 | 第一次了解系统；做任何跨模块改动前 |
 | [collection.md](collection.md) | 采集端详解：agent（Linux/Windows 各采集路径与降级链）、sensor（抓包后端与协议解析）、配置下发 | 改 `agent/`、`sensor/`；评估采集覆盖面 |
 | [events.md](events.md) | 事件模型参考：class_uid 总表、每类事件的字段 schema、实体标识约定、gRPC 契约 | 写/改检测规则；改事件格式；写查询 |
+| [suricata.md](suricata.md) | Suricata EVE alert 接入：来源密钥、资产归属、重传、导入与验证 | 接入外部网络检测告警 |
 | [detection.md](detection.md) | 检测与降噪链路：Sigma 引擎、情报、去重、抑制、爆破升级、关联、UEBA、AI 研判、响应处置、通知、清理 | 改 `server/internal/` 任何检测相关包 |
 | [api.md](api.md) | REST API 参考：端点、参数、权限约定、对接示例 | 对接外部系统；改 `server/internal/api` |
+| [open-integrations-design.md](open-integrations-design.md) | 资产导出与系统联动详细设计（待实施）：集成身份、API、事件订阅、工单回写及验收 | 实施导出、CMDB 对接或工单联动前 |
 | [roadmap.md](roadmap.md) | 路线图：现状快照、已完成项的教训、后续工作详细规划（P0/P1/P2）、不做清单 | 决定"接下来做什么"之前 |
 | [pi-backend.md](pi-backend.md) | AI 助手后端：会话与后台运行、命令名单与审批、只读查询、运维待办、预设任务 | 配置 AI 助手与巡检；改 `agentchat`、`commandgate` |
 | [vulns.md](vulns.md) | 软件漏洞：dpkg 软件清单、OSV 漏洞库同步、版本比较与暴露服务标注、已知限制 | 看主机漏洞；改 `vuln` 或 agent 软件清单 |

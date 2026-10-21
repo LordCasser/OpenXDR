@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
@@ -18,6 +19,8 @@ import (
 	entgroup "openxdr/server/ent/group"
 	"openxdr/server/ent/groupmember"
 	"openxdr/server/ent/hostcredential"
+	"openxdr/server/ent/integration"
+	"openxdr/server/ent/integrationgroup"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/commandgate"
@@ -139,6 +142,24 @@ func deleteGroup(db *ent.Client, queries queryProvisioner) http.HandlerFunc {
 			return
 		}
 		err := withTx(r, db, func(tx *ent.Tx) error {
+			if _, err := tx.Group.Query().Where(entgroup.IDEQ(g.ID)).Where(func(s *sql.Selector) { s.ForUpdate() }).Only(r.Context()); err != nil {
+				return err
+			}
+			grants, err := tx.IntegrationGroup.Query().Where(integrationgroup.GroupIDEQ(g.ID)).All(r.Context())
+			if err != nil {
+				return err
+			}
+			ids := make([]uuid.UUID, 0, len(grants))
+			for _, grant := range grants {
+				ids = append(ids, grant.IntegrationID)
+			}
+			if _, err := tx.Integration.Update().Where(integration.IDIn(ids...)).AddPermissionVersion(1).Save(r.Context()); err != nil {
+				return err
+			}
+			if _, err := tx.IntegrationGroup.Delete().Where(integrationgroup.GroupIDEQ(g.ID)).Exec(r.Context()); err != nil {
+				return err
+			}
+
 			if _, err := tx.HostCredential.Delete().Where(hostcredential.GroupIDEQ(g.ID)).Exec(r.Context()); err != nil {
 				return err
 			}

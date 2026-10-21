@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -45,6 +46,7 @@ import (
 	"openxdr/server/internal/identity"
 	"openxdr/server/internal/identity/directory"
 	"openxdr/server/internal/ingest"
+	"openxdr/server/internal/integration"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/ipdb"
 	"openxdr/server/internal/janitor"
@@ -58,6 +60,7 @@ import (
 	"openxdr/server/internal/schedule"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
+	"openxdr/server/internal/suricata"
 	"openxdr/server/internal/syslog"
 	"openxdr/server/internal/telemetry"
 	"openxdr/server/internal/temporal"
@@ -113,7 +116,7 @@ func main() {
 	dedupWindow := time.Duration(getenvInt("ALERT_DEDUP_WINDOW_MINUTES", 5)) * time.Minute
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		telemetry.NewCollectorHealth(db))
+		telemetry.NewCollectorHealth(db), telemetry.NewIntegrationQueue(db), integration.RateLimitedRequests)
 	events, router := startEventBus(db, rules, temporalRules, suppressions, intelStore, dedupWindow, hub, registry)
 	if router != nil {
 		defer router.Close()
@@ -138,6 +141,10 @@ func main() {
 	registerHostRoutes(ctx, routes, db, client, rules, credentialVault, enrollSvc, conf)
 	registerSettingsRoutes(routes, db, client, credentialVault, notifySettings, webhook, aiConf, intelFeeds, enrollSvc, dists)
 	registerAIRoutes(routes, client, llmFor, assetEngine)
+	integrations := api.Integrations(client, credentialVault)
+	routes.Handle("/api/system-integrations", integrations)
+	routes.Handle("/api/system-integrations/", integrations)
+	startIntegrationDelivery(ctx, client, credentialVault)
 	routes.Handle("/", api.Handler(client, rules, hub, suppressions, intelStore, allowlist, chat))
 	mux := publicMux(auth.Middleware(client, routes), db, client, registry, enrollSvc, dists, events)
 	// 经反向代理时还原客户端地址，登录退避与审计才按真人计
@@ -704,6 +711,17 @@ func registerAIRoutes(routes *http.ServeMux, client *ent.Client, llmFor func(str
 // publicMux 外层路由：指标、健康检查与免登录的接入端点，其余交给需登录的 app。
 func publicMux(app http.Handler, db *sql.DB, client *ent.Client, registry *prometheus.Registry, enrollSvc *enroll.Service, dists enroll.Dists, events eventbus.Bus) *http.ServeMux {
 	mux := http.NewServeMux()
+	integrationEnabled := getenv("INTEGRATION_API_ENABLED", "false") == "true"
+	cursorKey, keyErr := base64.StdEncoding.DecodeString(os.Getenv("INTEGRATION_CURSOR_KEY"))
+	if integrationEnabled && (keyErr != nil || len(cursorKey) < 32) {
+		slog.Error("启用集成 API 需要至少 32 字节的 base64 INTEGRATION_CURSOR_KEY")
+		os.Exit(1)
+	}
+	integrationAPI := &integration.Service{DB: client, Enabled: integrationEnabled, CursorKey: cursorKey,
+		Suricata: func(ctx context.Context, origin suricata.Origin, event suricata.Event) error {
+			return events.Publish(ctx, ingest.SuricataEnvelope(origin, event))
+		}}
+	mux.Handle("/api/integration/v1/", integrationAPI.Handler())
 	mux.Handle("/metrics", telemetry.Handler(registry))
 	// 接入端点免登录：安装脚本与二进制公开，注册靠令牌
 	mux.Handle("/api/enroll/", enrollSvc.Public(dists))
@@ -818,4 +836,24 @@ func getenvInt(key string, def int) int {
 		return v
 	}
 	return def
+}
+
+// startIntegrationDelivery 显式开关控制出站消息，未启用时仍维护本地队列与保留期。
+func startIntegrationDelivery(ctx context.Context, client *ent.Client, vault *hostimport.Vault) {
+	if getenv("INTEGRATION_WEBHOOK_ENABLED", "false") != "true" {
+		worker := &integration.Worker{DB: client}
+		go worker.RunMaintenance(ctx)
+		return
+	}
+	if vault == nil {
+		slog.Error("启用集成 Webhook 需要 HOST_CREDENTIAL_KEY")
+		os.Exit(1)
+	}
+	policy, err := integration.ParseOutboundPolicy(os.Getenv("INTEGRATION_WEBHOOK_ALLOW"))
+	if err != nil {
+		slog.Error("集成 Webhook 出站允许清单无效", "err", err)
+		os.Exit(1)
+	}
+	worker := &integration.Worker{DB: client, Vault: vault, Policy: policy}
+	go worker.Run(ctx)
 }

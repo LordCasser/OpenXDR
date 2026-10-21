@@ -19,6 +19,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldIntegrationRevision holds the string denoting the integration_revision field in the database.
+	FieldIntegrationRevision = "integration_revision"
 	// FieldGraph holds the string denoting the graph field in the database.
 	FieldGraph = "graph"
 	// FieldAiVerdict holds the string denoting the ai_verdict field in the database.
@@ -67,6 +69,7 @@ var Columns = []string{
 	FieldID,
 	FieldCreatedAt,
 	FieldStatus,
+	FieldIntegrationRevision,
 	FieldGraph,
 	FieldAiVerdict,
 	FieldTitle,
@@ -99,6 +102,8 @@ var (
 	DefaultCreatedAt func() time.Time
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
+	// DefaultIntegrationRevision holds the default value on creation for the "integration_revision" field.
+	DefaultIntegrationRevision int64
 	// DefaultTriageCount holds the default value on creation for the "triage_count" field.
 	DefaultTriageCount int
 	// DefaultTriageFailures holds the default value on creation for the "triage_failures" field.
@@ -123,6 +128,11 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByIntegrationRevision orders the results by the integration_revision field.
+func ByIntegrationRevision(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIntegrationRevision, opts...).ToFunc()
 }
 
 // ByTitle orders the results by the title field.

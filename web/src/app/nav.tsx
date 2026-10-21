@@ -66,6 +66,7 @@ export const NAV: (NavItem | NavGroup)[] = [
     admin: true,
     items: [
       { path: '/settings', key: 'navSettings', icon: <SettingOutlined /> },
+      { path: '/integrations', key: 'navIntegrations', icon: <DeploymentUnitOutlined /> },
       { path: '/users', key: 'navUsers', icon: <UserOutlined /> },
       { path: '/groups', key: 'navGroups', icon: <TeamOutlined /> },
       { path: '/audit', key: 'navAudit', icon: <AuditOutlined /> },

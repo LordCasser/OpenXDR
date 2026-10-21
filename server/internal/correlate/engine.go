@@ -17,9 +17,11 @@ import (
 
 	"openxdr/server/ent"
 	"openxdr/server/ent/alert"
+	"openxdr/server/ent/asset"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/incident"
 	"openxdr/server/internal/automation"
+	"openxdr/server/internal/incidentstate"
 	"openxdr/server/internal/sigma"
 )
 
@@ -59,11 +61,25 @@ func (e *Engine) Run(ctx context.Context) {
 }
 
 func (e *Engine) batch(ctx context.Context) error {
+	tx, err := e.DB.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	worker := *e
+	worker.DB = tx.Client()
+	if err := worker.batchTx(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (e *Engine) batchTx(ctx context.Context, tx *ent.Tx) error {
 	// 平台指令触发的告警挂在指令上，不组成事件：来源已知，发起与审批都有记录。
 	// 登记的可信自动化来源同理，只有高危例外照常进关联
 	pending, err := e.DB.Alert.Query().
 		Where(alert.IncidentIDIsNil(), alert.CommandIDIsNil(), automation.Counted()).
-		Order(ent.Asc(alert.FieldTs)).
+		Order(ent.Asc(alert.FieldTs), ent.Asc(alert.FieldID)).
 		Limit(500).
 		WithEvent().
 		WithAsset().
@@ -77,8 +93,9 @@ func (e *Engine) batch(ctx context.Context) error {
 		incident *ent.Incident
 		lastTs   time.Time
 	}
-	byAsset := map[uuid.UUID]cachedIncident{}
+	byAsset := map[string]cachedIncident{}
 	graphs := map[uuid.UUID]*Graph{}
+	created := map[uuid.UUID]bool{}
 	assign := map[uuid.UUID][]uuid.UUID{}
 	// 并入了新证据的 incident（研判按 evidence_at 判断是否待重研判），其中 urgent 是升级类、要立即重研判的
 	evidence := map[uuid.UUID]bool{}
@@ -95,12 +112,8 @@ func (e *Engine) batch(ctx context.Context) error {
 	escalate := map[uuid.UUID]bool{}
 
 	for _, al := range pending {
-		// 匹配不到资产的告警（例如探针看到的外部 IP）统一归到 uuid.Nil 这个桶，
-		// 否则每条都自成一个 incident，等于自己制造事件风暴
-		bucket := uuid.Nil
-		if al.AssetID != nil {
-			bucket = *al.AssetID
-		}
+		// 未归属的 Suricata 告警按组、探针与连接分桶，其余沿用全局 unknown 桶。
+		bucket := correlationBucket(al)
 
 		key, coarse := recurKeys(al)
 		if !e.RecurCoarse {
@@ -126,13 +139,19 @@ func (e *Engine) batch(ctx context.Context) error {
 		} else if cached, ok := byAsset[bucket]; ok &&
 			!al.Ts.Before(cached.lastTs) && al.Ts.Sub(cached.lastTs) <= e.Window {
 			inc = cached.incident
-		} else if found, err := e.findOpen(ctx, al.AssetID, al.Ts.Add(-e.Window)); err == nil {
+		} else if found, err := e.findForAlert(ctx, al, al.Ts.Add(-e.Window)); err == nil {
 			inc = found
 		} else if cached := cmp.Or(byEntity[entity], byEntity[coarseEntity]); cached != nil && al.Ts.Sub(cached.CreatedAt) <= e.RecurSpan {
 			inc = cached
 		} else if found, err := e.findRecurrence(ctx, al, key, coarse); err == nil {
 			inc = found
-		} else if found, src, err := e.findByLateral(ctx, al); err == nil {
+		} else if found, src, err := e.findByLateral(ctx, al, func(id uuid.UUID) *ent.Incident {
+			// 本批刚建、尚未落库挂接的 incident 也要能被横向关联到
+			if cached, ok := byAsset[id.String()]; ok && al.Ts.Sub(cached.lastTs) <= e.Window {
+				return cached.incident
+			}
+			return nil
+		}); err == nil {
 			inc = found
 			lateralFrom = src
 		}
@@ -144,6 +163,7 @@ func (e *Engine) batch(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			created[inc.ID] = true
 			maxSev[inc.ID] = al.Severity
 		}
 		if _, ok := maxSev[inc.ID]; !ok {
@@ -224,6 +244,15 @@ func (e *Engine) batch(ctx context.Context) error {
 		if err := upd.Exec(ctx); err != nil {
 			return err
 		}
+		kind := incidentstate.EvidenceUpdated
+		if created[incID] {
+			kind = incidentstate.Created
+		}
+		if created[incID] || evidence[incID] {
+			if err := incidentstate.Record(ctx, tx, incID, kind, incidentstate.Origin{Kind: "system"}, ""); err != nil {
+				return err
+			}
+		}
 	}
 	slog.Info("关联完成", "alerts", len(pending), "incidents", len(graphs))
 	return nil
@@ -235,7 +264,7 @@ func (e *Engine) title(al *ent.Alert) string {
 	if al.Edges.Asset != nil {
 		hostname = al.Edges.Asset.Hostname
 	}
-	return fmt.Sprintf("%s @ %s", e.ruleTitle(al.RuleID), hostname)
+	return fmt.Sprintf("%s @ %s", e.alertTitle(al), hostname)
 }
 
 // criticalOf 本批次的高危例外判定（情报命中与高危战术/技术，见 automation.Watch），按规则缓存
@@ -311,15 +340,21 @@ func (e *Engine) findByLineage(ctx context.Context, al *ent.Alert) (*ent.Inciden
 // findByLateral 横向移动：本机没有可归属的故事时，看时间窗内是否有别的
 // 主机向本机发起过网络会话（sensor 流事件按源 IP 归属，conn_tuple 的
 // 目的端是本机 IP），有则归并进对端的 incident。返回对端资产用于画图。
-func (e *Engine) findByLateral(ctx context.Context, al *ent.Alert) (*ent.Incident, *ent.Asset, error) {
+func (e *Engine) findByLateral(ctx context.Context, al *ent.Alert, inBatch func(uuid.UUID) *ent.Incident) (*ent.Incident, *ent.Asset, error) {
 	if al.AssetID == nil || al.Edges.Asset == nil {
 		return nil, nil, errNoLateral
 	}
 	since := al.Ts.Add(-e.Window)
+	group := asset.GroupIDIsNil()
+	if al.Edges.Asset.GroupID != nil {
+		group = asset.GroupIDEQ(*al.Edges.Asset.GroupID)
+	}
 	for _, ip := range al.Edges.Asset.IPAddrs {
 		conns, err := e.DB.Event.Query().
 			Where(
 				event.TsGTE(since),
+				event.TsLTE(al.Ts),
+				event.HasAssetWith(group),
 				event.ConnTupleContains(">"+ip+":"),
 				event.AssetIDNotNil(),
 				event.AssetIDNEQ(*al.AssetID),
@@ -332,6 +367,11 @@ func (e *Engine) findByLateral(ctx context.Context, al *ent.Alert) (*ent.Inciden
 			continue
 		}
 		for _, c := range conns {
+			if inBatch != nil {
+				if inc := inBatch(*c.AssetID); inc != nil {
+					return inc, c.Edges.Asset, nil
+				}
+			}
 			if inc, err := e.findOpen(ctx, c.AssetID, since); err == nil {
 				return inc, c.Edges.Asset, nil
 			}
@@ -346,6 +386,8 @@ func (e *Engine) findOpen(ctx context.Context, assetID *uuid.UUID, since time.Ti
 	scope := alert.AssetIDIsNil()
 	if assetID != nil {
 		scope = alert.AssetIDEQ(*assetID)
+	} else {
+		scope = alert.And(scope, alert.Not(alert.HasEventWith(event.SourceEQ("suricata"))))
 	}
 	al, err := e.DB.Alert.Query().
 		Where(
@@ -381,7 +423,7 @@ func (e *Engine) attach(ctx context.Context, g *Graph, al *ent.Alert) {
 	}
 
 	alertNode := "alert:" + al.ID.String()
-	g.ensureNode(alertNode, "alert", e.ruleTitle(al.RuleID))
+	g.ensureNode(alertNode, "alert", e.alertTitle(al))
 
 	if evt := al.Edges.Event; evt != nil {
 		id, typ, label := eventNode(evt)
@@ -432,7 +474,7 @@ const (
 // eventNode 事件在图上的节点：端点事件画成进程，网络事件画成连接，
 // 没有进程上下文的文件事件画成文件。同一进程/连接/文件的多条告警共用一个节点，靠 id 去重。
 func eventNode(evt *ent.Event) (id, typ, label string) {
-	if evt.ClassUID == classNetworkActivity || evt.ClassUID == classDNSActivity {
+	if evt.ClassUID == classNetworkActivity || evt.ClassUID == classDNSActivity || evt.Source == "suricata" {
 		id = "event:" + evt.ID.String()
 		if evt.ConnTuple != nil {
 			id = "conn:" + *evt.ConnTuple

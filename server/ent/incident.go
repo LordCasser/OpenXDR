@@ -24,6 +24,8 @@ type Incident struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// IntegrationRevision holds the value of the "integration_revision" field.
+	IntegrationRevision int64 `json:"integration_revision,omitempty"`
 	// Graph holds the value of the "graph" field.
 	Graph json.RawMessage `json:"graph,omitempty"`
 	// AiVerdict holds the value of the "ai_verdict" field.
@@ -85,7 +87,7 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case incident.FieldGraph, incident.FieldAiVerdict, incident.FieldClosureProposal:
 			values[i] = new([]byte)
-		case incident.FieldTriageCount, incident.FieldTriageFailures:
+		case incident.FieldIntegrationRevision, incident.FieldTriageCount, incident.FieldTriageFailures:
 			values[i] = new(sql.NullInt64)
 		case incident.FieldStatus, incident.FieldTitle, incident.FieldResolution, incident.FieldResolvedBy, incident.FieldResolutionSource:
 			values[i] = new(sql.NullString)
@@ -125,6 +127,12 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case incident.FieldIntegrationRevision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field integration_revision", values[i])
+			} else if value.Valid {
+				_m.IntegrationRevision = value.Int64
 			}
 		case incident.FieldGraph:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -278,6 +286,9 @@ func (_m *Incident) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("integration_revision=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IntegrationRevision))
 	builder.WriteString(", ")
 	builder.WriteString("graph=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Graph))

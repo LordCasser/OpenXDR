@@ -1456,3 +1456,56 @@ export const fetchDecoyObservations = (id: string) => get<{ items: DecoyObservat
 export async function reviewDecoyObservation(id: string, observation: string): Promise<{ incidentId: string }> {
   return (await send('POST', `/api/decoys/${encodeURIComponent(id)}/observations/${encodeURIComponent(observation)}/review`)).json()
 }
+
+export async function downloadAssets(format: 'csv' | 'json', selection: { mode: 'filter'; q: string; groupId: string } | { mode: 'ids'; ids: string[] }): Promise<void> {
+  const r = await fetch('/api/assets/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format, selection }) })
+  check(r)
+  if (!r.ok) await fail(r)
+  const url = URL.createObjectURL(await r.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = r.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ?? `openxdr-assets.${format}`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export interface IntegrationInput {
+  name: string; purpose: string; ownerId: string; enabled: boolean; scopes: string[]; groupIds: string[]
+  resolutionEnabled?: boolean; allowedResolutions?: string[]; allowMaliciousFalsePositive?: boolean
+}
+export interface IntegrationRow extends IntegrationInput { id: string; permissionVersion: number; createdAt: string }
+export interface IntegrationTokenRow {
+  id: string; prefix: string; scopes: string[]; createdAt: string; expiresAt: string; revoked: boolean
+  lastUsedAt: string | null; lastRemoteAddr: string; token?: string
+}
+export const fetchIntegrations = () => get<IntegrationRow[]>('/api/system-integrations')
+export const saveIntegration = (body: IntegrationInput, id?: string) => send(id ? 'PUT' : 'POST', `/api/system-integrations${id ? `/${id}` : ''}`, body)
+export const fetchIntegrationTokens = (id: string) => get<IntegrationTokenRow[]>(`/api/system-integrations/${id}/tokens`)
+export const issueIntegrationToken = async (id: string, days: number, scopes: string[]): Promise<IntegrationTokenRow> =>
+  (await send('POST', `/api/system-integrations/${id}/tokens`, { days, scopes })).json()
+export const revokeIntegrationToken = (id: string, tokenId: string) => send('DELETE', `/api/system-integrations/${id}/tokens/${tokenId}`)
+
+export interface IntegrationSubscription {
+  id: string; name: string; url: string; groupIds: string[]; kinds: string[]; enabled: boolean; version: number; keyId: string; secret?: string
+}
+export type SubscriptionInput = Pick<IntegrationSubscription, 'name' | 'url' | 'groupIds' | 'kinds' | 'enabled'> & { movePending?: boolean }
+export interface IntegrationDelivery {
+  id: string; subscriptionId: string; eventId: string; status: string; attempts: number; createdAt: string; nextAt: string; lastError: string; targetUrl: string; targetVersion: number; completedAt: string | null
+}
+const subscriptionPath = (id: string) => `/api/system-integrations/${id}/subscriptions`
+export const fetchIntegrationSubscriptions = (id: string) => get<IntegrationSubscription[]>(subscriptionPath(id))
+export const saveIntegrationSubscription = async (id: string, body: SubscriptionInput, subscriptionId?: string): Promise<IntegrationSubscription> =>
+  (await send(subscriptionId ? 'PUT' : 'POST', `${subscriptionPath(id)}${subscriptionId ? `/${subscriptionId}` : ''}`, body)).json()
+export const rotateIntegrationSecret = async (id: string, sid: string): Promise<IntegrationSubscription> => (await send('POST', `${subscriptionPath(id)}/${sid}/rotate`)).json()
+export const testIntegrationSubscription = (id: string, sid: string) => send('POST', `${subscriptionPath(id)}/${sid}/test`)
+export const deleteIntegrationSubscription = (id: string, sid: string) => send('DELETE', `${subscriptionPath(id)}/${sid}`)
+export interface DeliveryFilters { status?: string; subscriptionId?: string; from?: string; to?: string; offset?: string }
+export interface DeliveryPage { items: IntegrationDelivery[]; truncated: boolean; total: number; summary: { counts: Record<string, number>; oldestPendingAt: string | null } }
+export const fetchIntegrationDeliveries = (id: string, filters: DeliveryFilters = {}) => get<DeliveryPage>(`/api/system-integrations/${id}/deliveries?${new URLSearchParams({ ...filters, limit: '50' })}`)
+export interface DeliveryAttempt { startedAt: string; endedAt: string; httpStatus: number; result: string; leaseGeneration: number }
+export const fetchIntegrationAttempts = (id: string, did: string) => get<DeliveryAttempt[]>(`/api/system-integrations/${id}/deliveries/${did}/attempts`)
+export const retryIntegrationDelivery = (id: string, did: string) => send('POST', `/api/system-integrations/${id}/deliveries/${did}/retry`)
+export interface ExternalTicket { id: string; integrationId: string; incidentId: string; externalId: string; title: string; status: string; url: string; updatedAt: string }
+export const fetchIncidentTickets = (id: string) => get<ExternalTicket[]>(`/api/incidents/${id}/tickets`)

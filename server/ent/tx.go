@@ -42,6 +42,8 @@ type Tx struct {
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
 	Event *EventClient
+	// ExternalTicket is the client for interacting with the ExternalTicket builders.
+	ExternalTicket *ExternalTicketClient
 	// Finding is the client for interacting with the Finding builders.
 	Finding *FindingClient
 	// Group is the client for interacting with the Group builders.
@@ -54,6 +56,22 @@ type Tx struct {
 	IPInfo *IPInfoClient
 	// Incident is the client for interacting with the Incident builders.
 	Incident *IncidentClient
+	// Integration is the client for interacting with the Integration builders.
+	Integration *IntegrationClient
+	// IntegrationAttempt is the client for interacting with the IntegrationAttempt builders.
+	IntegrationAttempt *IntegrationAttemptClient
+	// IntegrationDelivery is the client for interacting with the IntegrationDelivery builders.
+	IntegrationDelivery *IntegrationDeliveryClient
+	// IntegrationEvent is the client for interacting with the IntegrationEvent builders.
+	IntegrationEvent *IntegrationEventClient
+	// IntegrationGroup is the client for interacting with the IntegrationGroup builders.
+	IntegrationGroup *IntegrationGroupClient
+	// IntegrationIdempotency is the client for interacting with the IntegrationIdempotency builders.
+	IntegrationIdempotency *IntegrationIdempotencyClient
+	// IntegrationSubscription is the client for interacting with the IntegrationSubscription builders.
+	IntegrationSubscription *IntegrationSubscriptionClient
+	// IntegrationToken is the client for interacting with the IntegrationToken builders.
+	IntegrationToken *IntegrationTokenClient
 	// Intel is the client for interacting with the Intel builders.
 	Intel *IntelClient
 	// Memory is the client for interacting with the Memory builders.
@@ -232,12 +250,21 @@ func (tx *Tx) init() {
 	tx.DecoyObservation = NewDecoyObservationClient(tx.config)
 	tx.EnrollToken = NewEnrollTokenClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
+	tx.ExternalTicket = NewExternalTicketClient(tx.config)
 	tx.Finding = NewFindingClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupMember = NewGroupMemberClient(tx.config)
 	tx.HostCredential = NewHostCredentialClient(tx.config)
 	tx.IPInfo = NewIPInfoClient(tx.config)
 	tx.Incident = NewIncidentClient(tx.config)
+	tx.Integration = NewIntegrationClient(tx.config)
+	tx.IntegrationAttempt = NewIntegrationAttemptClient(tx.config)
+	tx.IntegrationDelivery = NewIntegrationDeliveryClient(tx.config)
+	tx.IntegrationEvent = NewIntegrationEventClient(tx.config)
+	tx.IntegrationGroup = NewIntegrationGroupClient(tx.config)
+	tx.IntegrationIdempotency = NewIntegrationIdempotencyClient(tx.config)
+	tx.IntegrationSubscription = NewIntegrationSubscriptionClient(tx.config)
+	tx.IntegrationToken = NewIntegrationTokenClient(tx.config)
 	tx.Intel = NewIntelClient(tx.config)
 	tx.Memory = NewMemoryClient(tx.config)
 	tx.ProcessBaseline = NewProcessBaselineClient(tx.config)

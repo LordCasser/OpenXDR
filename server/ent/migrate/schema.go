@@ -562,6 +562,36 @@ var (
 			},
 		},
 	}
+	// ExternalTicketsColumns holds the columns for the "external_tickets" table.
+	ExternalTicketsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "integration_id", Type: field.TypeUUID},
+		{Name: "incident_id", Type: field.TypeUUID},
+		{Name: "external_id", Type: field.TypeString, Size: 200},
+		{Name: "url", Type: field.TypeString, Size: 2048},
+		{Name: "status", Type: field.TypeString, Size: 100},
+		{Name: "title", Type: field.TypeString, Size: 500},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "source_deleted", Type: field.TypeBool, Default: false},
+	}
+	// ExternalTicketsTable holds the schema information for the "external_tickets" table.
+	ExternalTicketsTable = &schema.Table{
+		Name:       "external_tickets",
+		Columns:    ExternalTicketsColumns,
+		PrimaryKey: []*schema.Column{ExternalTicketsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "externalticket_integration_id_external_id",
+				Unique:  true,
+				Columns: []*schema.Column{ExternalTicketsColumns[1], ExternalTicketsColumns[3]},
+			},
+			{
+				Name:    "externalticket_incident_id",
+				Unique:  false,
+				Columns: []*schema.Column{ExternalTicketsColumns[2]},
+			},
+		},
+	}
 	// FindingsColumns holds the columns for the "findings" table.
 	FindingsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -698,6 +728,7 @@ var (
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "status", Type: field.TypeString, Default: "open"},
+		{Name: "integration_revision", Type: field.TypeInt64, Default: 0},
 		{Name: "graph", Type: field.TypeJSON},
 		{Name: "ai_verdict", Type: field.TypeJSON, Nullable: true},
 		{Name: "title", Type: field.TypeString, Nullable: true},
@@ -719,6 +750,220 @@ var (
 		Name:       "incidents",
 		Columns:    IncidentsColumns,
 		PrimaryKey: []*schema.Column{IncidentsColumns[0]},
+	}
+	// IntegrationsColumns holds the columns for the "integrations" table.
+	IntegrationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "purpose", Type: field.TypeString, Size: 1000},
+		{Name: "owner_id", Type: field.TypeUUID},
+		{Name: "enabled", Type: field.TypeBool, Default: false},
+		{Name: "scopes", Type: field.TypeJSON},
+		{Name: "permission_version", Type: field.TypeInt64, Default: 1},
+		{Name: "resolution_enabled", Type: field.TypeBool, Default: false},
+		{Name: "allowed_resolutions", Type: field.TypeJSON, Nullable: true},
+		{Name: "allow_malicious_false_positive", Type: field.TypeBool, Default: false},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// IntegrationsTable holds the schema information for the "integrations" table.
+	IntegrationsTable = &schema.Table{
+		Name:       "integrations",
+		Columns:    IntegrationsColumns,
+		PrimaryKey: []*schema.Column{IntegrationsColumns[0]},
+	}
+	// IntegrationAttemptsColumns holds the columns for the "integration_attempts" table.
+	IntegrationAttemptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "delivery_id", Type: field.TypeUUID},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "ended_at", Type: field.TypeTime},
+		{Name: "http_status", Type: field.TypeInt, Default: 0},
+		{Name: "result", Type: field.TypeString},
+		{Name: "lease_generation", Type: field.TypeInt64},
+	}
+	// IntegrationAttemptsTable holds the schema information for the "integration_attempts" table.
+	IntegrationAttemptsTable = &schema.Table{
+		Name:       "integration_attempts",
+		Columns:    IntegrationAttemptsColumns,
+		PrimaryKey: []*schema.Column{IntegrationAttemptsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "integrationattempt_delivery_id_started_at",
+				Unique:  false,
+				Columns: []*schema.Column{IntegrationAttemptsColumns[1], IntegrationAttemptsColumns[2]},
+			},
+		},
+	}
+	// IntegrationDeliveriesColumns holds the columns for the "integration_deliveries" table.
+	IntegrationDeliveriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "subscription_id", Type: field.TypeUUID},
+		{Name: "event_id", Type: field.TypeUUID},
+		{Name: "status", Type: field.TypeString, Default: "pending"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "retry_window_at", Type: field.TypeTime},
+		{Name: "next_at", Type: field.TypeTime},
+		{Name: "lease_until", Type: field.TypeTime, Nullable: true},
+		{Name: "lease_generation", Type: field.TypeInt64, Default: 0},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "target_url", Type: field.TypeString},
+		{Name: "target_version", Type: field.TypeInt64},
+		{Name: "secret", Type: field.TypeBytes},
+		{Name: "key_id", Type: field.TypeString},
+		{Name: "last_error", Type: field.TypeString, Default: ""},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// IntegrationDeliveriesTable holds the schema information for the "integration_deliveries" table.
+	IntegrationDeliveriesTable = &schema.Table{
+		Name:       "integration_deliveries",
+		Columns:    IntegrationDeliveriesColumns,
+		PrimaryKey: []*schema.Column{IntegrationDeliveriesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "integrationdelivery_subscription_id_event_id",
+				Unique:  true,
+				Columns: []*schema.Column{IntegrationDeliveriesColumns[1], IntegrationDeliveriesColumns[2]},
+			},
+			{
+				Name:    "integrationdelivery_status_next_at",
+				Unique:  false,
+				Columns: []*schema.Column{IntegrationDeliveriesColumns[3], IntegrationDeliveriesColumns[6]},
+			},
+		},
+	}
+	// IntegrationEventsColumns holds the columns for the "integration_events" table.
+	IntegrationEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "incident_id", Type: field.TypeUUID},
+		{Name: "revision", Type: field.TypeInt64},
+		{Name: "kind", Type: field.TypeString},
+		{Name: "occurred_at", Type: field.TypeTime},
+		{Name: "group_ids", Type: field.TypeJSON},
+		{Name: "payload", Type: field.TypeJSON},
+		{Name: "dispatched", Type: field.TypeBool, Default: false},
+	}
+	// IntegrationEventsTable holds the schema information for the "integration_events" table.
+	IntegrationEventsTable = &schema.Table{
+		Name:       "integration_events",
+		Columns:    IntegrationEventsColumns,
+		PrimaryKey: []*schema.Column{IntegrationEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "integrationevent_incident_id_revision",
+				Unique:  true,
+				Columns: []*schema.Column{IntegrationEventsColumns[1], IntegrationEventsColumns[2]},
+			},
+			{
+				Name:    "integrationevent_dispatched_occurred_at",
+				Unique:  false,
+				Columns: []*schema.Column{IntegrationEventsColumns[7], IntegrationEventsColumns[4]},
+			},
+		},
+	}
+	// IntegrationGroupsColumns holds the columns for the "integration_groups" table.
+	IntegrationGroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "integration_id", Type: field.TypeUUID},
+		{Name: "group_id", Type: field.TypeUUID},
+	}
+	// IntegrationGroupsTable holds the schema information for the "integration_groups" table.
+	IntegrationGroupsTable = &schema.Table{
+		Name:       "integration_groups",
+		Columns:    IntegrationGroupsColumns,
+		PrimaryKey: []*schema.Column{IntegrationGroupsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "integrationgroup_integration_id_group_id",
+				Unique:  true,
+				Columns: []*schema.Column{IntegrationGroupsColumns[1], IntegrationGroupsColumns[2]},
+			},
+		},
+	}
+	// IntegrationIdempotenciesColumns holds the columns for the "integration_idempotencies" table.
+	IntegrationIdempotenciesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "integration_id", Type: field.TypeUUID},
+		{Name: "method", Type: field.TypeString},
+		{Name: "path", Type: field.TypeString, Size: 1024},
+		{Name: "key", Type: field.TypeString, Size: 200},
+		{Name: "request_hash", Type: field.TypeString},
+		{Name: "status", Type: field.TypeInt},
+		{Name: "response", Type: field.TypeJSON},
+		{Name: "expires_at", Type: field.TypeTime},
+	}
+	// IntegrationIdempotenciesTable holds the schema information for the "integration_idempotencies" table.
+	IntegrationIdempotenciesTable = &schema.Table{
+		Name:       "integration_idempotencies",
+		Columns:    IntegrationIdempotenciesColumns,
+		PrimaryKey: []*schema.Column{IntegrationIdempotenciesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "integrationidempotency_integration_id_method_path_key",
+				Unique:  true,
+				Columns: []*schema.Column{IntegrationIdempotenciesColumns[1], IntegrationIdempotenciesColumns[2], IntegrationIdempotenciesColumns[3], IntegrationIdempotenciesColumns[4]},
+			},
+			{
+				Name:    "integrationidempotency_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{IntegrationIdempotenciesColumns[8]},
+			},
+		},
+	}
+	// IntegrationSubscriptionsColumns holds the columns for the "integration_subscriptions" table.
+	IntegrationSubscriptionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "integration_id", Type: field.TypeUUID},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "url", Type: field.TypeString, Size: 2048},
+		{Name: "version", Type: field.TypeInt64, Default: 1},
+		{Name: "group_ids", Type: field.TypeJSON},
+		{Name: "kinds", Type: field.TypeJSON},
+		{Name: "enabled", Type: field.TypeBool, Default: false},
+		{Name: "periods", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "secret", Type: field.TypeBytes},
+		{Name: "key_id", Type: field.TypeString},
+		{Name: "configurations", Type: field.TypeJSON, Nullable: true},
+		{Name: "deleted", Type: field.TypeBool, Default: false},
+	}
+	// IntegrationSubscriptionsTable holds the schema information for the "integration_subscriptions" table.
+	IntegrationSubscriptionsTable = &schema.Table{
+		Name:       "integration_subscriptions",
+		Columns:    IntegrationSubscriptionsColumns,
+		PrimaryKey: []*schema.Column{IntegrationSubscriptionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "integrationsubscription_integration_id",
+				Unique:  false,
+				Columns: []*schema.Column{IntegrationSubscriptionsColumns[1]},
+			},
+		},
+	}
+	// IntegrationTokensColumns holds the columns for the "integration_tokens" table.
+	IntegrationTokensColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "integration_id", Type: field.TypeUUID},
+		{Name: "token_hash", Type: field.TypeString, Unique: true},
+		{Name: "prefix", Type: field.TypeString},
+		{Name: "scopes", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "revoked", Type: field.TypeBool, Default: false},
+		{Name: "last_used_at", Type: field.TypeTime, Nullable: true},
+		{Name: "last_remote_addr", Type: field.TypeString, Nullable: true},
+	}
+	// IntegrationTokensTable holds the schema information for the "integration_tokens" table.
+	IntegrationTokensTable = &schema.Table{
+		Name:       "integration_tokens",
+		Columns:    IntegrationTokensColumns,
+		PrimaryKey: []*schema.Column{IntegrationTokensColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "integrationtoken_integration_id",
+				Unique:  false,
+				Columns: []*schema.Column{IntegrationTokensColumns[1]},
+			},
+		},
 	}
 	// IntelsColumns holds the columns for the "intels" table.
 	IntelsColumns = []*schema.Column{
@@ -1150,12 +1395,21 @@ var (
 		DecoyObservationsTable,
 		EnrollTokensTable,
 		EventsTable,
+		ExternalTicketsTable,
 		FindingsTable,
 		GroupsTable,
 		GroupMembersTable,
 		HostCredentialsTable,
 		IPInfosTable,
 		IncidentsTable,
+		IntegrationsTable,
+		IntegrationAttemptsTable,
+		IntegrationDeliveriesTable,
+		IntegrationEventsTable,
+		IntegrationGroupsTable,
+		IntegrationIdempotenciesTable,
+		IntegrationSubscriptionsTable,
+		IntegrationTokensTable,
 		IntelsTable,
 		MemoriesTable,
 		ProcessBaselinesTable,

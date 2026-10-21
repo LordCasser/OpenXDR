@@ -68,6 +68,15 @@ func truncateRaw(ctx context.Context, t *testing.T, db *sql.DB) {
 func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 	t.Helper()
 	dels := []func(context.Context) (int, error){
+		func(ctx context.Context) (int, error) { return c.IntegrationIdempotency.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.ExternalTicket.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.IntegrationAttempt.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.IntegrationDelivery.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.IntegrationSubscription.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.IntegrationEvent.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.IntegrationToken.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.IntegrationGroup.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.Integration.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.DecoyObservation.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.DecoyDeployment.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AIJob.Delete().Exec(ctx) },

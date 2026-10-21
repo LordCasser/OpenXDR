@@ -9,6 +9,7 @@ OpenXDR 采用 OCSF 风格事件模型。本文列出所有事件类别、字段
 |---|---|---|---|
 | 1001 | 文件活动（File System Activity） | agent | Linux fswatch（fanotify/inotify）、Windows fswatch_win、persistwatch 文件/计划任务部分 |
 | 1007 | 进程活动（Process Activity） | agent | Linux eBPF/netlink/轮询、Windows ETW/轮询（启动+退出） |
+| 2004 | 检测告警（Detection Finding，OCSF 风格） | suricata | EVE alert 专用 HTTP 接入，保留外部检测证据，见 [suricata.md](suricata.md) |
 | 3002 | 认证（Authentication） | agent | Linux wtmp/btmp；Windows Security 4624/4625/4720/4726/4732/1102/4648/4719 |
 | 4001 | 网络活动（Network Activity） | agent / sensor | agent netwatch 连接（Linux eBPF、Windows ETW Kernel-Network：TCP 出入站、UDP 出站）；sensor 非 DNS 会话 |
 | 4003 | DNS 活动（DNS Activity） | agent / sensor | agent dnswatch 本机与容器的 DNS 问答（Linux AF_PACKET）、dnswatch_win 系统解析器的查询（Windows ETW DNS-Client）；sensor 会话带 dns_query 时判定 |
@@ -18,7 +19,7 @@ OpenXDR 采用 OCSF 风格事件模型。本文列出所有事件类别、字段
 | 201002 | 注册表值活动（Registry Value Activity） | agent | Windows persistwatch 注册表键/服务快照 |
 | 100001 | 应用日志（OCSF 私有段） | syslog | server syslog 接入 |
 
-events 表公共列：`ts`、`class_uid`、`source`（agent/sensor/syslog）、
+events 表公共列：`ts`、`class_uid`、`source`（agent/sensor/syslog/suricata）、
 `asset_id`、`process_guid`、`parent_process_guid`、`username`、`conn_tuple`、
 `raw`（OCSF 风格 JSON）。server 对 agent 事件**不做字段级归一化**，raw_json
 原样落库；解析失败替换为 `{}`（`server/internal/grpcsvc/agent.go:186-214`）。

@@ -79,7 +79,7 @@ export function EventsPage() {
               style={{ width: 130 }}
               value={filter.source}
               onChange={source => setFilter({ source })}
-              options={[{ value: '', label: t('allSources') }, ...['agent', 'sensor', 'syslog'].map(s => ({ value: s, label: s }))]}
+              options={[{ value: '', label: t('allSources') }, ...['agent', 'sensor', 'syslog', 'suricata'].map(s => ({ value: s, label: s }))]}
             />
             {filter.from ? (
               <Tag closable color="blue" onClose={() => setFilter({ from: '', to: '' })} style={{ padding: '4px 8px' }}>

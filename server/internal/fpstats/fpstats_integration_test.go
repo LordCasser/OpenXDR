@@ -75,6 +75,9 @@ func TestSweep(t *testing.T) {
 	f.times(4, "aiprop", "false_positive", "alice", "", dns)
 	f.times(3, "aiprop", "false_positive", "alice", "ai_proposal", dns)
 	f.times(3, "aiprop", "false_positive", "system", "", dns)
+	// 外部工单系统回写的误报也不计入
+	f.times(4, "external", "false_positive", "alice", "", dns)
+	f.times(3, "external", "false_positive", "ticket-bot", "external_integration", dns)
 	// 误报率不够：5 / 6
 	f.times(5, "ratio", "false_positive", "alice", "", dns)
 	f.incident("ratio", "triaged", "", "", dns)
@@ -102,7 +105,7 @@ func TestSweep(t *testing.T) {
 	if n, err := s.Sweep(ctx, time.Now()); err != nil || n != 3 {
 		t.Fatalf("应生成 3 条草案，得到 %d %v", n, err)
 	}
-	for _, rule := range []string{"few", "real", "aiprop", "ratio", "purged", "covered", "critical", "xdr:new-process"} {
+	for _, rule := range []string{"few", "real", "aiprop", "external", "ratio", "purged", "covered", "critical", "xdr:new-process"} {
 		if d := f.drafts(rule); len(d) != 0 {
 			t.Errorf("%s 不该生成草案：%+v", rule, d[0])
 		}

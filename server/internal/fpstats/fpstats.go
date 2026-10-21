@@ -145,6 +145,9 @@ func classify(inc *ent.Incident) kind {
 		return autoClosed
 	case inc.ResolutionSource != nil && *inc.ResolutionSource == "ai_proposal":
 		return aiProposal
+	// 外部工单系统回写的结论不是本平台分析师的独立判断，不推动抑制草案
+	case inc.ResolutionSource != nil && *inc.ResolutionSource == "external_integration":
+		return ignored
 	}
 	return fp
 }

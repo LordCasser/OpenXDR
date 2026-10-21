@@ -42,7 +42,9 @@ func ValidRole(role string) bool { _, ok := roleRank[role]; return ok }
 // minRole 请求要过的最低角色门槛。
 func minRole(method, path string) string {
 	switch {
-	case strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/audit"), strings.HasPrefix(path, "/api/settings"):
+	case path == "/api/assets/export" && method == http.MethodPost:
+		return "viewer"
+	case strings.HasPrefix(path, "/api/system-integrations"), strings.HasPrefix(path, "/api/users"), strings.HasPrefix(path, "/api/audit"), strings.HasPrefix(path, "/api/settings"):
 		return "admin"
 	// 同意用户协议、结束首次引导代表整个安装，只有 admin 能做；读取对所有人开放
 	case strings.HasPrefix(path, "/api/setup") && method != http.MethodGet:

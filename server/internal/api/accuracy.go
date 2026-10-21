@@ -45,7 +45,8 @@ type accuracyCase struct {
 const accuracyBase = `WITH done AS (
  SELECT i.id, coalesce(i.title,'') AS title, i.status, coalesce(i.resolved_by,'') AS resolved_by, coalesce(i.resolved_at, i.created_at) AS resolved_at,
   i.ai_verdict->>'verdict' AS verdict, coalesce(i.ai_verdict->>'model','') AS model,
-  CASE WHEN i.resolved_by = $2 THEN 'auto' WHEN i.resolution_source IS NOT NULL THEN 'adopted' ELSE 'reviewed' END AS kind
+  CASE WHEN i.resolved_by = $2 THEN 'auto' WHEN i.resolution_source = 'external_integration' THEN 'external'
+   WHEN i.resolution_source IS NOT NULL THEN 'adopted' ELSE 'reviewed' END AS kind
  FROM incidents i
  WHERE i.status IN ('closed','false_positive') AND coalesce(i.resolved_at, i.created_at) >= $1
   AND i.ai_verdict->>'verdict' IN ('malicious','suspicious','benign'))`

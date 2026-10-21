@@ -96,12 +96,31 @@ func (p *Processor) Process(ctx context.Context, e Envelope) (err error) {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	envelopes, external, err := suricataHit(ctx, tx, e)
+	if err != nil {
+		return err
+	}
+	// 东西向 Suricata 告警两端各有一台资产时各落一份证据，如同两端 agent 各自看到这条连接
+	duplicate = true
+	for _, item := range envelopes {
+		stored, n, skipped, err := p.store(ctx, tx, item, snapshot, external)
+		if err != nil {
+			return err
+		}
+		duplicate = duplicate && !stored
+		alerts += n
+		temporalSkipped = append(temporalSkipped, skipped...)
+	}
+	return tx.Commit()
+}
 
+// store 在调用方事务内落一条事件并产出告警；事件已存在（重传）时返回 stored=false。
+func (p *Processor) store(ctx context.Context, tx *sql.Tx, e Envelope, snapshot *temporal.Snapshot, external *intel.Hit) (stored bool, alerts int, temporalSkipped []string, err error) {
 	// 同一身份的认证写入先串行，避免并发失败和成功都看不到对方未提交的事件。
 	if authEntity(e) {
 		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`,
 			"auth-sequence|"+e.AssetID.String()+"|"+e.Username); err != nil {
-			return err
+			return false, 0, nil, err
 		}
 	}
 	// 不写冲突列：分区表主键是 (id, ts)，老表是 id。稳定 ID 由含时间戳的来源字段算出，同一 id 必是同一 ts，两者等价
@@ -112,25 +131,23 @@ ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 		nullUUID(e.AssetID), nullUUID(e.ProcessGUID), nullUUID(e.ParentProcessGUID),
 		nullString(e.Username), nullString(e.ConnTuple), string(e.Raw))
 	if err != nil {
-		return fmt.Errorf("事件落库: %w", err)
+		return false, 0, nil, fmt.Errorf("事件落库: %w", err)
 	}
-	inserted, _ := result.RowsAffected()
-	if inserted == 0 {
-		duplicate = true
-		return tx.Commit()
+	if inserted, _ := result.RowsAffected(); inserted == 0 {
+		return false, 0, nil, nil
 	}
 
 	if e.Source == "agent" && e.ClassUID == 3002 && e.AssetID != nil {
 		if err := identity.ObserveWindows(ctx, tx, e.ID); err != nil {
-			return err
+			return false, 0, nil, err
 		}
 		if err := identity.ObserveLinuxLogin(ctx, tx, e.ID); err != nil {
-			return err
+			return false, 0, nil, err
 		}
 	}
 	if e.Source == "agent" && e.ClassUID == 5001 && e.AssetID != nil {
 		if err := identity.ObserveLinuxAccounts(ctx, tx, e.ID); err != nil {
-			return err
+			return false, 0, nil, err
 		}
 	}
 	var raw map[string]any
@@ -150,21 +167,24 @@ ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 		if len(ids) > 0 {
 			observation, err = snapshot.Observe(ctx, tx, e.ID, ids)
 			if err != nil {
-				return err
+				return false, 0, nil, err
 			}
 			temporalSkipped = observation.Skipped
 		}
 	}
 	hits := intel.Detections(baseHits, p.Intel.Match(raw, e.Timestamp))
+	if external != nil {
+		hits = append(hits, *external)
+	}
 	var from origin
 	if len(hits) > 0 {
 		if from.command, err = cmdorigin.Of(ctx, tx, raw, e.AssetID, e.Timestamp); err != nil {
-			return err
+			return false, 0, nil, err
 		}
 		// 平台指令优先：指令拉起的进程也在某次登录会话里，但发起与审批都有记录，挂在指令上更准
 		if from.command == nil && e.Source == "agent" {
 			if from.automation, err = automation.Of(ctx, tx, raw, e.AssetID, e.Timestamp); err != nil {
-				return err
+				return false, 0, nil, err
 			}
 		}
 	}
@@ -176,7 +196,7 @@ ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 		hitFrom.watch = from.automation != nil && automation.Watch(hit.RuleID, baseHits)
 		created, err := p.upsertAlert(ctx, tx, e, hit, hitFrom)
 		if err != nil {
-			return err
+			return false, 0, nil, err
 		}
 		if created {
 			alerts++
@@ -184,19 +204,19 @@ ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 	}
 	n, err := p.authSequence(ctx, tx, e, authStatus(raw))
 	if err != nil {
-		return err
+		return false, 0, nil, err
 	}
 	alerts += n
 	for _, match := range observation.Matches {
 		created, err := p.temporalAlert(ctx, tx, match)
 		if err != nil {
-			return err
+			return false, 0, nil, err
 		}
 		if created {
 			alerts++
 		}
 	}
-	return tx.Commit()
+	return true, alerts, temporalSkipped, nil
 }
 
 // origin 告警的已知来源：平台指令，或登记的可信自动化（watch 为高危例外，仍进关联与研判）
@@ -229,9 +249,9 @@ func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit
 
 	alertID = uuid.Must(uuid.NewV7())
 	if _, err := tx.ExecContext(ctx, `INSERT INTO alerts
-  (id, ts, rule_id, severity, event_id, asset_id, count, last_ts, command_id, automation_id, automation_watch)
-VALUES ($1,$2,$3,$4,$5,$6,1,$2,$7,$8,$9)`, alertID, e.Timestamp, hit.RuleID, hit.Severity, e.ID, nullUUID(e.AssetID),
-		nullUUID(from.command), nullUUID(from.automation), from.watch); err != nil {
+  (id, ts, rule_id, severity, event_id, asset_id, count, last_ts, command_id, automation_id, automation_watch, detail)
+VALUES ($1,$2,$3,$4,$5,$6,1,$2,$7,$8,$9,$10)`, alertID, e.Timestamp, hit.RuleID, hit.Severity, e.ID, nullUUID(e.AssetID),
+		nullUUID(from.command), nullUUID(from.automation), from.watch, nullString(hit.Detail)); err != nil {
 		return false, err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO alert_dedup_state(fingerprint,alert_id,first_ts,last_ts)

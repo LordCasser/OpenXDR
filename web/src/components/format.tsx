@@ -74,6 +74,7 @@ export const CLASS_KEY: Record<number, MsgKey> = {
   1001: 'classFile',
   1005: 'classModule',
   1007: 'classProcess',
+  2004: 'classDetection',
   3002: 'classAuth',
   201002: 'classRegistry',
   4001: 'classNetwork',

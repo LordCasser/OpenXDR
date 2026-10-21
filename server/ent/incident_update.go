@@ -61,6 +61,27 @@ func (_u *IncidentUpdate) SetNillableStatus(v *string) *IncidentUpdate {
 	return _u
 }
 
+// SetIntegrationRevision sets the "integration_revision" field.
+func (_u *IncidentUpdate) SetIntegrationRevision(v int64) *IncidentUpdate {
+	_u.mutation.ResetIntegrationRevision()
+	_u.mutation.SetIntegrationRevision(v)
+	return _u
+}
+
+// SetNillableIntegrationRevision sets the "integration_revision" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableIntegrationRevision(v *int64) *IncidentUpdate {
+	if v != nil {
+		_u.SetIntegrationRevision(*v)
+	}
+	return _u
+}
+
+// AddIntegrationRevision adds value to the "integration_revision" field.
+func (_u *IncidentUpdate) AddIntegrationRevision(v int64) *IncidentUpdate {
+	_u.mutation.AddIntegrationRevision(v)
+	return _u
+}
+
 // SetGraph sets the "graph" field.
 func (_u *IncidentUpdate) SetGraph(v json.RawMessage) *IncidentUpdate {
 	_u.mutation.SetGraph(v)
@@ -428,6 +449,12 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(incident.FieldStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.IntegrationRevision(); ok {
+		_spec.SetField(incident.FieldIntegrationRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedIntegrationRevision(); ok {
+		_spec.AddField(incident.FieldIntegrationRevision, field.TypeInt64, value)
+	}
 	if value, ok := _u.mutation.Graph(); ok {
 		_spec.SetField(incident.FieldGraph, field.TypeJSON, value)
 	}
@@ -615,6 +642,27 @@ func (_u *IncidentUpdateOne) SetNillableStatus(v *string) *IncidentUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetIntegrationRevision sets the "integration_revision" field.
+func (_u *IncidentUpdateOne) SetIntegrationRevision(v int64) *IncidentUpdateOne {
+	_u.mutation.ResetIntegrationRevision()
+	_u.mutation.SetIntegrationRevision(v)
+	return _u
+}
+
+// SetNillableIntegrationRevision sets the "integration_revision" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableIntegrationRevision(v *int64) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetIntegrationRevision(*v)
+	}
+	return _u
+}
+
+// AddIntegrationRevision adds value to the "integration_revision" field.
+func (_u *IncidentUpdateOne) AddIntegrationRevision(v int64) *IncidentUpdateOne {
+	_u.mutation.AddIntegrationRevision(v)
 	return _u
 }
 
@@ -1014,6 +1062,12 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(incident.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IntegrationRevision(); ok {
+		_spec.SetField(incident.FieldIntegrationRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedIntegrationRevision(); ok {
+		_spec.AddField(incident.FieldIntegrationRevision, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.Graph(); ok {
 		_spec.SetField(incident.FieldGraph, field.TypeJSON, value)

@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
@@ -22,6 +23,7 @@ import (
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/commandgate"
+	"openxdr/server/internal/incidentstate"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/review"
@@ -150,7 +152,11 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 	mapReportReads(mux, db)
 
 	mapIncidents(mux, db, rules)
+	integrations := Integrations(db)
+	mux.Handle("/api/system-integrations", integrations)
+	mux.Handle("/api/system-integrations/", integrations)
 	mux.HandleFunc("GET /api/assets", listAssets(db))
+	mux.HandleFunc("POST /api/assets/export", exportAssets(db))
 	return mux
 }
 
@@ -161,6 +167,7 @@ func mapIncidents(mux *http.ServeMux, db *ent.Client, rules sigma.Catalog) {
 	mux.HandleFunc("POST /api/incidents/batch-status", resolveIncidents(db))
 	mux.HandleFunc("GET /api/incidents/{id}", getIncident(db, rules))
 	mux.HandleFunc("POST /api/incidents/{id}/status", setIncidentStatus(db))
+	mux.HandleFunc("GET /api/incidents/{id}/tickets", incidentTickets(db))
 	mux.HandleFunc("DELETE /api/incidents/{id}/closure-proposal", dismissClosureProposal(db))
 }
 
@@ -312,6 +319,8 @@ func getIncident(db *ent.Client, rules sigma.Catalog) http.HandlerFunc {
 			}
 			if title := rules.TitleOf(a.RuleID); title != "" {
 				row.RuleTitle = &title
+			} else if strings.HasPrefix(a.RuleID, "suricata:") {
+				row.RuleTitle = a.Detail
 			}
 			row.RuleAuthor = rules.AuthorOf(a.RuleID)
 			if a.Edges.Event != nil {
@@ -356,10 +365,16 @@ func setIncidentStatus(db *ent.Client) http.HandlerFunc {
 			http.Error(w, "结论备注最多 2000 字", http.StatusBadRequest)
 			return
 		}
-		if !incidentVisible(w, r, db, id, "analyst") {
+		tx, err := db.Tx(r.Context())
+		if err != nil {
+			http.Error(w, "无法开始结案事务", 500)
 			return
 		}
-		inc, err := db.Incident.Get(r.Context(), id)
+		defer tx.Rollback()
+		if !incidentVisible(w, r, tx.Client(), id, "analyst") {
+			return
+		}
+		inc, err := tx.Incident.Query().Where(incident.IDEQ(id)).Where(func(s *sql.Selector) { s.ForUpdate() }).Only(r.Context())
 		if ent.IsNotFound(err) {
 			http.NotFound(w, r)
 			return
@@ -369,7 +384,7 @@ func setIncidentStatus(db *ent.Client) http.HandlerFunc {
 			return
 		}
 		// 人改了状态，AI 的结案建议就作废了（采纳也走这里）
-		u := db.Incident.UpdateOneID(id).SetStatus(body.Status).ClearClosureProposal()
+		u := tx.Incident.UpdateOneID(id).SetStatus(body.Status).ClearClosureProposal()
 		if body.Status == "open" {
 			u.ClearResolution().ClearResolvedBy().ClearResolvedAt().ClearResolutionSource()
 		} else {
@@ -390,7 +405,18 @@ func setIncidentStatus(db *ent.Client) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		audit.Log(r.Context(), db, r, "incident_status", id.String(), strings.TrimSpace(body.Status+" "+note))
+		if err := audit.Checked(r.Context(), tx.AuditLog.Create(), audit.Actor(r.Context()), audit.RemoteAddr(r), "incident_status", id.String(), strings.TrimSpace(body.Status+" "+note)); err != nil {
+			http.Error(w, "结案审计失败", 500)
+			return
+		}
+		if err := incidentstate.Record(r.Context(), tx, id, incidentstate.StatusChanged, incidentstate.Origin{Kind: "user", ID: auth.From(r.Context()).ID.String()}, inc.Status); err != nil {
+			http.Error(w, "保存结案消息失败", 500)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			http.Error(w, "结案提交失败", 500)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

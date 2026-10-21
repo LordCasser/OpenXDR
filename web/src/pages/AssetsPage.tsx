@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImportOutlined, PlusOutlined, RobotOutlined } from '@ant-design/icons'
+import { DownloadOutlined, ImportOutlined, PlusOutlined, RobotOutlined } from '@ant-design/icons'
 import { App, Button, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
@@ -7,6 +7,7 @@ import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { assignAsset, fetchAssets, unassignAsset, type Asset } from '../api'
 import { useSession } from '../app/session'
 import { useCanChat, useHandoff } from '../components/Handoff'
+import { ExportAssetsModal } from '../components/ExportAssetsModal'
 import { ImportHostsModal } from '../components/ImportHostsModal'
 import { LoadError } from '../components/LoadError'
 import { AddHostModal } from '../components/AddHostModal'
@@ -33,6 +34,7 @@ export function AssetsPage() {
     setParams(Object.fromEntries(Object.entries({ q, group: groupFilter, ...patch }).filter(([, v]) => v)), { replace: true })
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [exporting, setExporting] = useState(false)
   // 组 admin 才能为本组签发接入令牌
   const canAdd = groups.some(g => g.role === 'admin')
   const { data, isPending, isFetching, isError, error, dataUpdatedAt, refetch } = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
@@ -79,7 +81,6 @@ export function AssetsPage() {
       setSelected([])
     },
   })
-  const anyChat = groups.some(g => canChat(g.id))
 
   const groupOptions = [{ value: UNGROUPED, label: t('ungrouped') }, ...groups.map(g => ({ value: g.id, label: g.name }))]
   const total = data?.length ?? 0
@@ -87,7 +88,10 @@ export function AssetsPage() {
 
   return (
     <Page title={t('navAssets')} subtitle={t('assetsSummary', { total, online: up })}
-      extra={canAdd && <Space wrap><Button icon={<ImportOutlined aria-hidden />} onClick={() => setImporting(true)}>{t('hostImport')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>{t('addHost')}</Button></Space>}>
+      extra={<Space wrap><Button icon={<DownloadOutlined />} onClick={() => setExporting(true)}>{t('exportAssets')}</Button>{canAdd && <><Button icon={<ImportOutlined aria-hidden />} onClick={() => setImporting(true)}>{t('hostImport')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>{t('addHost')}</Button></>}</Space>}>
+      <ExportAssetsModal open={exporting} onClose={() => setExporting(false)} ids={selected} q={q}
+        groupId={groupFilter === UNGROUPED ? 'ungrouped' : groupFilter}
+        groupName={groupFilter ? groupOptions.find(g => g.value === groupFilter)?.label ?? groupFilter : t('allGroups')} />
       <ImportHostsModal open={importing} onClose={() => setImporting(false)} />
       <AddHostModal open={adding} onClose={() => setAdding(false)} />
       <FilterCard
@@ -121,7 +125,7 @@ export function AssetsPage() {
           rowKey="id"
           rowClassName="row-link"
           onRow={rowLink}
-          rowSelection={anyChat || isAdmin ? { selectedRowKeys: selected, onChange: keys => setSelected(keys as string[]) } : undefined}
+          rowSelection={{ selectedRowKeys: selected, onChange: keys => setSelected(keys as string[]) }}
           loading={isPending}
           dataSource={rows}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}

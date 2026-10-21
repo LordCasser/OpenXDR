@@ -406,3 +406,28 @@ server 全部通过环境变量配置，均有默认值：
 | `FP_SUPPRESS_INTERVAL_HOURS` | `6` | 统计周期（小时），多节点只在持有租约的节点上跑 |
 
 AI 助手相关的 `PI_*` 变量见 [pi-backend.md](pi-backend.md#配置)；按包整理的完整清单见 [detection.md](detection.md#server-环境变量全清单servermaingo)。
+
+## 外部系统集成 API
+
+默认关闭。设置 `INTEGRATION_API_ENABLED=true` 后开放独立 Bearer API，必须同时设置
+`INTEGRATION_CURSOR_KEY` 为至少 32 字节随机值的 base64 编码，集群所有节点保持一致。
+游标签名密钥改变会使旧分页游标失效；Token 仍由数据库中的摘要和到期/吊销状态验证。
+
+管理员在「系统集成」配置负责人、授权组和 scopes，然后签发 Token。不要把 Token 放进 URL。
+接口与限制见 [API 文档](api.md#外部系统只读-api)，机器契约见
+[OpenAPI](openapi/integration-v1.yaml)。这两个新环境变量不会自动打开事件推送或工单回写。
+
+事件推送使用独立开关 `INTEGRATION_WEBHOOK_ENABLED=true`，并要求 `HOST_CREDENTIAL_KEY`。
+`INTEGRATION_WEBHOOK_ALLOW` 是逗号分隔的精确域名/CIDR，用于放行内网目标；公有 HTTPS
+地址默认可用，但环回、链路本地和元数据地址始终拒绝。目标 URL 不得带 userinfo、查询参数或片段，
+不跟随重定向、不继承 HTTP 代理，DNS 校验与实际拨号使用同一地址，TLS 证书必须有效。
+所有节点可运行投递 worker，由数据库租约协调；关闭开关不会撤回已经发出的 HTTP 请求。
+
+关闭出站开关后仍在本地生成、分发消息并维护保留期，不发 HTTP 请求。暂停积压超过
+24 小时会转为 dead，管理员可在清理前重放；终态记录保留 30 天，未分发消息不按普通
+保留期删除。幂等结果保留 7 天。回退旧二进制会中断事件覆盖，恢复后需通过 API 对账。
+
+指标包含 `openxdr_integration_deliveries`（各状态数量）、
+`openxdr_integration_oldest_pending_seconds`、`openxdr_integration_attempts_retained`
+以及集成 API 的 429 计数。队列指标是数据库全局快照，跨节点采集应取 max 而不是求和；
+尝试数量是保留期内的 gauge，不是永久累计 counter。

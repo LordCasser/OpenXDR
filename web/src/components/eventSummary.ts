@@ -71,6 +71,8 @@ export function eventSummary(classUid: number, raw: unknown, t: T, withAction = 
       const ok = !withAction ? undefined : r.status_id === 1 ? t('evLoginOk') : t('evLoginFail')
       return join(ok, r.user?.name, r.src_endpoint?.ip ? `← ${r.src_endpoint.ip}` : undefined, r.service?.name ? `(${r.service.name})` : undefined)
     }
+    case 2004:
+      return join(r.suricata?.alert?.signature, endpoint(r.src_endpoint), '→', endpoint(r.dst_endpoint))
     case 4001: {
       const host = r.tls?.sni || r.http_request?.hostname || r.dst_endpoint?.hostname
       const udp = r.connection_info?.protocol_name === 'udp' ? 'UDP' : undefined

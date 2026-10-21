@@ -51,6 +51,9 @@ type EnrollToken func(*sql.Selector)
 // Event is the predicate function for event builders.
 type Event func(*sql.Selector)
 
+// ExternalTicket is the predicate function for externalticket builders.
+type ExternalTicket func(*sql.Selector)
+
 // Finding is the predicate function for finding builders.
 type Finding func(*sql.Selector)
 
@@ -68,6 +71,30 @@ type IPInfo func(*sql.Selector)
 
 // Incident is the predicate function for incident builders.
 type Incident func(*sql.Selector)
+
+// Integration is the predicate function for integration builders.
+type Integration func(*sql.Selector)
+
+// IntegrationAttempt is the predicate function for integrationattempt builders.
+type IntegrationAttempt func(*sql.Selector)
+
+// IntegrationDelivery is the predicate function for integrationdelivery builders.
+type IntegrationDelivery func(*sql.Selector)
+
+// IntegrationEvent is the predicate function for integrationevent builders.
+type IntegrationEvent func(*sql.Selector)
+
+// IntegrationGroup is the predicate function for integrationgroup builders.
+type IntegrationGroup func(*sql.Selector)
+
+// IntegrationIdempotency is the predicate function for integrationidempotency builders.
+type IntegrationIdempotency func(*sql.Selector)
+
+// IntegrationSubscription is the predicate function for integrationsubscription builders.
+type IntegrationSubscription func(*sql.Selector)
+
+// IntegrationToken is the predicate function for integrationtoken builders.
+type IntegrationToken func(*sql.Selector)
 
 // Intel is the predicate function for intel builders.
 type Intel func(*sql.Selector)
