@@ -8,11 +8,13 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/agentsession"
 	"openxdr/server/ent/group"
 	entreport "openxdr/server/ent/report"
 	"openxdr/server/ent/sessionmessage"
 	enttask "openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/schedule"
 )
@@ -51,6 +53,8 @@ type taskRunRow struct {
 	ReportID    *uuid.UUID `json:"reportId"`
 	ReportTitle *string    `json:"reportTitle"`
 	Steps       int        `json:"steps"`
+	// Partial 模型没在时限内交报告，报告是平台整理的保底报告：运行记为成功（有报告、照常推送），界面标「部分完成」
+	Partial bool `json:"partial"`
 }
 
 // toTaskRow 任务行，带各组按当前周期与错峰偏移算出的下一次运行时间。
@@ -293,6 +297,15 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 		for _, s := range steps {
 			stepOf[s.SessionID] = s.Count
 		}
+		partial, err := db.AgentSession.Query().Where(agentsession.IDIn(sessions...), agentsession.ErrorEQ(agentchat.PartialNote)).IDs(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		partialOf := map[uuid.UUID]bool{}
+		for _, id := range partial {
+			partialOf[id] = true
+		}
 		out := make([]taskRunRow, len(runs))
 		for i, x := range runs {
 			out[i] = taskRunRow{ID: x.ID, TaskID: x.TaskID, GroupID: x.GroupID, SessionID: x.SessionID, StartedAt: x.StartedAt,
@@ -302,6 +315,7 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 					out[i].ReportID, out[i].ReportTitle = &rep.ID, &rep.Title
 				}
 				out[i].Steps = stepOf[*x.SessionID]
+				out[i].Partial = partialOf[*x.SessionID]
 			}
 		}
 		writeJSON(w, out)

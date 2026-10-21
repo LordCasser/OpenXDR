@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"openxdr/server/internal/agentchat"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
 	"openxdr/server/internal/suppress"
@@ -28,6 +29,10 @@ func TestAPITasks(t *testing.T) {
 	client.Report.Create().SetSessionID(sess.ID).SetGroupID(gA.ID).SetTitle("每日巡检报告").SetMarkdown("m").SaveX(ctx)
 	client.TaskRun.Create().SetTaskID("daily").SetGroupID(gA.ID).SetSessionID(sess.ID).SaveX(ctx)
 	client.TaskRun.Create().SetTaskID("daily").SetGroupID(gB.ID).SaveX(ctx)
+	// 模型没在时限内交报告、平台出了保底报告的一轮：运行记录标 partial
+	partial := client.AgentSession.Create().SetKind("task").SetGroupID(gA.ID).SetInitiator("system").SetModel("m").
+		SetStatus("succeeded").SetError(agentchat.PartialNote).SaveX(ctx)
+	client.TaskRun.Create().SetTaskID("daily").SetGroupID(gA.ID).SetSessionID(partial.ID).SetStatus("succeeded").SetStartedAt(time.Now().Add(-time.Hour)).SaveX(ctx)
 	alice := client.User.Create().SetUsername("alice").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
 	client.GroupMember.Create().SetGroupID(gA.ID).SetUserID(alice.ID).SetRole("viewer").SaveX(ctx)
 
@@ -101,11 +106,14 @@ func TestAPITasks(t *testing.T) {
 	if err := json.Unmarshal(body, &runs); err != nil {
 		t.Fatal(err)
 	}
-	if len(runs) != 1 || runs[0].GroupID != gA.ID {
-		t.Errorf("运行记录应只见 A 组：%+v", runs)
+	if len(runs) != 2 || runs[0].GroupID != gA.ID || runs[1].GroupID != gA.ID {
+		t.Fatalf("运行记录应只见 A 组：%+v", runs)
 	}
-	if r := runs[0]; r.Steps != 2 || r.ReportTitle == nil || *r.ReportTitle != "每日巡检报告" {
+	if r := runs[0]; r.Steps != 2 || r.ReportTitle == nil || *r.ReportTitle != "每日巡检报告" || r.Partial {
 		t.Errorf("运行记录应带步数与报告：%+v", r)
+	}
+	if !runs[1].Partial {
+		t.Errorf("保底报告的一轮应标 partial：%+v", runs[1])
 	}
 	_, body = get(t, viewer, "/api/tasks")
 	var listed []taskRow

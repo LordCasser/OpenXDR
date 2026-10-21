@@ -118,13 +118,14 @@ function LastShift({ run }: { run: TaskRunRow }) {
   const ok = run.status === 'succeeded'
   const interrupted = run.status === 'interrupted'
   const skipped = run.status === 'skipped'
+  const partial = ok && run.partial
   const took = run.finishedAt ? duration(Date.parse(run.finishedAt) - Date.parse(run.startedAt)) : '-'
   return (
     <Space wrap size={8} style={{ marginTop: 12 }}>
-      {ok ? <CheckCircleFilled style={{ color: 'var(--ant-color-success)' }} />
-        : interrupted || skipped ? <ExclamationCircleFilled style={{ color: 'var(--ant-color-warning)' }} />
+      {partial || interrupted || skipped ? <ExclamationCircleFilled style={{ color: 'var(--ant-color-warning)' }} />
+        : ok ? <CheckCircleFilled style={{ color: 'var(--ant-color-success)' }} />
           : <CloseCircleFilled style={{ color: 'var(--ant-color-error)' }} />}
-      <Typography.Text>{t(ok ? 'workerLastOk' : interrupted ? 'workerLastInterrupted' : skipped ? 'workerLastSkipped' : 'workerLastFailed')}</Typography.Text>
+      <Typography.Text>{t(partial ? 'workerLastPartial' : ok ? 'workerLastOk' : interrupted ? 'workerLastInterrupted' : skipped ? 'workerLastSkipped' : 'workerLastFailed')}</Typography.Text>
       {!skipped && <Typography.Text type="secondary"><Ago iso={run.finishedAt ?? run.startedAt} /> · {t('workerTook', { took })} · {t('workerSteps', { n: run.steps })}</Typography.Text>}
       {run.reportId && <a href={`/api/agent-reports/${run.reportId}/html`} target="_blank" rel="noreferrer"><FileTextOutlined /> {run.reportTitle}</a>}
       {!ok && !interrupted && !skipped && run.error && <Tooltip title={run.error}><Typography.Text type="danger" ellipsis style={{ maxWidth: 360 }}>{errorText(run.error, t)}</Typography.Text></Tooltip>}
@@ -141,8 +142,8 @@ function ShiftStrip({ runs }: { runs: TaskRunRow[] }) {
   return (
     <Space size={3} wrap>
       {[...runs].slice(0, 20).reverse().map(r => (
-        <Tooltip key={r.id} title={<>{fmtTime(r.startedAt)}<br />{t('workerSteps', { n: r.steps })}{r.reportTitle && <><br />{r.reportTitle}</>}{r.error && <><br />{errorText(r.error, t)}</>}</>}>
-          <span style={{ display: 'inline-block', width: 10, height: 18, borderRadius: 3, background: color[r.status], opacity: r.status === 'running' ? 1 : 0.8 }} />
+        <Tooltip key={r.id} title={<>{fmtTime(r.startedAt)}<br />{t('workerSteps', { n: r.steps })}{r.partial && <><br />{t('runPartial')}</>}{r.reportTitle && <><br />{r.reportTitle}</>}{r.error && <><br />{errorText(r.error, t)}</>}</>}>
+          <span style={{ display: 'inline-block', width: 10, height: 18, borderRadius: 3, background: r.partial ? token.colorWarning : color[r.status], opacity: r.status === 'running' ? 1 : 0.8 }} />
         </Tooltip>
       ))}
     </Space>
@@ -165,7 +166,7 @@ function Runs({ runs, loading }: { runs: TaskRunRow[]; loading: boolean }) {
         { title: t('thStartedAt'), dataIndex: 'startedAt', render: fmtTime, width: 170 },
         { title: t('thFinishedAt'), dataIndex: 'finishedAt', render: fmtTime, width: 170 },
         { title: t('group'), dataIndex: 'groupId', width: 120, render: v => groups.find(g => g.id === v)?.name ?? v.slice(0, 8) },
-        { title: t('thStatus'), dataIndex: 'status', width: 90, render: v => <SessionStatusTag value={v} /> },
+        { title: t('thStatus'), dataIndex: 'status', width: 90, render: (v, r) => r.partial ? <Tag color="warning">{t('runPartial')}</Tag> : <SessionStatusTag value={v} /> },
         { title: t('workerStepsTh'), dataIndex: 'steps', width: 70, align: 'right' },
         { title: t('thDetail'), key: 'detail', ellipsis: true, render: (_, r) => (r.reportId ? <a href={`/api/agent-reports/${r.reportId}/html`} target="_blank" rel="noreferrer">{r.reportTitle}</a> : r.error ? errorText(r.error, t) : '-') },
         { title: '', dataIndex: 'sessionId', width: 90, render: v => v && <Link to={`/chat/${v}`}>{t('openSession')}</Link> },

@@ -440,7 +440,7 @@ function ChatWorkspace({ prompt, setPrompt, filter, setFilter }: {
               {isRunning && (
                 <Space className="chat-indent" style={{ color: token.colorTextSecondary }}><Spin size="small" />{t('thinking')}</Space>
               )}
-              {session.error && <Alert className="chat-indent" type="error" showIcon title={session.error} />}
+              {session.error && <Alert className="chat-indent" type={session.status === 'succeeded' ? 'warning' : 'error'} showIcon title={session.error} />}
               {error && <Alert className="chat-indent" type="error" showIcon title={error} />}
 
             </div>

@@ -1163,6 +1163,8 @@ export interface TaskRunRow {
   // interrupted：被停机打断，接手的调度器稍后重跑；skipped：并发上限已满、排队超过一个周期没轮到
   status: 'running' | 'succeeded' | 'failed' | 'interrupted' | 'skipped'
   error: string | null
+  // 模型没在时限内交报告，报告是平台整理的保底报告（status 仍为 succeeded）
+  partial: boolean
 }
 
 export const fetchTasks = () => get<TaskRow[]>('/api/tasks')
