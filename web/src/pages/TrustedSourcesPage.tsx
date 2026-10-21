@@ -39,7 +39,7 @@ const fpText = (v: string | null) => (v
 // 已知自动化：运维脚本、AI 运维插件这类日常自动化的 SSH 登录身份。平台自动识别，组管理员可以调整、停用、删除或手动添加；
 // 它们的告警保留可查，但不生成事件、不推送。放宽检测只有人和平台的识别逻辑能做，AI 没有对应工具
 export function TrustedSourcesPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { message } = App.useApp()
   const client = useQueryClient()
   const { group, isAdmin } = useSession()
@@ -100,7 +100,7 @@ export function TrustedSourcesPage() {
     return (
       <Space orientation="vertical" size={0}>
         <span>{t('tsEvidenceLogins', { window: e.windowDays, days: e.days, logins: e.logins, hosts: e.hosts })}</span>
-        {e.alerts > 0 && <Typography.Text type="secondary">{t('tsEvidenceVerdicts', { human: e.humanBenign, ai: e.aiBenign })}</Typography.Text>}
+        {e.alerts > 0 && <Typography.Text type="secondary">{t('tsEvidenceVerdicts', { parts: parts(e.humanBenign, e.aiBenign) })}</Typography.Text>}
       </Space>
     )
   }
@@ -124,6 +124,13 @@ export function TrustedSourcesPage() {
       </Popconfirm>
     </Space>
   )
+
+  // 结论按事件计，只列非零的几项
+  const parts = (human: number, ai: number, pending = 0) => [
+    human ? t('tsPartHuman', { n: human }) : '',
+    ai ? t('tsPartAI', { n: ai }) : '',
+    pending ? t('tsPartPending', { n: pending }) : '',
+  ].filter(Boolean).join(locale === 'zh' ? '、' : ', ')
 
   const how: MsgKey[] = ['tsHowRecognize', 'tsHowNoCommand', 'tsHowException', 'tsHowAdjust', 'tsHowScope']
 
@@ -164,10 +171,10 @@ export function TrustedSourcesPage() {
               ),
             },
             { title: t('tsStatus'), key: 'state', width: 110, render: (_, s) => status(s) },
-            { title: t('tsIdentity'), key: 'identity', width: 230, render: (_, s) => identity(s) },
+            { title: t('tsIdentity'), key: 'identity', width: 260, render: (_, s) => identity(s) },
             { title: t('tsEvidence'), key: 'evidence', width: 300, render: (_, s) => evidence(s) },
             {
-              title: <Tooltip title={t('tsMatchedHint')}>{t('tsMatched')}</Tooltip>, dataIndex: 'matchedCount', width: 110, align: 'right',
+              title: <Tooltip title={t('tsMatchedHint')}>{t('tsMatched')}</Tooltip>, dataIndex: 'matchedCount', width: 130, align: 'right',
               // 放过的告警按指纹或来源在日志检索里翻
               render: (v: number, s) => (v && (s.keyFingerprint || s.sourceCidr)
                 ? <Link to={`/events?${new URLSearchParams({ q: s.keyFingerprint ?? s.sourceCidr!.replace(/\/\d+$/, ''), hours: '168' })}`}>{v}</Link>
@@ -212,7 +219,7 @@ export function TrustedSourcesPage() {
                 {
                   title: t('tsVerdicts'), key: 'verdicts', width: 250,
                   render: (_, c) => (c.alerts
-                    ? t('tsVerdictsValue', { alerts: c.alerts, human: c.humanBenign, ai: c.aiBenign, pending: c.pending })
+                    ? t('tsVerdictsValue', { alerts: c.alerts, parts: parts(c.humanBenign, c.aiBenign, c.pending) })
                     : <Typography.Text type="secondary">{t('tsVerdictsNone')}</Typography.Text>),
                 },
                 { title: t('tsLastSeen'), dataIndex: 'lastSeen', width: 150, render: fmtTime },
@@ -290,7 +297,7 @@ export function TrustedSourcesPage() {
             <Form.Item name="name" label={t('tsName')} rules={[{ required: true, whitespace: true, max: 100 }]}>
               <Input />
             </Form.Item>
-            <Form.Item name="reason" label={t('reason')} rules={[{ max: 1000 }]}>
+            <Form.Item name="reason" label={t('tsNote')} rules={[{ max: 1000 }]}>
               <Input.TextArea rows={2} placeholder={t('tsReasonHint')} />
             </Form.Item>
             <Form.Item name="expiresInDays" label={t('validityDays')} extra={t('tsValidityKeep', { at: fmtTime(editing.expiresAt) })}>
