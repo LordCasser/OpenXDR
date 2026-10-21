@@ -396,6 +396,12 @@ server 全部通过环境变量配置，均有默认值：
 | `FP_SUPPRESS_MIN_RATIO` | `90` | 误报率下限（%）：误报 /（误报 + 属实 + 未结案） |
 | `FP_SUPPRESS_WINDOW_DAYS` | `30` | 统计窗口（天） |
 | `FP_SUPPRESS_DAYS` | `30` | 草案建议的有效期（天，1–90），批准时从批准那一刻起算 |
+| `AUTOMATION_AUTO_ENABLED` | `true` | 已知自动化的自动识别总开关；`false` 时不新识别、不续期，但照常按结论停用已识别的条目并通知。条件见 [detection.md](detection.md#自动识别) |
+| `AUTOMATION_AUTO_WINDOW_DAYS` | `7` | 统计登录规律与告警结论的窗口（天） |
+| `AUTOMATION_AUTO_MIN_DAYS` / `AUTOMATION_AUTO_MIN_LOGINS` | `3` / `20` | 窗口内至少几天有登录、共至少几次登录（天数不超过窗口） |
+| `AUTOMATION_AUTO_AI_BENIGN` | `3` | 没有人工误报结论时，至少要几个 AI 判良性的事件（人工误报 1 个即可） |
+| `AUTOMATION_AUTO_TTL_DAYS` | `30` | 自动识别的有效期（天，1–365），持续满足时续期 |
+| `AUTOMATION_AUTO_INTERVAL_SECONDS` | `300` | 识别、续期与按结论停用的周期（秒）；非正数等不合理值退回默认 |
 | `FP_SUPPRESS_COOLDOWN_DAYS` | `30` | 组管理员拒绝后，同范围或更宽的草案多久内不再生成（天） |
 | `FP_SUPPRESS_INTERVAL_HOURS` | `6` | 统计周期（小时），多节点只在持有租约的节点上跑 |
 

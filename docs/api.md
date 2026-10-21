@@ -63,17 +63,19 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | POST | `/api/suppressions` | `{"ruleId","assetId"(空=全局),"reason","expiresInDays"(0=长期)}`；需该资产所在组的 analyst，全局抑制仅 admin，否则 403 |
 | DELETE | `/api/suppressions/{id}` | 撤销，权限同创建（按该抑制的资产判断） |
 
-## 可信自动化来源
+## 已知自动化
 
-按 SSH 登录身份认出的运维自动化，命中的告警不进事件与研判（高危例外除外），见
-[检测链路 · 可信自动化来源](detection.md#可信自动化来源serverinternalautomation)。
+按 SSH 登录身份认出的运维自动化（平台自动识别或组管理员手动添加），命中的告警不进事件与研判（高危例外除外），见
+[检测链路 · 已知自动化](detection.md#已知自动化serverinternalautomation)。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/trusted-sources?groupId=` | 列表（含已撤销、已过期，带命中次数与最近命中）；组内成员可看，`groupId` 可省略（看全部可见组） |
-| GET | `/api/trusted-sources/candidates?groupId=` | 组内近 7 天 agent 核对过出处的 SSH 成功登录，按（用户、来源、指纹）归并，标出已被哪些生效来源覆盖；组管理员 |
-| POST | `/api/trusted-sources` | `{"groupId","name","reason","keyFingerprint","sourceCidr","loginUser","expiresInDays"(1–365)}`；指纹与网段至少一个，只填网段时不宽于 /24；组管理员，落审计 |
-| POST | `/api/trusted-sources/{id}/revoke` | 撤销（保留记录，立即生效）；组管理员，落审计，重复撤销 409 |
+| GET | `/api/trusted-sources?groupId=` | 列表（含已停用、已过期，不含已删除；带命中次数与最近命中、`origin`(auto/manual)、`pinned`、`evidence` 识别依据、`revokeCause`(verdict=系统按结论停用)、`revokeIncidentId`）；组内成员可看，`groupId` 可省略（看全部可见组） |
+| GET | `/api/trusted-sources/candidates?groupId=` | 组内窗口内的 SSH 登录，按（用户、指纹；非公钥登录按来源地址）归并，带登录天数 / 次数 / 主机数、告警与结论统计和 `reason`：`eligible` / `no_key` / `public` / `scattered` / `flagged` / `irregular` / `quiet` / `pending` / `few_verdicts`，另有 `covered`（已被生效条目覆盖）、`declined`（人停用或删除过）、`disabled`（自动识别已关闭）；组管理员 |
+| POST | `/api/trusted-sources` | 手动添加 `{"groupId","name","reason","keyFingerprint","sourceCidr","loginUser","expiresInDays"(1–365)}`；指纹与网段至少一个，只填网段时不宽于 /24；组管理员，落审计 |
+| PATCH | `/api/trusted-sources/{id}` | 调整 `{"name","reason","expiresInDays"(1–365，从现在起算),"pinned","enabled"}`，字段可选、至少一个；启用已过期的须同时给有效期；重新启用系统停用的会自动固定；组管理员，落审计（`trusted_source_updated` / `_enabled` / `_revoked`），已删除 409 |
+| DELETE | `/api/trusted-sources/{id}` | 删除（隐藏并停用，记录保留，自动识别的不会再被加回）；组管理员，落审计，重复删除 409 |
+| POST | `/api/trusted-sources/{id}/revoke` | 停用（保留记录，立即生效），同 `PATCH {"enabled":false}`；组管理员，落审计，重复停用 409 |
 
 `GET /api/events` 的条目与 `GET /api/incidents/{id}` 的告警带 `automation: {id, name, watch}`（来自可信来源时；`watch` 为高危例外）。
 
