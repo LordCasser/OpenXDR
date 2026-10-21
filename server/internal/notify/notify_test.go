@@ -21,6 +21,17 @@ func incidentAt(created time.Time, status string, verdictJSON string) *ent.Incid
 	return inc
 }
 
+// retriage 已研判 incident 之后又并入了证据：urgent 为升级类，failures 为重研判连续失败次数
+func retriage(verdictJSON string, urgent bool, failures int) *ent.Incident {
+	inc := incidentAt(time.Now(), "triaged", verdictJSON)
+	triaged, later := time.Now().Add(-10*time.Minute), time.Now()
+	inc.TriagedAt, inc.EvidenceAt, inc.TriageFailures = &triaged, &later, failures
+	if urgent {
+		inc.UrgentAt = &later
+	}
+	return inc
+}
+
 func TestDecide(t *testing.T) {
 	n := &Notifier{start: time.Now().Add(-time.Hour), WaitTriage: func() bool { return true }}
 	fresh := time.Now()
@@ -42,6 +53,13 @@ func TestDecide(t *testing.T) {
 		{"恶意推送", incidentAt(fresh, "triaged", `{"verdict":"malicious","confidence":90}`), 3, true, ""},
 		{"可疑推送", incidentAt(fresh, "triaged", `{"verdict":"suspicious"}`), 3, true, ""},
 		{"研判无法解析也推送", incidentAt(fresh, "triaged", `{"error":"unparseable"}`), 3, true, ""},
+		// 普通新证据冷却中：旧结论仍可用，照它决定，不卡在冷却上
+		{"冷却中恶意照推", retriage(`{"verdict":"malicious"}`, false, 0), 3, true, ""},
+		{"冷却中良性照旧静默", retriage(`{"verdict":"benign"}`, false, 0), 3, false, "AI 判定良性"},
+		// 升级类：旧结论不作数，等新结论；研判一直失败就不等了，也不拿旧良性静默
+		{"升级等新结论", retriage(`{"verdict":"benign"}`, true, 0), 3, false, "wait"},
+		{"升级研判屡败照推", retriage(`{"verdict":"benign"}`, true, giveUpAfter), 3, true, ""},
+		{"首次研判屡败照推", func() *ent.Incident { i := incidentAt(fresh, "open", ""); i.TriageFailures = giveUpAfter; return i }(), 3, true, ""},
 	}
 	for _, c := range cases {
 		send, why := n.decide(c.inc, c.sev)
@@ -55,6 +73,9 @@ func TestDecideNoAI(t *testing.T) {
 	n := &Notifier{start: time.Now().Add(-time.Hour), WaitTriage: func() bool { return false }}
 	if send, _ := n.decide(incidentAt(time.Now(), "open", ""), 1); !send {
 		t.Fatal("AI 未启用时事件应立即推送")
+	}
+	if send, _ := n.decide(retriage(`{"verdict":"benign"}`, true, 0), 3); !send {
+		t.Fatal("AI 未启用时升级的事件不能拿旧的良性结论静默")
 	}
 }
 

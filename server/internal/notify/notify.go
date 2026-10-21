@@ -2,7 +2,8 @@
 // "一万条进三个出"——那三个出来了得有人知道，不能指望有人一直盯着屏幕。
 //
 // 投递语义：
-//   - AI 启用时等研判完成再推，避免推完 AI 又改口；未启用则事件一出就推
+//   - AI 启用时等研判完成再推，避免推完 AI 又改口；未启用则事件一出就推。
+//     升级类证据待重研判时同样等新结论；研判连续失败几次就不等了，照推
 //   - benign 判定静默跳过：AI 说是噪声的不打扰人。但高危及以上照推并标"需复核"——
 //     AI 会看错，高危事件被它一句"良性"吞掉的代价太大
 //   - 推送目标启用前的历史事件不补发，防止首次启用时轰炸群
@@ -119,14 +120,14 @@ func (n *Notifier) decide(inc *ent.Incident, severity int16) (bool, string) {
 	if inc.Status == "closed" || inc.Status == "false_positive" {
 		return false, "已人工处理"
 	}
-	// 没研判过，或级别升高后重开、等着带新证据重新研判：旧结论不作数，先等
-	if len(inc.AiVerdict) == 0 || inc.Status == "open" {
-		if n.WaitTriage != nil && n.WaitTriage() {
+	// 没有可用结论（没研判过、分析师重开、升级类证据还没重研判）：先等研判；
+	// 研判连续失败到 giveUpAfter 次就不等了，AI 未启用也不等——照推，不拿旧结论静默掉升级。
+	// 普通新证据待重研判（冷却中）不在此列：旧结论仍可用，照它决定，不把通知卡在冷却上
+	if !usable(inc) {
+		if n.WaitTriage != nil && n.WaitTriage() && inc.TriageFailures < giveUpAfter {
 			return false, "wait"
 		}
-		if len(inc.AiVerdict) == 0 {
-			return true, "" // AI 未启用，事件即推
-		}
+		return true, ""
 	}
 	var v verdict
 	_ = json.Unmarshal(inc.AiVerdict, &v)
@@ -134,6 +135,14 @@ func (n *Notifier) decide(inc *ent.Incident, severity int16) (bool, string) {
 		return false, "AI 判定良性"
 	}
 	return true, ""
+}
+
+// giveUpAfter 研判连续失败这么多次后通知不再等结论
+const giveUpAfter = 3
+
+// usable incident 当前的 AI 结论能否代表它的全部证据
+func usable(inc *ent.Incident) bool {
+	return len(inc.AiVerdict) > 0 && inc.Status != "open" && !review.IsUrgent(inc)
 }
 
 func (n *Notifier) markNotified(ctx context.Context, inc *ent.Incident) error {
@@ -176,10 +185,12 @@ func (n *Notifier) message(ctx context.Context, inc *ent.Incident, linkBase stri
 	if inc.Title != nil {
 		m.Title = *inc.Title
 	}
-	if len(inc.AiVerdict) > 0 {
+	if usable(inc) {
 		var v verdict
 		_ = json.Unmarshal(inc.AiVerdict, &v)
 		m.Verdict, m.Confidence, m.Summary = v.Verdict, v.Confidence, v.Summary
+	} else if inc.TriageFailures > 0 {
+		m.Summary = fmt.Sprintf("AI 研判连续失败 %d 次，未等结论先推送", inc.TriageFailures)
 	}
 	if linkBase != "" {
 		m.Link = linkBase + "/?incident=" + m.IncidentID

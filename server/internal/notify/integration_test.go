@@ -232,3 +232,48 @@ func TestSettingsOverrideAndLateEnable(t *testing.T) {
 		t.Fatalf("启用后的新事件应推送 1 条，实际 %d", received)
 	}
 }
+
+// 重研判期间的通知：普通新证据冷却中照旧结论推，不卡；升级类等新结论，研判屡败后不等、且不带旧结论
+func TestSweepDuringRetriage(t *testing.T) {
+	ctx, client := testdb.New(t)
+	var received []Message
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var m Message
+		_ = json.NewDecoder(r.Body).Decode(&m)
+		received = append(received, m)
+	}))
+	t.Cleanup(hook.Close)
+	n := &Notifier{
+		DB: client, Settings: &Settings{DB: client, Default: Target{URL: hook.URL, Format: "generic"}},
+		WaitTriage: func() bool { return true }, Client: hook.Client(), start: time.Now().Add(-time.Minute),
+	}
+	triaged, later := time.Now().Add(-5*time.Minute), time.Now()
+	mk := func(verdict string) uuid.UUID {
+		inc := client.Incident.Create().SetGraph(json.RawMessage(`{}`)).SetStatus("triaged").
+			SetAiVerdict(json.RawMessage(verdict)).SetTriagedAt(triaged).SetEvidenceAt(later).SaveX(ctx)
+		client.Alert.Create().SetTs(later).SetRuleID("r").SetSeverity(3).SetIncidentID(inc.ID).ExecX(ctx)
+		return inc.ID
+	}
+	cooling := mk(`{"verdict":"malicious","confidence":90,"summary":"外连"}`)
+	escalated := mk(`{"verdict":"benign","summary":"例行"}`)
+	client.Incident.UpdateOneID(escalated).SetUrgentAt(later).ExecX(ctx)
+
+	if err := n.sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(received) != 1 || received[0].IncidentID != cooling.String() || received[0].Verdict != "malicious" {
+		t.Fatalf("冷却中的应照旧结论推送、升级的应等：%+v", received)
+	}
+	if client.Incident.GetX(ctx, escalated).NotifiedAt != nil {
+		t.Fatal("升级类等新结论期间不应落推送标记")
+	}
+
+	client.Incident.UpdateOneID(escalated).SetTriageFailures(giveUpAfter).ExecX(ctx)
+	if err := n.sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(received) != 2 || received[1].IncidentID != escalated.String() || received[1].Verdict != "" ||
+		received[1].Summary == "" || client.Incident.GetX(ctx, escalated).NotifiedAt == nil {
+		t.Fatalf("研判屡败后应不带旧结论照推并落标记：%+v", received)
+	}
+}
