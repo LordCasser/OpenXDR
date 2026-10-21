@@ -342,6 +342,8 @@ server 全部通过环境变量配置，均有默认值：
 | `RULES_RELOAD_SECONDS` | `30` | 规则目录变更检测周期，变更自动热重载；0 关闭 |
 | `TASKS_PATH` | `../tasks` | 预设任务 YAML 目录；配置了 Pi 模型（`PI_MODEL` 或控制台）才运行，见 [Pi 后端](pi-backend.md#预设任务) |
 | `SCHEDULE_INTERVAL_SECONDS` | `30` | 任务到期检查与 YAML 重载周期 |
+| `SCHEDULE_SPREAD_MINUTES` | `15`（0 关闭） | 同一任务按组展开时的错峰窗口：每组在计划时间后固定偏移 hash(任务, 组) 秒开跑，窗口不超过任务周期的 1/4。15 分钟足够把十来个组拉开，每日巡检最晚 10:15 前开跑，仍在同一个上午；见 [Pi 后端](pi-backend.md#错峰与并发上限) |
+| `SCHEDULE_MAX_RUNNING` | `1` | 全集群同一时刻运行中的定时任务会话上限，按库里 `kind=task` 的运行中会话计，人发起的对话不计入；超出的排队，排满一个周期仍没轮到就跳过并记 `skipped`。默认 1：两个巡检并行就曾把共用端点的每轮推理从 5–17 秒拖到平均 98 秒、双双超时；端点能并行推理再调大 |
 | `CHROMIUM_PATH` | `chromium` | 报告 PDF 渲染用的 headless Chromium，server 镜像已内置 |
 | `HTTP_ADDR` / `GRPC_ADDR` | `:8080` / `:8081` | 监听地址 |
 | `ALERT_DEDUP_WINDOW_MINUTES` | `5` | 告警去重窗口 |
