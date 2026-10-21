@@ -45,7 +45,15 @@ func TestPredicates(t *testing.T) {
 
 	mk("未研判", "open", "", old)
 	mk("判恶意", "open", malicious, old, al{"r1", 2})
-	mk("判良性低危旧", "open", benign, old, al{"r1", 2}, al{"r2", 3})
+	mk("判良性低危旧", "triaged", benign, old, al{"r1", 2}, al{"r2", 3})
+	// 良性结论没看过的证据：分析师重开的、之后又并入新证据待重研判的，都不能拿旧结论自动结案
+	mk("重开良性低危旧", "open", benign, old, al{"r1", 2})
+	mk("待重研判良性低危旧", "triaged", benign, old, al{"r1", 2})
+	for id, name := range names {
+		if name == "待重研判良性低危旧" {
+			db.Incident.UpdateOneID(id).SetTriagedAt(old).SetEvidenceAt(now).ExecX(ctx)
+		}
+	}
 	mk("判良性低危新", "triaged", benign, now, al{"r1", 1})
 	mk("判良性但高危", "triaged", benign, old, al{"r1", 2}, al{"r2", 4})
 	mk("判良性含诱饵与真实告警", "open", benign, old, al{"r1", 1}, al{dec, 1})
