@@ -368,19 +368,19 @@ func message(kind string, rows []*ent.TrustedSource, groups map[uuid.UUID]string
 			if t.RevokeIncidentID != nil && titles[*t.RevokeIncidentID] != "" {
 				why += "（事件：" + titles[*t.RevokeIncidentID] + "）"
 			}
-			fmt.Fprintf(&b, "· %s（%s）：%s\n", t.Name, groups[t.GroupID], why)
+			fmt.Fprintf(&b, "· %s（%s 组）：%s\n", t.Name, groups[t.GroupID], why)
 		}
-		b.WriteString("它的告警恢复正常研判与推送，最近被它放过的告警也已重新送去研判。请确认这个登录身份有没有被盗用；确认无误后可以在「运维自动化」页重新启用。")
+		b.WriteString("它的告警恢复正常研判与提醒，最近被它放过的告警也已重新送去研判。请确认这个登录身份有没有被盗用；确认没问题后，可以在「已知自动化」页重新启用。")
 		path := "/trusted-sources"
 		if len(rows) == 1 && rows[0].RevokeIncidentID != nil {
-			path = "/?incident=" + rows[0].RevokeIncidentID.String()
+			path = "/incidents/" + rows[0].RevokeIncidentID.String()
 		}
-		return fmt.Sprintf("%d 个运维自动化已自动停用", len(rows)), b.String(), path
+		return fmt.Sprintf("%d 个已知自动化已自动停用", len(rows)), b.String(), path
 	}
 	for _, t := range rows {
-		line := fmt.Sprintf("· %s（%s）", t.Name, groups[t.GroupID])
+		line := fmt.Sprintf("· %s（%s 组）", t.Name, groups[t.GroupID])
 		if e := t.Evidence; e != nil {
-			line += fmt.Sprintf("：近 %d 天里有 %d 天在登录，共 %d 次、%d 台主机；之前的告警", e.WindowDays, e.Days, e.Logins, e.Hosts)
+			line += fmt.Sprintf("：近 %d 天有 %d 天登录，共 %d 次、%d 台主机；之前的告警", e.WindowDays, e.Days, e.Logins, e.Hosts)
 			var parts []string
 			if e.HumanBenign > 0 {
 				parts = append(parts, fmt.Sprintf("%d 个事件经人工判为误报", e.HumanBenign))
@@ -392,8 +392,8 @@ func message(kind string, rows []*ent.TrustedSource, groups map[uuid.UUID]string
 		}
 		b.WriteString(line + "\n")
 	}
-	b.WriteString("之后它的告警保留可查，但不再生成事件、不再推送；拿凭据、清痕迹、关防护这类高危行为照常提醒。如果不认可，可以在「运维自动化」页停用或删除，停用后不会再被自动加回。")
-	return fmt.Sprintf("自动识别出 %d 个运维自动化", len(rows)), b.String(), "/trusted-sources"
+	b.WriteString("之后它的告警照常保留、随时可查，但不再生成事件、不再推送；拿凭据、清痕迹、关防护这类高危行为照常提醒。不认可的话，到「已知自动化」页停用或删除即可，之后不会再被自动加回。")
+	return fmt.Sprintf("认出 %d 个日常自动化，已加入「已知自动化」", len(rows)), b.String(), "/trusted-sources"
 }
 
 func (a *Auto) tx(ctx context.Context, fn func(*ent.Tx) error) error {

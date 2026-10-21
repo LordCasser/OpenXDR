@@ -202,7 +202,7 @@ func TestAutoIdentify(t *testing.T) {
 			t.Fatalf("%s 不该被识别: %+v", fpN(i), r)
 		}
 	}
-	if len(w.sent) != 1 || !strings.Contains(w.sent[0], "自动识别出 2 个运维自动化") || !strings.Contains(w.sent[0], "1 个事件经人工判为误报") {
+	if len(w.sent) != 1 || !strings.Contains(w.sent[0], "认出 2 个日常自动化") || !strings.Contains(w.sent[0], "1 个事件经人工判为误报") {
 		t.Fatalf("应合成一条生效通知: %q", w.sent)
 	}
 	if n := w.audits("trusted_source_auto_created"); n != 2 {
@@ -303,7 +303,7 @@ func TestAutoRevoke(t *testing.T) {
 	if got := w.db.TrustedSource.GetX(w.ctx, manual.ID); got.RevokedAt != nil || !same(got.ExpiresAt, manual.ExpiresAt) {
 		t.Fatalf("人工条目不受自动逻辑影响: %+v", got)
 	}
-	if len(w.sent) != 1 || !strings.Contains(w.sent[0], "2 个运维自动化已自动停用") {
+	if len(w.sent) != 1 || !strings.Contains(w.sent[0], "2 个已知自动化已自动停用") {
 		t.Fatalf("应发一条停用通知: %q", w.sent)
 	}
 	if n := w.audits("trusted_source_auto_revoked"); n != 2 {
