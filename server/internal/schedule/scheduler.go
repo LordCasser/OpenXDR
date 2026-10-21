@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/agentsession"
 	entasset "openxdr/server/ent/asset"
 	entgroup "openxdr/server/ent/group"
 	"openxdr/server/ent/report"
@@ -22,6 +25,9 @@ import (
 
 // StatusInterrupted 运行被停机或失去租约打断：结果不算数，接手的 leader 用新会话重跑
 const StatusInterrupted = "interrupted"
+
+// StatusSkipped 并发上限已满、排队超过一个周期仍没轮到，这一轮没有运行
+const StatusSkipped = "skipped"
 
 // Initiator 定时任务会话的发起人，即审批闸门的系统身份。
 const Initiator = commandgate.SystemActor
@@ -54,10 +60,15 @@ type Scheduler struct {
 	Notify       Notifier
 	// 单次运行上限，含模型、工具与审批等待
 	Timeout time.Duration
+	// 全集群同一时刻运行中的定时任务会话上限，<= 0 用 DefaultMaxRunning
+	MaxRunning int
 
 	start time.Time
 	wg    sync.WaitGroup
-	slots chan struct{}
+	// 本节点在跑的任务数（含失败重试换会话的间隙）
+	active atomic.Int32
+	// 排队项 → 开始排队的时刻，只在 leader 内存里
+	queued map[string]time.Time
 }
 
 // Run 集群单活；遗留会话由执行期限清理器处理，接管时不修改其他节点的活跃运行。
@@ -86,11 +97,7 @@ func (s *Scheduler) tick(ctx context.Context, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	for _, t := range tasks {
-		if AnyEnabled(t) {
-			s.fireDue(ctx, t, now)
-		}
-	}
+	s.fire(ctx, tasks, now)
 	return nil
 }
 
@@ -115,42 +122,96 @@ func AnyEnabled(t *ent.Task) bool {
 	return false
 }
 
+// slot 一个组上到期的一轮。plan 是计划时间（cron 时刻，或立即运行的请求时刻），写进 scheduled_at；
+// fire 是可以开跑的时刻：定时触发加错峰偏移，立即运行不偏移；period 是排队上限，排满一个周期就跳过。
+type slot struct {
+	plan, fire time.Time
+	period     time.Duration
+	manual     bool
+}
+
 // due 按组从上次运行起算；从未运行的组使用任务的持久创建时间。
 // 停机或停用期间错过的多个周期只补跑一次。
-func (s *Scheduler) due(ctx context.Context, t *ent.Task, groupID uuid.UUID, now time.Time) (time.Time, error) {
+func (s *Scheduler) due(ctx context.Context, t *ent.Task, groupID uuid.UUID, now time.Time) (slot, error) {
 	expr := t.Schedule
 	if t.CustomSchedule != nil {
 		expr = *t.CustomSchedule
 	}
 	sched, err := ParseSchedule(expr)
 	if err != nil {
-		return time.Time{}, err
+		return slot{}, err
 	}
 	base := t.CreatedAt
 	last, err := s.DB.TaskRun.Query().Where(taskrun.TaskIDEQ(t.ID), taskrun.GroupIDEQ(groupID)).
 		Order(ent.Desc(taskrun.FieldStartedAt)).First(ctx)
 	if err != nil && !ent.IsNotFound(err) {
-		return time.Time{}, err
+		return slot{}, err
 	}
 	if last != nil {
 		base = last.StartedAt
 	}
-	// 手动请求晚于上次运行就立即跑；计划时间记请求时刻，集群内同一请求只跑一轮
+	// 手动请求晚于上次运行就立即跑、不错峰；计划时间记请求时刻，集群内同一请求只跑一轮
 	if r := t.RunRequestedAt; r != nil && r.After(base) && !r.After(now) {
-		return *r, nil
+		return slot{plan: *r, fire: *r, period: Period(sched, sched.Next(*r)), manual: true}, nil
 	}
 	next := sched.Next(base)
-	if next.After(now) {
-		return time.Time{}, nil
+	if next.IsZero() {
+		return slot{}, nil
 	}
-	return next, nil
+	fire := next.Add(Offset(t.ID, groupID, sched, next))
+	if fire.After(now) {
+		return slot{}, nil
+	}
+	return slot{plan: next, fire: fire, period: Period(sched, next)}, nil
 }
 
-// fireDue 每个目标组一个会话。空组不跑；上一轮还在跑的组跳过本轮，不叠加。
-func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
-	if s.slots == nil {
-		s.slots = make(chan struct{}, 4)
+// candidate 到期待拉起的一轮；retry 非空表示重跑被打断的那一轮
+type candidate struct {
+	task  *ent.Task
+	group *ent.Group
+	model string
+	retry *ent.TaskRun
+	slot
+}
+
+// rank 拉起顺序：立即运行（人在等）> 被打断的重跑 > 定时触发；同类按开跑时刻先来后到
+func (c candidate) rank() int {
+	switch {
+	case c.manual:
+		return 0
+	case c.retry != nil:
+		return 1
 	}
+	return 2
+}
+
+// key 排队登记用：同一任务同一组同一轮是同一个排队项
+func (c candidate) key() string {
+	round := c.plan
+	if c.retry != nil {
+		round = c.retry.StartedAt
+	}
+	return c.task.ID + "/" + c.group.ID.String() + "/" + round.UTC().Format(time.RFC3339Nano)
+}
+
+// fire 收集所有任务所有组到期的一轮，在并发上限内按优先级拉起，其余排队
+func (s *Scheduler) fire(ctx context.Context, tasks []*ent.Task, now time.Time) {
+	// 任务自带模型也得在 Pi 启用时才跑：端点与密钥跟着平台配置走
+	def := s.DefaultModel()
+	if def == "" {
+		return
+	}
+	var queue []candidate
+	for _, t := range tasks {
+		if AnyEnabled(t) {
+			queue = append(queue, s.collect(ctx, t, def, now)...)
+		}
+	}
+	s.launch(ctx, queue, now)
+}
+
+// collect 一个任务每个目标组到期的一轮。空组不跑；上一轮还在跑的组跳过本轮，不叠加。
+func (s *Scheduler) collect(ctx context.Context, t *ent.Task, def string, now time.Time) []candidate {
 	q := s.DB.Group.Query()
 	if t.TargetGroup != "*" {
 		q = q.Where(entgroup.NameEQ(t.TargetGroup))
@@ -158,37 +219,34 @@ func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 	groups, err := q.All(ctx)
 	if err != nil {
 		slog.Error("查询任务目标组失败", "task", t.ID, "err", err)
-		return
+		return nil
 	}
 	if len(groups) == 0 {
 		slog.Warn("任务没有可用的目标组", "task", t.ID, "group", t.TargetGroup)
-	}
-	// 任务自带模型也得在 Pi 启用时才跑：端点与密钥跟着平台配置走
-	def := s.DefaultModel()
-	if def == "" {
-		return
 	}
 	model := t.Model
 	if model == "" {
 		model = def
 	}
+	var out []candidate
 	for _, g := range groups {
 		if !EnabledFor(t, g.ID) {
 			continue
 		}
-		// 上一轮被停机打断的先接着重跑，不等下一个周期
-		retry, err := s.interrupted(ctx, t, g.ID, now)
-		if err != nil {
+		c := candidate{task: t, group: g, model: model}
+		// 上一轮被停机打断的先接着重跑，不等下一个周期，也不再错峰（当初开跑时已错过峰）
+		if c.retry, err = s.interrupted(ctx, t, g.ID, now); err != nil {
 			slog.Error("查询被打断的任务运行失败", "task", t.ID, "group", g.ID, "err", err)
 			continue
 		}
-		var scheduled time.Time
-		if retry == nil {
-			if scheduled, err = s.due(ctx, t, g.ID, now); err != nil {
+		if c.retry != nil {
+			c.fire = c.retry.StartedAt
+		} else {
+			if c.slot, err = s.due(ctx, t, g.ID, now); err != nil {
 				slog.Error("任务到期判断失败", "task", t.ID, "group", g.ID, "err", err)
 				continue
 			}
-			if scheduled.IsZero() {
+			if c.plan.IsZero() {
 				continue
 			}
 		}
@@ -205,29 +263,97 @@ func (s *Scheduler) fireDue(ctx context.Context, t *ent.Task, now time.Time) {
 			}
 			continue
 		}
-		select {
-		case s.slots <- struct{}{}:
-		case <-ctx.Done():
-			return
+		out = append(out, c)
+	}
+	return out
+}
+
+// launch 并发上限内按优先级拉起，拉不起的排队，下一次检查再看。排队满一个周期仍没轮到就跳过并留一条
+// skipped 记录，不无限积压；被打断的重跑不在这里跳过，超过 interruptedWithin 自然不再重跑。
+// 排队起点只记在 leader 内存里：leader 切换后重新起算，最多多等一个周期，不会因此超发。
+func (s *Scheduler) launch(ctx context.Context, queue []candidate, now time.Time) {
+	sort.SliceStable(queue, func(i, j int) bool {
+		a, b := queue[i], queue[j]
+		if a.rank() != b.rank() {
+			return a.rank() < b.rank()
 		}
-		run, session := retry, (*ent.AgentSession)(nil)
-		if retry != nil {
-			slog.Info("重跑被停机打断的任务", "task", t.ID, "group", g.Name, "run", retry.ID)
-			session, err = s.rerun(ctx, t, g, retry, model)
-		} else {
-			run, session, err = s.begin(ctx, t, g, model, scheduled)
-		}
-		if err != nil {
-			<-s.slots
-			slog.Error("创建任务运行失败", "task", t.ID, "group", g.Name, "err", err)
+		return a.fire.Before(b.fire)
+	})
+	free, err := s.free(ctx)
+	if err != nil {
+		slog.Error("统计运行中的任务会话失败", "err", err)
+		return
+	}
+	waiting := map[string]time.Time{}
+	for _, c := range queue {
+		if free > 0 {
+			if s.spawn(ctx, c) {
+				free--
+			}
 			continue
 		}
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			defer func() { <-s.slots }()
-			s.execute(ctx, t, g, run, session)
-		}()
+		key := c.key()
+		since, ok := s.queued[key]
+		if !ok {
+			since = now
+			slog.Info("定时任务会话已达并发上限，排队", "task", c.task.ID, "group", c.group.Name, "limit", s.maxRunning())
+		}
+		if c.retry == nil && now.Sub(since) >= c.period {
+			s.skip(ctx, c, since, now)
+			continue
+		}
+		waiting[key] = since
+	}
+	// 已拉起、已跳过、或不再到期（停用、改周期）的排队项一并清掉
+	s.queued = waiting
+}
+
+// free 还能拉起几个任务会话。以库里运行中的任务会话为准，覆盖其他节点（如上一任 leader）尚未收尾的；
+// 本节点在跑的另算一份取较大者——失败重试换会话的间隙里库里会少算一个。人发起的对话会话不计入。
+func (s *Scheduler) free(ctx context.Context) (int, error) {
+	n, err := s.DB.AgentSession.Query().Where(agentsession.KindEQ("task"), agentsession.StatusEQ("running")).Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return s.maxRunning() - max(n, int(s.active.Load())), nil
+}
+
+// spawn 建运行记录与会话并在后台跑；建不起来返回 false
+func (s *Scheduler) spawn(ctx context.Context, c candidate) bool {
+	run, session := c.retry, (*ent.AgentSession)(nil)
+	var err error
+	if c.retry != nil {
+		slog.Info("重跑被停机打断的任务", "task", c.task.ID, "group", c.group.Name, "run", c.retry.ID)
+		session, err = s.rerun(ctx, c.task, c.group, c.retry, c.model)
+	} else {
+		run, session, err = s.begin(ctx, c.task, c.group, c.model, c.plan)
+	}
+	if err != nil {
+		slog.Error("创建任务运行失败", "task", c.task.ID, "group", c.group.Name, "err", err)
+		return false
+	}
+	s.active.Add(1)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer s.active.Add(-1)
+		s.execute(ctx, c.task, c.group, run, session)
+	}()
+	return true
+}
+
+// SkipReason 排队超时跳过时写进运行记录的原因
+const SkipReason = "定时任务并发上限已满，排队超过一个周期仍没轮到，跳过本轮"
+
+// skip 记一条 skipped 运行。开始时间记跳过时刻，下一轮从这里起算：排队期间又到期的周期一并跳过，
+// 免得过载时补跑一轮接一轮地排下去。
+func (s *Scheduler) skip(ctx context.Context, c candidate, since, now time.Time) {
+	slog.Warn("定时任务排队超过一个周期，跳过本轮", "task", c.task.ID, "group", c.group.Name,
+		"plan", c.plan, "queued_since", since, "limit", s.maxRunning())
+	err := s.DB.TaskRun.Create().SetTaskID(c.task.ID).SetGroupID(c.group.ID).SetScheduledAt(c.plan).
+		SetStartedAt(now).SetFinishedAt(now).SetStatus(StatusSkipped).SetError(SkipReason).Exec(ctx)
+	if err != nil {
+		slog.Error("保存跳过记录失败", "task", c.task.ID, "group", c.group.Name, "err", err)
 	}
 }
 
@@ -400,6 +526,17 @@ func excerpt(s string, n int) string {
 		return string(r)
 	}
 	return string(r[:n]) + "…"
+}
+
+// DefaultMaxRunning 默认同一时刻只跑一个定时任务会话：所有会话共用一个模型端点，
+// 两个组的巡检同时开跑就曾把每轮推理从 5–17 秒拖到平均 98 秒、双双超时；端点扛得住再调大
+const DefaultMaxRunning = 1
+
+func (s *Scheduler) maxRunning() int {
+	if s.MaxRunning > 0 {
+		return s.MaxRunning
+	}
+	return DefaultMaxRunning
 }
 
 func (s *Scheduler) runTimeout() time.Duration {

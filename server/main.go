@@ -553,6 +553,8 @@ func startChat(ctx context.Context, client *ent.Client, rules sigma.Catalog, hub
 // 否则进程先退出，运行记录停在 running，只能等执行期限过了按失败清理，接手的 leader 也不会重跑
 func startScheduler(ctx context.Context, db *sql.DB, client *ent.Client, chat *agentchat.Service, conf func() aiconf.Config, webhook *notify.Webhook) <-chan struct{} {
 	report.Chromium = getenv("CHROMIUM_PATH", "chromium")
+	// 错峰窗口调度器与任务页共用，必须在 HTTP 服务起来之前设好
+	schedule.Spread = time.Duration(max(0, getenvInt("SCHEDULE_SPREAD_MINUTES", 15))) * time.Minute
 	scheduler := &schedule.Scheduler{
 		DB: client, Runner: chat,
 		Dir:          getenv("TASKS_PATH", "../tasks"),
@@ -560,6 +562,7 @@ func startScheduler(ctx context.Context, db *sql.DB, client *ent.Client, chat *a
 		DefaultModel: func() string { return conf().PiModel },
 		Notify:       webhook.Send,
 		Timeout:      time.Duration(getenvInt("PI_TIMEOUT_SECONDS", 1800)) * time.Second,
+		MaxRunning:   getenvInt("SCHEDULE_MAX_RUNNING", schedule.DefaultMaxRunning),
 	}
 	// 常驻：任务定义照常同步到库里，Pi 模型配上才运行
 	done := make(chan struct{})

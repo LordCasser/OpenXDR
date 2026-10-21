@@ -14,6 +14,7 @@ import (
 
 func TestPartialFanoutResumesOtherGroups(t *testing.T) {
 	ctx, db := testdb.New(t)
+	withSpread(t, 0)
 	now := time.Date(2026, 10, 17, 2, 5, 0, 0, time.UTC)
 	a := db.Group.Create().SetName("a").SaveX(ctx)
 	b := db.Group.Create().SetName("b").SaveX(ctx)
@@ -28,15 +29,15 @@ func TestPartialFanoutResumesOtherGroups(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !dueA.IsZero() || dueB.IsZero() {
+	if !dueA.plan.IsZero() || dueB.plan.IsZero() {
 		t.Fatalf("A 应跳过，B 应补跑: A=%v B=%v", dueA, dueB)
 	}
-	_, _, err = s.begin(ctx, task, b, "test", dueB)
+	_, _, err = s.begin(ctx, task, b, "test", dueB.plan)
 	if err != nil {
 		t.Fatal(err)
 	}
 	before := db.AgentSession.Query().CountX(ctx)
-	_, _, err = s.begin(ctx, task, b, "test", dueB)
+	_, _, err = s.begin(ctx, task, b, "test", dueB.plan)
 	if err == nil {
 		t.Fatal("同组同一触发点重复创建")
 	}
@@ -47,6 +48,7 @@ func TestPartialFanoutResumesOtherGroups(t *testing.T) {
 
 func TestTaskCreatedAtMigratesExistingRows(t *testing.T) {
 	ctx, db := testdb.New(t)
+	withSpread(t, 0)
 	db.Task.Create().SetID("legacy").SetName("旧任务").SetSchedule("0 2 * * *").SetPrompt("检查").SaveX(ctx)
 	raw, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
 	if err != nil {

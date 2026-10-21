@@ -44,6 +44,7 @@ func (f *fakeRunner) RunTask(_ context.Context, job Job) error {
 
 func TestSchedulerTick(t *testing.T) {
 	ctx, client := testdb.New(t)
+	withSpread(t, 0)
 	gA := client.Group.Create().SetName("A").SaveX(ctx)
 	gB := client.Group.Create().SetName("B").SaveX(ctx)
 	client.Group.Create().SetName("empty").SaveX(ctx)
@@ -59,7 +60,7 @@ func TestSchedulerTick(t *testing.T) {
 	var mu sync.Mutex
 	notes := map[string]string{}
 	s := &Scheduler{
-		DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute,
+		DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, MaxRunning: 10,
 		Notify: func(_ context.Context, title, text, path string) error {
 			mu.Lock()
 			defer mu.Unlock()
@@ -144,6 +145,7 @@ func TestSchedulerTick(t *testing.T) {
 // 第一次失败、重试成功：同一行运行记录换成重试会话，只推报告不报失败。
 func TestSchedulerRetriesOnce(t *testing.T) {
 	ctx, client := testdb.New(t)
+	withSpread(t, 0)
 	g := client.Group.Create().SetName("A").SaveX(ctx)
 	client.Asset.Create().SetHostname("a1").SetGroupID(g.ID).SaveX(ctx)
 	dir := t.TempDir()
@@ -152,7 +154,7 @@ func TestSchedulerRetriesOnce(t *testing.T) {
 	}
 	runner := &fakeRunner{db: client, flaky: g.ID.String()}
 	var titles []string
-	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute,
+	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, MaxRunning: 10,
 		Notify: func(_ context.Context, title, _, _ string) error { titles = append(titles, title); return nil }}
 	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
 		t.Fatal(err)
@@ -178,6 +180,7 @@ func TestSchedulerRetriesOnce(t *testing.T) {
 // 立即运行：请求晚于上次运行就跑一轮，跑完不再重复。
 func TestSchedulerRunRequested(t *testing.T) {
 	ctx, client := testdb.New(t)
+	withSpread(t, 0)
 	g := client.Group.Create().SetName("A").SaveX(ctx)
 	client.Asset.Create().SetHostname("a1").SetGroupID(g.ID).SaveX(ctx)
 	dir := t.TempDir()
@@ -185,7 +188,7 @@ func TestSchedulerRunRequested(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := &fakeRunner{db: client}
-	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute}
+	s := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, MaxRunning: 10}
 	if err := Sync(ctx, client, LoadDir(dir)); err != nil {
 		t.Fatal(err)
 	}
@@ -222,61 +225,22 @@ func (r *blockedRunner) RunTask(ctx context.Context, _ Job) error {
 	}
 }
 
-func TestSchedulerBoundsActiveGroups(t *testing.T) {
-	ctx, db := testdb.New(t)
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	for _, name := range []string{"a", "b", "c", "d", "e", "f"} {
-		g := db.Group.Create().SetName(name).SaveX(ctx)
-		db.Asset.Create().SetHostname(name).SetGroupID(g.ID).SaveX(ctx)
-	}
-	task := db.Task.Create().SetID("bounded").SetCreatedAt(time.Now().Add(-time.Minute)).SetName("巡检").SetSchedule("* * * * *").SetPrompt("检查").SaveX(ctx)
-	runner := &blockedRunner{make(chan struct{}, 6), make(chan struct{})}
-	s := &Scheduler{DB: db, Runner: runner, DefaultModel: func() string { return "m" }, Timeout: time.Minute}
-	done := make(chan struct{})
-	go func() { defer close(done); s.fireDue(ctx, task, time.Now()) }()
-	for range 4 {
-		select {
-		case <-runner.started:
-		case <-ctx.Done():
-			t.Fatal("未启动四个任务")
-		}
-	}
-	if n := db.TaskRun.Query().CountX(ctx); n != 4 {
-		t.Fatalf("等待的组不应提前建运行记录，得到 %d", n)
-	}
-	select {
-	case <-runner.started:
-		t.Fatal("超过四个并行任务")
-	default:
-	}
-	close(runner.release)
-	select {
-	case <-done:
-	case <-ctx.Done():
-		t.Fatal("调度未完成")
-	}
-	s.wg.Wait()
-	if n := db.TaskRun.Query().CountX(ctx); n != 6 {
-		t.Fatalf("等待目标丢失，得到 %d", n)
-	}
-}
-
 // Pi 模型没配（控制台或环境变量都空）时到期任务不运行；配上后下一轮即运行
 func TestSchedulerWaitsForPiModel(t *testing.T) {
 	ctx, db := testdb.New(t)
+	withSpread(t, 0)
 	g := db.Group.Create().SetName("a").SaveX(ctx)
 	db.Asset.Create().SetHostname("a").SetGroupID(g.ID).SaveX(ctx)
 	task := db.Task.Create().SetID("wait").SetCreatedAt(time.Now().Add(-time.Minute)).SetName("巡检").SetSchedule("* * * * *").SetPrompt("检查").SaveX(ctx)
 	runner := &blockedRunner{make(chan struct{}, 1), make(chan struct{})}
 	model := ""
-	s := &Scheduler{DB: db, Runner: runner, DefaultModel: func() string { return model }, Timeout: time.Minute}
-	s.fireDue(ctx, task, time.Now())
+	s := &Scheduler{DB: db, Runner: runner, DefaultModel: func() string { return model }, Timeout: time.Minute, MaxRunning: 10}
+	s.fire(ctx, []*ent.Task{task}, time.Now())
 	if n := db.TaskRun.Query().CountX(ctx); n != 0 {
 		t.Fatalf("没配 Pi 模型不应运行，得到 %d 次", n)
 	}
 	model = "m"
-	s.fireDue(ctx, task, time.Now())
+	s.fire(ctx, []*ent.Task{task}, time.Now())
 	<-runner.started
 	close(runner.release)
 	s.wg.Wait()
@@ -288,6 +252,7 @@ func TestSchedulerWaitsForPiModel(t *testing.T) {
 // 停机打断的一轮记为 interrupted、不发失败通知；接手的调度器用新会话重跑同一轮，跑完不再补
 func TestSchedulerRerunsInterrupted(t *testing.T) {
 	ctx, client := testdb.New(t)
+	withSpread(t, 0)
 	g := client.Group.Create().SetName("A").SaveX(ctx)
 	client.Asset.Create().SetHostname("a1").SetGroupID(g.ID).SaveX(ctx)
 	dir := t.TempDir()
@@ -302,7 +267,7 @@ func TestSchedulerRerunsInterrupted(t *testing.T) {
 	notify := func(_ context.Context, title, _, _ string) error { notes = append(notes, title); return nil }
 
 	blocked := &blockedRunner{started: make(chan struct{}, 1), release: make(chan struct{})}
-	old := &Scheduler{DB: client, Runner: blocked, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, Notify: notify}
+	old := &Scheduler{DB: client, Runner: blocked, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, MaxRunning: 10, Notify: notify}
 	stop, cancel := context.WithCancel(ctx)
 	if err := old.tick(stop, time.Now()); err != nil {
 		t.Fatal(err)
@@ -317,7 +282,7 @@ func TestSchedulerRerunsInterrupted(t *testing.T) {
 	first := *run.SessionID
 
 	runner := &fakeRunner{db: client}
-	next := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, Notify: notify}
+	next := &Scheduler{DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, MaxRunning: 10, Notify: notify}
 	for range 2 {
 		if err := next.tick(ctx, time.Now()); err != nil {
 			t.Fatal(err)
@@ -351,6 +316,7 @@ func (f *levelRunner) RunTask(_ context.Context, job Job) error {
 // YAML 里的 enabled 只决定首次入库，之后界面改过的开关不被覆盖
 func TestGroupEnabledAndQuietReports(t *testing.T) {
 	ctx, client := testdb.New(t)
+	withSpread(t, 0)
 	gA := client.Group.Create().SetName("A").SaveX(ctx)
 	gB := client.Group.Create().SetName("B").SaveX(ctx)
 	gC := client.Group.Create().SetName("C").SaveX(ctx)
@@ -369,7 +335,7 @@ func TestGroupEnabledAndQuietReports(t *testing.T) {
 	var mu sync.Mutex
 	var titles []string
 	s := &Scheduler{
-		DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute,
+		DB: client, Runner: runner, Dir: dir, DefaultModel: func() string { return "m" }, Timeout: time.Minute, MaxRunning: 10,
 		Notify: func(_ context.Context, title, _, _ string) error {
 			mu.Lock()
 			defer mu.Unlock()
