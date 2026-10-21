@@ -1,0 +1,32 @@
+title: Built-in Scheduled Task Hijacked
+id: 7a7cfac9-0a63-4058-b461-706a958ffaec
+status: experimental
+description: |
+  检测系统自带计划任务（Tasks\Microsoft\Windows\ 下）的动作被改：新动作的
+  程序不在 Windows 目录（或 Defender 平台目录）下，或是 PowerShell / mshta /
+  wscript / cmd 等解释器，或引用用户可写目录、URL。改已有系统任务比新建
+  任务隐蔽，任务名与作者都是系统原样（T1053.005）。系统维护只改触发器和
+  状态，动作不变。依赖 agent 在动作变化时带的 task.prev_actions（前后两次
+  都读到了任务 XML），旧版 agent 不会命中。
+tags:
+  - attack.execution
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1053.005
+logsource:
+  category: file_event
+  product: windows
+detection:
+  builtin:
+    TargetFilename|startswith: 'C:\Windows\System32\Tasks\Microsoft\Windows\'
+  modified:
+    activity_id: 3
+  actions_unchanged:
+    task.prev_actions: null
+  # 每一行动作都是 Windows 目录 / Defender 平台目录下的程序或 COM 处理器
+  all_in_windows:
+    task.actions|re: '^(("?(%windir%|%systemroot%|c:\\windows|(%programdata%|c:\\programdata)\\microsoft\\windows defender\\platform)\\[^\n]*|com:[^\n]*)(\n|$))*$'
+  suspicious:
+    task.actions|re: '(\bpowershell|\bpwsh|\bmshta|\bwscript|\bcscript|\bcmd(\.exe)?\s|\bregsvr32|\\users\\|\\temp\\|\\appdata\\|%temp%|%appdata%|%localappdata%|%userprofile%|%public%|https?://)'
+  condition: builtin and modified and not actions_unchanged and (not all_in_windows or suspicious)
+level: high

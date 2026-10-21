@@ -1,0 +1,37 @@
+title: Built-in Windows Service Hijacked
+id: aea20444-b971-4626-b622-774b368e2ac2
+status: experimental
+description: |
+  检测内置服务（改前 ImagePath 在 Windows 目录下）被换了执行目标：
+  ImagePath 改到 Windows 目录外、或改成命令解释器 / 脚本宿主 / 用户可写目录，
+  或 ServiceDll、FailureCommand 被改。劫持已有的系统服务比新建服务隐蔽，
+  服务名、描述都是系统原样（T1543.003）。系统维护只翻启动类型和运行状态，
+  不动执行目标；驱动更新换 DriverStore 目录仍在 System32 下，不报。
+  依赖 agent 修改事件里的 reg_value.prev_data / changed，旧版 agent 不会命中
+  （其修改事件由 Windows Service Installed or Execution Target Changed 报 medium）。
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.t1543.003
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  services:
+    TargetObject|startswith: 'HKLM\SYSTEM\CurrentControlSet\Services\'
+  modified:
+    activity_id: 3
+  builtin:
+    reg_value.prev_data|re: '^ImagePath="?(%systemroot%|%windir%|c:\\windows|\\systemroot|system32)\\'
+  image_changed:
+    reg_value.changed|contains: 'ImagePath'
+  image_in_windows:
+    Details|re: '^ImagePath="?(%systemroot%|%windir%|c:\\windows|\\systemroot|system32)\\'
+  image_suspicious:
+    Details|re: '^ImagePath=[^;]*(\bpowershell|\bpwsh|\bmshta|\bwscript|\bcscript|\bcmd(\.exe)?\s|\brundll32|\bregsvr32|\\users\\|\\temp\\|\\appdata\\|\\programdata\\|https?://)'
+  dll_or_failure_changed:
+    reg_value.changed|contains:
+      - 'ServiceDll'
+      - 'FailureCommand'
+  condition: services and modified and builtin and ((image_changed and (not image_in_windows or image_suspicious)) or dll_or_failure_changed)
+level: high

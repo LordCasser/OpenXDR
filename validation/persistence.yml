@@ -46,8 +46,8 @@ cases:
         cmd_line: '"C:\Windows\System32\reg.exe" add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v Atomic /t REG_SZ /d "C:\evil.exe" /f'
 
   - name: 新服务安装（服务快照 diff 出的新增）
-    technique: T1543.001
-    source: atomic T1543.001
+    technique: T1543.003
+    source: atomic T1543.003
     class: 201002
     os: windows
     event:
@@ -57,17 +57,108 @@ cases:
       reg_value:
         data: "ImagePath=C:\\Users\\Public\\evil.exe; Start=2"
 
-  - name: 已有服务 ImagePath 被篡改
-    technique: T1543.001
-    source: atomic T1543.001
+  - name: 已有服务 ImagePath 被篡改（旧版 agent，修改事件不带旧值）
+    technique: T1543.003
+    source: atomic T1543.003
     class: 201002
     os: windows
+    level: medium
     event:
       activity_id: 3
       reg_key:
         path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\WaaSMedicSvc"
       reg_value:
         data: "ImagePath=C:\\Users\\Public\\evil.exe; Start=2"
+
+  - name: 内置服务 ImagePath 改成 PowerShell（sc config Fax binPath=）
+    technique: T1543.003
+    source: atomic T1543.003 #1
+    class: 201002
+    os: windows
+    level: high
+    event:
+      activity_id: 3
+      reg_key:
+        path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Fax"
+      reg_value:
+        data: "ImagePath=C:\\windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe -noexit -c \"write-host 'T1543.003 Test'\"; Start=3; State=Stopped"
+        prev_data: "ImagePath=%systemroot%\\system32\\fxssvc.exe; Start=3; State=Stopped"
+        changed: "ImagePath"
+
+  - name: 内置服务 ImagePath 指向用户目录（sc config wuauserv binPath=）
+    technique: T1543.003
+    source: atomic T1543.003 同手法，目标换成 C:\Users\Public
+    class: 201002
+    os: windows
+    level: high
+    event:
+      activity_id: 3
+      reg_key:
+        path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\wuauserv"
+      reg_value:
+        data: "ImagePath=C:\\Users\\Public\\x.exe; ServiceDll=%systemroot%\\system32\\wuaueng.dll; Start=3; State=Stopped"
+        prev_data: "ImagePath=%systemroot%\\system32\\svchost.exe -k netsvcs -p; ServiceDll=%systemroot%\\system32\\wuaueng.dll; Start=3; State=Stopped"
+        changed: "ImagePath"
+
+  - name: svchost 服务的 ServiceDll 被换（ImagePath 不变）
+    technique: T1543.003
+    source: "T1543.003 ServiceDll 劫持（reg add …\\Parameters /v ServiceDll）"
+    class: 201002
+    os: windows
+    level: high
+    event:
+      activity_id: 3
+      reg_key:
+        path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\IKEEXT"
+      reg_value:
+        data: "ImagePath=%systemroot%\\system32\\svchost.exe -k netsvcs -p; ServiceDll=C:\\Users\\Public\\evil.dll; Start=3; State=Stopped"
+        prev_data: "ImagePath=%systemroot%\\system32\\svchost.exe -k netsvcs -p; ServiceDll=%SystemRoot%\\System32\\ikeext.dll; Start=3; State=Stopped"
+        changed: "ServiceDll"
+
+  - name: BITS 按需起停（启动类型与运行状态一起翻，良性对照）
+    technique: T1543.003
+    source: 生产测试机 OPENXDR-TESTWIN 2026-10-20，每 15 分钟一次
+    class: 201002
+    os: windows
+    expect: undetected
+    event:
+      activity_id: 3
+      reg_key:
+        path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\BITS"
+      reg_value:
+        data: "ImagePath=%SystemRoot%\\System32\\svchost.exe -k netsvcs -p; ServiceDll=%SystemRoot%\\System32\\qmgr.dll; Start=2; State=Running"
+        prev_data: "ImagePath=%SystemRoot%\\System32\\svchost.exe -k netsvcs -p; ServiceDll=%SystemRoot%\\System32\\qmgr.dll; Start=3; State=Stopped"
+        changed: "Start,State"
+
+  - name: wuauserv 被系统停止（只有运行状态变，良性对照）
+    technique: T1543.003
+    source: 生产测试机 OPENXDR-TESTWIN 2026-10-20
+    class: 201002
+    os: windows
+    expect: undetected
+    event:
+      activity_id: 3
+      reg_key:
+        path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\wuauserv"
+      reg_value:
+        data: "ImagePath=%systemroot%\\system32\\svchost.exe -k netsvcs -p; ServiceDll=%systemroot%\\system32\\wuaueng.dll; Start=3; State=Stopped"
+        prev_data: "ImagePath=%systemroot%\\system32\\svchost.exe -k netsvcs -p; ServiceDll=%systemroot%\\system32\\wuaueng.dll; Start=3; State=Running"
+        changed: "State"
+
+  - name: Defender 平台更新挪驱动目录（执行目标仍在 System32，留 medium 不升 high）
+    technique: T1543.003
+    source: 生产测试机 OPENXDR-TESTWIN 2026-10-20 WdNisDrv
+    class: 201002
+    os: windows
+    level: medium
+    event:
+      activity_id: 3
+      reg_key:
+        path: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\WdNisDrv"
+      reg_value:
+        data: "ImagePath=system32\\drivers\\wd\\WdNisDrv.sys; Start=3; State=Stopped"
+        prev_data: "ImagePath=system32\\Drivers\\WdNisDrv.sys; Start=3; State=Stopped"
+        changed: "ImagePath"
 
   - name: IFEO Debugger 劫持（快照 diff 注册表事件）
     technique: T1546.012

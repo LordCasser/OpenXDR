@@ -6,6 +6,9 @@ description: |
   补 schtasks 进程视角规则的盲区：攻击者直接写任务文件（或经
   schtasks /xml、COM 接口建任务）同样落盘在这里，但不留可疑命令行。
   只报增(1)/改(3)；删除归 "Persistence File Deleted" 规则。
+  系统自带任务（Tasks\Microsoft\Windows\ 下）的修改不在这条：Windows 更新
+  与维护一夜改几十次它们的触发器，降为 low 的 "Built-in Scheduled Task Modified"；
+  动作被换成系统目录外的程序或脚本解释器由 "Built-in Scheduled Task Hijacked" 报 high。
 tags:
   - attack.execution
   - attack.persistence
@@ -17,9 +20,11 @@ logsource:
 detection:
   task_dir:
     TargetFilename|startswith: 'C:\Windows\System32\Tasks\'
-  write_op:
-    activity_id:
-      - 1
-      - 3
-  condition: task_dir and write_op
+  created:
+    activity_id: 1
+  modified:
+    activity_id: 3
+  builtin:
+    TargetFilename|startswith: 'C:\Windows\System32\Tasks\Microsoft\Windows\'
+  condition: task_dir and (created or (modified and not builtin))
 level: medium

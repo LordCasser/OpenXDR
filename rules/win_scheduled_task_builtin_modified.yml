@@ -1,0 +1,22 @@
+title: Built-in Scheduled Task Modified
+id: 73f85f2c-fb70-48f8-a7c6-b471107a4768
+status: experimental
+description: |
+  系统自带计划任务（Tasks\Microsoft\Windows\ 下）的任务文件被修改。
+  UpdateOrchestrator、SoftwareProtectionPlatform 等任务每次维护都会重写
+  触发器与状态，测试机一夜几十次，单发没有信号价值，只留 low 供同主机
+  其他告警佐证。动作被换成系统目录外的程序或脚本解释器另由
+  "Built-in Scheduled Task Hijacked" 报 high。
+tags:
+  - attack.persistence
+  - attack.t1053.005
+logsource:
+  category: file_event
+  product: windows
+detection:
+  builtin:
+    TargetFilename|startswith: 'C:\Windows\System32\Tasks\Microsoft\Windows\'
+  modified:
+    activity_id: 3
+  condition: builtin and modified
+level: low

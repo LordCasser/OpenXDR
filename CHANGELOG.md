@@ -36,6 +36,20 @@
   （成功登录不可见时后者兜底）。生产 7 天无一次失败登录，回测 0 次。三条信号 7 天共写候选 1854 条，单实体窗口峰值 122 条，
   离候选上限很远。按父进程分组评估后仍不做，数据见 [temporal-rules/README.md](temporal-rules/README.md)。
 - backtest 时序模式先提交只读事务再喂入回放状态：副本冲突在提交时才报时，整段重试会重复喂入并误报「未按 (时间, ID) 递增」。
+- Windows 自身维护不再刷服务与计划任务告警（测试机一夜 140 多条并进一个 incident 反复重研判）：
+  - 「Windows Service Installed or Tampered」改名「Windows Service Installed or Execution Target Changed」：新建服务照报，
+    修改只报换了执行目标（ImagePath / ServiceDll / FailureCommand）的，启动类型、运行状态的翻转不报（停安全服务仍由
+    Security Service Stopped 报）。旧版 agent 的修改事件说不清改了什么，照旧全报，升级 agent 后才降噪。
+  - 新增「Built-in Windows Service Hijacked」（high）：改前 ImagePath 在 Windows 目录下的服务，ImagePath 被改到 Windows 目录外
+    或改成 PowerShell / cmd / mshta 等解释器、用户可写目录，或 ServiceDll、FailureCommand 被改。
+  - 「Scheduled Task File Created or Modified」不再报系统自带任务（`Tasks\Microsoft\Windows\`）的修改，新增
+    「Built-in Scheduled Task Modified」（low）接住；新增「Built-in Scheduled Task Hijacked」（high）：自带任务的动作被换成
+    Windows / Defender 平台目录外的程序、解释器、用户目录或 URL。新建与删除照旧。
+  - 服务规则的 ATT&CK 标注从 T1543.001（macOS Launch Agent）更正为 T1543.003。
+  - 生产 7 天回测（OPENXDR-TESTWIN）：计划任务 medium 246 → 39（全是新建），207 条维护修改降为 low；服务规则在现存（旧版 agent）
+    事件上仍是 681，按旧值还原出新版 agent 的事件再求值为 7（5 次新建 + Defender 更新挪了 2 个服务的路径）；两条 high 均 0 次。
+    回放里的 `sc.exe create`、`schtasks /create`、直接写 `Tasks\atomic` 仍命中。
+  - detectcheck 用例可写 `level`：命中规则的最高级别必须正好是它，守住「维护是 low、劫持是 high」。
 
 ### 资产图谱
 
@@ -65,6 +79,9 @@
 
 ### 采集
 
+- agent（Windows）：服务快照加上 ServiceDll（`Parameters\ServiceDll`）与 FailureCommand，修改事件带旧值 `reg_value.prev_data`
+  与变了的字段 `reg_value.changed`；计划任务快照读任务 XML 的 Exec / ComHandler 动作，事件带 `task.actions`，动作变了的修改带
+  `task.prev_actions`。升级后首轮静默建基线，不会把存量服务按新格式报一遍修改。
 - 发版新增 arm64 的 Linux agent（静态链接，带 eBPF）与流量探针：`openxdr-agent-linux-arm64`、`openxdr-sensor-linux-arm64`
   随 server 镜像与 Release 附件分发，arm64 主机一行接入不再 404。CI 增加 arm64 的构建、clippy 与测试。
 - 采集活性检测：进程（ETW / eBPF / netlink）、网络（ETW / eBPF）、文件（fanotify / inotify / RDCW）三条通道记录最近一次收到原始事件的时刻，

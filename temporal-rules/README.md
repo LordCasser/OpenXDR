@@ -81,6 +81,8 @@
   这类安装一台机器一般只发生一次，需要时按主机与时间窗临时抑制，不建议整条关闭。
 - Windows 两条：certutil / bitsadmin / mshta 下载后写 Run / Winlogon 或新建/修改计划任务。注册表与计划任务来自
   persistwatch 30 秒一轮的快照，事件时间晚于真实写入，持久化在后、顺序不会反，15 分钟留出快照延迟。
+  `win_scheduled_task_file` 不含系统自带任务（`Tasks\Microsoft\Windows\`）的修改——Windows 维护每十几分钟就改一次，
+  会和任何下载凑成链；自带任务的动作被劫持由单事件规则 `win_scheduled_task_hijack` 报 high。
   已知误报：用 bitsadmin / certutil 分发软件的老式登录脚本随后写入自启动；正常软件安装写 Run 键不经 LOLBin，不会命中。
 
 ### 管道下载执行（兄弟进程）

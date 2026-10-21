@@ -87,7 +87,7 @@ cases:
 
   - name: 删除恶意服务（快照 diff 删除事件）
     technique: T1070
-    source: atomic T1543.001 反向操作
+    source: atomic T1543.003 反向操作
     class: 201002
     os: windows
     event:

@@ -105,15 +105,98 @@ cases:
       target_server: WIN-DC01
       process_name: "C:\\Windows\\System32\\net.exe"
 
-  - name: 计划任务文件被修改
+  - name: 第三方计划任务文件被修改
     technique: T1053.005
-    source: atomic T1053.005
+    source: atomic T1053.005（schtasks /create /f 覆盖同名任务）
     class: 1001
     os: windows
+    level: medium
+    event:
+      activity_id: 3
+      file:
+        path: "C:\\Windows\\System32\\Tasks\\atomic"
+      task:
+        actions: "C:\\evil.exe"
+
+  - name: 系统自带任务被修改（旧版 agent 不带动作，降为 low）
+    technique: T1053.005
+    source: 生产测试机 OPENXDR-TESTWIN 2026-10-20 维护
+    class: 1001
+    os: windows
+    level: low
     event:
       activity_id: 3
       file:
         path: "C:\\Windows\\System32\\Tasks\\Microsoft\\Windows\\UpdateOrchestrator\\Reboot"
+
+  - name: 系统自带任务被维护改写、动作不变（降为 low）
+    technique: T1053.005
+    source: 生产测试机 OPENXDR-TESTWIN 2026-10-20，一夜 40 余次
+    class: 1001
+    os: windows
+    level: low
+    event:
+      activity_id: 3
+      file:
+        path: "C:\\Windows\\System32\\Tasks\\Microsoft\\Windows\\UpdateOrchestrator\\Schedule Scan"
+      task:
+        actions: "%systemroot%\\system32\\usoclient.exe StartScan"
+
+  - name: Defender 平台更新换了任务动作的版本目录（降为 low，不升 high）
+    technique: T1053.005
+    source: 生产测试机 OPENXDR-TESTWIN 2026-10-20 Defender 平台更新
+    class: 1001
+    os: windows
+    level: low
+    event:
+      activity_id: 3
+      file:
+        path: "C:\\Windows\\System32\\Tasks\\Microsoft\\Windows\\Windows Defender\\Windows Defender Scheduled Scan"
+      task:
+        actions: "C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\4.18.26090.9-0\\MpCmdRun.exe Scan -ScheduleJob -ScanTrigger 55 -IdleScheduledJob"
+        prev_actions: "C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\4.18.25080.5-0\\MpCmdRun.exe Scan -ScheduleJob -ScanTrigger 55 -IdleScheduledJob"
+
+  - name: 系统自带任务动作被换成 PowerShell 编码命令（schtasks /change /tr）
+    technique: T1053.005
+    source: "T1053.005 改已有任务（schtasks /change /tn \\Microsoft\\Windows\\UpdateOrchestrator\\Schedule Scan /tr \"powershell -enc …\"）"
+    class: 1001
+    os: windows
+    level: high
+    event:
+      activity_id: 3
+      file:
+        path: "C:\\Windows\\System32\\Tasks\\Microsoft\\Windows\\UpdateOrchestrator\\Schedule Scan"
+      task:
+        actions: "powershell.exe -NoP -W Hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA"
+        prev_actions: "%systemroot%\\system32\\usoclient.exe StartScan"
+
+  - name: 系统自带任务动作被换成用户目录下的程序
+    technique: T1053.005
+    source: T1053.005 改已有任务（Set-ScheduledTask -Action (New-ScheduledTaskAction -Execute C:\Users\Public\x.exe)）
+    class: 1001
+    os: windows
+    level: high
+    event:
+      activity_id: 3
+      file:
+        path: "C:\\Windows\\System32\\Tasks\\Microsoft\\Windows\\SoftwareProtectionPlatform\\SvcRestartTask"
+      task:
+        actions: "C:\\Users\\Public\\x.exe"
+        prev_actions: "com:{B1AEBB5D-EAD9-4476-B375-9C3ED9F32AFC}"
+
+  - name: 系统自带任务追加第二个动作（rundll32 加载用户目录 DLL）
+    technique: T1053.005
+    source: T1053.005 改已有任务（任务 XML 多个 Exec）
+    class: 1001
+    os: windows
+    level: high
+    event:
+      activity_id: 3
+      file:
+        path: "C:\\Windows\\System32\\Tasks\\Microsoft\\Windows\\UpdateOrchestrator\\Schedule Scan"
+      task:
+        actions: "%systemroot%\\system32\\usoclient.exe StartScan\n%windir%\\system32\\rundll32.exe C:\\Users\\Public\\x.dll,Start"
+        prev_actions: "%systemroot%\\system32\\usoclient.exe StartScan"
 
   - name: Tasks 同名前缀目录（路径边界对照，不该命中）
     technique: T1053.005
