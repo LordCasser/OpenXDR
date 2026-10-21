@@ -32,10 +32,22 @@ const INCIDENT_STATUS: Record<string, { key: MsgKey; color: string }> = {
   false_positive: { key: 'statusFalsePositive', color: 'green' },
 }
 
-export function IncidentStatusTag({ value }: { value: string }) {
+// 已研判之后又并入新证据：结论还没看过它们，状态旁另挂一个标
+const RETRIAGE: Record<string, { key: MsgKey; hint: MsgKey; color: string }> = {
+  pending: { key: 'retriagePending', hint: 'retriagePendingHint', color: 'cyan' },
+  urgent: { key: 'retriageUrgent', hint: 'retriageUrgentHint', color: 'volcano' },
+}
+
+export function IncidentStatusTag({ value, retriage }: { value: string; retriage?: string }) {
   const { t } = useI18n()
   const s = INCIDENT_STATUS[value]
-  return <Tag color={s?.color}>{s ? t(s.key) : value}</Tag>
+  const r = retriage ? RETRIAGE[retriage] : undefined
+  return (
+    <>
+      <Tag color={s?.color}>{s ? t(s.key) : value}</Tag>
+      {r && <Tooltip title={t(r.hint)}><Tag color={r.color}>{t(r.key)}</Tag></Tooltip>}
+    </>
+  )
 }
 
 export const INCIDENT_STATUSES = Object.keys(INCIDENT_STATUS)

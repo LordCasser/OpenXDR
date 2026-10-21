@@ -215,7 +215,7 @@ export function OverviewPage() {
                 columns={[
                   { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
                   { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: (v, r) => <Link to={`/incidents/${r.id}`}>{v ?? r.id}</Link> },
-                  { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <IncidentStatusTag value={v} /> },
+                  { title: t('thStatus'), dataIndex: 'status', width: 100, render: (v, r) => <Space size={4} wrap><IncidentStatusTag value={v} retriage={r.retriage} /></Space> },
                   { responsive: WIDE_ONLY, title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
                   { responsive: WIDE_ONLY, title: t('thCreatedAt'), dataIndex: 'createdAt', width: 110, render: v => <Ago iso={v} /> },
                 ]}

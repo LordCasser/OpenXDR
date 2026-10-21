@@ -130,9 +130,9 @@ export function IncidentDetailPage() {
   return (
     <Page
       crumb={inc.title ?? inc.id}
-      title={<Space align={wide ? "center" : "start"}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} />{wide && <SeverityTag value={inc.severity} />}{inc.title ?? inc.id}{wide && <IncidentStatusTag value={inc.status} />}</Space>}
+      title={<Space align={wide ? "center" : "start"}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} />{wide && <SeverityTag value={inc.severity} />}{inc.title ?? inc.id}{wide && <IncidentStatusTag value={inc.status} retriage={inc.retriage} />}</Space>}
       // 窄屏标题会折行，级别与状态挪到标题下面一行，不夹在折行的标题中间
-      subtitle={!wide && <Space size={4} style={{ marginLeft: 40 }}><SeverityTag value={inc.severity} /><IncidentStatusTag value={inc.status} /></Space>}
+      subtitle={!wide && <Space size={4} style={{ marginLeft: 40 }}><SeverityTag value={inc.severity} /><IncidentStatusTag value={inc.status} retriage={inc.retriage} /></Space>}
       extra={
         <>
           {queue.index >= 0 && (
@@ -249,7 +249,9 @@ export function IncidentDetailPage() {
             <Card title={t('basicInfo')}>
               <Descriptions column={1} size="small">
                 <Descriptions.Item label="ID"><Typography.Text className="mono" copyable ellipsis style={{ maxWidth: 220 }}>{inc.id}</Typography.Text></Descriptions.Item>
-                <Descriptions.Item label={t('thStatus')}><IncidentStatusTag value={inc.status} /></Descriptions.Item>
+                <Descriptions.Item label={t('thStatus')}><Space size={4} wrap><IncidentStatusTag value={inc.status} retriage={inc.retriage} /></Space></Descriptions.Item>
+                {inc.triagedAt && <Descriptions.Item label={t('lastTriaged')}>{fmtTime(inc.triagedAt)} · {t('triageRounds', { n: inc.triageCount })}</Descriptions.Item>}
+                {!!inc.triageFailures && <Descriptions.Item label={t('triageFailed')}>{t('triageFailedDetail', { n: inc.triageFailures, at: fmtTime(inc.triageRetryAt) })}</Descriptions.Item>}
                 <Descriptions.Item label={t('thSeverity')}><SeverityTag value={inc.severity} /></Descriptions.Item>
                 <Descriptions.Item label={t('thCreatedAt')}>{fmtTime(inc.createdAt)}</Descriptions.Item>
                 <Descriptions.Item label={t('thAlerts')}>{inc.alerts.length}</Descriptions.Item>

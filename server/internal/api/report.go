@@ -13,6 +13,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/ent/alert"
 	entcommand "openxdr/server/ent/command"
+	"openxdr/server/internal/review"
 	"openxdr/server/internal/sigma"
 )
 
@@ -63,7 +64,15 @@ var verdictName = map[string]string{
 }
 
 var statusName = map[string]string{
-	"open": "待研判", "triaged": "已研判", "closed": "已关闭", "false_positive": "误报",
+	"open": "待研判", "triaged": "已研判", "retriage": "已研判（之后有新证据，待重研判）", "closed": "已关闭", "false_positive": "误报",
+}
+
+// reportStatus 已研判但之后又有新证据的，报告里写明结论还没看过新证据
+func reportStatus(inc *ent.Incident) string {
+	if review.IsRetriage(inc) {
+		return "retriage"
+	}
+	return inc.Status
 }
 
 // renderReport 生成事件报告。给人看的东西，字段顺序按汇报时的阅读顺序排：
@@ -229,7 +238,7 @@ func collectReport(r *http.Request, db *ent.Client, rules sigma.Catalog, id uuid
 	}
 
 	d := reportData{
-		ID: inc.ID, CreatedAt: inc.CreatedAt, Status: inc.Status,
+		ID: inc.ID, CreatedAt: inc.CreatedAt, Status: reportStatus(inc),
 	}
 	if inc.Title != nil {
 		d.Title = *inc.Title

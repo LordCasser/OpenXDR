@@ -85,7 +85,10 @@ CREATE OR REPLACE VIEW :"schema".alert_events WITH (security_barrier) AS
 
 -- incident：与 REST 接口同一口径，全部告警都落在本组资产上才可见，跨组的不给
 CREATE OR REPLACE VIEW :"schema".incidents WITH (security_barrier) AS
-  SELECT i.id, i.created_at, i.status, i.title, i.ai_verdict, i.graph
+  SELECT i.id, i.created_at, i.status, i.title, i.ai_verdict, i.graph, i.triaged_at, i.triage_count,
+         CASE WHEN i.status <> 'triaged' THEN NULL
+              WHEN i.urgent_at > COALESCE(i.triaged_at, '-infinity') THEN 'urgent'
+              WHEN i.evidence_at > COALESCE(i.triaged_at, '-infinity') THEN 'pending' END AS retriage
   FROM public.incidents i
   WHERE EXISTS (SELECT 1 FROM public.alerts a WHERE a.incident_id = i.id)
     AND NOT EXISTS (
@@ -136,7 +139,7 @@ COMMENT ON VIEW :"schema".assets IS '本组资产';
 COMMENT ON VIEW :"schema".events IS '本组原始事件（OCSF 风格，raw 为 JSON）；查询务必带 ts 范围';
 COMMENT ON VIEW :"schema".alerts IS '本组告警（去重后，count 为累计次数）';
 COMMENT ON VIEW :"schema".alert_events IS '本组告警连同触发它的原始事件（event_ts、class_uid、raw）；按 incident_id、rule_id、alert_id 过滤';
-COMMENT ON VIEW :"schema".incidents IS '本组 incident（全部告警都在本组）';
+COMMENT ON VIEW :"schema".incidents IS '本组 incident（全部告警都在本组）；status=triaged 时 retriage 为 pending 表示研判之后又并入了新证据、待冷却到期重研判，urgent 表示升级类证据、立即重研判，ai_verdict 尚未看过这些证据';
 COMMENT ON VIEW :"schema".commands IS '本组处置与命令执行记录';
 COMMENT ON VIEW :"schema".findings IS '本组运维待办（track 登记的问题，status 为 open / resolved / ignored）';
 COMMENT ON VIEW :"schema".suppressions IS '本组主机上的抑制规则（status：active 生效 / proposed 待批 / rejected 已拒绝）';

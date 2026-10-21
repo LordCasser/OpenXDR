@@ -79,6 +79,13 @@ type incidentSummary struct {
 	ResolvedAt *time.Time `json:"resolvedAt"`
 	// ClosureProposal AI 的结案建议，人采纳或忽略
 	ClosureProposal *schema.ClosureProposal `json:"closureProposal"`
+	// 研判节奏：上次研判时刻与累计次数；Retriage 为 pending（有新证据，冷却到期重研判）或 urgent（升级类，立即重研判），空为无
+	TriagedAt   *time.Time `json:"triagedAt"`
+	TriageCount int        `json:"triageCount"`
+	Retriage    string     `json:"retriage,omitempty"`
+	// 研判连续失败次数与下次重试时刻
+	TriageFailures int        `json:"triageFailures,omitempty"`
+	TriageRetryAt  *time.Time `json:"triageRetryAt,omitempty"`
 }
 
 type alertRow struct {
@@ -452,7 +459,19 @@ func summarize(inc *ent.Incident, alertCount int, severity int16) incidentSummar
 		Title: inc.Title, AiVerdict: inc.AiVerdict, AlertCount: alertCount,
 		Severity: severity, Resolution: inc.Resolution, ResolvedBy: inc.ResolvedBy, ResolvedAt: inc.ResolvedAt,
 		ClosureProposal: inc.ClosureProposal,
+		TriagedAt:       inc.TriagedAt, TriageCount: inc.TriageCount, Retriage: retriageOf(inc),
+		TriageFailures: inc.TriageFailures, TriageRetryAt: inc.TriageRetryAt,
 	}
+}
+
+func retriageOf(inc *ent.Incident) string {
+	switch {
+	case review.IsUrgent(inc):
+		return "urgent"
+	case review.IsRetriage(inc):
+		return "pending"
+	}
+	return ""
 }
 
 // incidentGroups 各 incident 第一条有归属资产的告警所在资产的组。

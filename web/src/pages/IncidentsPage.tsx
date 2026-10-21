@@ -218,7 +218,7 @@ export function IncidentsPage() {
               { responsive: WIDE_ONLY, title: t('group'), dataIndex: 'groupId', width: 140, ellipsis: true, render: v => groups.find(g => g.id === v)?.name ?? '-' },
               {
                 title: t('thStatus'), dataIndex: 'status', width: 130,
-                render: (v, r) => <Space size={4} wrap><IncidentStatusTag value={v} />{r.closureProposal && <Tag color="purple" variant="filled">{t('proposalTag')}</Tag>}</Space>,
+                render: (v, r) => <Space size={4} wrap><IncidentStatusTag value={v} retriage={r.retriage} />{r.closureProposal && <Tag color="purple" variant="filled">{t('proposalTag')}</Tag>}</Space>,
               },
               { responsive: WIDE_ONLY, title: t('thVerdict'), width: 150, render: (_, r) => <VerdictBadge row={r} /> },
               { responsive: WIDE_ONLY, title: t('thAlerts'), dataIndex: 'alertCount', width: 80, align: 'right' },
