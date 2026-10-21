@@ -8,10 +8,19 @@ pub mod pb {
     tonic::include_proto!("openxdr.agent.v1");
 }
 
+// 全 crate 的 eprintln! 走统一日志出口（见 log.rs）：同名宏按文本作用域盖住 std 的，调用点不用改。
+// 必须定义在所有 mod 之前，后面声明的模块才看得见
+macro_rules! eprintln {
+    ($($arg:tt)*) => {
+        $crate::log::line(format_args!($($arg)*))
+    };
+}
+
 mod collector;
 mod delivery;
 mod enroll;
 mod health;
+mod log;
 mod process_identity;
 mod receipts;
 mod respond;
@@ -35,6 +44,13 @@ fn main() {
             }
         }
         _ => {
+            #[cfg(windows)]
+            log::to_file();
+            eprintln!(
+                "openxdr-agent {} 启动，程序哈希 {}",
+                env!("CARGO_PKG_VERSION"),
+                upgrade::self_sha256().get(..12).unwrap_or("未知")
+            );
             enroll::load_env_file(&enroll::default_env_file());
             agent();
         }
@@ -69,6 +85,15 @@ async fn agent() {
         };
         match registration {
             Ok((mut client, session)) => {
+                eprintln!(
+                    "已注册：{}{}",
+                    session.agent_id,
+                    if session.upgrade_sha256.is_empty() {
+                        ""
+                    } else {
+                        "，分发版本不同，开始自动升级"
+                    }
+                );
                 if identity.as_ref().is_some_and(|id| id != &session.agent_id) {
                     // 旧身份的缓存移进隔离区后退出一次，由服务管理器以新身份拉起，不陷入重启循环
                     let retired = delivery::access(&queue, |spool| spool.retire_identity()).await;
@@ -208,7 +233,7 @@ async fn finish(
     };
     match result {
         Ok(()) => {
-            eprintln!("采集入口已关闭，已接收事件落盘完成；未确认批次留待下次补传");
+            eprintln!("采集入口已关闭，已接收事件落盘完成；未确认批次留待下次补传。退出码 {code}");
             std::process::exit(code);
         }
         Err(err) => exit(&format!(
@@ -395,7 +420,7 @@ async fn run_command(
         }
     }
     let result = respond::execute(&agent_id, &cmd).await;
-    println!("执行指令 {}: {}", cmd.id, result.detail);
+    eprintln!("执行指令 {}: {}", cmd.id, result.detail);
     loop {
         let retained = result.clone();
         match delivery::access(&queue, move |s| s.receipts.finish(retained)).await {
