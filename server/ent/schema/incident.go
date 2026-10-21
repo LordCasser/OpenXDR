@@ -11,7 +11,9 @@ import (
 )
 
 // Incident 事件：关联引擎聚合出的攻击故事，AI 研判的对象。
-// 状态机：open → triaged →（新证据）→ open → triaged；closed / false_positive 是分析师终态。
+// 状态机：open（还没有可用结论：新事件、分析师重开）→ triaged；closed / false_positive 是分析师终态。
+// 研判后再并入的新证据不改 status，记在 evidence_at / urgent_at，与 triaged_at 比较即知是否待重研判
+// （口径见 internal/review/retriage.go）：旧结论在重研判前继续有效，通知与列表不必卡在「待研判」。
 type Incident struct {
 	ent.Schema
 }
@@ -33,6 +35,16 @@ func (Incident) Fields() []ent.Field {
 		// 结案说明从哪来：空为人工写的；ai_verdict 人没写理由、采纳了 AI 研判；ai_proposal 原样采纳了 AI 结案建议。
 		// 后两种不是人的独立判断，不作为人工案例回喂研判
 		field.String("resolution_source").Optional().Nillable(),
+		// 最近一次完成研判时取上下文的时刻（之后进来的证据都没看过）与累计完成次数
+		field.Time("triaged_at").Optional().Nillable(),
+		field.Int("triage_count").Default(0),
+		// 关联引擎最近一次并入新证据的时刻（同实体同规则的重复不算）；晚于 triaged_at 即待重研判，冷却到期再研判
+		field.Time("evidence_at").Optional().Nillable(),
+		// 其中升级类证据（级别高于已有最高级别，或首次出现的高危例外规则）的时刻：晚于 triaged_at 即立即重研判，通知等新结论
+		field.Time("urgent_at").Optional().Nillable(),
+		// 研判连续失败次数与退避到期时刻：失败的只退避自己，不堵队首
+		field.Int("triage_failures").Default(0),
+		field.Time("triage_retry_at").Optional().Nillable(),
 		// AI 的结案建议：人在事件页一键采纳（结案仍记在人名下、照常作为人工案例回喂研判）或忽略。
 		// 任何状态变更都会清掉它
 		field.JSON("closure_proposal", &ClosureProposal{}).Optional(),

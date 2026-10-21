@@ -96,6 +96,36 @@ func ResolutionSource(v string) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldResolutionSource, v))
 }
 
+// TriagedAt applies equality check predicate on the "triaged_at" field. It's identical to TriagedAtEQ.
+func TriagedAt(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriagedAt, v))
+}
+
+// TriageCount applies equality check predicate on the "triage_count" field. It's identical to TriageCountEQ.
+func TriageCount(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageCount, v))
+}
+
+// EvidenceAt applies equality check predicate on the "evidence_at" field. It's identical to EvidenceAtEQ.
+func EvidenceAt(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldEvidenceAt, v))
+}
+
+// UrgentAt applies equality check predicate on the "urgent_at" field. It's identical to UrgentAtEQ.
+func UrgentAt(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldUrgentAt, v))
+}
+
+// TriageFailures applies equality check predicate on the "triage_failures" field. It's identical to TriageFailuresEQ.
+func TriageFailures(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageFailures, v))
+}
+
+// TriageRetryAt applies equality check predicate on the "triage_retry_at" field. It's identical to TriageRetryAtEQ.
+func TriageRetryAt(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageRetryAt, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldCreatedAt, v))
@@ -609,6 +639,286 @@ func ResolutionSourceEqualFold(v string) predicate.Incident {
 // ResolutionSourceContainsFold applies the ContainsFold predicate on the "resolution_source" field.
 func ResolutionSourceContainsFold(v string) predicate.Incident {
 	return predicate.Incident(sql.FieldContainsFold(FieldResolutionSource, v))
+}
+
+// TriagedAtEQ applies the EQ predicate on the "triaged_at" field.
+func TriagedAtEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriagedAt, v))
+}
+
+// TriagedAtNEQ applies the NEQ predicate on the "triaged_at" field.
+func TriagedAtNEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldTriagedAt, v))
+}
+
+// TriagedAtIn applies the In predicate on the "triaged_at" field.
+func TriagedAtIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldTriagedAt, vs...))
+}
+
+// TriagedAtNotIn applies the NotIn predicate on the "triaged_at" field.
+func TriagedAtNotIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldTriagedAt, vs...))
+}
+
+// TriagedAtGT applies the GT predicate on the "triaged_at" field.
+func TriagedAtGT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldTriagedAt, v))
+}
+
+// TriagedAtGTE applies the GTE predicate on the "triaged_at" field.
+func TriagedAtGTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldTriagedAt, v))
+}
+
+// TriagedAtLT applies the LT predicate on the "triaged_at" field.
+func TriagedAtLT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldTriagedAt, v))
+}
+
+// TriagedAtLTE applies the LTE predicate on the "triaged_at" field.
+func TriagedAtLTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldTriagedAt, v))
+}
+
+// TriagedAtIsNil applies the IsNil predicate on the "triaged_at" field.
+func TriagedAtIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldTriagedAt))
+}
+
+// TriagedAtNotNil applies the NotNil predicate on the "triaged_at" field.
+func TriagedAtNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldTriagedAt))
+}
+
+// TriageCountEQ applies the EQ predicate on the "triage_count" field.
+func TriageCountEQ(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageCount, v))
+}
+
+// TriageCountNEQ applies the NEQ predicate on the "triage_count" field.
+func TriageCountNEQ(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldTriageCount, v))
+}
+
+// TriageCountIn applies the In predicate on the "triage_count" field.
+func TriageCountIn(vs ...int) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldTriageCount, vs...))
+}
+
+// TriageCountNotIn applies the NotIn predicate on the "triage_count" field.
+func TriageCountNotIn(vs ...int) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldTriageCount, vs...))
+}
+
+// TriageCountGT applies the GT predicate on the "triage_count" field.
+func TriageCountGT(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldTriageCount, v))
+}
+
+// TriageCountGTE applies the GTE predicate on the "triage_count" field.
+func TriageCountGTE(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldTriageCount, v))
+}
+
+// TriageCountLT applies the LT predicate on the "triage_count" field.
+func TriageCountLT(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldTriageCount, v))
+}
+
+// TriageCountLTE applies the LTE predicate on the "triage_count" field.
+func TriageCountLTE(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldTriageCount, v))
+}
+
+// EvidenceAtEQ applies the EQ predicate on the "evidence_at" field.
+func EvidenceAtEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldEvidenceAt, v))
+}
+
+// EvidenceAtNEQ applies the NEQ predicate on the "evidence_at" field.
+func EvidenceAtNEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldEvidenceAt, v))
+}
+
+// EvidenceAtIn applies the In predicate on the "evidence_at" field.
+func EvidenceAtIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldEvidenceAt, vs...))
+}
+
+// EvidenceAtNotIn applies the NotIn predicate on the "evidence_at" field.
+func EvidenceAtNotIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldEvidenceAt, vs...))
+}
+
+// EvidenceAtGT applies the GT predicate on the "evidence_at" field.
+func EvidenceAtGT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldEvidenceAt, v))
+}
+
+// EvidenceAtGTE applies the GTE predicate on the "evidence_at" field.
+func EvidenceAtGTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldEvidenceAt, v))
+}
+
+// EvidenceAtLT applies the LT predicate on the "evidence_at" field.
+func EvidenceAtLT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldEvidenceAt, v))
+}
+
+// EvidenceAtLTE applies the LTE predicate on the "evidence_at" field.
+func EvidenceAtLTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldEvidenceAt, v))
+}
+
+// EvidenceAtIsNil applies the IsNil predicate on the "evidence_at" field.
+func EvidenceAtIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldEvidenceAt))
+}
+
+// EvidenceAtNotNil applies the NotNil predicate on the "evidence_at" field.
+func EvidenceAtNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldEvidenceAt))
+}
+
+// UrgentAtEQ applies the EQ predicate on the "urgent_at" field.
+func UrgentAtEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldUrgentAt, v))
+}
+
+// UrgentAtNEQ applies the NEQ predicate on the "urgent_at" field.
+func UrgentAtNEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldUrgentAt, v))
+}
+
+// UrgentAtIn applies the In predicate on the "urgent_at" field.
+func UrgentAtIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldUrgentAt, vs...))
+}
+
+// UrgentAtNotIn applies the NotIn predicate on the "urgent_at" field.
+func UrgentAtNotIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldUrgentAt, vs...))
+}
+
+// UrgentAtGT applies the GT predicate on the "urgent_at" field.
+func UrgentAtGT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldUrgentAt, v))
+}
+
+// UrgentAtGTE applies the GTE predicate on the "urgent_at" field.
+func UrgentAtGTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldUrgentAt, v))
+}
+
+// UrgentAtLT applies the LT predicate on the "urgent_at" field.
+func UrgentAtLT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldUrgentAt, v))
+}
+
+// UrgentAtLTE applies the LTE predicate on the "urgent_at" field.
+func UrgentAtLTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldUrgentAt, v))
+}
+
+// UrgentAtIsNil applies the IsNil predicate on the "urgent_at" field.
+func UrgentAtIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldUrgentAt))
+}
+
+// UrgentAtNotNil applies the NotNil predicate on the "urgent_at" field.
+func UrgentAtNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldUrgentAt))
+}
+
+// TriageFailuresEQ applies the EQ predicate on the "triage_failures" field.
+func TriageFailuresEQ(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageFailures, v))
+}
+
+// TriageFailuresNEQ applies the NEQ predicate on the "triage_failures" field.
+func TriageFailuresNEQ(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldTriageFailures, v))
+}
+
+// TriageFailuresIn applies the In predicate on the "triage_failures" field.
+func TriageFailuresIn(vs ...int) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldTriageFailures, vs...))
+}
+
+// TriageFailuresNotIn applies the NotIn predicate on the "triage_failures" field.
+func TriageFailuresNotIn(vs ...int) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldTriageFailures, vs...))
+}
+
+// TriageFailuresGT applies the GT predicate on the "triage_failures" field.
+func TriageFailuresGT(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldTriageFailures, v))
+}
+
+// TriageFailuresGTE applies the GTE predicate on the "triage_failures" field.
+func TriageFailuresGTE(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldTriageFailures, v))
+}
+
+// TriageFailuresLT applies the LT predicate on the "triage_failures" field.
+func TriageFailuresLT(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldTriageFailures, v))
+}
+
+// TriageFailuresLTE applies the LTE predicate on the "triage_failures" field.
+func TriageFailuresLTE(v int) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldTriageFailures, v))
+}
+
+// TriageRetryAtEQ applies the EQ predicate on the "triage_retry_at" field.
+func TriageRetryAtEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageRetryAt, v))
+}
+
+// TriageRetryAtNEQ applies the NEQ predicate on the "triage_retry_at" field.
+func TriageRetryAtNEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldTriageRetryAt, v))
+}
+
+// TriageRetryAtIn applies the In predicate on the "triage_retry_at" field.
+func TriageRetryAtIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldTriageRetryAt, vs...))
+}
+
+// TriageRetryAtNotIn applies the NotIn predicate on the "triage_retry_at" field.
+func TriageRetryAtNotIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldTriageRetryAt, vs...))
+}
+
+// TriageRetryAtGT applies the GT predicate on the "triage_retry_at" field.
+func TriageRetryAtGT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldTriageRetryAt, v))
+}
+
+// TriageRetryAtGTE applies the GTE predicate on the "triage_retry_at" field.
+func TriageRetryAtGTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldTriageRetryAt, v))
+}
+
+// TriageRetryAtLT applies the LT predicate on the "triage_retry_at" field.
+func TriageRetryAtLT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldTriageRetryAt, v))
+}
+
+// TriageRetryAtLTE applies the LTE predicate on the "triage_retry_at" field.
+func TriageRetryAtLTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldTriageRetryAt, v))
+}
+
+// TriageRetryAtIsNil applies the IsNil predicate on the "triage_retry_at" field.
+func TriageRetryAtIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldTriageRetryAt))
+}
+
+// TriageRetryAtNotNil applies the NotNil predicate on the "triage_retry_at" field.
+func TriageRetryAtNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldTriageRetryAt))
 }
 
 // ClosureProposalIsNil applies the IsNil predicate on the "closure_proposal" field.

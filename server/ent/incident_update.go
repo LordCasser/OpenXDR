@@ -211,6 +211,128 @@ func (_u *IncidentUpdate) ClearResolutionSource() *IncidentUpdate {
 	return _u
 }
 
+// SetTriagedAt sets the "triaged_at" field.
+func (_u *IncidentUpdate) SetTriagedAt(v time.Time) *IncidentUpdate {
+	_u.mutation.SetTriagedAt(v)
+	return _u
+}
+
+// SetNillableTriagedAt sets the "triaged_at" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableTriagedAt(v *time.Time) *IncidentUpdate {
+	if v != nil {
+		_u.SetTriagedAt(*v)
+	}
+	return _u
+}
+
+// ClearTriagedAt clears the value of the "triaged_at" field.
+func (_u *IncidentUpdate) ClearTriagedAt() *IncidentUpdate {
+	_u.mutation.ClearTriagedAt()
+	return _u
+}
+
+// SetTriageCount sets the "triage_count" field.
+func (_u *IncidentUpdate) SetTriageCount(v int) *IncidentUpdate {
+	_u.mutation.ResetTriageCount()
+	_u.mutation.SetTriageCount(v)
+	return _u
+}
+
+// SetNillableTriageCount sets the "triage_count" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableTriageCount(v *int) *IncidentUpdate {
+	if v != nil {
+		_u.SetTriageCount(*v)
+	}
+	return _u
+}
+
+// AddTriageCount adds value to the "triage_count" field.
+func (_u *IncidentUpdate) AddTriageCount(v int) *IncidentUpdate {
+	_u.mutation.AddTriageCount(v)
+	return _u
+}
+
+// SetEvidenceAt sets the "evidence_at" field.
+func (_u *IncidentUpdate) SetEvidenceAt(v time.Time) *IncidentUpdate {
+	_u.mutation.SetEvidenceAt(v)
+	return _u
+}
+
+// SetNillableEvidenceAt sets the "evidence_at" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableEvidenceAt(v *time.Time) *IncidentUpdate {
+	if v != nil {
+		_u.SetEvidenceAt(*v)
+	}
+	return _u
+}
+
+// ClearEvidenceAt clears the value of the "evidence_at" field.
+func (_u *IncidentUpdate) ClearEvidenceAt() *IncidentUpdate {
+	_u.mutation.ClearEvidenceAt()
+	return _u
+}
+
+// SetUrgentAt sets the "urgent_at" field.
+func (_u *IncidentUpdate) SetUrgentAt(v time.Time) *IncidentUpdate {
+	_u.mutation.SetUrgentAt(v)
+	return _u
+}
+
+// SetNillableUrgentAt sets the "urgent_at" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableUrgentAt(v *time.Time) *IncidentUpdate {
+	if v != nil {
+		_u.SetUrgentAt(*v)
+	}
+	return _u
+}
+
+// ClearUrgentAt clears the value of the "urgent_at" field.
+func (_u *IncidentUpdate) ClearUrgentAt() *IncidentUpdate {
+	_u.mutation.ClearUrgentAt()
+	return _u
+}
+
+// SetTriageFailures sets the "triage_failures" field.
+func (_u *IncidentUpdate) SetTriageFailures(v int) *IncidentUpdate {
+	_u.mutation.ResetTriageFailures()
+	_u.mutation.SetTriageFailures(v)
+	return _u
+}
+
+// SetNillableTriageFailures sets the "triage_failures" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableTriageFailures(v *int) *IncidentUpdate {
+	if v != nil {
+		_u.SetTriageFailures(*v)
+	}
+	return _u
+}
+
+// AddTriageFailures adds value to the "triage_failures" field.
+func (_u *IncidentUpdate) AddTriageFailures(v int) *IncidentUpdate {
+	_u.mutation.AddTriageFailures(v)
+	return _u
+}
+
+// SetTriageRetryAt sets the "triage_retry_at" field.
+func (_u *IncidentUpdate) SetTriageRetryAt(v time.Time) *IncidentUpdate {
+	_u.mutation.SetTriageRetryAt(v)
+	return _u
+}
+
+// SetNillableTriageRetryAt sets the "triage_retry_at" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableTriageRetryAt(v *time.Time) *IncidentUpdate {
+	if v != nil {
+		_u.SetTriageRetryAt(*v)
+	}
+	return _u
+}
+
+// ClearTriageRetryAt clears the value of the "triage_retry_at" field.
+func (_u *IncidentUpdate) ClearTriageRetryAt() *IncidentUpdate {
+	_u.mutation.ClearTriageRetryAt()
+	return _u
+}
+
 // SetClosureProposal sets the "closure_proposal" field.
 func (_u *IncidentUpdate) SetClosureProposal(v *schema.ClosureProposal) *IncidentUpdate {
 	_u.mutation.SetClosureProposal(v)
@@ -360,6 +482,42 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ResolutionSourceCleared() {
 		_spec.ClearField(incident.FieldResolutionSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.TriagedAt(); ok {
+		_spec.SetField(incident.FieldTriagedAt, field.TypeTime, value)
+	}
+	if _u.mutation.TriagedAtCleared() {
+		_spec.ClearField(incident.FieldTriagedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TriageCount(); ok {
+		_spec.SetField(incident.FieldTriageCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTriageCount(); ok {
+		_spec.AddField(incident.FieldTriageCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.EvidenceAt(); ok {
+		_spec.SetField(incident.FieldEvidenceAt, field.TypeTime, value)
+	}
+	if _u.mutation.EvidenceAtCleared() {
+		_spec.ClearField(incident.FieldEvidenceAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.UrgentAt(); ok {
+		_spec.SetField(incident.FieldUrgentAt, field.TypeTime, value)
+	}
+	if _u.mutation.UrgentAtCleared() {
+		_spec.ClearField(incident.FieldUrgentAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TriageFailures(); ok {
+		_spec.SetField(incident.FieldTriageFailures, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTriageFailures(); ok {
+		_spec.AddField(incident.FieldTriageFailures, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TriageRetryAt(); ok {
+		_spec.SetField(incident.FieldTriageRetryAt, field.TypeTime, value)
+	}
+	if _u.mutation.TriageRetryAtCleared() {
+		_spec.ClearField(incident.FieldTriageRetryAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ClosureProposal(); ok {
 		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)
@@ -610,6 +768,128 @@ func (_u *IncidentUpdateOne) ClearResolutionSource() *IncidentUpdateOne {
 	return _u
 }
 
+// SetTriagedAt sets the "triaged_at" field.
+func (_u *IncidentUpdateOne) SetTriagedAt(v time.Time) *IncidentUpdateOne {
+	_u.mutation.SetTriagedAt(v)
+	return _u
+}
+
+// SetNillableTriagedAt sets the "triaged_at" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableTriagedAt(v *time.Time) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetTriagedAt(*v)
+	}
+	return _u
+}
+
+// ClearTriagedAt clears the value of the "triaged_at" field.
+func (_u *IncidentUpdateOne) ClearTriagedAt() *IncidentUpdateOne {
+	_u.mutation.ClearTriagedAt()
+	return _u
+}
+
+// SetTriageCount sets the "triage_count" field.
+func (_u *IncidentUpdateOne) SetTriageCount(v int) *IncidentUpdateOne {
+	_u.mutation.ResetTriageCount()
+	_u.mutation.SetTriageCount(v)
+	return _u
+}
+
+// SetNillableTriageCount sets the "triage_count" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableTriageCount(v *int) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetTriageCount(*v)
+	}
+	return _u
+}
+
+// AddTriageCount adds value to the "triage_count" field.
+func (_u *IncidentUpdateOne) AddTriageCount(v int) *IncidentUpdateOne {
+	_u.mutation.AddTriageCount(v)
+	return _u
+}
+
+// SetEvidenceAt sets the "evidence_at" field.
+func (_u *IncidentUpdateOne) SetEvidenceAt(v time.Time) *IncidentUpdateOne {
+	_u.mutation.SetEvidenceAt(v)
+	return _u
+}
+
+// SetNillableEvidenceAt sets the "evidence_at" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableEvidenceAt(v *time.Time) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetEvidenceAt(*v)
+	}
+	return _u
+}
+
+// ClearEvidenceAt clears the value of the "evidence_at" field.
+func (_u *IncidentUpdateOne) ClearEvidenceAt() *IncidentUpdateOne {
+	_u.mutation.ClearEvidenceAt()
+	return _u
+}
+
+// SetUrgentAt sets the "urgent_at" field.
+func (_u *IncidentUpdateOne) SetUrgentAt(v time.Time) *IncidentUpdateOne {
+	_u.mutation.SetUrgentAt(v)
+	return _u
+}
+
+// SetNillableUrgentAt sets the "urgent_at" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableUrgentAt(v *time.Time) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetUrgentAt(*v)
+	}
+	return _u
+}
+
+// ClearUrgentAt clears the value of the "urgent_at" field.
+func (_u *IncidentUpdateOne) ClearUrgentAt() *IncidentUpdateOne {
+	_u.mutation.ClearUrgentAt()
+	return _u
+}
+
+// SetTriageFailures sets the "triage_failures" field.
+func (_u *IncidentUpdateOne) SetTriageFailures(v int) *IncidentUpdateOne {
+	_u.mutation.ResetTriageFailures()
+	_u.mutation.SetTriageFailures(v)
+	return _u
+}
+
+// SetNillableTriageFailures sets the "triage_failures" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableTriageFailures(v *int) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetTriageFailures(*v)
+	}
+	return _u
+}
+
+// AddTriageFailures adds value to the "triage_failures" field.
+func (_u *IncidentUpdateOne) AddTriageFailures(v int) *IncidentUpdateOne {
+	_u.mutation.AddTriageFailures(v)
+	return _u
+}
+
+// SetTriageRetryAt sets the "triage_retry_at" field.
+func (_u *IncidentUpdateOne) SetTriageRetryAt(v time.Time) *IncidentUpdateOne {
+	_u.mutation.SetTriageRetryAt(v)
+	return _u
+}
+
+// SetNillableTriageRetryAt sets the "triage_retry_at" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableTriageRetryAt(v *time.Time) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetTriageRetryAt(*v)
+	}
+	return _u
+}
+
+// ClearTriageRetryAt clears the value of the "triage_retry_at" field.
+func (_u *IncidentUpdateOne) ClearTriageRetryAt() *IncidentUpdateOne {
+	_u.mutation.ClearTriageRetryAt()
+	return _u
+}
+
 // SetClosureProposal sets the "closure_proposal" field.
 func (_u *IncidentUpdateOne) SetClosureProposal(v *schema.ClosureProposal) *IncidentUpdateOne {
 	_u.mutation.SetClosureProposal(v)
@@ -789,6 +1069,42 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if _u.mutation.ResolutionSourceCleared() {
 		_spec.ClearField(incident.FieldResolutionSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.TriagedAt(); ok {
+		_spec.SetField(incident.FieldTriagedAt, field.TypeTime, value)
+	}
+	if _u.mutation.TriagedAtCleared() {
+		_spec.ClearField(incident.FieldTriagedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TriageCount(); ok {
+		_spec.SetField(incident.FieldTriageCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTriageCount(); ok {
+		_spec.AddField(incident.FieldTriageCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.EvidenceAt(); ok {
+		_spec.SetField(incident.FieldEvidenceAt, field.TypeTime, value)
+	}
+	if _u.mutation.EvidenceAtCleared() {
+		_spec.ClearField(incident.FieldEvidenceAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.UrgentAt(); ok {
+		_spec.SetField(incident.FieldUrgentAt, field.TypeTime, value)
+	}
+	if _u.mutation.UrgentAtCleared() {
+		_spec.ClearField(incident.FieldUrgentAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TriageFailures(); ok {
+		_spec.SetField(incident.FieldTriageFailures, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTriageFailures(); ok {
+		_spec.AddField(incident.FieldTriageFailures, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TriageRetryAt(); ok {
+		_spec.SetField(incident.FieldTriageRetryAt, field.TypeTime, value)
+	}
+	if _u.mutation.TriageRetryAtCleared() {
+		_spec.ClearField(incident.FieldTriageRetryAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ClosureProposal(); ok {
 		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)

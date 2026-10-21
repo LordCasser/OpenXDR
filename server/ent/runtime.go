@@ -393,6 +393,14 @@ func init() {
 	incidentDescStatus := incidentFields[2].Descriptor()
 	// incident.DefaultStatus holds the default value on creation for the status field.
 	incident.DefaultStatus = incidentDescStatus.Default.(string)
+	// incidentDescTriageCount is the schema descriptor for triage_count field.
+	incidentDescTriageCount := incidentFields[12].Descriptor()
+	// incident.DefaultTriageCount holds the default value on creation for the triage_count field.
+	incident.DefaultTriageCount = incidentDescTriageCount.Default.(int)
+	// incidentDescTriageFailures is the schema descriptor for triage_failures field.
+	incidentDescTriageFailures := incidentFields[15].Descriptor()
+	// incident.DefaultTriageFailures holds the default value on creation for the triage_failures field.
+	incident.DefaultTriageFailures = incidentDescTriageFailures.Default.(int)
 	// incidentDescID is the schema descriptor for id field.
 	incidentDescID := incidentFields[0].Descriptor()
 	// incident.DefaultID holds the default value on creation for the id field.

@@ -706,6 +706,12 @@ var (
 		{Name: "resolved_by", Type: field.TypeString, Nullable: true},
 		{Name: "resolved_at", Type: field.TypeTime, Nullable: true},
 		{Name: "resolution_source", Type: field.TypeString, Nullable: true},
+		{Name: "triaged_at", Type: field.TypeTime, Nullable: true},
+		{Name: "triage_count", Type: field.TypeInt, Default: 0},
+		{Name: "evidence_at", Type: field.TypeTime, Nullable: true},
+		{Name: "urgent_at", Type: field.TypeTime, Nullable: true},
+		{Name: "triage_failures", Type: field.TypeInt, Default: 0},
+		{Name: "triage_retry_at", Type: field.TypeTime, Nullable: true},
 		{Name: "closure_proposal", Type: field.TypeJSON, Nullable: true},
 	}
 	// IncidentsTable holds the schema information for the "incidents" table.

@@ -20429,29 +20429,37 @@ func (m *IPInfoMutation) ResetEdge(name string) error {
 // IncidentMutation represents an operation that mutates the Incident nodes in the graph.
 type IncidentMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *uuid.UUID
-	created_at        *time.Time
-	status            *string
-	graph             *json.RawMessage
-	appendgraph       json.RawMessage
-	ai_verdict        *json.RawMessage
-	appendai_verdict  json.RawMessage
-	title             *string
-	notified_at       *time.Time
-	resolution        *string
-	resolved_by       *string
-	resolved_at       *time.Time
-	resolution_source *string
-	closure_proposal  **schema.ClosureProposal
-	clearedFields     map[string]struct{}
-	alerts            map[uuid.UUID]struct{}
-	removedalerts     map[uuid.UUID]struct{}
-	clearedalerts     bool
-	done              bool
-	oldValue          func(context.Context) (*Incident, error)
-	predicates        []predicate.Incident
+	op                 Op
+	typ                string
+	id                 *uuid.UUID
+	created_at         *time.Time
+	status             *string
+	graph              *json.RawMessage
+	appendgraph        json.RawMessage
+	ai_verdict         *json.RawMessage
+	appendai_verdict   json.RawMessage
+	title              *string
+	notified_at        *time.Time
+	resolution         *string
+	resolved_by        *string
+	resolved_at        *time.Time
+	resolution_source  *string
+	triaged_at         *time.Time
+	triage_count       *int
+	addtriage_count    *int
+	evidence_at        *time.Time
+	urgent_at          *time.Time
+	triage_failures    *int
+	addtriage_failures *int
+	triage_retry_at    *time.Time
+	closure_proposal   **schema.ClosureProposal
+	clearedFields      map[string]struct{}
+	alerts             map[uuid.UUID]struct{}
+	removedalerts      map[uuid.UUID]struct{}
+	clearedalerts      bool
+	done               bool
+	oldValue           func(context.Context) (*Incident, error)
+	predicates         []predicate.Incident
 }
 
 var _ ent.Mutation = (*IncidentMutation)(nil)
@@ -21040,6 +21048,314 @@ func (m *IncidentMutation) ResetResolutionSource() {
 	delete(m.clearedFields, incident.FieldResolutionSource)
 }
 
+// SetTriagedAt sets the "triaged_at" field.
+func (m *IncidentMutation) SetTriagedAt(t time.Time) {
+	m.triaged_at = &t
+}
+
+// TriagedAt returns the value of the "triaged_at" field in the mutation.
+func (m *IncidentMutation) TriagedAt() (r time.Time, exists bool) {
+	v := m.triaged_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTriagedAt returns the old "triaged_at" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldTriagedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTriagedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTriagedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTriagedAt: %w", err)
+	}
+	return oldValue.TriagedAt, nil
+}
+
+// ClearTriagedAt clears the value of the "triaged_at" field.
+func (m *IncidentMutation) ClearTriagedAt() {
+	m.triaged_at = nil
+	m.clearedFields[incident.FieldTriagedAt] = struct{}{}
+}
+
+// TriagedAtCleared returns if the "triaged_at" field was cleared in this mutation.
+func (m *IncidentMutation) TriagedAtCleared() bool {
+	_, ok := m.clearedFields[incident.FieldTriagedAt]
+	return ok
+}
+
+// ResetTriagedAt resets all changes to the "triaged_at" field.
+func (m *IncidentMutation) ResetTriagedAt() {
+	m.triaged_at = nil
+	delete(m.clearedFields, incident.FieldTriagedAt)
+}
+
+// SetTriageCount sets the "triage_count" field.
+func (m *IncidentMutation) SetTriageCount(i int) {
+	m.triage_count = &i
+	m.addtriage_count = nil
+}
+
+// TriageCount returns the value of the "triage_count" field in the mutation.
+func (m *IncidentMutation) TriageCount() (r int, exists bool) {
+	v := m.triage_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTriageCount returns the old "triage_count" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldTriageCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTriageCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTriageCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTriageCount: %w", err)
+	}
+	return oldValue.TriageCount, nil
+}
+
+// AddTriageCount adds i to the "triage_count" field.
+func (m *IncidentMutation) AddTriageCount(i int) {
+	if m.addtriage_count != nil {
+		*m.addtriage_count += i
+	} else {
+		m.addtriage_count = &i
+	}
+}
+
+// AddedTriageCount returns the value that was added to the "triage_count" field in this mutation.
+func (m *IncidentMutation) AddedTriageCount() (r int, exists bool) {
+	v := m.addtriage_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTriageCount resets all changes to the "triage_count" field.
+func (m *IncidentMutation) ResetTriageCount() {
+	m.triage_count = nil
+	m.addtriage_count = nil
+}
+
+// SetEvidenceAt sets the "evidence_at" field.
+func (m *IncidentMutation) SetEvidenceAt(t time.Time) {
+	m.evidence_at = &t
+}
+
+// EvidenceAt returns the value of the "evidence_at" field in the mutation.
+func (m *IncidentMutation) EvidenceAt() (r time.Time, exists bool) {
+	v := m.evidence_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEvidenceAt returns the old "evidence_at" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldEvidenceAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEvidenceAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEvidenceAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEvidenceAt: %w", err)
+	}
+	return oldValue.EvidenceAt, nil
+}
+
+// ClearEvidenceAt clears the value of the "evidence_at" field.
+func (m *IncidentMutation) ClearEvidenceAt() {
+	m.evidence_at = nil
+	m.clearedFields[incident.FieldEvidenceAt] = struct{}{}
+}
+
+// EvidenceAtCleared returns if the "evidence_at" field was cleared in this mutation.
+func (m *IncidentMutation) EvidenceAtCleared() bool {
+	_, ok := m.clearedFields[incident.FieldEvidenceAt]
+	return ok
+}
+
+// ResetEvidenceAt resets all changes to the "evidence_at" field.
+func (m *IncidentMutation) ResetEvidenceAt() {
+	m.evidence_at = nil
+	delete(m.clearedFields, incident.FieldEvidenceAt)
+}
+
+// SetUrgentAt sets the "urgent_at" field.
+func (m *IncidentMutation) SetUrgentAt(t time.Time) {
+	m.urgent_at = &t
+}
+
+// UrgentAt returns the value of the "urgent_at" field in the mutation.
+func (m *IncidentMutation) UrgentAt() (r time.Time, exists bool) {
+	v := m.urgent_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUrgentAt returns the old "urgent_at" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldUrgentAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUrgentAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUrgentAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUrgentAt: %w", err)
+	}
+	return oldValue.UrgentAt, nil
+}
+
+// ClearUrgentAt clears the value of the "urgent_at" field.
+func (m *IncidentMutation) ClearUrgentAt() {
+	m.urgent_at = nil
+	m.clearedFields[incident.FieldUrgentAt] = struct{}{}
+}
+
+// UrgentAtCleared returns if the "urgent_at" field was cleared in this mutation.
+func (m *IncidentMutation) UrgentAtCleared() bool {
+	_, ok := m.clearedFields[incident.FieldUrgentAt]
+	return ok
+}
+
+// ResetUrgentAt resets all changes to the "urgent_at" field.
+func (m *IncidentMutation) ResetUrgentAt() {
+	m.urgent_at = nil
+	delete(m.clearedFields, incident.FieldUrgentAt)
+}
+
+// SetTriageFailures sets the "triage_failures" field.
+func (m *IncidentMutation) SetTriageFailures(i int) {
+	m.triage_failures = &i
+	m.addtriage_failures = nil
+}
+
+// TriageFailures returns the value of the "triage_failures" field in the mutation.
+func (m *IncidentMutation) TriageFailures() (r int, exists bool) {
+	v := m.triage_failures
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTriageFailures returns the old "triage_failures" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldTriageFailures(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTriageFailures is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTriageFailures requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTriageFailures: %w", err)
+	}
+	return oldValue.TriageFailures, nil
+}
+
+// AddTriageFailures adds i to the "triage_failures" field.
+func (m *IncidentMutation) AddTriageFailures(i int) {
+	if m.addtriage_failures != nil {
+		*m.addtriage_failures += i
+	} else {
+		m.addtriage_failures = &i
+	}
+}
+
+// AddedTriageFailures returns the value that was added to the "triage_failures" field in this mutation.
+func (m *IncidentMutation) AddedTriageFailures() (r int, exists bool) {
+	v := m.addtriage_failures
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTriageFailures resets all changes to the "triage_failures" field.
+func (m *IncidentMutation) ResetTriageFailures() {
+	m.triage_failures = nil
+	m.addtriage_failures = nil
+}
+
+// SetTriageRetryAt sets the "triage_retry_at" field.
+func (m *IncidentMutation) SetTriageRetryAt(t time.Time) {
+	m.triage_retry_at = &t
+}
+
+// TriageRetryAt returns the value of the "triage_retry_at" field in the mutation.
+func (m *IncidentMutation) TriageRetryAt() (r time.Time, exists bool) {
+	v := m.triage_retry_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTriageRetryAt returns the old "triage_retry_at" field's value of the Incident entity.
+// If the Incident object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentMutation) OldTriageRetryAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTriageRetryAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTriageRetryAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTriageRetryAt: %w", err)
+	}
+	return oldValue.TriageRetryAt, nil
+}
+
+// ClearTriageRetryAt clears the value of the "triage_retry_at" field.
+func (m *IncidentMutation) ClearTriageRetryAt() {
+	m.triage_retry_at = nil
+	m.clearedFields[incident.FieldTriageRetryAt] = struct{}{}
+}
+
+// TriageRetryAtCleared returns if the "triage_retry_at" field was cleared in this mutation.
+func (m *IncidentMutation) TriageRetryAtCleared() bool {
+	_, ok := m.clearedFields[incident.FieldTriageRetryAt]
+	return ok
+}
+
+// ResetTriageRetryAt resets all changes to the "triage_retry_at" field.
+func (m *IncidentMutation) ResetTriageRetryAt() {
+	m.triage_retry_at = nil
+	delete(m.clearedFields, incident.FieldTriageRetryAt)
+}
+
 // SetClosureProposal sets the "closure_proposal" field.
 func (m *IncidentMutation) SetClosureProposal(sp *schema.ClosureProposal) {
 	m.closure_proposal = &sp
@@ -21177,7 +21493,7 @@ func (m *IncidentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 17)
 	if m.created_at != nil {
 		fields = append(fields, incident.FieldCreatedAt)
 	}
@@ -21207,6 +21523,24 @@ func (m *IncidentMutation) Fields() []string {
 	}
 	if m.resolution_source != nil {
 		fields = append(fields, incident.FieldResolutionSource)
+	}
+	if m.triaged_at != nil {
+		fields = append(fields, incident.FieldTriagedAt)
+	}
+	if m.triage_count != nil {
+		fields = append(fields, incident.FieldTriageCount)
+	}
+	if m.evidence_at != nil {
+		fields = append(fields, incident.FieldEvidenceAt)
+	}
+	if m.urgent_at != nil {
+		fields = append(fields, incident.FieldUrgentAt)
+	}
+	if m.triage_failures != nil {
+		fields = append(fields, incident.FieldTriageFailures)
+	}
+	if m.triage_retry_at != nil {
+		fields = append(fields, incident.FieldTriageRetryAt)
 	}
 	if m.closure_proposal != nil {
 		fields = append(fields, incident.FieldClosureProposal)
@@ -21239,6 +21573,18 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 		return m.ResolvedAt()
 	case incident.FieldResolutionSource:
 		return m.ResolutionSource()
+	case incident.FieldTriagedAt:
+		return m.TriagedAt()
+	case incident.FieldTriageCount:
+		return m.TriageCount()
+	case incident.FieldEvidenceAt:
+		return m.EvidenceAt()
+	case incident.FieldUrgentAt:
+		return m.UrgentAt()
+	case incident.FieldTriageFailures:
+		return m.TriageFailures()
+	case incident.FieldTriageRetryAt:
+		return m.TriageRetryAt()
 	case incident.FieldClosureProposal:
 		return m.ClosureProposal()
 	}
@@ -21270,6 +21616,18 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldResolvedAt(ctx)
 	case incident.FieldResolutionSource:
 		return m.OldResolutionSource(ctx)
+	case incident.FieldTriagedAt:
+		return m.OldTriagedAt(ctx)
+	case incident.FieldTriageCount:
+		return m.OldTriageCount(ctx)
+	case incident.FieldEvidenceAt:
+		return m.OldEvidenceAt(ctx)
+	case incident.FieldUrgentAt:
+		return m.OldUrgentAt(ctx)
+	case incident.FieldTriageFailures:
+		return m.OldTriageFailures(ctx)
+	case incident.FieldTriageRetryAt:
+		return m.OldTriageRetryAt(ctx)
 	case incident.FieldClosureProposal:
 		return m.OldClosureProposal(ctx)
 	}
@@ -21351,6 +21709,48 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetResolutionSource(v)
 		return nil
+	case incident.FieldTriagedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTriagedAt(v)
+		return nil
+	case incident.FieldTriageCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTriageCount(v)
+		return nil
+	case incident.FieldEvidenceAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEvidenceAt(v)
+		return nil
+	case incident.FieldUrgentAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUrgentAt(v)
+		return nil
+	case incident.FieldTriageFailures:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTriageFailures(v)
+		return nil
+	case incident.FieldTriageRetryAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTriageRetryAt(v)
+		return nil
 	case incident.FieldClosureProposal:
 		v, ok := value.(*schema.ClosureProposal)
 		if !ok {
@@ -21365,13 +21765,26 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *IncidentMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addtriage_count != nil {
+		fields = append(fields, incident.FieldTriageCount)
+	}
+	if m.addtriage_failures != nil {
+		fields = append(fields, incident.FieldTriageFailures)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *IncidentMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case incident.FieldTriageCount:
+		return m.AddedTriageCount()
+	case incident.FieldTriageFailures:
+		return m.AddedTriageFailures()
+	}
 	return nil, false
 }
 
@@ -21380,6 +21793,20 @@ func (m *IncidentMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *IncidentMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case incident.FieldTriageCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTriageCount(v)
+		return nil
+	case incident.FieldTriageFailures:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTriageFailures(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Incident numeric field %s", name)
 }
@@ -21408,6 +21835,18 @@ func (m *IncidentMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(incident.FieldResolutionSource) {
 		fields = append(fields, incident.FieldResolutionSource)
+	}
+	if m.FieldCleared(incident.FieldTriagedAt) {
+		fields = append(fields, incident.FieldTriagedAt)
+	}
+	if m.FieldCleared(incident.FieldEvidenceAt) {
+		fields = append(fields, incident.FieldEvidenceAt)
+	}
+	if m.FieldCleared(incident.FieldUrgentAt) {
+		fields = append(fields, incident.FieldUrgentAt)
+	}
+	if m.FieldCleared(incident.FieldTriageRetryAt) {
+		fields = append(fields, incident.FieldTriageRetryAt)
 	}
 	if m.FieldCleared(incident.FieldClosureProposal) {
 		fields = append(fields, incident.FieldClosureProposal)
@@ -21446,6 +21885,18 @@ func (m *IncidentMutation) ClearField(name string) error {
 		return nil
 	case incident.FieldResolutionSource:
 		m.ClearResolutionSource()
+		return nil
+	case incident.FieldTriagedAt:
+		m.ClearTriagedAt()
+		return nil
+	case incident.FieldEvidenceAt:
+		m.ClearEvidenceAt()
+		return nil
+	case incident.FieldUrgentAt:
+		m.ClearUrgentAt()
+		return nil
+	case incident.FieldTriageRetryAt:
+		m.ClearTriageRetryAt()
 		return nil
 	case incident.FieldClosureProposal:
 		m.ClearClosureProposal()
@@ -21487,6 +21938,24 @@ func (m *IncidentMutation) ResetField(name string) error {
 		return nil
 	case incident.FieldResolutionSource:
 		m.ResetResolutionSource()
+		return nil
+	case incident.FieldTriagedAt:
+		m.ResetTriagedAt()
+		return nil
+	case incident.FieldTriageCount:
+		m.ResetTriageCount()
+		return nil
+	case incident.FieldEvidenceAt:
+		m.ResetEvidenceAt()
+		return nil
+	case incident.FieldUrgentAt:
+		m.ResetUrgentAt()
+		return nil
+	case incident.FieldTriageFailures:
+		m.ResetTriageFailures()
+		return nil
+	case incident.FieldTriageRetryAt:
+		m.ResetTriageRetryAt()
 		return nil
 	case incident.FieldClosureProposal:
 		m.ResetClosureProposal()

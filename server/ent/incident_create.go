@@ -148,6 +148,90 @@ func (_c *IncidentCreate) SetNillableResolutionSource(v *string) *IncidentCreate
 	return _c
 }
 
+// SetTriagedAt sets the "triaged_at" field.
+func (_c *IncidentCreate) SetTriagedAt(v time.Time) *IncidentCreate {
+	_c.mutation.SetTriagedAt(v)
+	return _c
+}
+
+// SetNillableTriagedAt sets the "triaged_at" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableTriagedAt(v *time.Time) *IncidentCreate {
+	if v != nil {
+		_c.SetTriagedAt(*v)
+	}
+	return _c
+}
+
+// SetTriageCount sets the "triage_count" field.
+func (_c *IncidentCreate) SetTriageCount(v int) *IncidentCreate {
+	_c.mutation.SetTriageCount(v)
+	return _c
+}
+
+// SetNillableTriageCount sets the "triage_count" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableTriageCount(v *int) *IncidentCreate {
+	if v != nil {
+		_c.SetTriageCount(*v)
+	}
+	return _c
+}
+
+// SetEvidenceAt sets the "evidence_at" field.
+func (_c *IncidentCreate) SetEvidenceAt(v time.Time) *IncidentCreate {
+	_c.mutation.SetEvidenceAt(v)
+	return _c
+}
+
+// SetNillableEvidenceAt sets the "evidence_at" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableEvidenceAt(v *time.Time) *IncidentCreate {
+	if v != nil {
+		_c.SetEvidenceAt(*v)
+	}
+	return _c
+}
+
+// SetUrgentAt sets the "urgent_at" field.
+func (_c *IncidentCreate) SetUrgentAt(v time.Time) *IncidentCreate {
+	_c.mutation.SetUrgentAt(v)
+	return _c
+}
+
+// SetNillableUrgentAt sets the "urgent_at" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableUrgentAt(v *time.Time) *IncidentCreate {
+	if v != nil {
+		_c.SetUrgentAt(*v)
+	}
+	return _c
+}
+
+// SetTriageFailures sets the "triage_failures" field.
+func (_c *IncidentCreate) SetTriageFailures(v int) *IncidentCreate {
+	_c.mutation.SetTriageFailures(v)
+	return _c
+}
+
+// SetNillableTriageFailures sets the "triage_failures" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableTriageFailures(v *int) *IncidentCreate {
+	if v != nil {
+		_c.SetTriageFailures(*v)
+	}
+	return _c
+}
+
+// SetTriageRetryAt sets the "triage_retry_at" field.
+func (_c *IncidentCreate) SetTriageRetryAt(v time.Time) *IncidentCreate {
+	_c.mutation.SetTriageRetryAt(v)
+	return _c
+}
+
+// SetNillableTriageRetryAt sets the "triage_retry_at" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableTriageRetryAt(v *time.Time) *IncidentCreate {
+	if v != nil {
+		_c.SetTriageRetryAt(*v)
+	}
+	return _c
+}
+
 // SetClosureProposal sets the "closure_proposal" field.
 func (_c *IncidentCreate) SetClosureProposal(v *schema.ClosureProposal) *IncidentCreate {
 	_c.mutation.SetClosureProposal(v)
@@ -226,6 +310,14 @@ func (_c *IncidentCreate) defaults() {
 		v := incident.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.TriageCount(); !ok {
+		v := incident.DefaultTriageCount
+		_c.mutation.SetTriageCount(v)
+	}
+	if _, ok := _c.mutation.TriageFailures(); !ok {
+		v := incident.DefaultTriageFailures
+		_c.mutation.SetTriageFailures(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := incident.DefaultID()
 		_c.mutation.SetID(v)
@@ -242,6 +334,12 @@ func (_c *IncidentCreate) check() error {
 	}
 	if _, ok := _c.mutation.Graph(); !ok {
 		return &ValidationError{Name: "graph", err: errors.New(`ent: missing required field "Incident.graph"`)}
+	}
+	if _, ok := _c.mutation.TriageCount(); !ok {
+		return &ValidationError{Name: "triage_count", err: errors.New(`ent: missing required field "Incident.triage_count"`)}
+	}
+	if _, ok := _c.mutation.TriageFailures(); !ok {
+		return &ValidationError{Name: "triage_failures", err: errors.New(`ent: missing required field "Incident.triage_failures"`)}
 	}
 	return nil
 }
@@ -317,6 +415,30 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ResolutionSource(); ok {
 		_spec.SetField(incident.FieldResolutionSource, field.TypeString, value)
 		_node.ResolutionSource = &value
+	}
+	if value, ok := _c.mutation.TriagedAt(); ok {
+		_spec.SetField(incident.FieldTriagedAt, field.TypeTime, value)
+		_node.TriagedAt = &value
+	}
+	if value, ok := _c.mutation.TriageCount(); ok {
+		_spec.SetField(incident.FieldTriageCount, field.TypeInt, value)
+		_node.TriageCount = value
+	}
+	if value, ok := _c.mutation.EvidenceAt(); ok {
+		_spec.SetField(incident.FieldEvidenceAt, field.TypeTime, value)
+		_node.EvidenceAt = &value
+	}
+	if value, ok := _c.mutation.UrgentAt(); ok {
+		_spec.SetField(incident.FieldUrgentAt, field.TypeTime, value)
+		_node.UrgentAt = &value
+	}
+	if value, ok := _c.mutation.TriageFailures(); ok {
+		_spec.SetField(incident.FieldTriageFailures, field.TypeInt, value)
+		_node.TriageFailures = value
+	}
+	if value, ok := _c.mutation.TriageRetryAt(); ok {
+		_spec.SetField(incident.FieldTriageRetryAt, field.TypeTime, value)
+		_node.TriageRetryAt = &value
 	}
 	if value, ok := _c.mutation.ClosureProposal(); ok {
 		_spec.SetField(incident.FieldClosureProposal, field.TypeJSON, value)

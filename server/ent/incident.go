@@ -40,6 +40,18 @@ type Incident struct {
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
 	// ResolutionSource holds the value of the "resolution_source" field.
 	ResolutionSource *string `json:"resolution_source,omitempty"`
+	// TriagedAt holds the value of the "triaged_at" field.
+	TriagedAt *time.Time `json:"triaged_at,omitempty"`
+	// TriageCount holds the value of the "triage_count" field.
+	TriageCount int `json:"triage_count,omitempty"`
+	// EvidenceAt holds the value of the "evidence_at" field.
+	EvidenceAt *time.Time `json:"evidence_at,omitempty"`
+	// UrgentAt holds the value of the "urgent_at" field.
+	UrgentAt *time.Time `json:"urgent_at,omitempty"`
+	// TriageFailures holds the value of the "triage_failures" field.
+	TriageFailures int `json:"triage_failures,omitempty"`
+	// TriageRetryAt holds the value of the "triage_retry_at" field.
+	TriageRetryAt *time.Time `json:"triage_retry_at,omitempty"`
 	// ClosureProposal holds the value of the "closure_proposal" field.
 	ClosureProposal *schema.ClosureProposal `json:"closure_proposal,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -73,9 +85,11 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case incident.FieldGraph, incident.FieldAiVerdict, incident.FieldClosureProposal:
 			values[i] = new([]byte)
+		case incident.FieldTriageCount, incident.FieldTriageFailures:
+			values[i] = new(sql.NullInt64)
 		case incident.FieldStatus, incident.FieldTitle, incident.FieldResolution, incident.FieldResolvedBy, incident.FieldResolutionSource:
 			values[i] = new(sql.NullString)
-		case incident.FieldCreatedAt, incident.FieldNotifiedAt, incident.FieldResolvedAt:
+		case incident.FieldCreatedAt, incident.FieldNotifiedAt, incident.FieldResolvedAt, incident.FieldTriagedAt, incident.FieldEvidenceAt, incident.FieldUrgentAt, incident.FieldTriageRetryAt:
 			values[i] = new(sql.NullTime)
 		case incident.FieldID:
 			values[i] = new(uuid.UUID)
@@ -170,6 +184,46 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				_m.ResolutionSource = new(string)
 				*_m.ResolutionSource = value.String
 			}
+		case incident.FieldTriagedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field triaged_at", values[i])
+			} else if value.Valid {
+				_m.TriagedAt = new(time.Time)
+				*_m.TriagedAt = value.Time
+			}
+		case incident.FieldTriageCount:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field triage_count", values[i])
+			} else if value.Valid {
+				_m.TriageCount = int(value.Int64)
+			}
+		case incident.FieldEvidenceAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field evidence_at", values[i])
+			} else if value.Valid {
+				_m.EvidenceAt = new(time.Time)
+				*_m.EvidenceAt = value.Time
+			}
+		case incident.FieldUrgentAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field urgent_at", values[i])
+			} else if value.Valid {
+				_m.UrgentAt = new(time.Time)
+				*_m.UrgentAt = value.Time
+			}
+		case incident.FieldTriageFailures:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field triage_failures", values[i])
+			} else if value.Valid {
+				_m.TriageFailures = int(value.Int64)
+			}
+		case incident.FieldTriageRetryAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field triage_retry_at", values[i])
+			} else if value.Valid {
+				_m.TriageRetryAt = new(time.Time)
+				*_m.TriageRetryAt = value.Time
+			}
 		case incident.FieldClosureProposal:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field closure_proposal", values[i])
@@ -259,6 +313,32 @@ func (_m *Incident) String() string {
 	if v := _m.ResolutionSource; v != nil {
 		builder.WriteString("resolution_source=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.TriagedAt; v != nil {
+		builder.WriteString("triaged_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("triage_count=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TriageCount))
+	builder.WriteString(", ")
+	if v := _m.EvidenceAt; v != nil {
+		builder.WriteString("evidence_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.UrgentAt; v != nil {
+		builder.WriteString("urgent_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("triage_failures=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TriageFailures))
+	builder.WriteString(", ")
+	if v := _m.TriageRetryAt; v != nil {
+		builder.WriteString("triage_retry_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("closure_proposal=")

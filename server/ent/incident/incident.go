@@ -35,6 +35,18 @@ const (
 	FieldResolvedAt = "resolved_at"
 	// FieldResolutionSource holds the string denoting the resolution_source field in the database.
 	FieldResolutionSource = "resolution_source"
+	// FieldTriagedAt holds the string denoting the triaged_at field in the database.
+	FieldTriagedAt = "triaged_at"
+	// FieldTriageCount holds the string denoting the triage_count field in the database.
+	FieldTriageCount = "triage_count"
+	// FieldEvidenceAt holds the string denoting the evidence_at field in the database.
+	FieldEvidenceAt = "evidence_at"
+	// FieldUrgentAt holds the string denoting the urgent_at field in the database.
+	FieldUrgentAt = "urgent_at"
+	// FieldTriageFailures holds the string denoting the triage_failures field in the database.
+	FieldTriageFailures = "triage_failures"
+	// FieldTriageRetryAt holds the string denoting the triage_retry_at field in the database.
+	FieldTriageRetryAt = "triage_retry_at"
 	// FieldClosureProposal holds the string denoting the closure_proposal field in the database.
 	FieldClosureProposal = "closure_proposal"
 	// EdgeAlerts holds the string denoting the alerts edge name in mutations.
@@ -63,6 +75,12 @@ var Columns = []string{
 	FieldResolvedBy,
 	FieldResolvedAt,
 	FieldResolutionSource,
+	FieldTriagedAt,
+	FieldTriageCount,
+	FieldEvidenceAt,
+	FieldUrgentAt,
+	FieldTriageFailures,
+	FieldTriageRetryAt,
 	FieldClosureProposal,
 }
 
@@ -81,6 +99,10 @@ var (
 	DefaultCreatedAt func() time.Time
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
+	// DefaultTriageCount holds the default value on creation for the "triage_count" field.
+	DefaultTriageCount int
+	// DefaultTriageFailures holds the default value on creation for the "triage_failures" field.
+	DefaultTriageFailures int
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -131,6 +153,36 @@ func ByResolvedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByResolutionSource orders the results by the resolution_source field.
 func ByResolutionSource(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldResolutionSource, opts...).ToFunc()
+}
+
+// ByTriagedAt orders the results by the triaged_at field.
+func ByTriagedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTriagedAt, opts...).ToFunc()
+}
+
+// ByTriageCount orders the results by the triage_count field.
+func ByTriageCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTriageCount, opts...).ToFunc()
+}
+
+// ByEvidenceAt orders the results by the evidence_at field.
+func ByEvidenceAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEvidenceAt, opts...).ToFunc()
+}
+
+// ByUrgentAt orders the results by the urgent_at field.
+func ByUrgentAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUrgentAt, opts...).ToFunc()
+}
+
+// ByTriageFailures orders the results by the triage_failures field.
+func ByTriageFailures(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTriageFailures, opts...).ToFunc()
+}
+
+// ByTriageRetryAt orders the results by the triage_retry_at field.
+func ByTriageRetryAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTriageRetryAt, opts...).ToFunc()
 }
 
 // ByAlertsCount orders the results by alerts count.

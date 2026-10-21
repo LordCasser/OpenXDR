@@ -47,7 +47,9 @@ func Needed() predicate.Incident {
 	return incident.And(unresolved(), incident.Or(incident.Not(benign()), severe(), decoyReview()))
 }
 
-// StaleBenign 未结案、AI 判良性、级别低于 Severity 且创建早于 before：没人看也不必看的噪声。
+// StaleBenign 已研判、AI 判良性、级别低于 Severity 且创建早于 before：没人看也不必看的噪声。
+// 良性结论之后又并入了新证据（待重研判）或分析师重开（open）的不算：旧结论没看过新证据，不能拿它结案
 func StaleBenign(before time.Time) predicate.Incident {
-	return incident.And(unresolved(), benign(), incident.Not(severe()), incident.Not(decoyReview()), incident.CreatedAtLT(before))
+	return incident.And(incident.StatusEQ("triaged"), incident.Not(newer(incident.FieldEvidenceAt)),
+		benign(), incident.Not(severe()), incident.Not(decoyReview()), incident.CreatedAtLT(before))
 }
