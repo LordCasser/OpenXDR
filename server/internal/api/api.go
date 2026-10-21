@@ -152,9 +152,6 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 	mapReportReads(mux, db)
 
 	mapIncidents(mux, db, rules)
-	integrations := Integrations(db)
-	mux.Handle("/api/system-integrations", integrations)
-	mux.Handle("/api/system-integrations/", integrations)
 	mux.HandleFunc("GET /api/assets", listAssets(db))
 	mux.HandleFunc("POST /api/assets/export", exportAssets(db))
 	return mux

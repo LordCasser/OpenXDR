@@ -36,7 +36,7 @@ func TestIntegrationReadBoundary(t *testing.T) {
 	db.IntegrationGroup.Create().SetIntegrationID(i.ID).SetGroupID(ga.ID).SaveX(ctx)
 	plain := "oxi_" + strings.Repeat("x", 43)
 	token := db.IntegrationToken.Create().SetIntegrationID(i.ID).SetPrefix("oxi_xxx").SetTokenHash(TokenHash(plain)).SetScopes(ReadScopes).SetExpiresAt(time.Now().Add(time.Hour)).SaveX(ctx)
-	s := &Service{DB: db, Enabled: true, CursorKey: []byte(strings.Repeat("s", 32))}
+	s := &Service{DB: db, CursorKey: []byte(strings.Repeat("s", 32))}
 	h := s.Handler()
 	call := func(path, auth string) *httptest.ResponseRecorder {
 		t.Helper()

@@ -14,6 +14,7 @@ import (
 	"openxdr/server/internal/auth"
 	"openxdr/server/internal/hostimport"
 	"openxdr/server/internal/incidentstate"
+	integrationapi "openxdr/server/internal/integration"
 	"openxdr/server/internal/testdb"
 )
 
@@ -27,7 +28,7 @@ func TestIntegrationSubscriptionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := Integrations(db, vault)
+	h := Integrations(db, vault, &integrationapi.OutboundAllow{DB: db})
 	call := func(method, path string, body any) *httptest.ResponseRecorder {
 		raw, _ := json.Marshal(body)
 		r := httptest.NewRequest(method, path, bytes.NewReader(raw))

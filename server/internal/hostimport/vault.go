@@ -4,7 +4,9 @@ package hostimport
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,9 +22,9 @@ type Vault struct{ aead cipher.AEAD }
 
 // NewVault 密钥由独立环境变量提供，各 HA 节点使用同一把，禁止回退到登录密码或数据库内的密钥。
 func NewVault(key string) (*Vault, error) {
-	raw, err := base64.StdEncoding.DecodeString(key)
-	if err != nil || len(raw) != 32 {
-		return nil, errors.New("HOST_CREDENTIAL_KEY 必须是 base64 编码的 32 字节密钥")
+	raw, err := decodeKey(key)
+	if err != nil {
+		return nil, err
 	}
 	defer clear(raw)
 	block, err := aes.NewCipher(raw)
@@ -34,6 +36,24 @@ func NewVault(key string) (*Vault, error) {
 		return nil, err
 	}
 	return &Vault{aead: aead}, nil
+}
+
+// DeriveKey 按用途从同一把主密钥派生独立子密钥（HKDF-SHA256），各 HA 节点自然一致，不必再配一个环境变量。
+func DeriveKey(key, purpose string) ([]byte, error) {
+	raw, err := decodeKey(key)
+	if err != nil {
+		return nil, err
+	}
+	defer clear(raw)
+	return hkdf.Key(sha256.New, raw, nil, purpose, 32)
+}
+
+func decodeKey(key string) ([]byte, error) {
+	raw, err := base64.StdEncoding.DecodeString(key)
+	if err != nil || len(raw) != 32 {
+		return nil, errors.New("HOST_CREDENTIAL_KEY 必须是 base64 编码的 32 字节密钥")
+	}
+	return raw, nil
 }
 
 func (v *Vault) Seal(secret Secret, binding string) ([]byte, error) {

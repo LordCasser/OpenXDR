@@ -5,14 +5,20 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"openxdr/server/ent"
+	"openxdr/server/ent/setting"
 )
 
 // OutboundPolicy 内网目标须显式放行，域名解析后仍拒绝元数据和本机地址。
@@ -106,4 +112,91 @@ func SignEvent(secret []byte, timestamp, eventID string, body []byte) string {
 	mac.Write([]byte(timestamp + "." + eventID + "."))
 	mac.Write(body)
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+const outboundAllowKey = "integration.outbound_allow"
+
+// OutboundAllow 内网目标放行清单。控制台保存在 settings 表；Locked 非空（环境变量
+// INTEGRATION_WEBHOOK_ALLOW）时以它为准，控制台只读。每次发送前读取，改了即生效、各节点一致。
+type OutboundAllow struct {
+	DB     *ent.Client
+	Locked string
+}
+
+// Entries 返回生效清单与是否锁定。
+func (a *OutboundAllow) Entries(ctx context.Context) ([]string, bool, error) {
+	if a.Locked != "" {
+		return splitAllow(a.Locked), true, nil
+	}
+	row, err := a.DB.Setting.Get(ctx, outboundAllowKey)
+	if ent.IsNotFound(err) {
+		return []string{}, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	var entries []string
+	if err := json.Unmarshal(row.Value, &entries); err != nil {
+		return nil, false, errors.New("出站允许清单配置损坏")
+	}
+	return entries, false, nil
+}
+
+// Policy 生效清单解析失败时报错而不是放宽：本次投递按暂时失败重试。
+func (a *OutboundAllow) Policy(ctx context.Context) (OutboundPolicy, error) {
+	if a == nil {
+		return OutboundPolicy{}, nil
+	}
+	entries, _, err := a.Entries(ctx)
+	if err != nil {
+		return OutboundPolicy{}, err
+	}
+	return ParseOutboundPolicy(strings.Join(entries, ","))
+}
+
+// CleanAllow 规范化并校验清单：每项须是精确域名或 CIDR，去重，最多 200 项。
+func CleanAllow(entries []string) ([]string, error) {
+	clean := []string{}
+	for _, raw := range entries {
+		v := strings.ToLower(strings.TrimSpace(raw))
+		if v == "" || slices.Contains(clean, v) {
+			continue
+		}
+		if p, err := ParseOutboundPolicy(v); err != nil || len(p.Hosts)+len(p.Networks) != 1 || len(v) > 253 {
+			return nil, fmt.Errorf("%q 不是精确域名或 CIDR", raw)
+		}
+		clean = append(clean, v)
+	}
+	if len(clean) > 200 {
+		return nil, errors.New("出站允许清单最多 200 项")
+	}
+	return clean, nil
+}
+
+// Save 在调用方事务内保存已校验的清单，审计由调用方写入同一事务。
+func (a *OutboundAllow) Save(ctx context.Context, tx *ent.Tx, clean []string) error {
+	if a.Locked != "" {
+		return ErrOutboundLocked
+	}
+	value, err := json.Marshal(clean)
+	if err != nil {
+		return err
+	}
+	n, err := tx.Setting.Update().Where(setting.IDEQ(outboundAllowKey)).SetValue(value).Save(ctx)
+	if err == nil && n == 0 {
+		err = tx.Setting.Create().SetID(outboundAllowKey).SetValue(value).Exec(ctx)
+	}
+	return err
+}
+
+var ErrOutboundLocked = errors.New("出站允许清单由环境变量 INTEGRATION_WEBHOOK_ALLOW 锁定")
+
+func splitAllow(value string) []string {
+	out := []string{}
+	for _, v := range strings.Split(value, ",") {
+		if v = strings.ToLower(strings.TrimSpace(v)); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

@@ -29,7 +29,7 @@ func TestSuricataEventsEndpoint(t *testing.T) {
 	}
 	writer, reader := token("w", "suricata:write"), token("r", "assets:read")
 	var got []suricata.Origin
-	h := (&Service{DB: db, Enabled: true, CursorKey: []byte(strings.Repeat("s", 32)), Suricata: func(_ context.Context, origin suricata.Origin, _ suricata.Event) error {
+	h := (&Service{DB: db, CursorKey: []byte(strings.Repeat("s", 32)), Suricata: func(_ context.Context, origin suricata.Origin, _ suricata.Event) error {
 		got = append(got, origin)
 		return nil
 	}}).Handler()

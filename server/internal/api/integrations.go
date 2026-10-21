@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"slices"
@@ -86,13 +87,11 @@ func integrationID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 }
 
 // Integrations 管理端只接受浏览器管理员，不与机器认证共享身份。
-func Integrations(db *ent.Client, vaults ...*hostimport.Vault) http.Handler {
+// vault 为空表示没配 HOST_CREDENTIAL_KEY：集成 API 不可用，不签发 Token 也不建订阅。
+func Integrations(db *ent.Client, vault *hostimport.Vault, allow *integrationapi.OutboundAllow) http.Handler {
 	mux := http.NewServeMux()
-	var vault *hostimport.Vault
-	if len(vaults) > 0 {
-		vault = vaults[0]
-	}
 	mapIntegrationSubscriptions(mux, db, vault)
+	mapOutboundAllow(mux, db, allow)
 	mux.HandleFunc("GET /api/system-integrations", func(w http.ResponseWriter, r *http.Request) {
 		rows, err := db.Integration.Query().Order(ent.Desc(integration.FieldCreatedAt)).All(r.Context())
 		if integrationFailure(w, err) {
@@ -240,6 +239,10 @@ func Integrations(db *ent.Client, vaults ...*hostimport.Vault) http.Handler {
 			integrationapi.Error(w, 400, "invalid_argument", "有效期或 scope 无效")
 			return
 		}
+		if vault == nil {
+			integrationapi.Error(w, 409, "unavailable", "未配置 HOST_CREDENTIAL_KEY，集成 API 不可用，签发的 Token 无法使用")
+			return
+		}
 		tx, err := db.Tx(r.Context())
 		if integrationFailure(w, err) {
 			return
@@ -316,5 +319,51 @@ func Integrations(db *ent.Client, vaults ...*hostimport.Vault) http.Handler {
 			return
 		}
 		mux.ServeHTTP(w, r)
+	})
+}
+
+// mapOutboundAllow Webhook 内网目标放行清单。放宽 SSRF 边界属敏感操作：仅全局管理员，同事务审计。
+func mapOutboundAllow(mux *http.ServeMux, db *ent.Client, allow *integrationapi.OutboundAllow) {
+	type view struct {
+		Entries []string `json:"entries"`
+		Locked  bool     `json:"locked"`
+	}
+	mux.HandleFunc("GET /api/system-integrations/outbound-allow", func(w http.ResponseWriter, r *http.Request) {
+		entries, locked, err := allow.Entries(r.Context())
+		if integrationFailure(w, err) {
+			return
+		}
+		integrationapi.JSON(w, 200, view{entries, locked})
+	})
+	mux.HandleFunc("PUT /api/system-integrations/outbound-allow", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Entries []string `json:"entries"`
+		}
+		if !integrationDecode(w, r, &body) {
+			return
+		}
+		entries, err := integrationapi.CleanAllow(body.Entries)
+		if err != nil {
+			integrationapi.Error(w, 400, "invalid_argument", err.Error())
+			return
+		}
+		tx, err := db.Tx(r.Context())
+		if integrationFailure(w, err) {
+			return
+		}
+		defer tx.Rollback()
+		err = allow.Save(r.Context(), tx, entries)
+		if errors.Is(err, integrationapi.ErrOutboundLocked) {
+			integrationapi.Error(w, 409, "locked", err.Error())
+			return
+		}
+		if integrationFailure(w, err) {
+			return
+		}
+		err = audit.Checked(r.Context(), tx.AuditLog.Create(), audit.Actor(r.Context()), audit.RemoteAddr(r), "integration_outbound_allow", "", strings.Join(entries, ","))
+		if integrationFailure(w, err) || integrationFailure(w, tx.Commit()) {
+			return
+		}
+		integrationapi.JSON(w, 200, view{entries, false})
 	})
 }

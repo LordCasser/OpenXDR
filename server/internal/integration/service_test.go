@@ -2,6 +2,7 @@ package integration
 
 import (
 	"github.com/google/uuid"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -36,5 +37,13 @@ func TestIntegrationScopeAndRateLimits(t *testing.T) {
 	}
 	if !s.allow(uuid.New()) {
 		t.Fatal("不同身份共享额度")
+	}
+}
+
+func TestHandlerWithoutMasterKey(t *testing.T) {
+	w := httptest.NewRecorder()
+	(&Service{}).Handler().ServeHTTP(w, httptest.NewRequest("GET", "/api/integration/v1/assets", nil))
+	if w.Code != 503 || !strings.Contains(w.Body.String(), "HOST_CREDENTIAL_KEY") {
+		t.Fatal("没配主密钥应明确 503", w.Code, w.Body.String())
 	}
 }

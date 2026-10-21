@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"github.com/google/uuid"
 	"net/http"
@@ -11,7 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"openxdr/server/ent"
 	"openxdr/server/internal/auth"
+	"openxdr/server/internal/hostimport"
+	integrationapi "openxdr/server/internal/integration"
 	"openxdr/server/internal/testdb"
 )
 
@@ -20,7 +24,12 @@ func TestIntegrationManagement(t *testing.T) {
 	admin := db.User.Create().SetUsername("admin").SetPasswordHash("x").SetRole("admin").SaveX(ctx)
 	viewer := db.User.Create().SetUsername("viewer").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
 	g := db.Group.Create().SetName("ops").SaveX(ctx)
-	h := Integrations(db)
+	vault, err := hostimport.NewVault(base64.StdEncoding.EncodeToString([]byte(strings.Repeat("v", 32))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	allow := &integrationapi.OutboundAllow{DB: db}
+	h := Integrations(db, vault, allow)
 	call := func(method, path string, body any, isAdmin bool) *httptest.ResponseRecorder {
 		b, _ := json.Marshal(body)
 		r := httptest.NewRequest(method, path, bytes.NewReader(b))
@@ -105,5 +114,51 @@ func TestIntegrationOwnerAndGroupLifecycle(t *testing.T) {
 	db.Integration.UpdateOne(i).SetEnabled(false).ExecX(ctx)
 	if w := call("/api/users/" + owner.ID.String()); w.Code != 204 {
 		t.Fatal(w.Code, w.Body.String())
+	}
+}
+
+// 出站允许清单在控制台保存即生效；环境变量配置了就锁定；保存同事务审计；非管理员不能改。
+func TestOutboundAllowSettings(t *testing.T) {
+	ctx, db := testdb.New(t)
+	admin := db.User.Create().SetUsername("admin").SetPasswordHash("x").SetRole("admin").SaveX(ctx)
+	viewer := db.User.Create().SetUsername("viewer").SetPasswordHash("x").SetRole("viewer").SaveX(ctx)
+	allow := &integrationapi.OutboundAllow{DB: db}
+	h := Integrations(db, nil, allow)
+	call := func(method string, body any, u *ent.User) *httptest.ResponseRecorder {
+		b, _ := json.Marshal(body)
+		r := httptest.NewRequest(method, "/api/system-integrations/outbound-allow", bytes.NewReader(b))
+		r = r.WithContext(auth.WithUser(r.Context(), u))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := call("PUT", map[string]any{"entries": []string{"10.0.0.0/8"}}, viewer); w.Code != 403 {
+		t.Fatal("非管理员改了放行清单", w.Code)
+	}
+	if w := call("PUT", map[string]any{"entries": []string{"https://desk.example"}}, admin); w.Code != 400 {
+		t.Fatal("接受了非域名/CIDR", w.Code)
+	}
+	if w := call("PUT", map[string]any{"entries": []string{" Desk.Internal ", "10.1.0.0/16", "desk.internal"}}, admin); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	policy, err := allow.Policy(ctx)
+	if err != nil || len(policy.Hosts) != 1 || policy.Hosts[0] != "desk.internal" || len(policy.Networks) != 1 {
+		t.Fatalf("保存后未生效: %+v %v", policy, err)
+	}
+	if db.AuditLog.Query().CountX(ctx) != 1 {
+		t.Fatal("放宽出站边界没有审计")
+	}
+	locked := Integrations(db, nil, &integrationapi.OutboundAllow{DB: db, Locked: "192.168.0.0/16"})
+	r := httptest.NewRequest("PUT", "/api/system-integrations/outbound-allow", strings.NewReader(`{"entries":[]}`))
+	w := httptest.NewRecorder()
+	locked.ServeHTTP(w, r.WithContext(auth.WithUser(r.Context(), admin)))
+	if w.Code != 409 {
+		t.Fatal("环境变量锁定时仍可修改", w.Code)
+	}
+	r = httptest.NewRequest("GET", "/api/system-integrations/outbound-allow", nil)
+	w = httptest.NewRecorder()
+	locked.ServeHTTP(w, r.WithContext(auth.WithUser(r.Context(), admin)))
+	if !strings.Contains(w.Body.String(), `"locked":true`) || !strings.Contains(w.Body.String(), "192.168.0.0/16") {
+		t.Fatal("锁定值未展示", w.Body.String())
 	}
 }

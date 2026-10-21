@@ -2,7 +2,7 @@ import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import { useRef, useState } from 'react'
-import { fetchIntegrations, fetchIntegrationTokens, fetchUsers, issueIntegrationToken, revokeIntegrationToken, saveIntegration, type IntegrationInput, type IntegrationRow, type IntegrationTokenRow } from '../api'
+import { fetchIntegrations, fetchIntegrationTokens, fetchOutboundAllow, fetchUsers, issueIntegrationToken, revokeIntegrationToken, saveIntegration, saveOutboundAllow, type IntegrationInput, type IntegrationRow, type IntegrationTokenRow } from '../api'
 import { useSession } from '../app/session'
 import { IntegrationSubscriptions } from '../components/IntegrationSubscriptions'
 import { LoadError } from '../components/LoadError'
@@ -23,9 +23,12 @@ export function IntegrationsPage() {
   const [subscriptionsFor, setSubscriptionsFor] = useState<IntegrationRow | null>(null)
   const [days, setDays] = useState(90)
   const [tokenScopes, setTokenScopes] = useState<string[]>([])
+  const [allowOpen, setAllowOpen] = useState(false)
+  const [allowText, setAllowText] = useState<string>()
   const [form] = Form.useForm<IntegrationInput>()
   const query = useQuery({ queryKey: ['integrations'], queryFn: fetchIntegrations })
   const users = useQuery({ queryKey: ['users'], queryFn: fetchUsers })
+  const outbound = useQuery({ queryKey: ['outboundAllow'], queryFn: fetchOutboundAllow, enabled: allowOpen })
   const tokens = useQuery({ queryKey: ['integrationTokens', tokensFor?.id], queryFn: () => fetchIntegrationTokens(tokensFor!.id), enabled: !!tokensFor })
   const scopeOptions = [{ value: 'assets:read', label: t('integrationAssetsRead') }, { value: 'incidents:read', label: t('integrationIncidentsRead') }, { value: 'tickets:write', label: t('integrationTicketsWrite') }, { value: 'incidents:resolve', label: t('integrationResolve') }, { value: 'suricata:write', label: t('integrationSuricataWrite') }]
   const run = async (fn: () => Promise<void>) => {
@@ -41,7 +44,7 @@ export function IntegrationsPage() {
     setEditing(row ?? 'new')
   }
   const openTokens = (row: IntegrationRow) => { setTokensFor(row); setTokenScopes(row.scopes); setPlain(null); setDays(90) }
-  return <Page title={t('navIntegrations')} subtitle={t('integrationHint')} extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => edit()}>{t('create')}</Button>}>
+  return <Page title={t('navIntegrations')} subtitle={t('integrationHint')} extra={<Space><Button onClick={() => { setAllowText(undefined); setAllowOpen(true) }}>{t('integrationOutboundAllow')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => edit()}>{t('create')}</Button></Space>}>
     {query.isError ? <LoadError error={query.error} onRetry={() => query.refetch()} /> : <Table<IntegrationRow> rowKey="id" dataSource={query.data} loading={query.isPending} scroll={{ x: 800 }} columns={[
       { title: t('integrationName'), dataIndex: 'name' },
       { title: t('integrationPurpose'), dataIndex: 'purpose' },
@@ -82,6 +85,15 @@ export function IntegrationsPage() {
         ]} />}
       </Space>
     </Drawer>
+    <Modal title={t('integrationOutboundAllow')} open={allowOpen} onCancel={() => setAllowOpen(false)} confirmLoading={busy} okText={t('save')}
+      okButtonProps={{ disabled: !outbound.data || outbound.data.locked }}
+      onOk={() => run(async () => { await saveOutboundAllow((allowText ?? outbound.data!.entries.join('\n')).split('\n')); await client.invalidateQueries({ queryKey: ['outboundAllow'] }); setAllowOpen(false) })}>
+      <Typography.Paragraph type="secondary">{t('integrationOutboundHint')}</Typography.Paragraph>
+      {outbound.data?.locked && <Alert type="info" title={t('integrationOutboundLocked')} style={{ marginBottom: 12 }} />}
+      {outbound.isError ? <LoadError error={outbound.error} onRetry={() => outbound.refetch()} /> :
+        <Input.TextArea aria-label={t('integrationOutboundAllow')} rows={6} disabled={!outbound.data || outbound.data.locked}
+          value={allowText ?? outbound.data?.entries.join('\n') ?? ''} placeholder={'desk.internal\n10.20.0.0/16'} onChange={e => setAllowText(e.target.value)} />}
+    </Modal>
     <Drawer open={!!subscriptionsFor} title={t('integrationSubscriptions')} size="large" onClose={() => setSubscriptionsFor(null)} destroyOnHidden>
       {subscriptionsFor && <IntegrationSubscriptions integration={subscriptionsFor} />}
     </Drawer>

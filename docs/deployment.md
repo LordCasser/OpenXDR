@@ -359,7 +359,8 @@ server 全部通过环境变量配置，均有默认值：
 | `INTEL_RELOAD_SECONDS` | `30` | 威胁情报重载与命中计数回写周期 |
 | `WEBHOOK_MIN_SEVERITY` | `0` | 低于该级别的事件不推送（1 信息 ~ 5 严重），0 表示全推。控制台保存过通知配置后以控制台为准 |
 | `AGENT_SILENT_MINUTES` | `10` | agent 指令通道超过该时长没有心跳即判失联并通知，恢复时再通知一次 |
-| `HOST_CREDENTIAL_KEY` | 空 | 文档导入凭据的 AES-256-GCM 密钥，base64 编码 32 字节；HA 节点必须一致 |
+| `HOST_CREDENTIAL_KEY` | 空 | 文档导入凭据的 AES-256-GCM 密钥，base64 编码 32 字节；HA 节点必须一致。也是系统集成的前提：集成 API 游标密钥由它派生，Webhook 签名密钥用它加密 |
+| `INTEGRATION_WEBHOOK_ALLOW` | 空（用控制台） | 可选锁定值：事件推送内网放行清单（逗号分隔的精确域名/CIDR）。配置后控制台「内网推送放行」只读，见[外部系统集成 API](#外部系统集成-api) |
 | `ENROLL_SSH_ENABLED` | `false` | 允许组管理员使用保存凭据进行 SSH 纳管 |
 | `DECOY_SSH_ENABLED` | `false` | 允许组管理员通过已保存凭据安装 Linux 专用诱饵；要求 systemd 250+、独立核对的 SSH 指纹、凭据加密密钥与 HTTPS `ENROLL_PUBLIC_URL` |
 | `DECOY_DIST_DIR` | 镜像中 `/opt/openxdr/decoy-dist`，裸机为空 | 诱饵静态 ELF 安装包目录，固定文件名 `decoyhost-linux-amd64` / `decoyhost-linux-arm64`；不接受用户提供的下载地址 |
@@ -409,21 +410,23 @@ AI 助手相关的 `PI_*` 变量见 [pi-backend.md](pi-backend.md#配置)；按�
 
 ## 外部系统集成 API
 
-默认关闭。设置 `INTEGRATION_API_ENABLED=true` 后开放独立 Bearer API，必须同时设置
-`INTEGRATION_CURSOR_KEY` 为至少 32 字节随机值的 base64 编码，集群所有节点保持一致。
-游标签名密钥改变会使旧分页游标失效；Token 仍由数据库中的摘要和到期/吊销状态验证。
+无需额外环境变量，只要求已配置 `HOST_CREDENTIAL_KEY`（安装脚本默认生成）。分页游标的签名密钥由它按用途派生，
+集群各节点自然一致；更换主密钥只会让 1 小时内的旧游标失效，Token 仍由数据库中的摘要和到期/吊销状态验证。
+没有主密钥时集成 API 返回 503，控制台也不签发 Token、不建订阅。
 
-管理员在「系统集成」配置负责人、授权组和 scopes，然后签发 Token。不要把 Token 放进 URL。
-接口与限制见 [API 文档](api.md#外部系统只读-api)，机器契约见
-[OpenAPI](openapi/integration-v1.yaml)。这两个新环境变量不会自动打开事件推送或工单回写。
+闸门在控制台：只有全局管理员能在「系统集成」创建并启用集成、配置负责人、授权组和 scopes、签发 Token；
+没有启用的集成和有效 Token 就没有任何外部访问。不要把 Token 放进 URL。
+接口与限制见 [API 文档](api.md#外部系统只读-api)，机器契约见 [OpenAPI](openapi/integration-v1.yaml)。
+事件推送与工单回写分别要求管理员显式创建订阅、开启回写。
 
-事件推送使用独立开关 `INTEGRATION_WEBHOOK_ENABLED=true`，并要求 `HOST_CREDENTIAL_KEY`。
-`INTEGRATION_WEBHOOK_ALLOW` 是逗号分隔的精确域名/CIDR，用于放行内网目标；公有 HTTPS
-地址默认可用，但环回、链路本地和元数据地址始终拒绝。目标 URL 不得带 userinfo、查询参数或片段，
-不跟随重定向、不继承 HTTP 代理，DNS 校验与实际拨号使用同一地址，TLS 证书必须有效。
-所有节点可运行投递 worker，由数据库租约协调；关闭开关不会撤回已经发出的 HTTP 请求。
+事件推送默认只允许公网 HTTPS 目标。内网工单系统在「系统集成 → 内网推送放行」里填精确域名或 CIDR，
+保存即生效、各节点一致并记审计；环回、链路本地和元数据地址始终拒绝。需要把清单固定在部署配置里时，
+设置环境变量 `INTEGRATION_WEBHOOK_ALLOW`（逗号分隔），它作为锁定值，控制台只读。
+目标 URL 不得带 userinfo、查询参数或片段，不跟随重定向、不继承 HTTP 代理，
+DNS 校验与实际拨号使用同一地址，TLS 证书必须有效。
+所有节点可运行投递 worker，由数据库租约协调；暂停订阅或停用集成不会撤回已经发出的 HTTP 请求。
 
-关闭出站开关后仍在本地生成、分发消息并维护保留期，不发 HTTP 请求。暂停积压超过
+暂停订阅的消息原地保留，恢复后继续投递；停用集成会取消其未发消息。暂停积压超过
 24 小时会转为 dead，管理员可在清理前重放；终态记录保留 30 天，未分发消息不按普通
 保留期删除。幂等结果保留 7 天。回退旧二进制会中断事件覆盖，恢复后需通过 API 对账。
 

@@ -59,7 +59,6 @@ type bucket struct {
 }
 type Service struct {
 	DB        *ent.Client
-	Enabled   bool
 	CursorKey []byte
 	// Suricata 把通过认证的 EVE 告警写入持久事件队列；为空时该接口不可用
 	Suricata     func(context.Context, suricata.Origin, suricata.Event) error
@@ -143,8 +142,9 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { Error(w, 404, "not_found", "接口不存在") })
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Request-ID", uuid.NewString())
-		if !s.Enabled || len(s.CursorKey) < 32 {
-			Error(w, 503, "unavailable", "集成 API 未启用")
+		// 游标密钥由 HOST_CREDENTIAL_KEY 派生；没配主密钥时整个集成 API 不可用，不退回弱密钥
+		if len(s.CursorKey) < 32 {
+			Error(w, 503, "unavailable", "未配置 HOST_CREDENTIAL_KEY，集成 API 不可用")
 			return
 		}
 		header := r.Header.Get("Authorization")

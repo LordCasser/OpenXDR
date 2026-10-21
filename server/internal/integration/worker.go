@@ -27,9 +27,9 @@ import (
 )
 
 type Worker struct {
-	DB     *ent.Client
-	Vault  *hostimport.Vault
-	Policy OutboundPolicy
+	DB    *ent.Client
+	Vault *hostimport.Vault
+	Allow *OutboundAllow
 	// 测试在包内注入接收器，生产始终使用校验 DNS 与证书的 transport。
 	transport func() *http.Transport
 }
@@ -282,7 +282,11 @@ func (w *Worker) deliver(ctx context.Context, d *ent.IntegrationDelivery) error 
 	req.Header.Set("X-OpenXDR-Timestamp", timestamp)
 	req.Header.Set("X-OpenXDR-Key-ID", d.KeyID)
 	req.Header.Set("X-OpenXDR-Signature", SignEvent(key, timestamp, e.ID.String(), e.Payload))
-	transport := w.Policy.transport()
+	policy, err := w.Allow.Policy(ctx)
+	if err != nil {
+		return err
+	}
+	transport := policy.transport()
 	if w.transport != nil {
 		transport = w.transport()
 	}

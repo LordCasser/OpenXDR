@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -141,10 +140,11 @@ func main() {
 	registerHostRoutes(ctx, routes, db, client, rules, credentialVault, enrollSvc, conf)
 	registerSettingsRoutes(routes, db, client, credentialVault, notifySettings, webhook, aiConf, intelFeeds, enrollSvc, dists)
 	registerAIRoutes(routes, client, llmFor, assetEngine)
-	integrations := api.Integrations(client, credentialVault)
+	outboundAllow := &integration.OutboundAllow{DB: client, Locked: os.Getenv("INTEGRATION_WEBHOOK_ALLOW")}
+	integrations := api.Integrations(client, credentialVault, outboundAllow)
 	routes.Handle("/api/system-integrations", integrations)
 	routes.Handle("/api/system-integrations/", integrations)
-	startIntegrationDelivery(ctx, client, credentialVault)
+	startIntegrationDelivery(ctx, client, credentialVault, outboundAllow)
 	routes.Handle("/", api.Handler(client, rules, hub, suppressions, intelStore, allowlist, chat))
 	mux := publicMux(auth.Middleware(client, routes), db, client, registry, enrollSvc, dists, events)
 	// 经反向代理时还原客户端地址，登录退避与审计才按真人计
@@ -711,13 +711,17 @@ func registerAIRoutes(routes *http.ServeMux, client *ent.Client, llmFor func(str
 // publicMux 外层路由：指标、健康检查与免登录的接入端点，其余交给需登录的 app。
 func publicMux(app http.Handler, db *sql.DB, client *ent.Client, registry *prometheus.Registry, enrollSvc *enroll.Service, dists enroll.Dists, events eventbus.Bus) *http.ServeMux {
 	mux := http.NewServeMux()
-	integrationEnabled := getenv("INTEGRATION_API_ENABLED", "false") == "true"
-	cursorKey, keyErr := base64.StdEncoding.DecodeString(os.Getenv("INTEGRATION_CURSOR_KEY"))
-	if integrationEnabled && (keyErr != nil || len(cursorKey) < 32) {
-		slog.Error("启用集成 API 需要至少 32 字节的 base64 INTEGRATION_CURSOR_KEY")
-		os.Exit(1)
+	// 集成 API 的闸门是控制台里由全局管理员启用的集成与签发的 Token，不再另设全局开关；
+	// 游标密钥由 HOST_CREDENTIAL_KEY 派生，没配主密钥时集成 API 返回 503
+	var cursorKey []byte
+	if key := os.Getenv("HOST_CREDENTIAL_KEY"); key != "" {
+		var err error
+		if cursorKey, err = hostimport.DeriveKey(key, "openxdr/integration-cursor/v1"); err != nil {
+			slog.Error("凭据加密配置无效")
+			os.Exit(1)
+		}
 	}
-	integrationAPI := &integration.Service{DB: client, Enabled: integrationEnabled, CursorKey: cursorKey,
+	integrationAPI := &integration.Service{DB: client, CursorKey: cursorKey,
 		Suricata: func(ctx context.Context, origin suricata.Origin, event suricata.Event) error {
 			return events.Publish(ctx, ingest.SuricataEnvelope(origin, event))
 		}}
@@ -838,22 +842,19 @@ func getenvInt(key string, def int) int {
 	return def
 }
 
-// startIntegrationDelivery 显式开关控制出站消息，未启用时仍维护本地队列与保留期。
-func startIntegrationDelivery(ctx context.Context, client *ent.Client, vault *hostimport.Vault) {
-	if getenv("INTEGRATION_WEBHOOK_ENABLED", "false") != "true" {
-		worker := &integration.Worker{DB: client}
+// startIntegrationDelivery 有 HOST_CREDENTIAL_KEY 才能解开签名密钥、投递出站消息；
+// 订阅本身要全局管理员显式创建，不再另设全局开关。没有主密钥时只维护本地队列与保留期。
+func startIntegrationDelivery(ctx context.Context, client *ent.Client, vault *hostimport.Vault, allow *integration.OutboundAllow) {
+	worker := &integration.Worker{DB: client, Vault: vault, Allow: allow}
+	if vault == nil {
 		go worker.RunMaintenance(ctx)
 		return
 	}
-	if vault == nil {
-		slog.Error("启用集成 Webhook 需要 HOST_CREDENTIAL_KEY")
-		os.Exit(1)
+	if allow.Locked != "" {
+		if _, err := integration.CleanAllow(strings.Split(allow.Locked, ",")); err != nil {
+			slog.Error("INTEGRATION_WEBHOOK_ALLOW 无效", "err", err)
+			os.Exit(1)
+		}
 	}
-	policy, err := integration.ParseOutboundPolicy(os.Getenv("INTEGRATION_WEBHOOK_ALLOW"))
-	if err != nil {
-		slog.Error("集成 Webhook 出站允许清单无效", "err", err)
-		os.Exit(1)
-	}
-	worker := &integration.Worker{DB: client, Vault: vault, Policy: policy}
 	go worker.Run(ctx)
 }

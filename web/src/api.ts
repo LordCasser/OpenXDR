@@ -1486,6 +1486,10 @@ export const fetchIntegrationTokens = (id: string) => get<IntegrationTokenRow[]>
 export const issueIntegrationToken = async (id: string, days: number, scopes: string[]): Promise<IntegrationTokenRow> =>
   (await send('POST', `/api/system-integrations/${id}/tokens`, { days, scopes })).json()
 export const revokeIntegrationToken = (id: string, tokenId: string) => send('DELETE', `/api/system-integrations/${id}/tokens/${tokenId}`)
+export interface OutboundAllow { entries: string[]; locked: boolean }
+export const fetchOutboundAllow = () => get<OutboundAllow>('/api/system-integrations/outbound-allow')
+export const saveOutboundAllow = async (entries: string[]): Promise<OutboundAllow> =>
+  (await send('PUT', '/api/system-integrations/outbound-allow', { entries })).json()
 
 export interface IntegrationSubscription {
   id: string; name: string; url: string; groupIds: string[]; kinds: string[]; enabled: boolean; version: number; keyId: string; secret?: string

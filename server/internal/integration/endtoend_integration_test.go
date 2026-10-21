@@ -32,7 +32,7 @@ func TestIncidentWebhookTicketRoundTrip(t *testing.T) {
 	db.IntegrationGroup.Create().SetIntegrationID(i.ID).SetGroupID(g.ID).SaveX(ctx)
 	plain := "oxi_" + strings.Repeat("t", 43)
 	db.IntegrationToken.Create().SetIntegrationID(i.ID).SetPrefix("oxi_ttt").SetTokenHash(TokenHash(plain)).SetScopes(AllowedScopes).SetExpiresAt(time.Now().Add(time.Hour)).SaveX(ctx)
-	service := &Service{DB: db, Enabled: true, CursorKey: []byte(strings.Repeat("c", 32))}
+	service := &Service{DB: db, CursorKey: []byte(strings.Repeat("c", 32))}
 	api := service.Handler()
 	secret := []byte(strings.Repeat("s", 32))
 	var received atomic.Int32

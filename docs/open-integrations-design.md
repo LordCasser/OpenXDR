@@ -271,7 +271,7 @@ Go 单测验证编码和签名等纯逻辑；PostgreSQL integration 测试串行
 
 截至本次实现，关联引擎、人工单条/批量结案、AI 研判、自动结案和诱饵事件创建已将
 incident 变更与 IntegrationEvent 发件箱放入同一事务。只读 API 返回 `revision`。
-事件记录随业务事务生成，运行时对外投递由 INTEGRATION_WEBHOOK_ENABLED 控制，默认关闭；旧 IM 通知仍独立运行。
+事件记录随业务事务生成，有 `HOST_CREDENTIAL_KEY` 即可投递，闸门是管理员显式创建的订阅（原 INTEGRATION_WEBHOOK_ENABLED / INTEGRATION_API_ENABLED / INTEGRATION_CURSOR_KEY 已取消，游标密钥由主密钥派生，内网放行清单移入控制台）；旧 IM 通知仍独立运行。
 
 已通过：发件箱失败/回滚原子性、历史组快照、受控 HTTPS 接收器签名验证、503 重试、
 租约过期恢复、过期 worker 结果拒绝、移组后取消投递。关联与研判、janitor 的 PostgreSQL

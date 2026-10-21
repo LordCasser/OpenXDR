@@ -28,7 +28,7 @@ func TestTicketWritebackIdempotencyAndRevision(t *testing.T) {
 	db.IntegrationGroup.Create().SetIntegrationID(i.ID).SetGroupID(g.ID).SaveX(ctx)
 	plain := "oxi_" + strings.Repeat("x", 43)
 	db.IntegrationToken.Create().SetIntegrationID(i.ID).SetPrefix("oxi_xxx").SetTokenHash(TokenHash(plain)).SetScopes(AllowedScopes).SetExpiresAt(time.Now().Add(time.Hour)).SaveX(ctx)
-	service := &Service{DB: db, Enabled: true, CursorKey: []byte(strings.Repeat("s", 32))}
+	service := &Service{DB: db, CursorKey: []byte(strings.Repeat("s", 32))}
 	h := service.Handler()
 	call := func(method, path, key string, body any) *httptest.ResponseRecorder {
 		raw, _ := json.Marshal(body)
@@ -92,7 +92,7 @@ func TestTicketWritebackIdempotencyAndRevision(t *testing.T) {
 		_ = json.Unmarshal(w.Body.Bytes(), &body)
 		return body.Error.Code + "|" + body.Error.Message
 	}
-	h = (&Service{DB: db, Enabled: true, CursorKey: []byte(strings.Repeat("s", 32))}).Handler() // 换实例重置写限流
+	h = (&Service{DB: db, CursorKey: []byte(strings.Repeat("s", 32))}).Handler() // 换实例重置写限流
 	hidden := call("PUT", base+"/tickets/SEC-9", "probe-hidden", ticket)
 	missing := call("PUT", "/api/integration/v1/incidents/"+uuid.NewString()+"/tickets/SEC-9", "probe-missing", ticket)
 	if hidden.Code != 404 || missing.Code != 404 || message(hidden) != message(missing) {

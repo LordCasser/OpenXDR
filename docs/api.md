@@ -215,8 +215,10 @@ JSON 保留原值，结构为 `{schemaVersion, exportedAt, filters, count, items
 机器接口使用 `/api/integration/v1/`，仅接受 `Authorization: Bearer oxi_...`，不接受浏览器 cookie；
 该令牌也不能访问浏览器管理 API。契约见 [integration-v1.yaml](openapi/integration-v1.yaml)。
 
-部署时设置 `INTEGRATION_API_ENABLED=true` 和 `INTEGRATION_CURSOR_KEY`（至少 32 字节随机值的 base64 编码）。
-集群各节点使用相同游标签名密钥；更换密钥使旧游标失效，但不会吊销 Token。默认关闭 API。
+不需要额外环境变量：游标签名密钥由 `HOST_CREDENTIAL_KEY` 派生，未配置主密钥时返回 503。
+更换主密钥使旧游标失效，但不会吊销 Token。没有启用的集成和有效 Token 就没有外部访问。
+`GET/PUT /api/system-integrations/outbound-allow`（全局管理员）读写事件推送的内网放行清单 `{entries,locked}`，
+环境变量 `INTEGRATION_WEBHOOK_ALLOW` 配置时 `locked=true`，修改返回 409。
 管理员在「系统集成」创建身份、负责人、授权组和 scope，再签发 1–365 天 Token（默认 90 天）。
 空组列表不授予任何资源权限。Token 秘密仅显示一次，后端只存摘要；轮换采用签发新令牌后吊销旧令牌。
 

@@ -6,8 +6,8 @@ Suricata 独立执行 `.rules`；平台不执行该规则格式，不管理它�
 
 ## 配置
 
-接入走[外部系统集成 API](deployment.md#外部系统集成-api)，先确保 server 已设置 `INTEGRATION_API_ENABLED=true`
-与 `INTEGRATION_CURSOR_KEY`。然后在控制台「系统集成」为每个探针建一个集成：
+接入走[外部系统集成 API](deployment.md#外部系统集成-api)，不需要额外环境变量（要求已配置 `HOST_CREDENTIAL_KEY`，
+安装脚本默认生成）。在控制台「系统集成」为每个探针建一个集成：
 
 - scopes 选「Suricata 告警写入」（`suricata:write`），授权组**恰好一个**，即告警归属的组；
 - 签发只带 `suricata:write` 的 Token，明文只显示一次，不要提交到 Git。
@@ -31,7 +31,7 @@ Token 只能写这个组的告警，不授予查询、执行或处置权限；�
 | 403 | Token 或集成缺 `suricata:write`，或授权组不是恰好一个 |
 | 405 | 方法不是 POST |
 | 413 | 请求超过大小限制或读取失败 |
-| 503 | 集成 API 未启用、队列/数据库失败等；保留原始事件，恢复后重传 |
+| 503 | 未配置 `HOST_CREDENTIAL_KEY`、队列/数据库失败等；保留原始事件，恢复后重传 |
 
 连接超时可能已经接收。重传原始事件即可，服务端以来源组、集成 ID 和规范 JSON 生成稳定 ID；
 重排 JSON 键或改变空白不产生新事件。重传不会增加告警计数；同一签名在同一地址对上的真实重复命中
