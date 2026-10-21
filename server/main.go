@@ -350,6 +350,7 @@ func startTriage(ctx context.Context, db *sql.DB, client *ent.Client, rules sigm
 		Rules:    rules,
 		LLM:      llmFor("triage"),
 		Interval: time.Duration(getenvInt("AI_INTERVAL_SECONDS", 30)) * time.Second,
+		Cooldown: time.Duration(getenvInt("AI_RETRIAGE_COOLDOWN_MINUTES", 30)) * time.Minute,
 	}
 	// 自动响应：显式开启才挂钩子，隔离真执行（仍受 RESPONSE_ENABLED 约束），白名单主机绝不自动隔离
 	if os.Getenv("AUTO_RESPONSE_ENABLED") == "true" {

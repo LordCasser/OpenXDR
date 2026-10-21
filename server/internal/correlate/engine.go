@@ -80,7 +80,11 @@ func (e *Engine) batch(ctx context.Context) error {
 	byAsset := map[uuid.UUID]cachedIncident{}
 	graphs := map[uuid.UUID]*Graph{}
 	assign := map[uuid.UUID][]uuid.UUID{}
-	reopen := map[uuid.UUID]bool{}
+	// 并入了新证据的 incident（研判按 evidence_at 判断是否待重研判），其中 urgent 是升级类、要立即重研判的
+	evidence := map[uuid.UUID]bool{}
+	urgent := map[uuid.UUID]bool{}
+	crit := e.criticalOf()
+	ruleIn := map[string]bool{}
 	// 标题跟随最高级别的告警：maxSev 是各 incident 当前最高级别，titles 是批内要改写的标题
 	maxSev := map[uuid.UUID]int16{}
 	titles := map[uuid.UUID]string{}
@@ -154,16 +158,21 @@ func (e *Engine) batch(ctx context.Context) error {
 			escalate[inc.ID] = true
 		}
 		byAsset[bucket] = cachedIncident{incident: inc, lastTs: al.Ts}
-		// 已研判的 incident 收到新证据：重开，研判引擎会带新证据重新定性。
+		// 已研判的 incident 收到新证据：记下时刻，研判引擎冷却到期后带新证据重新定性，旧结论在此之前继续有效。
 		// 同一实体同一规则又来一次不算新证据——周期扫描每来一次就重新研判一遍，
-		// 等于把拆开的 incident 换个形式又研判 N 次；级别升高才是要重新定性的信号。
-		// 按粗键并进来的不是同一实体（命令行不同、新冒出的程序），照常重开重判
+		// 等于把拆开的 incident 换个形式又研判 N 次。按粗键并进来的不是同一实体（命令行不同、新冒出的程序），照常算。
+		// 升级类证据不等冷却：级别升高，或这个 incident 里头一回出现的高危例外规则（情报命中、拿凭据、抹痕迹、
+		// 关防护、搞破坏，与可信来源的高危例外同一口径）。同一条高危规则再来只按普通新证据冷却，免得它自己成风暴。
+		// 还没研判过的照样记：首次研判可能正在进行，完成时据此知道有没看过的证据
 		seenKey := inc.ID.String() + "|" + entity
-		if inc.Status == "triaged" {
-			repeated := entity != "" && (seen[seenKey] || e.seenIn(ctx, inc.ID, al, key))
-			if escalated || !repeated {
-				reopen[inc.ID] = true
-			}
+		ruleKey := inc.ID.String() + "|" + al.RuleID
+		if escalated || crit(al.RuleID) && !ruleIn[ruleKey] && !e.ruleIn(ctx, inc.ID, al.RuleID) {
+			urgent[inc.ID] = true
+			evidence[inc.ID] = true
+		}
+		ruleIn[ruleKey] = true
+		if inc.Status != "triaged" || entity == "" || !seen[seenKey] && !e.seenIn(ctx, inc.ID, al, key) {
+			evidence[inc.ID] = true
 		}
 		if entity != "" {
 			seen[seenKey] = true
@@ -191,9 +200,20 @@ func (e *Engine) batch(ctx context.Context) error {
 	}
 
 	for incID, g := range graphs {
+		// 先归属告警再记证据时刻：研判按「证据时刻晚于取上下文的时刻」认没看过的证据，反过来会漏
+		if err := e.DB.Alert.Update().
+			Where(alert.IDIn(assign[incID]...)).
+			SetIncidentID(incID).
+			Exec(ctx); err != nil {
+			return err
+		}
+		now := time.Now()
 		upd := e.DB.Incident.UpdateOneID(incID).SetGraph(g.raw())
-		if reopen[incID] {
-			upd.SetStatus("open")
+		if evidence[incID] {
+			upd.SetEvidenceAt(now)
+		}
+		if urgent[incID] {
+			upd.SetUrgentAt(now)
 		}
 		if title, ok := titles[incID]; ok {
 			upd.SetTitle(title)
@@ -202,12 +222,6 @@ func (e *Engine) batch(ctx context.Context) error {
 			upd.ClearNotifiedAt()
 		}
 		if err := upd.Exec(ctx); err != nil {
-			return err
-		}
-		if err := e.DB.Alert.Update().
-			Where(alert.IDIn(assign[incID]...)).
-			SetIncidentID(incID).
-			Exec(ctx); err != nil {
 			return err
 		}
 	}
@@ -222,6 +236,26 @@ func (e *Engine) title(al *ent.Alert) string {
 		hostname = al.Edges.Asset.Hostname
 	}
 	return fmt.Sprintf("%s @ %s", e.ruleTitle(al.RuleID), hostname)
+}
+
+// criticalOf 本批次的高危例外判定（情报命中与高危战术/技术，见 automation.Watch），按规则缓存
+func (e *Engine) criticalOf() func(ruleID string) bool {
+	rules := e.Rules.Rules()
+	cache := map[string]bool{}
+	return func(ruleID string) bool {
+		c, ok := cache[ruleID]
+		if !ok {
+			c = automation.Watch(ruleID, rules)
+			cache[ruleID] = c
+		}
+		return c
+	}
+}
+
+// ruleIn incident 里是否已有这条规则的告警；查不了按没有算，宁可多研判一次也不把高危压进冷却
+func (e *Engine) ruleIn(ctx context.Context, incID uuid.UUID, ruleID string) bool {
+	ok, err := e.DB.Alert.Query().Where(alert.IncidentIDEQ(incID), alert.RuleIDEQ(ruleID)).Exist(ctx)
+	return ok && err == nil
 }
 
 // maxSeverity 已归属告警里的最高级别；没有已归属告警时返回最小值，任何告警都比它高。

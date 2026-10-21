@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
@@ -50,6 +51,8 @@ type Engine struct {
 	DB       *ent.Client
 	LLM      *LLM
 	Interval time.Duration
+	// Cooldown 已研判的 incident 又并入普通新证据时，距上次研判至少隔这么久才重研判；升级类证据不等
+	Cooldown time.Duration
 	// Rules 用于把上下文里的规则 UUID 翻译成标题，模型看得懂才判得准
 	Rules interface{ TitleOf(id string) string }
 	// OnVerdict 结论落库后的钩子（自动响应挂在这里），nil 表示无人关心
@@ -75,42 +78,120 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
+// 每轮研判名额与其中留给重研判的保底名额：新事件有多数，重研判有保底，谁也饿不死谁
+const (
+	batchSize     = 5
+	retriageSlots = 1
+)
+
+// 研判失败的退避：从一分钟起每次翻倍，封顶一小时；只退避失败的那一个
+const (
+	backoffBase = time.Minute
+	backoffMax  = time.Hour
+)
+
+// clockSkew 研判取上下文的时刻往前让一点：关联与研判可能跑在不同节点，时钟差一点也不把证据当成已看过
+const clockSkew = time.Second
+
 func (e *Engine) batch(ctx context.Context) error {
-	// 只看 status：重开的 incident（带新证据）会被重新研判，旧 verdict 被覆盖
-	incidents, err := e.DB.Incident.Query().
-		Where(incident.StatusEQ("open")).
-		Order(ent.Asc(incident.FieldCreatedAt)).
-		Limit(5).
-		All(ctx)
+	incidents, err := e.queue(ctx, time.Now())
 	if err != nil {
 		return err
 	}
-
 	for _, inc := range incidents {
-		context_, err := e.buildContext(ctx, inc)
-		if err != nil {
-			return err
+		if err := e.triageOne(ctx, inc); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			// 一个失败（多半是大上下文超时）只退避它自己，后面的照常研判
+			slog.Error("incident 研判失败，退避后缩小上下文重试", "id", inc.ID, "failures", inc.TriageFailures+1, "err", err)
+			if err := e.backoff(ctx, inc, time.Now()); err != nil {
+				return err
+			}
 		}
-		// 模型可以在控制台随时换，结论里记下这一次实际用的，准确度才能按模型对比
-		_, model, _ := e.LLM.endpoint()
-		answer, err := e.investigate(ctx, context_)
-		if err != nil {
-			return err
-		}
-		verdict := withModel(parseVerdict(inc.ID.String(), answer), model)
-		// LLM 调用慢，逐个落库，中途挂了不丢已完成的研判
-		upd := e.DB.Incident.UpdateOneID(inc.ID).SetAiVerdict(verdict).SetStatus("triaged")
-		// 复发并入后重判从良性翻成可疑或恶意：之前按良性静默过的要重新决定推送，升级信号不能被旧结论吞掉
-		if inc.NotifiedAt != nil && verdictLabel(inc.AiVerdict) == "benign" && verdictLabel(verdict) != "benign" {
-			upd.ClearNotifiedAt()
-		}
-		if err := upd.Exec(ctx); err != nil {
-			return err
-		}
-		slog.Info("incident 研判完成", "id", inc.ID)
-		if e.OnVerdict != nil {
-			e.OnVerdict(ctx, inc.ID, verdict)
-		}
+	}
+	return nil
+}
+
+// queue 本轮要研判的 incident，见 docs/detection.md「研判节奏」：
+//   - 新事件（open：还没有可用结论）按创建先后，占多数名额；
+//   - 重研判里升级类（Urgent）不等冷却，普通新证据（Retriage）要距上次研判满 Cooldown；
+//     两类都按上次研判时刻排（刚研判过的排后面），升级类在前，至少留 retriageSlots 个名额，新事件不满时补满；
+//   - 失败退避中的都不取。
+func (e *Engine) queue(ctx context.Context, now time.Time) ([]*ent.Incident, error) {
+	ready := incident.Or(incident.TriageRetryAtIsNil(), incident.TriageRetryAtLTE(now))
+	fresh, err := e.DB.Incident.Query().
+		Where(incident.StatusEQ("open"), ready).
+		Order(ent.Asc(incident.FieldCreatedAt)).
+		Limit(batchSize).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	urgent, err := e.DB.Incident.Query().
+		Where(review.Urgent(), ready).
+		Order(lastLooked).
+		Limit(batchSize).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	due, err := e.DB.Incident.Query().
+		Where(review.Retriage(), incident.Not(review.Urgent()), ready,
+			incident.Or(incident.TriagedAtIsNil(), incident.TriagedAtLTE(now.Add(-e.Cooldown)))).
+		Order(lastLooked).
+		Limit(batchSize).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	again := append(urgent, due...)
+	again = again[:min(len(again), max(retriageSlots, batchSize-len(fresh)))]
+	return append(fresh[:min(len(fresh), batchSize-len(again))], again...), nil
+}
+
+// lastLooked 按上次研判时刻（没研判过按创建时刻）排：刚看过的排后面，等得最久的先轮到
+func lastLooked(s *sql.Selector) {
+	s.OrderExpr(sql.Expr(fmt.Sprintf("COALESCE(%s, %s)", s.C(incident.FieldTriagedAt), s.C(incident.FieldCreatedAt))))
+}
+
+// backoff 记一次失败：下次研判推迟，上下文按失败次数缩小（见 buildContext）
+func (e *Engine) backoff(ctx context.Context, inc *ent.Incident, now time.Time) error {
+	wait := min(backoffBase<<min(inc.TriageFailures, 10), backoffMax)
+	return e.DB.Incident.UpdateOneID(inc.ID).AddTriageFailures(1).SetTriageRetryAt(now.Add(wait)).Exec(ctx)
+}
+
+// triageOne 研判一个 incident 并落库。取上下文的时刻记为 triaged_at：研判期间并进来的证据晚于它，仍算待重研判
+func (e *Engine) triageOne(ctx context.Context, inc *ent.Incident) error {
+	snapshot := time.Now().Add(-clockSkew)
+	context_, err := e.buildContext(ctx, inc)
+	if err != nil {
+		return err
+	}
+	// 模型可以在控制台随时换，结论里记下这一次实际用的，准确度才能按模型对比
+	_, model, _ := e.LLM.endpoint()
+	answer, err := e.investigate(ctx, context_)
+	if err != nil {
+		return err
+	}
+	verdict := withModel(parseVerdict(inc.ID.String(), answer), model)
+	upd := e.DB.Incident.UpdateOneID(inc.ID).SetAiVerdict(verdict).
+		SetTriagedAt(snapshot).AddTriageCount(1).SetTriageFailures(0).ClearTriageRetryAt()
+	// 重研判从良性翻成可疑或恶意：之前按良性静默过的要重新决定推送，升级信号不能被旧结论吞掉
+	if verdictLabel(inc.AiVerdict) == "benign" && verdictLabel(verdict) != "benign" {
+		upd.ClearNotifiedAt()
+	}
+	if err := upd.Exec(ctx); err != nil {
+		return err
+	}
+	// 研判期间被分析师结案的不改回来
+	if err := e.DB.Incident.Update().Where(incident.IDEQ(inc.ID), incident.StatusEQ("open")).
+		SetStatus("triaged").Exec(ctx); err != nil {
+		return err
+	}
+	slog.Info("incident 研判完成", "id", inc.ID, "round", inc.TriageCount+1)
+	if e.OnVerdict != nil {
+		e.OnVerdict(ctx, inc.ID, verdict)
 	}
 	return nil
 }
@@ -191,11 +272,18 @@ func parseVerdict(incidentID, answer string) json.RawMessage {
 	return fallback
 }
 
+// 告警明细条数：失败一次减半（超时多半是上下文太大），最少留几条；汇总照常是全量
+const (
+	detailLimit    = 50
+	minDetailLimit = 5
+)
+
 func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, error) {
+	limit := max(detailLimit>>min(inc.TriageFailures, 10), minDetailLimit)
 	alerts, err := e.DB.Alert.Query().
 		Where(alert.IncidentIDEQ(inc.ID)).
 		Order(ent.Asc(alert.FieldTs)).
-		Limit(50).
+		Limit(limit).
 		WithEvent().
 		All(ctx)
 	if err != nil {
@@ -209,38 +297,15 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 	}
 	fmt.Fprintf(&sb, "# 事件: %s\n创建时间: %s\n", title, inc.CreatedAt.Format(time.RFC3339))
 	fmt.Fprintf(&sb, "## 实体关系图\n%s\n", inc.Graph)
-	if err := e.appendRuleTally(ctx, &sb, inc.ID); err != nil {
+	if err := e.appendRuleTally(ctx, &sb, "## 告警汇总（按规则统计同类重复，含明细未列出的）\n", alert.IncidentIDEQ(inc.ID)); err != nil {
+		return "", err
+	}
+	if err := e.appendRetriage(ctx, &sb, inc, limit); err != nil {
 		return "", err
 	}
 	fmt.Fprintf(&sb, "## 告警明细（%d 条，按时间排序）\n", len(alerts))
 	for _, a := range alerts {
-		raw := "{}"
-		if a.Edges.Event != nil {
-			raw = string(a.Edges.Event.Raw)
-			if len(raw) > 500 {
-				raw = raw[:500] + "…"
-			}
-		}
-		rule := a.RuleID
-		if e.Rules != nil {
-			if title := e.Rules.TitleOf(a.RuleID); title != "" {
-				rule = title
-			}
-		}
-		fmt.Fprintf(&sb, "- [%s] severity=%d count=%d rule=%s event=%s\n",
-			a.Ts.Format("15:04:05"), a.Severity, a.Count, rule, raw)
-		// 合成检测（心跳等）的依据在 detail 里，单看那一条连接事件判断不出规律
-		if a.Detail != nil {
-			fmt.Fprintf(&sb, "  依据：%s\n", *a.Detail)
-		}
-		// 可信来源的告警只有高危例外会进 incident：来源是已登记的运维自动化，但这类行为在密钥被盗用时最要紧
-		if a.AutomationID != nil {
-			name := a.AutomationID.String()
-			if t, err := e.DB.TrustedSource.Get(ctx, *a.AutomationID); err == nil {
-				name = t.Name
-			}
-			fmt.Fprintf(&sb, "  来源：登记的可信自动化「%s」的 SSH 会话（高危例外仍需研判：确认是否符合该自动化的正常用途，警惕其凭据被盗用）\n", name)
-		}
+		e.writeAlert(ctx, &sb, a)
 	}
 	e.appendIPInfo(ctx, &sb, alerts)
 	e.appendCaseHistory(ctx, &sb, inc, alerts)
@@ -248,16 +313,105 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 	return sb.String(), nil
 }
 
-// appendRuleTally 按规则汇总 incident 的全部告警：复发归并会把同类告警并进同一个 incident，
+// writeAlert 一条告警明细
+func (e *Engine) writeAlert(ctx context.Context, sb *strings.Builder, a *ent.Alert) {
+	raw := "{}"
+	if a.Edges.Event != nil {
+		raw = string(a.Edges.Event.Raw)
+		if len(raw) > 500 {
+			raw = raw[:500] + "…"
+		}
+	}
+	fmt.Fprintf(sb, "- [%s] severity=%d count=%d rule=%s event=%s\n",
+		a.Ts.Format("15:04:05"), a.Severity, a.Count, e.ruleName(a.RuleID), raw)
+	// 合成检测（心跳等）的依据在 detail 里，单看那一条连接事件判断不出规律
+	if a.Detail != nil {
+		fmt.Fprintf(sb, "  依据：%s\n", *a.Detail)
+	}
+	// 可信来源的告警只有高危例外会进 incident：来源是已登记的运维自动化，但这类行为在密钥被盗用时最要紧
+	if a.AutomationID != nil {
+		name := a.AutomationID.String()
+		if t, err := e.DB.TrustedSource.Get(ctx, *a.AutomationID); err == nil {
+			name = t.Name
+		}
+		fmt.Fprintf(sb, "  来源：登记的可信自动化「%s」的 SSH 会话（高危例外仍需研判：确认是否符合该自动化的正常用途，警惕其凭据被盗用）\n", name)
+	}
+}
+
+func (e *Engine) ruleName(id string) string {
+	if e.Rules != nil {
+		if title := e.Rules.TitleOf(id); title != "" {
+			return title
+		}
+	}
+	return id
+}
+
+// newAlertMargin 「上次研判后新增」往前多算一点：告警入库后要等关联引擎下一轮才归属进来，
+// 上次取上下文时还没归属的也算新增，宁可重复列出也不漏
+const newAlertMargin = time.Minute
+
+// appendRetriage 重研判时告诉模型：第几次、上次结论、上次之后新增了什么（按规则汇总加最新几条明细，不全量铺开）
+func (e *Engine) appendRetriage(ctx context.Context, sb *strings.Builder, inc *ent.Incident, limit int) error {
+	if len(inc.AiVerdict) == 0 {
+		return nil
+	}
+	var last struct {
+		Verdict    string `json:"verdict"`
+		Confidence int    `json:"confidence"`
+		Summary    string `json:"summary"`
+	}
+	_ = json.Unmarshal(inc.AiVerdict, &last)
+	fmt.Fprintf(sb, "## 重新研判（此前已研判 %d 次）\n", max(inc.TriageCount, 1))
+	when := "时刻未记录"
+	if inc.TriagedAt != nil {
+		when = "于 " + inc.TriagedAt.Format(time.RFC3339)
+	}
+	fmt.Fprintf(sb, "上次研判%s，结论 %s（置信度 %d）：%s\n", when, cmp.Or(last.Verdict, "无法解析"), last.Confidence, excerpt(last.Summary, 300))
+	sb.WriteString("上次结论没看过下面的新增告警；判断它们是否改变结论，仍输出完整的 JSON 结论。\n")
+	if inc.TriagedAt == nil {
+		return nil
+	}
+	since := alert.IDGTE(v7Floor(inc.TriagedAt.Add(-newAlertMargin)))
+	if err := e.appendRuleTally(ctx, sb, "### 上次研判之后新增的告警（按规则汇总）\n", alert.IncidentIDEQ(inc.ID), since); err != nil {
+		return err
+	}
+	fresh, err := e.DB.Alert.Query().
+		Where(alert.IncidentIDEQ(inc.ID), since).
+		Order(ent.Desc(alert.FieldSeverity), ent.Desc(alert.FieldTs)).
+		Limit(max(limit/5, 3)).
+		WithEvent().
+		All(ctx)
+	if err != nil || len(fresh) == 0 {
+		return err
+	}
+	fmt.Fprintf(sb, "### 新增告警明细（级别最高、最新的 %d 条）\n", len(fresh))
+	for _, a := range fresh {
+		e.writeAlert(ctx, sb, a)
+	}
+	return nil
+}
+
+// v7Floor 某时刻之后生成的 UUIDv7 都不小于它：告警主键是 v7，按主键比就是按入库时间比
+func v7Floor(t time.Time) uuid.UUID {
+	var u uuid.UUID
+	ms := uint64(t.UnixMilli())
+	for i := range 6 {
+		u[i] = byte(ms >> (40 - 8*i))
+	}
+	return u
+}
+
+// appendRuleTally 按规则汇总告警：复发归并会把同类告警并进同一个 incident，
 // 明细只列前 50 条，模型要看到「同一规则重复了 N 次」而不是只看第一条。
-func (e *Engine) appendRuleTally(ctx context.Context, sb *strings.Builder, incID uuid.UUID) error {
+func (e *Engine) appendRuleTally(ctx context.Context, sb *strings.Builder, heading string, where ...predicate.Alert) error {
 	type ruleTally struct {
 		RuleID string `json:"rule_id"`
 		Alerts int    `json:"count"`
 		Hits   int    `json:"sum"`
 	}
 	var tally []ruleTally
-	if err := e.DB.Alert.Query().Where(alert.IncidentIDEQ(incID)).
+	if err := e.DB.Alert.Query().Where(where...).
 		GroupBy(alert.FieldRuleID).
 		Aggregate(ent.Count(), ent.Sum(alert.FieldCount)).
 		Scan(ctx, &tally); err != nil {
@@ -266,15 +420,12 @@ func (e *Engine) appendRuleTally(ctx context.Context, sb *strings.Builder, incID
 	slices.SortFunc(tally, func(a, b ruleTally) int {
 		return cmp.Or(b.Alerts-a.Alerts, strings.Compare(a.RuleID, b.RuleID))
 	})
-	sb.WriteString("## 告警汇总（按规则统计同类重复，含明细未列出的）\n")
+	if len(tally) == 0 {
+		return nil
+	}
+	sb.WriteString(heading)
 	for _, t := range tally {
-		rule := t.RuleID
-		if e.Rules != nil {
-			if title := e.Rules.TitleOf(t.RuleID); title != "" {
-				rule = title
-			}
-		}
-		fmt.Fprintf(sb, "- %s：%d 条告警（去重前累计命中 %d 次）\n", rule, t.Alerts, t.Hits)
+		fmt.Fprintf(sb, "- %s：%d 条告警（去重前累计命中 %d 次）\n", e.ruleName(t.RuleID), t.Alerts, t.Hits)
 	}
 	return nil
 }

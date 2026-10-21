@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/internal/review"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/testdb"
 )
@@ -70,7 +71,7 @@ func (f *recurFixture) asset(name string) uuid.UUID {
 	return f.client.Asset.Create().SetHostname(name).SaveX(f.ctx).ID
 }
 
-// 生产实例：同一情报 IP 每隔几小时扫一次同一台主机，已研判的 incident 收下复发、不重开；
+// 生产实例：同一情报 IP 每隔几小时扫一次同一台主机，已研判的 incident 收下复发、不记新证据；
 // 跨批次与批内两条路径都要并。
 func TestRecurrenceMergesAcrossHours(t *testing.T) {
 	f := newRecurFixture(t)
@@ -80,7 +81,7 @@ func TestRecurrenceMergesAcrossHours(t *testing.T) {
 	first := f.scan(host, base, "176.120.22.61")
 	f.batch()
 	inc := f.incidentOf(first)
-	f.client.Incident.UpdateOneID(inc.ID).SetStatus("triaged").SetNotifiedAt(time.Now()).
+	f.client.Incident.UpdateOneID(inc.ID).SetStatus("triaged").SetNotifiedAt(time.Now()).SetTriagedAt(time.Now()).
 		SetAiVerdict(json.RawMessage(`{"verdict":"benign"}`)).ExecX(f.ctx)
 
 	// 跨批次：4 小时后再来一次
@@ -100,17 +101,17 @@ func TestRecurrenceMergesAcrossHours(t *testing.T) {
 		t.Fatalf("同实体复发应只有 1 个 incident，实际 %d", n)
 	}
 	got := f.client.Incident.GetX(f.ctx, inc.ID)
-	if got.Status != "triaged" || got.NotifiedAt == nil {
-		t.Errorf("同级复发不是新证据，不应重开或重新推送：status=%s notified=%v", got.Status, got.NotifiedAt)
+	if got.Status != "triaged" || review.IsRetriage(got) || got.NotifiedAt == nil {
+		t.Errorf("同级复发不是新证据，不应待重研判或重新推送：status=%s evidence=%v notified=%v", got.Status, got.EvidenceAt, got.NotifiedAt)
 	}
 
-	// 级别升高（情报更新后该 IP 定级变高）：重开等重新研判，推送标记清掉重新决定
+	// 级别升高（情报更新后该 IP 定级变高）：立即重研判，推送标记清掉重新决定
 	worse := f.scan(host, base.Add(11*time.Hour), "176.120.22.61")
 	f.client.Alert.UpdateOneID(worse.ID).SetSeverity(5).ExecX(f.ctx)
 	f.batch()
 	got = f.client.Incident.GetX(f.ctx, inc.ID)
-	if f.incidentOf(worse).ID != inc.ID || got.Status != "open" || got.NotifiedAt != nil {
-		t.Errorf("级别升高应并入并重开、清推送标记：status=%s notified=%v", got.Status, got.NotifiedAt)
+	if f.incidentOf(worse).ID != inc.ID || !review.IsUrgent(got) || got.NotifiedAt != nil {
+		t.Errorf("级别升高应并入、立即重研判、清推送标记：urgent=%v notified=%v", got.UrgentAt, got.NotifiedAt)
 	}
 }
 
@@ -207,7 +208,7 @@ func (f *recurFixture) proc(asset uuid.UUID, ts time.Time, rule, user, image, pa
 }
 
 // 粗键：同映像同用户同父进程、命令行不同的复发并入（跨批次与批内）；首次出现规则按主机+用户+父进程并。
-// 已研判的 incident 收到命令行不同的同类告警要重开重判，但不清推送标记；完全相同的复发仍不重开。
+// 已研判的 incident 收到命令行不同的同类告警记为新证据、待重研判，但不清推送标记；完全相同的复发不算。
 func TestRecurrenceCoarseMerges(t *testing.T) {
 	f := newRecurFixture(t)
 	host := f.asset("pve2")
@@ -216,7 +217,7 @@ func TestRecurrenceCoarseMerges(t *testing.T) {
 	first := f.proc(host, base, "r-lvm", "root", "/sbin/lvcreate", "/usr/bin/perl", "lvcreate -V 4096k --name vm-145")
 	f.batch()
 	inc := f.incidentOf(first)
-	f.client.Incident.UpdateOneID(inc.ID).SetStatus("triaged").SetNotifiedAt(time.Now()).
+	f.client.Incident.UpdateOneID(inc.ID).SetStatus("triaged").SetNotifiedAt(time.Now()).SetTriagedAt(time.Now()).
 		SetAiVerdict(json.RawMessage(`{"verdict":"benign"}`)).ExecX(f.ctx)
 
 	same := f.proc(host, base.Add(3*time.Hour), "r-lvm", "root", "/usr/sbin/lvcreate", "/usr/bin/perl", "lvcreate -V 4096k --name vm-145")
@@ -224,8 +225,8 @@ func TestRecurrenceCoarseMerges(t *testing.T) {
 	if f.incidentOf(same).ID != inc.ID {
 		t.Fatal("同映像同命令行的复发应并入")
 	}
-	if got := f.client.Incident.GetX(f.ctx, inc.ID); got.Status != "triaged" {
-		t.Errorf("完全相同的复发不是新证据，不应重开：%s", got.Status)
+	if got := f.client.Incident.GetX(f.ctx, inc.ID); got.Status != "triaged" || review.IsRetriage(got) {
+		t.Errorf("完全相同的复发不是新证据，不应待重研判：%s %v", got.Status, got.EvidenceAt)
 	}
 
 	other := f.proc(host, base.Add(6*time.Hour), "r-lvm", "root", "/usr/sbin/lvcreate", "/usr/bin/perl", "lvcreate -V 8192k --name vm-146")
@@ -237,8 +238,8 @@ func TestRecurrenceCoarseMerges(t *testing.T) {
 		}
 	}
 	got := f.client.Incident.GetX(f.ctx, inc.ID)
-	if got.Status != "open" || got.NotifiedAt == nil {
-		t.Errorf("粗键并入的不同命令行应重开重判、同级不重新推送：status=%s notified=%v", got.Status, got.NotifiedAt)
+	if !review.IsRetriage(got) || review.IsUrgent(got) || got.NotifiedAt == nil {
+		t.Errorf("粗键并入的不同命令行应待重研判（不立即）、同级不重新推送：evidence=%v urgent=%v notified=%v", got.EvidenceAt, got.UrgentAt, got.NotifiedAt)
 	}
 
 	// 首次出现：每条映像都不同，同主机同用户同父进程的并成一件
@@ -298,7 +299,7 @@ func TestRecurrenceCoarseKeepsApart(t *testing.T) {
 	}
 }
 
-// 粗键沿用复发归并的口径：已结案不并、超过跨度上限新开、级别升高重开并清推送标记。
+// 粗键沿用复发归并的口径：已结案不并、超过跨度上限新开、级别升高立即重研判并清推送标记。
 func TestRecurrenceCoarseLimits(t *testing.T) {
 	f := newRecurFixture(t)
 	hostA := f.asset("pve1")
@@ -315,7 +316,7 @@ func TestRecurrenceCoarseLimits(t *testing.T) {
 	old := f.incidentOf(oldFirst)
 	f.client.Incident.UpdateOneID(old.ID).SetCreatedAt(now.Add(-25 * time.Hour)).ExecX(f.ctx)
 	triaged := f.incidentOf(triagedFirst)
-	f.client.Incident.UpdateOneID(triaged.ID).SetStatus("triaged").SetNotifiedAt(now).ExecX(f.ctx)
+	f.client.Incident.UpdateOneID(triaged.ID).SetStatus("triaged").SetNotifiedAt(now).SetTriagedAt(now).ExecX(f.ctx)
 
 	afterClose := f.proc(hostA, now, "r-a", "root", "/usr/bin/pgrep", "/usr/sbin/cron", "pgrep b")
 	afterSpan := f.proc(hostB, now, "r-a", "root", "/usr/bin/pgrep", "/usr/sbin/cron", "pgrep b")
@@ -333,7 +334,45 @@ func TestRecurrenceCoarseLimits(t *testing.T) {
 		t.Error("超过跨度上限不应按粗键并入")
 	}
 	got := f.client.Incident.GetX(f.ctx, triaged.ID)
-	if f.incidentOf(worse).ID != triaged.ID || got.Status != "open" || got.NotifiedAt != nil {
-		t.Errorf("级别升高应并入并重开、清推送标记：status=%s notified=%v", got.Status, got.NotifiedAt)
+	if f.incidentOf(worse).ID != triaged.ID || !review.IsUrgent(got) || got.NotifiedAt != nil {
+		t.Errorf("级别升高应并入、立即重研判、清推送标记：urgent=%v notified=%v", got.UrgentAt, got.NotifiedAt)
+	}
+}
+
+// 已研判的 incident 并入新证据：普通的只待重研判（等冷却）；头一回出现的高危例外规则（情报命中等）立即重研判，
+// 但同一条高危规则再来不算升级，免得它自己成风暴；级别没升高不清推送标记
+func TestEvidenceMarksRetriage(t *testing.T) {
+	f := newRecurFixture(t)
+	host := f.asset("pve1")
+	base := time.Now().Add(-time.Hour)
+
+	first := f.dns(host, base, "a.example.top")
+	f.batch()
+	inc := f.incidentOf(first)
+	settle := func() {
+		f.client.Incident.UpdateOneID(inc.ID).SetStatus("triaged").SetTriagedAt(time.Now()).SetNotifiedAt(time.Now()).ExecX(f.ctx)
+	}
+	settle()
+
+	other := f.dns(host, base.Add(time.Minute), "b.example.top")
+	f.batch()
+	got := f.client.Incident.GetX(f.ctx, inc.ID)
+	if f.incidentOf(other).ID != inc.ID || !review.IsRetriage(got) || review.IsUrgent(got) {
+		t.Fatalf("同规则新实体应待重研判、不立即：evidence=%v urgent=%v", got.EvidenceAt, got.UrgentAt)
+	}
+
+	settle()
+	hit := f.alert(host, base.Add(2*time.Minute), "intel:domain:evil.example", 2, 4003, `{"query":{"hostname":"evil.example"}}`)
+	f.batch()
+	got = f.client.Incident.GetX(f.ctx, inc.ID)
+	if f.incidentOf(hit).ID != inc.ID || !review.IsUrgent(got) || got.NotifiedAt == nil {
+		t.Fatalf("头一回出现的情报命中应立即重研判、级别未升不清推送标记：urgent=%v notified=%v", got.UrgentAt, got.NotifiedAt)
+	}
+
+	settle()
+	f.alert(host, base.Add(3*time.Minute), "intel:domain:evil.example", 2, 4003, `{"query":{"hostname":"evil.example"}}`)
+	f.batch()
+	if got = f.client.Incident.GetX(f.ctx, inc.ID); review.IsUrgent(got) || review.IsRetriage(got) {
+		t.Errorf("同一情报再命中既不是升级也不是新证据：evidence=%v urgent=%v", got.EvidenceAt, got.UrgentAt)
 	}
 }
