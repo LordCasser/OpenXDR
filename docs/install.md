@@ -96,6 +96,8 @@ sensor 安装包同样内置在 server 镜像里，升级 OpenXDR 后在线探�
 | agent 连不上 | 主机到 `<地址>:8081` 的网络与防火墙；`docker compose logs server` 看拒绝原因 |
 | 探针安装报「令牌用途不符」 | 用了 agent 令牌装探针（或反过来），在添加主机里切到对应的类型重新生成 |
 | 探针抓包状态「不可用」或一直没状态 | `journalctl -u openxdr-sensor` 看原因；常见是网卡名写错或网卡没起来，改 `/etc/systemd/system/openxdr-sensor.service` 里的 `SENSOR_IFACE` 或重新执行安装命令 |
+| Windows agent 不在线或采集异常 | 看 `C:\ProgramData\OpenXDR\logs\agent.log`（UTC 时间与 pid，10 MB 滚动留 5 份，需管理员）；Linux 用 `journalctl -u openxdr-agent` |
+| Windows agent 自动升级后好几分钟才回来 | 旧版安装脚本每 5 分钟才检查一次进程。重新执行安装命令，或管理员 PowerShell 执行 `$t = Get-ScheduledTask 'OpenXDR Agent'; ($t.Triggers \| ? { $_.Repetition.Interval }).Repetition.Interval = 'PT1M'; Set-ScheduledTask -InputObject $t` 只改检查间隔 |
 | 拉镜像慢或失败 | 给 Docker 配镜像加速或代理；镜像在 `ghcr.io/yaklang/` 下 |
 
 ## 给 AI agent 的说明
