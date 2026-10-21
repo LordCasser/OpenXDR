@@ -1,17 +1,20 @@
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, PushpinFilled } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd'
+import { App, Button, Card, Collapse, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { createTrustedSource, fetchTrustedCandidates, fetchTrustedSources, revokeTrustedSource, type TrustedCandidate, type TrustedSource } from '../api'
+import {
+  createTrustedSource, deleteTrustedSource, fetchTrustedCandidates, fetchTrustedSources, updateTrustedSource,
+  type TrustedCandidate, type TrustedSource,
+} from '../api'
 import { useSession } from '../app/session'
 import { EmptyHint } from '../components/Ago'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
 import { errText, fmtTime } from '../components/format'
-import { useI18n } from '../i18n'
+import { useI18n, type MsgKey } from '../i18n'
 
-interface Draft {
+interface AddDraft {
   name: string
   reason?: string
   keyFingerprint?: string
@@ -20,10 +23,21 @@ interface Draft {
   expiresInDays: number
 }
 
-const mono = (v: string | null) => (v ? <Typography.Text className="mono" copyable style={{ fontSize: 12 }}>{v}</Typography.Text> : '-')
+interface EditDraft {
+  name: string
+  reason?: string
+  expiresInDays?: number
+  pinned: boolean
+}
 
-// 可信自动化来源：按 SSH 登录身份认出运维自动化，命中的告警照常留痕、不进事件与研判。
-// 登记是降低检测的操作，只有组管理员能做；AI 没有对应工具
+// 指纹太长，表格里只露头尾，悬停看全、可复制
+const shortFp = (v: string) => (v.length > 24 ? `${v.slice(0, 15)}…${v.slice(-6)}` : v)
+const fpText = (v: string | null) => (v
+  ? <Tooltip title={v}><Typography.Text className="mono" copyable={{ text: v }} style={{ fontSize: 12 }}>{shortFp(v)}</Typography.Text></Tooltip>
+  : null)
+
+// 已知自动化：运维脚本、AI 运维插件这类日常自动化的 SSH 登录身份。平台自动识别，组管理员可以调整、停用、删除或手动添加；
+// 它们的告警保留可查，但不生成事件、不推送。放宽检测只有人和平台的识别逻辑能做，AI 没有对应工具
 export function TrustedSourcesPage() {
   const { t } = useI18n()
   const { message } = App.useApp()
@@ -31,22 +45,27 @@ export function TrustedSourcesPage() {
   const { group, isAdmin } = useSession()
   const groupId = group?.id ?? ''
   const manage = isAdmin || group?.role === 'admin'
+  const [recentOpen, setRecentOpen] = useState(false)
   const sources = useQuery({ queryKey: ['trustedSources', groupId], queryFn: () => fetchTrustedSources(groupId), enabled: !!groupId })
-  const candidates = useQuery({ queryKey: ['trustedCandidates', groupId], queryFn: () => fetchTrustedCandidates(groupId), enabled: !!groupId && manage })
-  const [draft, setDraft] = useState<Partial<Draft> | null>(null)
+  const candidates = useQuery({
+    queryKey: ['trustedCandidates', groupId], queryFn: () => fetchTrustedCandidates(groupId), enabled: !!groupId && manage && recentOpen,
+  })
+  const [adding, setAdding] = useState<Partial<AddDraft> | null>(null)
+  const [editing, setEditing] = useState<TrustedSource | null>(null)
   const [busy, setBusy] = useState(false)
-  const [form] = Form.useForm<Draft>()
+  const [addForm] = Form.useForm<AddDraft>()
+  const [editForm] = Form.useForm<EditDraft>()
   const now = Date.now()
 
   const refresh = () => Promise.all([
     client.invalidateQueries({ queryKey: ['trustedSources', groupId] }),
     client.invalidateQueries({ queryKey: ['trustedCandidates', groupId] }),
   ])
-  const submit = async (v: Draft) => {
+  const run = async (fn: () => Promise<unknown>, done?: () => void) => {
     setBusy(true)
     try {
-      await createTrustedSource({ ...v, groupId })
-      setDraft(null)
+      await fn()
+      done?.()
       await refresh()
     } catch (e) {
       message.error(errText(e, t))
@@ -54,109 +73,181 @@ export function TrustedSourcesPage() {
       setBusy(false)
     }
   }
-  const revoke = async (id: string) => {
-    try {
-      await revokeTrustedSource(id)
-      await refresh()
-    } catch (e) {
-      message.error(errText(e, t))
+  const expired = (s: TrustedSource) => Date.parse(s.expiresAt) <= now
+
+  const status = (s: TrustedSource) => {
+    if (s.revokedAt && s.revokeCause) {
+      const tag = <Tag color="red">{t('tsAutoDisabled')}</Tag>
+      return <Tooltip title={t('tsAutoDisabledHint')}>{s.revokeIncidentId ? <Link to={`/incidents/${s.revokeIncidentId}`}>{tag}</Link> : tag}</Tooltip>
     }
+    if (s.revokedAt) return <Tooltip title={`${s.revokedBy ?? ''} · ${fmtTime(s.revokedAt)}`}><Tag>{t('tsDisabled')}</Tag></Tooltip>
+    if (expired(s)) return <Tag>{t('tsExpired')}</Tag>
+    return <Tag color="green">{t('tsActive')}</Tag>
   }
-  const state = (s: TrustedSource) => (s.revokedAt
-    ? <Tooltip title={`${s.revokedBy ?? ''} · ${fmtTime(s.revokedAt)}`}><Tag>{t('tsRevoked')}</Tag></Tooltip>
-    : Date.parse(s.expiresAt) <= now ? <Tag>{t('tsExpired')}</Tag> : <Tag color="green">{t('supActive')}</Tag>)
-  const fromCandidate = (c: TrustedCandidate) => setDraft({
-    keyFingerprint: c.keyFingerprint ?? undefined,
-    sourceCidr: c.srcIp,
-    loginUser: c.user,
-  })
+
+  const identity = (s: TrustedSource) => (
+    <Space orientation="vertical" size={0}>
+      <span className="mono" style={{ fontSize: 12 }}>{[s.loginUser, s.sourceCidr?.replace(/\/(32|128)$/, '')].filter(Boolean).join('@') || '-'}</span>
+      {fpText(s.keyFingerprint)}
+    </Space>
+  )
+
+  const evidence = (s: TrustedSource) => {
+    const e = s.evidence
+    if (s.origin !== 'auto' || !e) {
+      return <Typography.Text type="secondary">{t('tsEvidenceManual', { by: s.createdBy })}</Typography.Text>
+    }
+    return (
+      <Space orientation="vertical" size={0}>
+        <span>{t('tsEvidenceLogins', { window: e.windowDays, days: e.days, logins: e.logins, hosts: e.hosts })}</span>
+        {e.alerts > 0 && <Typography.Text type="secondary">{t('tsEvidenceVerdicts', { human: e.humanBenign, ai: e.aiBenign })}</Typography.Text>}
+      </Space>
+    )
+  }
+
+  const actions = (s: TrustedSource) => (
+    <Space size={0} wrap>
+      <Button type="link" size="small" onClick={() => setEditing(s)}>{t('tsEdit')}</Button>
+      {s.revokedAt
+        ? (
+            <Tooltip title={expired(s) ? t('tsEnableExpired') : undefined}>
+              <Button type="link" size="small" disabled={busy || expired(s)} onClick={() => run(() => updateTrustedSource(s.id, { enabled: true }))}>{t('tsEnable')}</Button>
+            </Tooltip>
+          )
+        : (
+            <Popconfirm title={t('tsConfirmDisable')} onConfirm={() => run(() => updateTrustedSource(s.id, { enabled: false }))}>
+              <Button type="link" size="small" disabled={busy}>{t('tsDisable')}</Button>
+            </Popconfirm>
+          )}
+      <Popconfirm title={t('tsConfirmDelete')} onConfirm={() => run(() => deleteTrustedSource(s.id))}>
+        <Button type="link" size="small" danger disabled={busy}>{t('tsDelete')}</Button>
+      </Popconfirm>
+    </Space>
+  )
+
+  const how: MsgKey[] = ['tsHowRecognize', 'tsHowNoCommand', 'tsHowException', 'tsHowAdjust', 'tsHowScope']
 
   return (
     <Page
       title={t('navTrustedSources')}
       subtitle={t('tsSubtitle')}
-      extra={manage && <Button type="primary" icon={<PlusOutlined />} onClick={() => setDraft({})}>{t('tsAdd')}</Button>}
+      extra={manage && <Button icon={<PlusOutlined />} onClick={() => setAdding({})}>{t('tsAdd')}</Button>}
     >
-      <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('tsExplain')} description={t('tsExplainDetail')} />
+      <Collapse
+        size="small"
+        style={{ marginBottom: 16 }}
+        items={[{
+          key: 'how',
+          label: t('tsHowTitle'),
+          children: <Space orientation="vertical" size={8}>{how.map(k => <Typography.Text key={k}>{t(k)}</Typography.Text>)}</Space>,
+        }]}
+      />
       <Card styles={{ body: { padding: 0 } }}>
         {sources.isError ? <LoadError error={sources.error} onRetry={() => sources.refetch()} /> : <Table<TrustedSource>
           rowKey="id"
           loading={sources.isPending && !!groupId}
           dataSource={sources.data ?? []}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1180 }}
           locale={{ emptyText: <EmptyHint title={t('tsEmpty')} hint={t('tsEmptyHint')} /> }}
           columns={[
-            { title: t('tsName'), dataIndex: 'name', width: 160, render: (v: string, s) => <Tooltip title={s.reason}>{v}</Tooltip> },
-            { title: t('thStatus'), key: 'state', width: 90, render: (_, s) => state(s) },
-            { title: t('tsKeyFingerprint'), dataIndex: 'keyFingerprint', width: 260, render: mono },
-            { title: t('tsSourceCidr'), dataIndex: 'sourceCidr', width: 140, render: mono },
-            { title: t('tsLoginUser'), dataIndex: 'loginUser', width: 100, render: v => v ?? '-' },
             {
-              title: t('thMatched'), dataIndex: 'matchedCount', width: 100, align: 'right',
-              // 命中的事件按指纹或来源在日志检索里翻
+              title: t('tsName'), dataIndex: 'name', width: 220,
+              render: (v: string, s) => (
+                <Space orientation="vertical" size={2}>
+                  <Tooltip title={s.reason}><Typography.Text strong>{v}</Typography.Text></Tooltip>
+                  <Space size={4} wrap>
+                    <Tag variant="filled" color={s.origin === 'auto' ? 'blue' : undefined}>{t(s.origin === 'auto' ? 'tsOriginAuto' : 'tsOriginManual')}</Tag>
+                    {s.pinned && <Tooltip title={t('tsPinnedHint')}><Tag variant="filled" icon={<PushpinFilled />}>{t('tsPinned')}</Tag></Tooltip>}
+                  </Space>
+                </Space>
+              ),
+            },
+            { title: t('tsStatus'), key: 'state', width: 110, render: (_, s) => status(s) },
+            { title: t('tsIdentity'), key: 'identity', width: 230, render: (_, s) => identity(s) },
+            { title: t('tsEvidence'), key: 'evidence', width: 300, render: (_, s) => evidence(s) },
+            {
+              title: <Tooltip title={t('tsMatchedHint')}>{t('tsMatched')}</Tooltip>, dataIndex: 'matchedCount', width: 110, align: 'right',
+              // 放过的告警按指纹或来源在日志检索里翻
               render: (v: number, s) => (v && (s.keyFingerprint || s.sourceCidr)
                 ? <Link to={`/events?${new URLSearchParams({ q: s.keyFingerprint ?? s.sourceCidr!.replace(/\/\d+$/, ''), hours: '168' })}`}>{v}</Link>
                 : v),
             },
-            { title: t('thLastMatched'), dataIndex: 'lastMatchedAt', width: 160, render: fmtTime },
-            { title: t('thExpires'), dataIndex: 'expiresAt', width: 160, render: fmtTime },
-            { title: t('thCreatedBy'), dataIndex: 'createdBy', width: 110 },
-            ...(manage
-              ? [{
-                  title: t('actions'), width: 90,
-                  render: (_: unknown, s: TrustedSource) => !s.revokedAt && (
-                    <Popconfirm title={t('confirmRevoke')} onConfirm={() => revoke(s.id)}>
-                      <Button type="link" danger size="small">{t('revoke')}</Button>
-                    </Popconfirm>
-                  ),
-                }]
-              : []),
+            { title: t('thLastMatched'), dataIndex: 'lastMatchedAt', width: 150, render: fmtTime },
+            { title: t('thExpires'), dataIndex: 'expiresAt', width: 150, render: fmtTime },
+            ...(manage ? [{ title: t('actions'), key: 'act', width: 170, render: (_: unknown, s: TrustedSource) => actions(s) }] : []),
           ]}
         />}
       </Card>
 
       {manage && (
-        <Card title={t('tsCandidates')} extra={<Typography.Text type="secondary">{t('tsCandidatesHint')}</Typography.Text>} style={{ marginTop: 16 }} styles={{ body: { padding: 0 } }}>
-          {candidates.isError ? <LoadError error={candidates.error} onRetry={() => candidates.refetch()} /> : <Table<TrustedCandidate>
-            rowKey={c => `${c.user}|${c.srcIp}|${c.keyFingerprint ?? ''}`}
-            size="small"
-            loading={candidates.isPending}
-            dataSource={candidates.data ?? []}
-            pagination={{ pageSize: 10, hideOnSinglePage: true }}
-            scroll={{ x: 1000 }}
-            locale={{ emptyText: <EmptyHint title={t('tsNoCandidates')} hint={t('tsNoCandidatesHint')} /> }}
-            columns={[
-              { title: t('tsLoginUser'), dataIndex: 'user', width: 100 },
-              { title: t('tsSourceIp'), dataIndex: 'srcIp', width: 140, render: mono },
-              {
-                title: t('tsKeyFingerprint'), dataIndex: 'keyFingerprint', width: 320,
-                render: (v: string | null, c) => (v ? <Space size={4}>{c.keyType && <Tag variant="filled">{c.keyType}</Tag>}{mono(v)}</Space> : <Typography.Text type="secondary">{t('tsNoKey')}</Typography.Text>),
-              },
-              { title: t('tsLogins'), dataIndex: 'logins', width: 90, align: 'right' },
-              { title: t('tsHosts'), dataIndex: 'hosts', width: 80, align: 'right' },
-              { title: t('tsLastSeen'), dataIndex: 'lastSeen', width: 160, render: fmtTime },
-              {
-                title: '', key: 'act', width: 110,
-                render: (_, c) => (c.trustedSourceIds.length
-                  ? <Tag color="green">{t('tsCovered')}</Tag>
-                  : <Button size="small" onClick={() => fromCandidate(c)}>{t('tsAdd')}</Button>),
-              },
-            ]}
-          />}
-        </Card>
+        <Collapse
+          style={{ marginTop: 16 }}
+          onChange={keys => setRecentOpen(keys.length > 0)}
+          items={[{
+            key: 'recent',
+            label: <Space wrap size={8}><span>{t('tsRecent')}</span><Typography.Text type="secondary">{t('tsRecentHint')}</Typography.Text></Space>,
+            styles: { body: { padding: 0 } },
+            children: candidates.isError ? <LoadError error={candidates.error} onRetry={() => candidates.refetch()} /> : <Table<TrustedCandidate>
+              rowKey={c => `${c.user}|${c.keyFingerprint ?? c.addresses.join(',')}`}
+              size="small"
+              loading={candidates.isPending}
+              dataSource={candidates.data ?? []}
+              pagination={{ pageSize: 10, hideOnSinglePage: true }}
+              scroll={{ x: 1080 }}
+              locale={{ emptyText: <EmptyHint title={t('tsNoCandidates')} hint={t('tsNoCandidatesHint')} /> }}
+              columns={[
+                {
+                  title: t('tsIdentity'), key: 'id', width: 260,
+                  render: (_, c) => (
+                    <Space orientation="vertical" size={0}>
+                      <span className="mono" style={{ fontSize: 12 }}>{c.user}@{c.addresses.join(', ')}</span>
+                      {c.keyFingerprint
+                        ? <Space size={4}>{c.keyType && <Tag variant="filled">{c.keyType}</Tag>}{fpText(c.keyFingerprint)}</Space>
+                        : <Typography.Text type="secondary">{t('tsNoKey')}</Typography.Text>}
+                    </Space>
+                  ),
+                },
+                { title: t('tsLoginStats'), key: 'logins', width: 160, render: (_, c) => t('tsLoginStatsValue', { days: c.days, logins: c.logins, hosts: c.hosts }) },
+                {
+                  title: t('tsVerdicts'), key: 'verdicts', width: 250,
+                  render: (_, c) => (c.alerts
+                    ? t('tsVerdictsValue', { alerts: c.alerts, human: c.humanBenign, ai: c.aiBenign, pending: c.pending })
+                    : <Typography.Text type="secondary">{t('tsVerdictsNone')}</Typography.Text>),
+                },
+                { title: t('tsLastSeen'), dataIndex: 'lastSeen', width: 150, render: fmtTime },
+                {
+                  title: t('tsStatus'), key: 'reason', width: 260,
+                  render: (_, c) => (
+                    <Space size={4} wrap>
+                      <Typography.Text type={c.reason === 'covered' || c.reason === 'eligible' ? 'success' : undefined}>{t(`tsReason_${c.reason}` as MsgKey)}</Typography.Text>
+                      {c.reason !== 'covered' && (
+                        <Button size="small" type="link" onClick={() => setAdding({
+                          keyFingerprint: c.keyFingerprint ?? undefined,
+                          sourceCidr: c.addresses.length === 1 ? c.addresses[0] : undefined,
+                          loginUser: c.user,
+                        })}>{t('tsAdd')}</Button>
+                      )}
+                    </Space>
+                  ),
+                },
+              ]}
+            />,
+          }]}
+        />
       )}
 
       <Modal
-        open={draft !== null}
+        open={adding !== null}
         title={t('tsAdd')}
-        onCancel={() => { if (!busy) setDraft(null) }}
-        onOk={() => form.submit()}
+        onCancel={() => { if (!busy) setAdding(null) }}
+        onOk={() => addForm.submit()}
         confirmLoading={busy}
         width={620}
         destroyOnHidden
       >
-        <Form<Draft> form={form} layout="vertical" disabled={busy} onFinish={submit} initialValues={{ expiresInDays: 90, ...draft }}>
+        <Form<AddDraft> form={addForm} layout="vertical" disabled={busy} initialValues={{ expiresInDays: 90, ...adding }}
+          onFinish={v => run(() => createTrustedSource({ ...v, groupId }), () => setAdding(null))}>
           <Form.Item name="name" label={t('tsName')} rules={[{ required: true, whitespace: true, max: 100 }]}>
             <Input placeholder="Termix AI Ops" />
           </Form.Item>
@@ -167,7 +258,7 @@ export function TrustedSourcesPage() {
             <Input className="mono" placeholder="SHA256:…" />
           </Form.Item>
           <Form.Item name="sourceCidr" label={t('tsSourceCidr')} extra={t('tsSourceCidrHint')}>
-            <Input className="mono" placeholder="10.1.1.35/32" />
+            <Input className="mono" placeholder="10.1.1.35" />
           </Form.Item>
           <Form.Item name="loginUser" label={t('tsLoginUser')}>
             <Input placeholder="root" />
@@ -176,6 +267,40 @@ export function TrustedSourcesPage() {
             <InputNumber min={1} max={365} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        open={editing !== null}
+        title={t('tsEdit')}
+        onCancel={() => { if (!busy) setEditing(null) }}
+        onOk={() => editForm.submit()}
+        confirmLoading={busy}
+        width={560}
+        destroyOnHidden
+      >
+        {editing && (
+          <Form<EditDraft> form={editForm} layout="vertical" disabled={busy}
+            initialValues={{ name: editing.name, reason: editing.reason ?? '', pinned: editing.pinned }}
+            onFinish={v => run(() => updateTrustedSource(editing.id, {
+              name: v.name,
+              reason: v.reason ?? '',
+              pinned: v.pinned,
+              ...(v.expiresInDays ? { expiresInDays: v.expiresInDays } : {}),
+            }), () => setEditing(null))}>
+            <Form.Item name="name" label={t('tsName')} rules={[{ required: true, whitespace: true, max: 100 }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="reason" label={t('reason')} rules={[{ max: 1000 }]}>
+              <Input.TextArea rows={2} placeholder={t('tsReasonHint')} />
+            </Form.Item>
+            <Form.Item name="expiresInDays" label={t('validityDays')} extra={t('tsValidityKeep', { at: fmtTime(editing.expiresAt) })}>
+              <InputNumber min={1} max={365} />
+            </Form.Item>
+            <Form.Item name="pinned" label={t('tsPinned')} extra={t('tsPinnedHint')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Form>
+        )}
       </Modal>
     </Page>
   )

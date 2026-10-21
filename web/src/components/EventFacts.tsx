@@ -22,7 +22,7 @@ export function EventFacts({ classUid, raw, username }: { classUid: number; raw:
   add('path', t('factPath'), p.file?.path && mono(p.file.path))
   add('cmd', t('factCmd'), p.cmd_line && p.cmd_line !== p.name && mono(p.cmd_line))
   add('user', t('factUser'), username)
-  // SSH 登录归属：agent 按 sshd 认证日志与审计会话号打的，可信自动化来源据此认
+  // SSH 登录归属：agent 按 sshd 认证日志与审计会话号打的，已知自动化据此认
   const ls: Raw | undefined = r.login_session
   add('login', t('factLogin'), ls?.src_ip && <>
     <span className="mono">{ls.user}@{ls.src_ip}</span>

@@ -72,11 +72,11 @@ export interface AlertRow {
   event: unknown
   // 合成检测（心跳等）的依据
   detail?: string
-  // 来自登记的可信自动化来源（进得了 incident 的只有高危例外）
+  // 来自运维自动化（进得了 incident 的只有高危例外）
   automation?: AutomationRef
 }
 
-// 告警或事件标注的可信自动化来源；watch 为高危例外（仍进研判）
+// 告警或事件标注的运维自动化；watch 为高危例外（仍进研判）
 export interface AutomationRef {
   id: string
   name: string
@@ -598,7 +598,21 @@ export const fetchAssetIdentityAccounts = (assetId: string, hours: number) =>
 
 export const fetchSuppressions = () => get<Suppression[]>('/api/suppressions')
 
-// 可信自动化来源：组管理员按 SSH 登录身份（公钥指纹 / 来源网段 / 用户）登记，命中的告警不进事件与研判
+// 运维自动化：运维脚本、AI 运维插件这类日常自动化的 SSH 登录身份。平台自动识别（origin=auto），
+// 组管理员也可以手工添加；它们的告警保留可查，但不进事件与研判
+export interface AutomationEvidence {
+  windowDays: number
+  days: number
+  logins: number
+  hosts: number
+  addresses: string[]
+  lastLogin: string
+  humanBenign: number
+  aiBenign: number
+  alerts: number
+  checkedAt: string
+}
+
 export interface TrustedSource {
   id: string
   createdAt: string
@@ -614,17 +628,31 @@ export interface TrustedSource {
   lastMatchedAt: string | null
   revokedAt: string | null
   revokedBy: string | null
+  origin: 'auto' | 'manual'
+  pinned: boolean
+  evidence: AutomationEvidence | null
+  // verdict：它的告警被判属实、恶意或可疑，系统停用
+  revokeCause: string | null
+  revokeIncidentId: string | null
 }
 
-// 组内近 7 天 agent 核对过出处的 SSH 登录，登记时从这里挑
+// 组内近期 SSH 登录，按登录身份归并，说明为什么（没）被自动识别
+export type CandidateReason = 'eligible' | 'no_key' | 'public' | 'scattered' | 'flagged' | 'irregular' | 'quiet' | 'pending'
+  | 'few_verdicts' | 'covered' | 'declined' | 'disabled'
 export interface TrustedCandidate {
   user: string
-  srcIp: string
+  addresses: string[]
   keyType: string | null
   keyFingerprint: string | null
   logins: number
+  days: number
   hosts: number
   lastSeen: string
+  alerts: number
+  humanBenign: number
+  aiBenign: number
+  pending: number
+  reason: CandidateReason
   trustedSourceIds: string[]
 }
 
@@ -641,7 +669,14 @@ export async function createTrustedSource(body: {
 }): Promise<TrustedSource> {
   return (await send('POST', '/api/trusted-sources', body)).json()
 }
-export const revokeTrustedSource = async (id: string) => { await send('POST', `/api/trusted-sources/${encodeURIComponent(id)}/revoke`) }
+export const updateTrustedSource = (id: string, body: {
+  name?: string
+  reason?: string
+  expiresInDays?: number
+  pinned?: boolean
+  enabled?: boolean
+}) => send('PATCH', `/api/trusted-sources/${encodeURIComponent(id)}`, body)
+export const deleteTrustedSource = (id: string) => send('DELETE', `/api/trusted-sources/${encodeURIComponent(id)}`)
 
 export async function createSuppression(body: {
   ruleId: string
@@ -686,7 +721,7 @@ export interface EventRow {
   username: string | null
   connTuple: string | null
   raw: unknown
-  // 这条事件的告警来自登记的可信自动化来源
+  // 这条事件的告警来自已知自动化
   automation?: AutomationRef
 }
 
