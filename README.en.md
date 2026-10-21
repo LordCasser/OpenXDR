@@ -51,6 +51,46 @@ People make the calls instead of digging through alert lists.
 - **Production-ready**: mTLS with host-bound certificates, three-tier RBAC plus group roles, NATS JetStream queues
   sharded by asset, multi-node servers, and a cross-host HA deployment with Patroni + Keepalived.
 
+## Screenshots
+
+These screenshots come from a fictional demo environment; all hosts, addresses and domains are examples.
+
+**Overview**: over a million raw events and ten thousand alerts a day, boiled down to the 3 incidents that need a human.
+
+![Overview](docs/images/screenshots/overview-en.png)
+
+**AI assistant handling an incident**: hand an incident to the AI; it gathers evidence on the host, queries platform data, contains the threat after approval, and proposes how to close it.
+
+![AI assistant](docs/images/screenshots/ai-assistant-en.png)
+
+**Incidents**: every incident carries an AI verdict; benign ones say why, and the truly suspicious ones sit at the top.
+
+![Incidents](docs/images/screenshots/incidents-en.png)
+
+**Incident detail**: verdict, kill chain and suggested actions up front, with the process tree and connections in one graph.
+
+![Incident detail](docs/images/screenshots/incident-detail-en.png)
+
+**Asset map**: dependencies drawn from connections actually observed, with AI-annotated roles and criticality.
+
+![Asset map](docs/images/screenshots/asset-map-en.png)
+
+**Attack surface**: which services face the internet, who reaches them and how risky they are, laid out by zone.
+
+![Attack surface](docs/images/screenshots/attack-surface-en.png)
+
+**Daily inspection reports**: the AI inspects every host each day and puts what needs a human first.
+
+![Reports](docs/images/screenshots/reports-en.png)
+
+**Scheduled tasks**: each task works like an AI teammate on a roster; see what its last shift did and which report it filed.
+
+![Scheduled tasks](docs/images/screenshots/scheduled-tasks-en.png)
+
+**Asset detail**: collection health, network sensor status, the asset profile and related incidents on one page.
+
+![Asset detail](docs/images/screenshots/asset-detail-en.png)
+
 ## Architecture
 
 ```

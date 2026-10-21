@@ -39,6 +39,46 @@
 - **能上生产**：mTLS 与按主机绑定证书、三档 RBAC 与组权限、NATS JetStream 按资产分片队列、
   多节点 server，以及 Patroni + Keepalived 的跨宿主机高可用部署方案。
 
+## 界面一览
+
+以下截图来自虚构的演示环境，主机、地址与域名均为示例。
+
+**态势总览**：一天上百万条原始事件、上万条告警，最后只剩 3 件需要人看。
+
+![态势总览](docs/images/screenshots/overview-zh.png)
+
+**AI 助手处理事件**：把事件交给 AI，它上机取证、查平台数据、在审批后处置，最后给出结论和结案建议。
+
+![AI 助手](docs/images/screenshots/ai-assistant-zh.png)
+
+**安全事件**：每个事件都带 AI 研判结论，良性的写明理由，真正可疑的排在最前。
+
+![安全事件](docs/images/screenshots/incidents-zh.png)
+
+**事件详情**：研判结论、攻击链与处置建议在上，进程树与外联关系一张图看清。
+
+![事件详情](docs/images/screenshots/incident-detail-zh.png)
+
+**资产图谱**：按实际观测到的连接画出依赖关系，AI 标注每台机器的角色与重要程度。
+
+![资产图谱](docs/images/screenshots/asset-map-zh.png)
+
+**攻击面**：哪些服务对公网开放、谁在访问、风险多高，按区域一目了然。
+
+![攻击面](docs/images/screenshots/attack-surface-zh.png)
+
+**每日巡检报告**：AI 每天巡检全组主机，只把需要人处理的事写在前面。
+
+![巡检报告](docs/images/screenshots/reports-zh.png)
+
+**定时任务**：每个任务像一位排班上岗的 AI 员工，上一班做了什么、交了什么报告都看得到。
+
+![定时任务](docs/images/screenshots/scheduled-tasks-zh.png)
+
+**资产详情**：采集链路是否健康、流量探针状态、角色画像与相关事件集中在一页。
+
+![资产详情](docs/images/screenshots/asset-detail-zh.png)
+
 ## 架构
 
 ```
