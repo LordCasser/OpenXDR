@@ -1,7 +1,7 @@
 # OpenXDR agent 一键安装（Windows，管理员 PowerShell）。在控制台「添加主机」复制命令执行：
 #   & ([scriptblock]::Create((irm <控制台>/api/enroll/install.ps1))) <控制台> <令牌>
-# 以 SYSTEM 身份的计划任务常驻：开机启动，另每 5 分钟检查一次，进程不在就拉起
-# （自动升级后的退出、意外崩溃都靠它恢复）。重复执行即重装。
+# 以 SYSTEM 身份的计划任务常驻：开机启动，另每分钟检查一次，进程不在就拉起
+# （自动升级后的退出、意外崩溃都靠它恢复）。日志在 OpenXDR\logs\agent.log。重复执行即重装。
 param([Parameter(Mandatory)][string]$Base, [Parameter(Mandatory)][string]$Token)
 $ErrorActionPreference = 'Stop'
 if (([uri]$Base).Scheme -ne 'https') { throw '接入需要可信 HTTPS 控制台地址' }
@@ -54,7 +54,9 @@ if (Test-Path $bin) { Move-Item -Force $bin "$bin.prev" }
 Move-Item -Force $new $bin
 
 $action = New-ScheduledTaskAction -Execute $bin
-$watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+# 「失败时重新启动」只管任务没拉起来，进程以非零码退出（升级后的 75）不会触发，实机验证过；
+# 升级后的重启全靠这个检查：通常 1 分钟内拉起；碰上旧进程还在排空（最多约 40 秒）的那一次被跳过，最坏约 2 分钟
+$watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1)
 $triggers = @((New-ScheduledTaskTrigger -AtStartup), $watchdog)
 # 已在运行时跳过新实例，重复触发只起到"不在就拉起"的作用
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
