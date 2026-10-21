@@ -365,19 +365,35 @@ var wrapUpPrompts = map[string]string{
 
 const wrapUpPrompt = "不要再调用 exec、query、track，也不要继续调查；立即基于已经拿到的证据收尾，没有覆盖到的检查项逐条明确标注为「未验证」。"
 
-// wrapUpReserve 从运行期限里留给收尾的时间：调查到点就截停，否则期限一到连报告都交不出来
-func wrapUpReserve(timeout time.Duration) time.Duration {
-	return min(3*time.Minute, timeout/5)
+// errWrapUpDue 剩余时间不够收尾了，截停调查
+var errWrapUpDue = errors.New("剩余时间只够收尾")
+
+// reportGrace 截止时已在提交的报告允许写完的时间：入库只要几毫秒，被截断就白写了
+const reportGrace = 15 * time.Second
+
+// graceReport report 调用不随截止取消，在 reportGrace 内写完；其余工具照常随 ctx 停下
+func graceReport(handle piruntime.Handler) piruntime.Handler {
+	return func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+		if name != "report" {
+			return handle(ctx, name, args)
+		}
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), reportGrace)
+		defer cancel()
+		return handle(ctx, name, args)
+	}
 }
 
-// investigate 跑调查阶段并按需收尾。调查只能用到期限前 wrapUpReserve 为止；到点截停时补齐半截的工具调用，
-// 按超时收尾。人点停止、进程退出取消的是外层 ctx，不在这里收尾。
+// investigate 跑调查阶段并按需收尾。剩余时间少于 wrapUpLead（按本会话实测的模型单轮耗时算）就截停调查，
+// 补齐半截的工具调用，按超时收尾。人点停止、进程退出取消的是外层 ctx，不在这里收尾。
 func (s *Service) investigate(ctx context.Context, session *ent.AgentSession, request piruntime.Request, handle piruntime.Handler, record piruntime.Observer, seq *int) (*piruntime.Result, error) {
 	deadline, _ := ctx.Deadline()
-	work, cancel := context.WithDeadline(ctx, deadline.Add(-wrapUpReserve(s.timeout())))
-	defer cancel()
-	result, err := s.Runtime.Run(work, request, handle, record)
-	if err != nil && ctx.Err() == nil && errors.Is(work.Err(), context.DeadlineExceeded) {
+	handle = graceReport(handle)
+	work, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	p := newPace(time.Now())
+	go p.watch(work, deadline, s.timeout(), func() { cancel(errWrapUpDue) })
+	result, err := s.Runtime.Run(work, request, handle, p.observe(record))
+	if err != nil && ctx.Err() == nil && errors.Is(context.Cause(work), errWrapUpDue) {
 		if err := s.closeDangling(ctx, session.ID, seq); err != nil {
 			return nil, err
 		}
@@ -385,6 +401,9 @@ func (s *Service) investigate(ctx context.Context, session *ent.AgentSession, re
 	}
 	if err != nil {
 		return nil, err
+	}
+	if _, ok := wrapUpPrompts[result.StopReason]; ok {
+		slog.Info("会话进入收尾", "session", session.ID, "reason", result.StopReason, "turn", p.turn(), "left", time.Until(deadline))
 	}
 	return s.wrapUp(ctx, session, request, result, handle, record)
 }
