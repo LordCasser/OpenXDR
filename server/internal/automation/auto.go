@@ -169,16 +169,18 @@ func Assess(ctx context.Context, db *ent.Client, c Config, group *uuid.UUID, now
 		return nil, nil, err
 	}
 
+	// 一律按来源地址分开：同一把钥匙从工作站和脚本机都登录时，人手动的会话不能跟着脚本一起被认成自动化
 	type key struct {
-		group     uuid.UUID
-		user, fp  string
-		addrOfKey string // 非公钥登录按来源地址分开
+		group    uuid.UUID
+		user, fp string
+		addr     string
 	}
 	keyOf := func(g uuid.UUID, l Login) key {
-		if l.Method == "publickey" && l.KeyFP != "" {
-			return key{group: g, user: l.User, fp: l.KeyFP}
+		k := key{group: g, user: l.User, addr: l.SrcIP}
+		if l.Method == "publickey" {
+			k.fp = l.KeyFP
 		}
-		return key{group: g, user: l.User, addrOfKey: l.SrcIP}
+		return k
 	}
 	byKey := map[key]*Assessment{}
 	var order []key

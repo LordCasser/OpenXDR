@@ -254,8 +254,8 @@ func TestAutoNoticeRetry(t *testing.T) {
 	}
 }
 
-// 告警被判可疑以上立即停用（固定的也停）、通知、落审计，被放过的近期告警重新送去研判，且不会被自动加回；
-// 人工条目不受影响
+// 告警被判可疑以上立即停用（固定的、人工登记的也停）、通知、落审计，被放过的近期告警重新送去研判，且不会被自动加回；
+// 人工条目只看登记之后的结论
 func TestAutoRevoke(t *testing.T) {
 	w := newWorld(t)
 	a := session("root", "10.1.1.35", "publickey", fpN(1))
@@ -266,8 +266,15 @@ func TestAutoRevoke(t *testing.T) {
 		inc := w.incident("false_positive", "benign", "lead", "")
 		w.alert(ls, 3, &inc, nil, false)
 	}
-	manual := w.db.TrustedSource.Create().SetGroupID(w.group).SetName("Termix").SetCreatedBy("lead").
+	manual := w.db.TrustedSource.Create().SetGroupID(w.group).SetName("Termix").SetCreatedBy("lead").SetCreatedAt(w.base.Add(-30 * time.Minute)).
 		SetExpiresAt(w.base.AddDate(0, 0, 90)).SetKeyFingerprint(fpN(3)).SaveX(w.ctx)
+	// 登记之前就有的恶意结论：人是看过之后才登记的，不因此停用
+	old := w.incident("triaged", "malicious", "", "")
+	w.alert(m, 3, &old, &manual.ID, true)
+	w.sweep(w.base.Add(30 * time.Second))
+	if got := w.db.TrustedSource.GetX(w.ctx, manual.ID); got.RevokedAt != nil {
+		t.Fatal("登记之前的结论不应停用人工条目")
+	}
 	w.sweep(w.base)
 	ra, rb := w.autoRow(fpN(1)), w.autoRow(fpN(2))
 	if ra == nil || rb == nil || w.autoRow(fpN(3)) != nil {
@@ -283,9 +290,10 @@ func TestAutoRevoke(t *testing.T) {
 	// b（固定）：生效前的旧事件被人改判属实
 	bad := w.incident("closed", "benign", "lead", "")
 	w.alert(b, 3, &bad, nil, false)
-	// 人工条目的告警被判恶意：自动逻辑不碰
+	// 人工条目登记之后的告警被判恶意：同样停用
 	mal := w.incident("triaged", "malicious", "", "")
-	w.alert(m, 3, &mal, &manual.ID, true)
+	after := w.alert(m, 3, &mal, &manual.ID, true)
+	w.db.Alert.UpdateOneID(after.ID).SetTs(w.base.Add(-time.Minute)).ExecX(w.ctx)
 
 	w.sweep(w.base.Add(time.Minute))
 	ra, rb = w.autoRow(fpN(1)), w.autoRow(fpN(2))
@@ -300,13 +308,13 @@ func TestAutoRevoke(t *testing.T) {
 	if !w.db.Alert.Query().Where(alert.IDEQ(hidden.ID)).OnlyX(w.ctx).AutomationWatch {
 		t.Fatal("被放过的近期告警应重新送去研判")
 	}
-	if got := w.db.TrustedSource.GetX(w.ctx, manual.ID); got.RevokedAt != nil || !same(got.ExpiresAt, manual.ExpiresAt) {
-		t.Fatalf("人工条目不受自动逻辑影响: %+v", got)
+	if got := w.db.TrustedSource.GetX(w.ctx, manual.ID); got.RevokedAt == nil || got.RevokeIncidentID == nil || *got.RevokeIncidentID != mal {
+		t.Fatalf("人工条目登记后被判恶意也应停用: %+v", got)
 	}
-	if len(w.sent) != 1 || !strings.Contains(w.sent[0], "2 个已知自动化已自动停用") {
+	if len(w.sent) != 1 || !strings.Contains(w.sent[0], "3 个已知自动化已自动停用") {
 		t.Fatalf("应发一条停用通知: %q", w.sent)
 	}
-	if n := w.audits("trusted_source_auto_revoked"); n != 2 {
+	if n := w.audits("trusted_source_auto_revoked"); n != 3 {
 		t.Fatalf("停用应落审计，实际 %d", n)
 	}
 
@@ -418,5 +426,33 @@ func TestAutoDisabled(t *testing.T) {
 	w.sweep(w.base.Add(2 * time.Minute))
 	if w.autoRow(fpN(1)).RevokedAt == nil {
 		t.Fatal("关闭时仍应按结论停用")
+	}
+}
+
+// 同一把钥匙从两个地址登录：按地址分开判断，各自是单个地址，不合成网段把人手动的会话一起放过
+func TestAutoSplitsByAddress(t *testing.T) {
+	w := newWorld(t)
+	script := session("root", "10.1.1.35", "publickey", fpN(7))
+	human := session("root", "10.1.1.3", "publickey", fpN(7))
+	w.logins(4, 6, script)
+	inc := w.incident("false_positive", "benign", "lead", "")
+	w.alert(script, 3, &inc, nil, false)
+	w.logins(4, 1, human)
+	w.sweep(w.base)
+	got, _, err := Assess(w.ctx, w.db, w.auto.Config, &w.group, w.base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("应按地址分成两个身份，实际 %d", len(got))
+	}
+	for _, a := range got {
+		if len(a.Addresses) != 1 || a.CIDR != a.Addresses[0]+"/32" {
+			t.Fatalf("每个身份只应有一个地址并记 /32: %+v", a)
+		}
+	}
+	rows := w.db.TrustedSource.Query().AllX(w.ctx)
+	if len(rows) != 1 || rows[0].SourceCidr == nil || *rows[0].SourceCidr != "10.1.1.35/32" {
+		t.Fatalf("只有脚本那个地址该被认出来: %+v", rows)
 	}
 }

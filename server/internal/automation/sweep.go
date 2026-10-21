@@ -23,7 +23,7 @@ import (
 
 // 自动识别：平台定期从核对过出处的 SSH 登录里认出运维自动化，满足条件就生效，不用人去登记。
 //
-// 条件都要满足：公钥登录；来源是内网、固定地址或同一个 /24；窗口内登录有规律（天数、次数够）；
+// 条件都要满足：公钥登录；来源是内网的单个固定地址（同一把钥匙不同地址分开判断）；窗口内登录有规律（天数、次数够）；
 // 触发过告警，且全部已有结论、都是良性（人工判误报一个即可，只有 AI 结论时要够数），从没被判可疑以上。
 // 生效后标「自动识别」、带依据、有有效期，持续满足就续期；生效与停用都通知、都落审计（操作者 system）。
 //
@@ -78,11 +78,12 @@ func (a *Auto) Sweep(ctx context.Context, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	autos, err := a.DB.TrustedSource.Query().Where(trustedsource.OriginEQ("auto")).All(ctx)
+	// 被判恶意即停用对人工登记的同样生效：「人登记过」不等于「被判恶意也不管」
+	sources, err := a.DB.TrustedSource.Query().All(ctx)
 	if err != nil {
 		return err
 	}
-	if err := a.revoke(ctx, autos, facts, now); err != nil {
+	if err := a.revoke(ctx, sources, facts, now); err != nil {
 		return err
 	}
 	if a.Config.Enabled {
@@ -144,14 +145,19 @@ ON CONFLICT (id) DO NOTHING`, from, to); err != nil {
 
 // revoke 生效中的自动识别，只要它的告警（生效前同一身份的、生效后挂在它上面的）被判可疑以上就停用。
 // 固定的也停：固定是人对「别再自动改它」的表态，不是对「被判恶意也别管」的授权
-func (a *Auto) revoke(ctx context.Context, autos []*ent.TrustedSource, facts []fact, now time.Time) error {
-	for _, t := range autos {
+func (a *Auto) revoke(ctx context.Context, sources []*ent.TrustedSource, facts []fact, now time.Time) error {
+	for _, t := range sources {
 		if t.RevokedAt != nil || t.DeletedAt != nil {
 			continue
 		}
 		var flagged *uuid.UUID
 		for _, f := range facts {
-			if f.verdict != bad || f.group != t.GroupID || (t.ConfirmedAt != nil && f.ts.Before(*t.ConfirmedAt)) {
+			// 人确认过（重新启用或人工登记）之前的结论不算：人是看过这些之后才做的决定
+			confirmed := t.ConfirmedAt
+			if confirmed == nil && t.Origin != "auto" {
+				confirmed = &t.CreatedAt
+			}
+			if f.verdict != bad || f.group != t.GroupID || (confirmed != nil && f.ts.Before(*confirmed)) {
 				continue
 			}
 			// 同一把钥匙、同一个用户从别处登录被判恶意，同样说明这个身份不可信了
