@@ -24,7 +24,7 @@
 
 ```
 correlate：未归属告警 → incident（10s 一批）
-triage：   open incident → LLM 研判 → verdict（30s 一批，需 AI_MODEL）
+triage：   新 incident / 待重研判 → LLM 研判 → verdict（30s 一批，需 AI_MODEL；节奏见「研判节奏」）
 notify：   研判后事件 → webhook（30s 一批，benign 不推，高危 benign 照推待复核）
 ueba：     扫进程事件维护基线，首次出现合成 low 告警进同一管线（30s 一批）
 beacon：   增量读出站连接，新出现的规律公网外联合成 medium 告警（300s 一批）
@@ -310,13 +310,14 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
   connection，边 rel：hosts/triggered/spawned/lateral；上限
   `CORRELATE_MAX_GRAPH_NODES` 默认 500，触顶只累 overflow
   （`graph.go:5-25`、`engine.go:121-126,239-319`）
-- **重开**：triaged 的 incident 收到新证据重开为 open，等重新研判。incident 里已有
-  同资产同规则同实体（精确键）的告警时，再来一条不算新证据、不重开（否则周期扫描每来一次就重判一次）；
-  按粗键并进来的是同类的另一件事（命令行不同、新冒出的程序），照常重开重判，但同级不清推送标记；
-  研判上下文按规则汇总全部告警条数与累计命中，明细只列前 50 条时也能看到同类重复了多少次；
-  级别高于 incident 现有最高级别的告警一律重开，并清掉推送标记——重新研判后按新级别与新结论
-  再决定是否推送，通知在重开期间等研判（`notify.go` decide），升级信号不会被旧的「良性」吞掉
-  （`engine.go:110-137`）
+- **新证据**：incident 收到新证据时不改状态，记 `evidence_at`，研判引擎按「研判节奏」决定何时重研判。
+  incident 里已有同资产同规则同实体（精确键）的告警时，再来一条不算新证据（否则周期扫描每来一次就重判一次）；
+  按粗键并进来的是同类的另一件事（命令行不同、新冒出的程序），照常算新证据，但同级不清推送标记；
+  研判上下文按规则汇总全部告警条数与累计命中，明细只列前 50 条时也能看到同类重复了多少次。
+  **升级类**另记 `urgent_at`、立即重研判：级别高于 incident 现有最高级别（同时清掉推送标记，重新研判后按新级别与
+  新结论再决定是否推送，升级信号不会被旧的「良性」吞掉），或 incident 里头一回出现的高危例外规则——与可信来源的高危例外
+  同一口径（`automation.Watch`：情报命中、凭据窃取、指标清除、削弱防御、破坏；规则库里查不到的按高危）。同一条高危规则
+  再来只算普通新证据，免得它自己成风暴。先归属告警再记时刻，研判按「证据时刻晚于取上下文的时刻」认没看过的证据
 - incident 标题：`"<规则标题> @ <hostname>"`（`engine.go:96-108`）
 
 ## UEBA 首次出现（`server/internal/ueba`）
@@ -360,8 +361,7 @@ C2 心跳的样子是同一进程隔着差不多的时间反复连同一个公�
 
 ### 研判流程
 
-- 周期轮询 `AI_INTERVAL_SECONDS` 默认 30s，每批最多 5 个 open incident
-  （`engine.go:63-72`）
+- 周期轮询 `AI_INTERVAL_SECONDS` 默认 30s，每批最多 5 个，取法见下节「研判节奏」
 - **主动调查式**：模型可调用三个有边界的调查工具（`tools.go:21-39`）：
   | 工具 | 参数边界 |
   |---|---|
@@ -373,14 +373,43 @@ C2 心跳的样子是同一进程隔着差不多的时间反复连同一个公�
 - **最多 6 轮**（`maxToolTurns`，`engine.go:100`）；模型返回无 tool_calls
   即出答案——不支持 tool calling 的模型天然退化为单轮，无需配置
   （`engine.go:109-128`）；轮数用尽收走工具强制收结论（`engine.go:129-135`）
-- 上下文：事件图 + 最多 50 条告警（raw 截 500 字符）+ **误报反馈回流**
-  （近 90 天同规则被判 false_positive 的案例）（`engine.go:161-252`）
+- 上下文：事件图 + 按规则的全量汇总 + 最多 50 条告警（raw 截 500 字符）+ **误报反馈回流**
+  （近 90 天同规则被判 false_positive 的案例）（`engine.go` buildContext）。重研判时另加一节：此前研判过几次、
+  上次结论与摘要、上次之后新增的告警（按规则汇总加级别最高、最新的几条明细，不全量铺开；按告警主键 UUIDv7 的入库时间算，
+  往前多算一分钟，上次取上下文时还没归属进来的也算新增）
 - verdict 格式：`{verdict: malicious|suspicious|benign, confidence 0-100,
   summary, kill_chain[], actions[]}`；解析容错取首个 `{` 到末个 `}`，
   不合法存档 `{"error":"unparseable"}`；结论写 `ai_verdict` 并把状态推进
   triaged（`engine.go:20-32,85-90,146-159`）
 - **模型输出视为不可信输入**：刻意不做 NL2SQL——工具参数空间受限且已
   转义，模型越不出边界
+
+### 研判节奏（`triage/engine.go` queue，口径在 `review/retriage.go`）
+
+incident 状态：`open` 还没有可用结论（新事件、分析师重开），`triaged` 已有结论，`closed` / `false_positive` 是分析师终态。
+研判之后再并入的证据不改状态，靠三个时刻判断：`triaged_at`（最近一次研判取上下文的时刻）、`evidence_at`、`urgent_at`
+（关联引擎记，见上文「新证据」）。证据时刻晚于 `triaged_at` 即**待重研判**（控制台状态旁标「待重研判」，
+升级类标「升级待重研判」；Pi 只读视图 `incidents.retriage` 为 `pending` / `urgent`；报告写「已研判（之后有新证据，待重研判）」）。
+研判完成时 `triaged_at` 记成开始取上下文的时刻（再往前让 1 秒防节点间时钟差），研判期间并进来的证据晚于它，下一轮仍待重研判，
+不会被这次结论吞掉；研判期间被分析师结案的不改回 triaged。
+
+- **冷却**：普通新证据距上次研判满 `AI_RETRIAGE_COOLDOWN_MINUTES`（默认 30）才重研判，冷却期间进来的告警只累积，
+  到期一次研判全部带上。升级类不等冷却。
+- **每轮 5 个名额**：新事件（open）按创建先后占多数；重研判里升级类在前、普通的在后，各自按上次研判先后排（刚研判过的排到后面），
+  至少留 1 个名额，新事件不满 4 个时补满。
+- **防饿死**：新事件每轮至少 4 个名额、先来先研判，后来的新事件只会排在后面，第 k 个新事件最多等 ⌈k/4⌉ 轮；
+  研判成功即离开新事件队列。重研判每轮保底 1 个，按上次研判先后轮转，研判完排到最后，每个待重研判的最多等它前面那几个各轮一次；
+  每个 incident 的普通重研判至多每个冷却期一次，升级类每个 incident 有上限（级别最多升 4 次，加上不同高危规则各一次），
+  所以噪声 incident 既挤不掉新事件，也不会被新事件永远压着。
+- **失败退避**：一个 incident 研判失败（模型超时、端点报错）只退避它自己，同批后面的照常研判：
+  `triage_failures` 加一，`triage_retry_at` 推到 1、2、4…分钟后（封顶 1 小时），退避期内不进队列；
+  重试时告警明细按失败次数减半（50→25→12…最少 5 条，汇总仍是全量）——超时多半是上下文太大，原样重试只会再超时。
+  成功后清零。连续失败 3 次后通知不再等这个研判（见「通知」）。
+
+生产估算（2026-10-21，离线重放 10-20 18:30 ~ 10-21 01:43 UTC 的告警流，单次研判按 250 秒）：Windows 测试机那个被系统
+计划任务、服务配置变更反复并入的 incident 实际研判 43 次；按新口径冷却 30 分钟为 15 次（首次 1 次、高危规则首现 2 次、
+冷却到期 12 次），冷却 60 分钟为 9 次。同期 pve1 DNS incident 复发后实际等了 40 分钟才重研判（队首超时反复中止整批），
+pve2 侦察 incident 首次研判等了 40 分钟；按新口径分别约 4 分钟与即时，按生产当天 46% 的失败率随机注入也在 15 分钟内。
 
 ### LLM 客户端
 
@@ -471,7 +500,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 3. 每次决策（含跳过）落审计
 
 同一 incident 同一资产只自动隔离一次（查 issued_by="auto" 的 isolate_host），
-重开重判不重复隔离（`auto.go:28-104`）。
+重研判不重复隔离（`auto.go:28-104`）。
 
 ## 通知（`server/internal/notify`）
 
@@ -480,7 +509,9 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
   配置后只推之后的事件
 - 格式：generic 推 Message JSON；dingtalk/wecom 为 `{"msgtype":"text",...}`；
   feishu 为 `{"msg_type":"text",...}`；正文模板共用（`notify.go:144-227`）
-- **投递语义**：AI 启用时等 verdict 再推；benign 静默跳过，但最高级别 ≥ 高危(4)
+- **投递语义**：AI 启用时等 verdict 再推；升级类证据待重研判时旧结论不作数，同样等新结论；
+  普通新证据冷却中按旧结论照常决定，不卡在冷却上（重研判从良性翻成可疑或恶意时清推送标记重新推）；
+  研判连续失败 3 次后不再等，不带结论照推并注明研判失败，AI 未启用时也不拿旧结论静默升级的事件；benign 静默跳过，但最高级别 ≥ 高危(4)
   的照推并标「良性，但级别高需人工复核」——AI 会看错，高危事件不能被一句良性吞掉；
   closed/false_positive 不推；目标启用前的历史事件不补发；失败下周期重试；
   每批 20 个（`notify.go:73-137`）
@@ -564,6 +595,7 @@ POST /api/commands → Hub.Issue 落 command 行并发往 agent 指令通道
 | `AI_API_KEY` | 空 | Bearer key |
 | `AI_TIMEOUT_SECONDS` | `120` | LLM 超时 |
 | `AI_INTERVAL_SECONDS` | `30` | 研判批次周期 |
+| `AI_RETRIAGE_COOLDOWN_MINUTES` | `30` | 已研判 incident 又并入普通新证据时，距上次研判至少隔多久才重研判；升级类不等 |
 | `RESPONSE_ENABLED` | `false` | 响应处置总开关 |
 | `ISOLATION_ALLOW` | 空（隔离将被 agent 拒绝） | 隔离放行地址，逗号分隔 |
 | `AUTO_RESPONSE_ENABLED` | `false` | 自动响应钩子，开启即真实隔离（依赖 RESPONSE_ENABLED） |
