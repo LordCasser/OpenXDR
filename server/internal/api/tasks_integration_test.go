@@ -116,6 +116,10 @@ func TestAPITasks(t *testing.T) {
 		if task.NextRun == nil || task.NextRun.Before(time.Now()) {
 			t.Errorf("启用的任务应带下一次运行时间：%+v", task)
 		}
+		// 按组错峰：只给看得到的组，且就是 NextRun
+		if next, ok := task.NextRuns[gA.ID.String()]; len(task.NextRuns) != 1 || !ok || !next.Equal(*task.NextRun) {
+			t.Errorf("下次运行时间应只含本组且按偏移计算：%+v", task.NextRuns)
+		}
 	}
 }
 

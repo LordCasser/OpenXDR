@@ -31,6 +31,7 @@ const ERRORS: [RegExp, MsgKey][] = [
   [/max_turns/, 'workerErrTurns'],
   [/模型用量已到上限/, 'workerErrBudget'],
   [/没有提交报告/, 'workerErrNoReport'],
+  [/并发上限/, 'workerErrSkipped'],
 ]
 const errorText = (err: string, t: (k: MsgKey) => string) => {
   const hit = ERRORS.find(([re]) => re.test(err))
@@ -116,16 +117,17 @@ function LastShift({ run }: { run: TaskRunRow }) {
   const { t } = useI18n()
   const ok = run.status === 'succeeded'
   const interrupted = run.status === 'interrupted'
+  const skipped = run.status === 'skipped'
   const took = run.finishedAt ? duration(Date.parse(run.finishedAt) - Date.parse(run.startedAt)) : '-'
   return (
     <Space wrap size={8} style={{ marginTop: 12 }}>
       {ok ? <CheckCircleFilled style={{ color: 'var(--ant-color-success)' }} />
-        : interrupted ? <ExclamationCircleFilled style={{ color: 'var(--ant-color-warning)' }} />
+        : interrupted || skipped ? <ExclamationCircleFilled style={{ color: 'var(--ant-color-warning)' }} />
           : <CloseCircleFilled style={{ color: 'var(--ant-color-error)' }} />}
-      <Typography.Text>{t(ok ? 'workerLastOk' : interrupted ? 'workerLastInterrupted' : 'workerLastFailed')}</Typography.Text>
-      <Typography.Text type="secondary"><Ago iso={run.finishedAt ?? run.startedAt} /> · {t('workerTook', { took })} · {t('workerSteps', { n: run.steps })}</Typography.Text>
+      <Typography.Text>{t(ok ? 'workerLastOk' : interrupted ? 'workerLastInterrupted' : skipped ? 'workerLastSkipped' : 'workerLastFailed')}</Typography.Text>
+      {!skipped && <Typography.Text type="secondary"><Ago iso={run.finishedAt ?? run.startedAt} /> · {t('workerTook', { took })} · {t('workerSteps', { n: run.steps })}</Typography.Text>}
       {run.reportId && <a href={`/api/agent-reports/${run.reportId}/html`} target="_blank" rel="noreferrer"><FileTextOutlined /> {run.reportTitle}</a>}
-      {!ok && !interrupted && run.error && <Tooltip title={run.error}><Typography.Text type="danger" ellipsis style={{ maxWidth: 360 }}>{errorText(run.error, t)}</Typography.Text></Tooltip>}
+      {!ok && !interrupted && !skipped && run.error && <Tooltip title={run.error}><Typography.Text type="danger" ellipsis style={{ maxWidth: 360 }}>{errorText(run.error, t)}</Typography.Text></Tooltip>}
       {run.sessionId && <Link to={`/chat/${run.sessionId}`}>{t('openSession')}</Link>}
     </Space>
   )
@@ -135,7 +137,7 @@ function LastShift({ run }: { run: TaskRunRow }) {
 function ShiftStrip({ runs }: { runs: TaskRunRow[] }) {
   const { t } = useI18n()
   const { token } = theme.useToken()
-  const color = { succeeded: token.colorSuccess, failed: token.colorError, interrupted: token.colorWarning, running: token.colorPrimary }
+  const color = { succeeded: token.colorSuccess, failed: token.colorError, interrupted: token.colorWarning, skipped: token.colorTextQuaternary, running: token.colorPrimary }
   return (
     <Space size={3} wrap>
       {[...runs].slice(0, 20).reverse().map(r => (
@@ -199,6 +201,8 @@ function Worker({ task, busy, hosts, onToggle, onGroup, onRun, onEdit }: {
   const last = runs.find(r => r.status !== 'running')
   const now = useNow(working.length > 0)
   const spec = task.customSchedule ?? task.schedule
+  // 各组开跑时间按组错峰；选了组看本组的，没选看最早的
+  const nextRun = groupId ? task.nextRuns[groupId] : task.nextRun
   // 职责优先用任务说明；没有说明的旧任务取提示词第一句，截在冒号上的（「……覆盖：」）去掉冒号
   const duty = description || task.prompt.split(/[。\n]/)[0].replace(/[：:]\s*$/, '')
   const state = working.length ? 'working' : enabled ? 'idle' : 'off'
@@ -224,7 +228,7 @@ function Worker({ task, busy, hosts, onToggle, onGroup, onRun, onEdit }: {
             <Tooltip title={<span className="mono">{spec}</span>}>{describeCron(spec, t, locale) ?? <code>{spec}</code>}</Tooltip>
             {task.customSchedule && <Tag color="blue">{t('taskCustom')}</Tag>}
             {isAdmin && <Button type="link" size="small" aria-label={t('taskEditSchedule')} disabled={busy} icon={<EditOutlined />} onClick={onEdit} />}
-            {state === 'idle' && task.nextRun && <Typography.Text type="secondary">· {t('workerNext', { time: fmtTime(task.nextRun) })}</Typography.Text>}
+            {state === 'idle' && nextRun && <Typography.Text type="secondary">· {t('workerNext', { time: fmtTime(nextRun) })}</Typography.Text>}
           </Space>
         </div>
         <Space orientation="vertical" align="end" size={6}>

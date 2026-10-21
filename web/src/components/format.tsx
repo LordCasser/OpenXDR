@@ -46,6 +46,8 @@ const SESSION_STATUS: Record<string, { key: MsgKey; color: string }> = {
   idle: { key: 'sessionIdle', color: 'default' },
   succeeded: { key: 'sessionSucceeded', color: 'success' },
   failed: { key: 'sessionFailed', color: 'error' },
+  // 只出现在定时任务运行记录上：并发上限已满、排队超过一个周期没轮到
+  skipped: { key: 'sessionSkipped', color: 'warning' },
 }
 
 export function SessionStatusTag({ value }: { value: string }) {

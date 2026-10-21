@@ -32,7 +32,9 @@ type taskRow struct {
 	Model        string          `json:"model"`
 	TargetGroup  string          `json:"targetGroup"`
 	Prompt       string          `json:"prompt"`
-	// NextRun 按当前周期算的下一次运行时间；停用或周期写错时为空
+	// NextRuns 每个看得到且启用的组下一次开跑时间（计划时间加该组的错峰偏移）
+	NextRuns map[string]time.Time `json:"nextRuns"`
+	// NextRun NextRuns 里最早的一个；没有启用的组或周期写错时为空
 	NextRun *time.Time `json:"nextRun"`
 }
 
@@ -51,11 +53,12 @@ type taskRunRow struct {
 	Steps       int        `json:"steps"`
 }
 
-// toTaskRow 任务行，带按当前周期算出的下一次运行时间。visible 为 nil 表示能看全部组
-func toTaskRow(t *ent.Task, visible map[uuid.UUID]bool) taskRow {
+// toTaskRow 任务行，带各组按当前周期与错峰偏移算出的下一次运行时间。
+// visible 为 nil 表示能看全部组；groups 是要算下次运行时间的组（调用者看得到的）
+func toTaskRow(t *ent.Task, visible map[uuid.UUID]bool, groups []*ent.Group) taskRow {
 	row := taskRow{ID: t.ID, Name: t.Name, NameEN: t.NameEn, Description: t.Description, DescriptionEN: t.DescriptionEn, Category: t.Category,
 		Schedule: t.Schedule, CustomSchedule: t.CustomSchedule, Enabled: t.Enabled, GroupEnabled: map[string]bool{},
-		Model: t.Model, TargetGroup: t.TargetGroup, Prompt: t.Prompt}
+		Model: t.Model, TargetGroup: t.TargetGroup, Prompt: t.Prompt, NextRuns: map[string]time.Time{}}
 	for g, on := range t.GroupEnabled {
 		if id, err := uuid.Parse(g); err == nil && (visible == nil || visible[id]) {
 			row.GroupEnabled[g] = on
@@ -65,9 +68,23 @@ func toTaskRow(t *ent.Task, visible map[uuid.UUID]bool) taskRow {
 	if t.CustomSchedule != nil {
 		spec = *t.CustomSchedule
 	}
-	if sched, err := schedule.ParseSchedule(spec); err == nil && schedule.AnyEnabled(t) {
-		next := sched.Next(time.Now())
-		row.NextRun = &next
+	sched, err := schedule.ParseSchedule(spec)
+	if err != nil {
+		return row
+	}
+	now := time.Now()
+	for _, g := range groups {
+		if (t.TargetGroup != "*" && g.Name != t.TargetGroup) || !schedule.EnabledFor(t, g.ID) {
+			continue
+		}
+		next := schedule.NextRun(sched, t.ID, g.ID, now)
+		if next.IsZero() {
+			continue
+		}
+		row.NextRuns[g.ID.String()] = next
+		if row.NextRun == nil || next.Before(*row.NextRun) {
+			row.NextRun = &next
+		}
 	}
 	return row
 }
@@ -80,12 +97,16 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 			return
 		}
 		q := db.Task.Query().Where(enttask.Removed(false))
+		gq := db.Group.Query()
 		if !scope.all {
-			groups, err := db.Group.Query().Where(group.IDIn(scope.groups...)).All(r.Context())
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
+			gq = gq.Where(group.IDIn(scope.groups...))
+		}
+		groups, err := gq.All(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		if !scope.all {
 			names := make([]string, 0, len(groups)+1)
 			if len(groups) > 0 {
 				names = append(names, "*")
@@ -109,7 +130,7 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 		}
 		out := make([]taskRow, len(tasks))
 		for i, t := range tasks {
-			out[i] = toTaskRow(t, visible)
+			out[i] = toTaskRow(t, visible, groups)
 		}
 		writeJSON(w, out)
 	})
@@ -140,11 +161,10 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if t.TargetGroup != "*" {
-			if g, err := db.Group.Get(r.Context(), gid); err != nil || g.Name != t.TargetGroup {
-				http.Error(w, "这个任务不针对该组", http.StatusBadRequest)
-				return
-			}
+		g, err := db.Group.Get(r.Context(), gid)
+		if err != nil || (t.TargetGroup != "*" && g.Name != t.TargetGroup) {
+			http.Error(w, "这个任务不针对该组", http.StatusBadRequest)
+			return
 		}
 		next := map[string]bool{}
 		for k, v := range t.GroupEnabled {
@@ -161,7 +181,7 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 		}
 		detail, _ := json.Marshal(map[string]any{"group": gid, "enabled": body.Enabled})
 		audit.Log(r.Context(), db, r, "task_group_updated", t.ID, string(detail))
-		writeJSON(w, toTaskRow(t, map[uuid.UUID]bool{gid: true}))
+		writeJSON(w, toTaskRow(t, map[uuid.UUID]bool{gid: true}, []*ent.Group{g}))
 	})
 
 	// customSchedule 传空串表示恢复 YAML 里的周期
@@ -199,7 +219,12 @@ func mapTasks(api *http.ServeMux, db *ent.Client) {
 		}
 		detail, _ := json.Marshal(body)
 		audit.Log(r.Context(), db, r, "task_updated", t.ID, string(detail))
-		writeJSON(w, toTaskRow(t, nil))
+		groups, err := db.Group.Query().All(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, toTaskRow(t, nil, groups))
 	})
 
 	// 立即运行：只记请求时间，由集群单活的调度器在下一次检查时拉起，避免多节点各跑一份

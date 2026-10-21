@@ -1143,7 +1143,9 @@ export interface TaskRow {
   model: string
   targetGroup: string
   prompt: string
-  // 按当前周期算的下一次运行时间；停用时为空
+  // 每个看得到且启用的组下一次开跑时间（含按组错峰偏移）
+  nextRuns: Record<string, string>
+  // nextRuns 里最早的一个；没有启用的组时为空
   nextRun: string | null
 }
 
@@ -1158,8 +1160,8 @@ export interface TaskRunRow {
   sessionId: string | null
   startedAt: string
   finishedAt: string | null
-  // interrupted：被停机打断，接手的调度器稍后重跑
-  status: 'running' | 'succeeded' | 'failed' | 'interrupted'
+  // interrupted：被停机打断，接手的调度器稍后重跑；skipped：并发上限已满、排队超过一个周期没轮到
+  status: 'running' | 'succeeded' | 'failed' | 'interrupted' | 'skipped'
   error: string | null
 }
 
