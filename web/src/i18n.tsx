@@ -2073,7 +2073,7 @@ const en = {
   retriageUrgent: 'Escalated, re-triaging',
   retriageUrgentHint: 'A higher-severity or first-seen high-risk alert joined; it is re-triaged with priority, the last verdict no longer counts and notification waits for the new one',
   lastTriaged: 'Last triaged',
-  triageRounds: '{n} rounds',
+  triageRounds: 'rounds: {n}',
   triageFailed: 'Triage failed',
   triageFailedDetail: '{n} times in a row, retrying with smaller context at {at}',
   sessionRunning: 'Running',
