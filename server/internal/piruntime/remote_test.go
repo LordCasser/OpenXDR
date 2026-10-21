@@ -4,8 +4,12 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +61,39 @@ func TestRemoteRoundTrip(t *testing.T) {
 		func(context.Context, Event) error { return nil })
 	if err != nil || res.Response != `hi:ran-exec:{"a":1}` {
 		t.Fatalf("全双工往返: %+v %v", res, err)
+	}
+}
+
+// HTTP/2 的沙箱长时间不出事件（模型慢、工具在等）：到期必须立即返回，不能等沙箱下一行
+func TestRemoteCancelHTTP2(t *testing.T) {
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rc := http.NewResponseController(w)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"type":"event","event":{}}` + "\n"))
+		_ = rc.Flush()
+		// 修复前客户端要等到这里结束才返回
+		select {
+		case <-time.After(5 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	defer srv.Close()
+	ca := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	remote, err := NewRemote(srv.URL, testKey, ca)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err = Runtime{Remote: remote}.Run(ctx, Request{Prompt: "hi"}, nil, func(context.Context, Event) error { return nil })
+	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 2*time.Second {
+		t.Fatalf("到期应立即返回：%v，用时 %v", err, time.Since(start))
 	}
 }
 

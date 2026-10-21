@@ -64,5 +64,11 @@ func (r *Remote) open(ctx context.Context) (*channel, error) {
 		_ = out.Close()
 		return nil, fmt.Errorf("沙箱拒绝运行: %s %s", resp.Status, strings.TrimSpace(string(body)))
 	}
+	// HTTP/2 下取消请求打断不了正在读的响应体，要等沙箱再发一行才返回：慢模型时到期后还会卡上几分钟，
+	// 会话终态写不进去，只能等执行期限清理。到点主动关掉两端
+	context.AfterFunc(ctx, func() {
+		_ = out.CloseWithError(ctx.Err())
+		_ = resp.Body.Close()
+	})
 	return &channel{out, resp.Body, func() error { return nil }}, nil
 }
