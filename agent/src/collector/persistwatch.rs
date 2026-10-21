@@ -74,7 +74,7 @@ fn run(agent_id: &str, sink: &EventSink) {
     let mut reg_seen = registry_snapshot();
     let mut file_seen = startup_snapshot();
     let mut svc_seen = services_snapshot();
-    let mut task_seen = tasks_snapshot();
+    let mut task_seen = tasks_snapshot(None);
     let mut wmi_seen = wmi_snapshot();
 
     while !sink.is_closed() {
@@ -105,8 +105,9 @@ fn run(agent_id: &str, sink: &EventSink) {
 
         if let Some(svc_now) = services_snapshot() {
             if let Some(seen) = &svc_seen {
-                for (path, data, activity) in diff(seen, &svc_now) {
-                    if !sink.send(registry_event(agent_id, path, data, activity, None)) {
+                for (path, svc, activity) in diff(seen, &svc_now) {
+                    let prev = seen.get(path).filter(|_| activity == 3);
+                    if !sink.send(service_event(agent_id, path, svc, prev, activity)) {
                         return;
                     }
                 }
@@ -114,10 +115,11 @@ fn run(agent_id: &str, sink: &EventSink) {
             svc_seen = Some(svc_now);
         }
 
-        if let Some(task_now) = tasks_snapshot() {
+        if let Some(task_now) = tasks_snapshot(task_seen.as_ref()) {
             if let Some(seen) = &task_seen {
-                for (path, _, activity) in diff(seen, &task_now) {
-                    if !sink.send(file_event(agent_id, path, activity)) {
+                for (path, task, activity) in diff(seen, &task_now) {
+                    let prev = seen.get(path).filter(|_| activity == 3);
+                    if !sink.send(task_event(agent_id, path, task, prev, activity)) {
                         return;
                     }
                 }
@@ -257,13 +259,13 @@ fn snapshot_tree(
     }
 }
 
-/// Windows 服务快照：完整键路径 -> ImagePath + 启动类型 + 运行状态。
+/// Windows 服务快照：完整键路径 -> 执行目标（ImagePath / ServiceDll / FailureCommand）+ 启动类型 + 运行状态。
 /// 服务清单走注册表（有几百个，全量枚举比逐个 OpenService 简单），
 /// 运行状态走 SCM 一次性枚举——注册表拿不到 Running/Stopped，
 /// 而"停掉 EventLog 瞎眼"恰恰是最关键的信号。
 /// 返回 None 表示连 Services 键都打不开或 SCM 枚举失败（权限等），本轮整体跳过：
 /// 拿着缺 State 字段的半份快照去 diff，会把全量服务误报成"修改"。
-fn services_snapshot() -> Option<HashMap<String, String>> {
+fn services_snapshot() -> Option<HashMap<String, ServiceEntry>> {
     let names = winreg::subkeys(winreg::LOCAL_MACHINE, SERVICES_KEY)?;
     let states = service_states()?;
     let services: Vec<Service> = names.into_iter().map(read_service).collect();
@@ -280,10 +282,13 @@ fn services_snapshot() -> Option<HashMap<String, String>> {
         let state = states.get(&svc.name.to_lowercase()).copied().unwrap_or("?");
         snap.insert(
             format!(r"HKLM\{SERVICES_KEY}\{}", svc.name),
-            format!(
-                "ImagePath={}; Start={}; State={state}",
-                svc.image_path, svc.start
-            ),
+            ServiceEntry {
+                image_path: svc.image_path.clone(),
+                service_dll: svc.service_dll.clone(),
+                failure_command: svc.failure_command.clone(),
+                start: svc.start.clone(),
+                state: state.to_string(),
+            },
         );
     }
     Some(snap)
@@ -295,16 +300,17 @@ struct Service {
     /// Type 值，读不到记 0
     kind: u32,
     image_path: String,
+    /// svchost 托管服务真正加载的 DLL（Parameters\ServiceDll，老写法直接挂在服务键下）
+    service_dll: String,
+    /// 服务失败时执行的命令，与 ImagePath 一样是劫持点
+    failure_command: String,
     start: String,
 }
 
 fn read_service(name: String) -> Service {
     let key = format!(r"{SERVICES_KEY}\{name}");
-    let image_path = winreg::values(winreg::LOCAL_MACHINE, &key)
-        .into_iter()
-        .find(|(n, _)| n.eq_ignore_ascii_case("ImagePath"))
-        .map(|(_, data)| data)
-        .unwrap_or_default();
+    let values = winreg::values(winreg::LOCAL_MACHINE, &key);
+    let params = winreg::values(winreg::LOCAL_MACHINE, &format!(r"{key}\Parameters"));
     let start = winreg::dword(winreg::LOCAL_MACHINE, &key, "Start")
         .map(|v| v.to_string())
         .unwrap_or_else(|| "?".to_string());
@@ -312,8 +318,64 @@ fn read_service(name: String) -> Service {
     Service {
         name,
         kind,
-        image_path,
+        image_path: value_of(&values, "ImagePath").unwrap_or_default(),
+        service_dll: value_of(&params, "ServiceDll")
+            .or_else(|| value_of(&values, "ServiceDll"))
+            .unwrap_or_default(),
+        failure_command: value_of(&values, "FailureCommand").unwrap_or_default(),
         start,
+    }
+}
+
+fn value_of(values: &[(String, String)], name: &str) -> Option<String> {
+    values
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case(name))
+        .map(|(_, data)| data.clone())
+}
+
+/// 服务快照里的一项。修改事件要说清改了哪个字段：系统自己翻 State / Start 一夜几百次，
+/// 换掉执行目标（ImagePath / ServiceDll / FailureCommand）才是劫持（T1543.003），规则据此分级。
+#[derive(PartialEq)]
+struct ServiceEntry {
+    image_path: String,
+    service_dll: String,
+    failure_command: String,
+    start: String,
+    state: String,
+}
+
+impl ServiceEntry {
+    fn fields(&self) -> [(&'static str, &str); 5] {
+        [
+            ("ImagePath", &self.image_path),
+            ("ServiceDll", &self.service_dll),
+            ("FailureCommand", &self.failure_command),
+            ("Start", &self.start),
+            ("State", &self.state),
+        ]
+    }
+
+    /// 事件里的值：`ImagePath=…; ServiceDll=…; Start=2; State=Running`，空字段省略
+    /// （多数服务没有 ServiceDll / FailureCommand）。
+    fn data(&self) -> String {
+        self.fields()
+            .iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
+    /// 与旧值相比变了的字段名，逗号分隔，如 `Start,State`。
+    fn changed(&self, old: &ServiceEntry) -> String {
+        self.fields()
+            .iter()
+            .zip(old.fields())
+            .filter(|((_, now), (_, before))| now != before)
+            .map(|((name, _), _)| *name)
+            .collect::<Vec<_>>()
+            .join(",")
     }
 }
 
@@ -509,10 +571,21 @@ fn startup_snapshot() -> HashMap<String, ()> {
     snap
 }
 
-/// 计划任务快照：任务文件路径 -> (mtime 秒, 大小)。
+/// 计划任务快照里的一项。系统维护一夜改几十次自带任务的触发器与状态，动作不变；
+/// 劫持已有任务（T1053.005）改的是动作，所以动作单独拿出来比。
+#[derive(PartialEq)]
+struct TaskEntry {
+    mtime: u64,
+    size: u64,
+    /// 任务 XML 里的动作（见 [`task_actions`]），文件读不到且没有上一轮的值时为 None
+    actions: Option<String>,
+}
+
+/// 计划任务快照：任务文件路径 -> mtime 秒、大小与动作。
 /// 返回 None 表示 Tasks 根目录都读不了（权限等），本轮整体跳过；
-/// 子目录读取失败只跳过该子目录。
-fn tasks_snapshot() -> Option<HashMap<String, (u64, u64)>> {
+/// 子目录读取失败只跳过该子目录。任务文件这一轮读不到（计划任务服务正在写）时沿用上一轮的动作，
+/// 不把"读不到"当成动作变化。
+fn tasks_snapshot(prev: Option<&HashMap<String, TaskEntry>>) -> Option<HashMap<String, TaskEntry>> {
     let mut snap = HashMap::new();
     let mut stack = vec![std::fs::read_dir(TASKS_DIR).ok()?];
     while let Some(entries) = stack.pop() {
@@ -529,11 +602,118 @@ fn tasks_snapshot() -> Option<HashMap<String, (u64, u64)>> {
                     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                     .map(|d| d.as_secs())
                     .unwrap_or(0);
-                snap.insert(path.display().to_string(), (mtime, meta.len()));
+                let key = path.display().to_string();
+                let actions = read_task(&path)
+                    .map(|xml| task_actions(&xml))
+                    .or_else(|| prev?.get(&key)?.actions.clone());
+                snap.insert(
+                    key,
+                    TaskEntry {
+                        mtime,
+                        size: meta.len(),
+                        actions,
+                    },
+                );
             }
         }
     }
     Some(snap)
+}
+
+/// 任务文件只读前 1 MiB：计划任务服务写出的 XML 只有几 KB，不为塞进来的大文件每 30 秒读一遍。
+const TASK_READ_LIMIT: u64 = 1 << 20;
+
+/// 读任务文件并解码。计划任务服务写的是带 BOM 的 UTF-16LE，手写的也可能是 UTF-8。
+fn read_task(path: &std::path::Path) -> Option<String> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(TASK_READ_LIMIT)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    Some(decode_task(&bytes))
+}
+
+fn decode_task(bytes: &[u8]) -> String {
+    let utf16 = |b: &[u8]| {
+        let units: Vec<u16> = b
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&c| u16::from_le_bytes(c))
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    match bytes {
+        [0xFF, 0xFE, rest @ ..] => utf16(rest),
+        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
+        [_, 0, ..] => utf16(bytes),
+        _ => String::from_utf8_lossy(bytes).into_owned(),
+    }
+}
+
+/// 任务 XML 里会执行代码的动作，按出现顺序一行一个：Exec 为「命令 参数」，ComHandler 为 `com:{CLSID}`。
+/// 不引 XML 库：任务文件由计划任务服务按固定架构写出，按标签找足够；SendEmail / ShowMessage 早已废弃，不执行代码。
+fn task_actions(xml: &str) -> String {
+    let mut actions: Vec<(usize, String)> = elements(xml, "Exec")
+        .map(|(at, body)| {
+            let command = element_text(body, "Command");
+            let line = match element_text(body, "Arguments") {
+                args if args.is_empty() => command,
+                args => format!("{command} {args}"),
+            };
+            (at, line)
+        })
+        .chain(
+            elements(xml, "ComHandler")
+                .map(|(at, body)| (at, format!("com:{}", element_text(body, "ClassId")))),
+        )
+        .collect();
+    actions.sort_by_key(|(at, _)| *at);
+    actions
+        .into_iter()
+        .map(|(_, line)| line.replace(['\r', '\n'], " "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `<tag>…</tag>`（开标签可带属性）的位置与内容。
+fn elements<'a>(xml: &'a str, tag: &'a str) -> impl Iterator<Item = (usize, &'a str)> + 'a {
+    let open = format!("<{tag}");
+    let close = format!("</{tag}>");
+    let mut from = 0;
+    std::iter::from_fn(move || {
+        loop {
+            let at = from + xml[from..].find(&open)?;
+            let after = &xml[at + open.len()..];
+            from = at + open.len();
+            // <Exec> 与 <Exec id="…">，不认 <ExecutionTimeLimit>
+            if !after.starts_with(['>', ' ', '\t', '\r', '\n']) {
+                continue;
+            }
+            let body_start = from + after.find('>')? + 1;
+            let body_end = body_start + xml[body_start..].find(&close)?;
+            from = body_end + close.len();
+            return Some((at, &xml[body_start..body_end]));
+        }
+    })
+}
+
+/// 第一个 `<tag>` 的文本（反转义、去首尾空白），没有给空串。
+fn element_text(body: &str, tag: &str) -> String {
+    elements(body, tag)
+        .next()
+        .map(|(_, text)| unescape_xml(text.trim()))
+        .unwrap_or_default()
+}
+
+fn unescape_xml(s: &str) -> String {
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
 }
 
 /// WMI 永久事件订阅快照：伪路径 -> 实例属性（规范化 JSON 串）。
@@ -619,6 +799,51 @@ fn registry_event(
         raw["user"] = hive_owner(sid, winreg::account_name(sid).as_deref());
     }
     event(agent_id, CLASS_REGISTRY, raw)
+}
+
+/// 服务事件：路径与值的写法同注册表事件。修改事件另带旧值 `prev_data` 与变了的字段 `changed`，
+/// 规则据此区分系统翻启动类型 / 运行状态与换执行目标。
+fn service_event(
+    agent_id: &str,
+    path: &str,
+    svc: &ServiceEntry,
+    prev: Option<&ServiceEntry>,
+    activity: u8,
+) -> AgentEvent {
+    let mut raw = serde_json::json!({
+        "activity_id": activity,
+        "reg_key": { "path": path },
+        "reg_value": { "data": svc.data() },
+    });
+    if let Some(prev) = prev {
+        raw["reg_value"]["prev_data"] = prev.data().into();
+        raw["reg_value"]["changed"] = svc.changed(prev).into();
+    }
+    event(agent_id, CLASS_REGISTRY, raw)
+}
+
+/// 计划任务文件事件：带任务动作 `task.actions`（删除事件为旧动作）；
+/// 修改事件里动作变了（前后都读得到）才带旧动作 `task.prev_actions`。
+fn task_event(
+    agent_id: &str,
+    path: &str,
+    task: &TaskEntry,
+    prev: Option<&TaskEntry>,
+    activity: u8,
+) -> AgentEvent {
+    let mut raw = serde_json::json!({
+        "activity_id": activity,
+        "file": { "path": path },
+    });
+    if let Some(actions) = &task.actions {
+        raw["task"] = serde_json::json!({ "actions": actions });
+        if let Some(Some(old)) = prev.map(|p| &p.actions)
+            && old != actions
+        {
+            raw["task"]["prev_actions"] = old.as_str().into();
+        }
+    }
+    event(agent_id, CLASS_FILE, raw)
 }
 
 fn file_event(agent_id: &str, path: &str, activity: u8) -> AgentEvent {
@@ -962,8 +1187,153 @@ mod tests {
             name: name.to_string(),
             kind,
             image_path: image_path.to_string(),
+            service_dll: String::new(),
+            failure_command: String::new(),
             start: "3".to_string(),
         }
+    }
+
+    fn entry(image_path: &str, service_dll: &str, start: &str, state: &str) -> ServiceEntry {
+        ServiceEntry {
+            image_path: image_path.to_string(),
+            service_dll: service_dll.to_string(),
+            failure_command: String::new(),
+            start: start.to_string(),
+            state: state.to_string(),
+        }
+    }
+
+    const NETSVCS: &str = r"%SystemRoot%\System32\svchost.exe -k netsvcs -p";
+
+    #[test]
+    fn service_data_omits_empty_fields() {
+        assert_eq!(
+            entry(NETSVCS, r"%SystemRoot%\System32\qmgr.dll", "3", "Stopped").data(),
+            r"ImagePath=%SystemRoot%\System32\svchost.exe -k netsvcs -p; ServiceDll=%SystemRoot%\System32\qmgr.dll; Start=3; State=Stopped"
+        );
+        assert_eq!(
+            entry(r"C:\Windows\System32\spoolsv.exe", "", "2", "Running").data(),
+            r"ImagePath=C:\Windows\System32\spoolsv.exe; Start=2; State=Running"
+        );
+    }
+
+    #[test]
+    fn service_modify_reports_prev_and_changed_fields() {
+        let dll = r"%SystemRoot%\System32\qmgr.dll";
+        let path = r"HKLM\SYSTEM\CurrentControlSet\Services\BITS";
+        let seen: HashMap<String, ServiceEntry> =
+            [(path.to_string(), entry(NETSVCS, dll, "3", "Stopped"))].into();
+        // BITS 被系统按需拉起：启动类型与运行状态一起翻，执行目标不变
+        let now: HashMap<String, ServiceEntry> =
+            [(path.to_string(), entry(NETSVCS, dll, "2", "Running"))].into();
+        let (p, svc, activity) = diff(&seen, &now)[0];
+        let raw: serde_json::Value =
+            serde_json::from_str(&service_event("a", p, svc, seen.get(p), activity).raw_json)
+                .unwrap();
+        assert_eq!(raw["reg_value"]["changed"], "Start,State");
+        assert!(
+            raw["reg_value"]["prev_data"]
+                .as_str()
+                .unwrap()
+                .ends_with("Start=3; State=Stopped")
+        );
+        // ServiceDll 换成用户目录下的 DLL：只有它变
+        let evil = entry(NETSVCS, r"C:\Users\Public\x.dll", "3", "Stopped");
+        assert_eq!(evil.changed(&seen[path]), "ServiceDll");
+    }
+
+    #[test]
+    fn service_create_and_delete_carry_no_prev() {
+        let svc = entry(r"C:\evil.exe", "", "3", "Stopped");
+        let raw: serde_json::Value =
+            serde_json::from_str(&service_event("a", "p", &svc, None, 1).raw_json).unwrap();
+        assert!(raw["reg_value"].get("prev_data").is_none());
+        assert!(raw["reg_value"].get("changed").is_none());
+    }
+
+    /// 计划任务服务写出的任务 XML（节选自 UpdateOrchestrator\Schedule Scan 的形态）
+    const TASK_XML: &str = r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.6" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Settings><ExecutionTimeLimit>PT72H</ExecutionTimeLimit></Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>%systemroot%\system32\usoclient.exe</Command>
+      <Arguments>StartScan</Arguments>
+    </Exec>
+    <ComHandler>
+      <ClassId>{A6BA00FE-40E8-477C-B713-C64A14F18ADB}</ClassId>
+    </ComHandler>
+    <Exec id="second">
+      <Command>"C:\Program Files\x\a.exe"</Command>
+      <Arguments>-q &quot;a &amp; b&quot;</Arguments>
+    </Exec>
+  </Actions>
+</Task>"#;
+
+    #[test]
+    fn task_actions_in_document_order() {
+        assert_eq!(
+            task_actions(TASK_XML),
+            "%systemroot%\\system32\\usoclient.exe StartScan\n\
+             com:{A6BA00FE-40E8-477C-B713-C64A14F18ADB}\n\
+             \"C:\\Program Files\\x\\a.exe\" -q \"a & b\""
+        );
+        // 只有命令没有参数；没有动作（空文件、不是任务 XML）给空串
+        assert_eq!(
+            task_actions("<Exec><Command>C:\\evil.exe</Command></Exec>"),
+            r"C:\evil.exe"
+        );
+        assert_eq!(task_actions(""), "");
+        assert_eq!(task_actions("<Exec><Command>unterminated"), "");
+    }
+
+    #[test]
+    fn decode_task_handles_utf16_bom_and_utf8() {
+        let utf16: Vec<u8> = [0xFF, 0xFE]
+            .into_iter()
+            .chain("<Exec/>".encode_utf16().flat_map(u16::to_le_bytes))
+            .collect();
+        assert_eq!(decode_task(&utf16), "<Exec/>");
+        assert_eq!(decode_task(b"\xEF\xBB\xBF<Task/>"), "<Task/>");
+        assert_eq!(decode_task(b"<Task/>"), "<Task/>");
+        assert_eq!(decode_task(b""), "");
+    }
+
+    fn task(mtime: u64, actions: Option<&str>) -> TaskEntry {
+        TaskEntry {
+            mtime,
+            size: 10,
+            actions: actions.map(str::to_string),
+        }
+    }
+
+    fn task_raw(now: &TaskEntry, prev: Option<&TaskEntry>, activity: u8) -> serde_json::Value {
+        serde_json::from_str(&task_event("a", "p", now, prev, activity).raw_json).unwrap()
+    }
+
+    #[test]
+    fn task_modify_carries_prev_actions_only_when_actions_change() {
+        let usoclient = r"%systemroot%\system32\usoclient.exe StartScan";
+        // 系统维护：只改了触发器，动作不变
+        let raw = task_raw(
+            &task(2, Some(usoclient)),
+            Some(&task(1, Some(usoclient))),
+            3,
+        );
+        assert_eq!(raw["task"]["actions"], usoclient);
+        assert!(raw["task"].get("prev_actions").is_none());
+        // 劫持：动作换成 powershell
+        let raw = task_raw(
+            &task(2, Some("powershell.exe -enc AAAA")),
+            Some(&task(1, Some(usoclient))),
+            3,
+        );
+        assert_eq!(raw["task"]["prev_actions"], usoclient);
+        // 前一轮动作未知：说不清变没变，不带旧动作
+        let raw = task_raw(&task(2, Some(usoclient)), Some(&task(1, None)), 3);
+        assert!(raw["task"].get("prev_actions").is_none());
+        // 动作未知时不带 task
+        assert!(task_raw(&task(2, None), None, 1).get("task").is_none());
     }
 
     #[test]

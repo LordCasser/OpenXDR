@@ -82,6 +82,9 @@ agent 侧组装（`agent/src/collector/mod.rs:233` `process_event`）。
 - 产生位置：Linux fswatch（fanotify 优先、inotify 兜底）、Windows
   fswatch_win（ReadDirectoryChangesW）、persistwatch 的 Startup 目录与
   计划任务快照（增/删/改语义见 collection.md）
+- persistwatch 的计划任务事件另带 `task.actions`：任务 XML 里的动作，一行一个，Exec 为「命令 参数」、
+  ComHandler 为 `com:{CLSID}`（删除事件为旧动作，任务文件读不到时省略）；修改事件里动作变了才带
+  `task.prev_actions`（旧动作）。动作不变的修改是系统维护改触发器与状态
 
 ## 3002 认证
 
@@ -313,8 +316,11 @@ Windows persistwatch（`persistwatch.rs`）：
 
 - activity_id：1=Create、3=Modify、4=Delete（删除事件带旧值内容）
 - 覆盖：Run/RunOnce/Winlogon 自启动键（HKLM + 每个已加载的用户配置单元）、**Windows 服务快照**
-  （`HKLM\SYSTEM\CurrentControlSet\Services`，值为 ImagePath+启动类型+运行状态，
-  EventLog 等安全服务被停止会产生 Modify）、`CurrentVersion\Windows`
+  （`HKLM\SYSTEM\CurrentControlSet\Services`，值形如
+  `ImagePath=…; ServiceDll=…; FailureCommand=…; Start=2; State=Running`，空字段省略；
+  EventLog 等安全服务被停止会产生 Modify。服务的修改事件另带 `reg_value.prev_data`（旧值）与
+  `reg_value.changed`（变了的字段名，逗号分隔，如 `Start,State`），规则据此区分系统翻启动类型 / 运行状态
+  与换执行目标）、`CurrentVersion\Windows`
   （AppInit_DLLs）、Defender Exclusions、IFEO 各子键 Debugger 值、
   用户的 `HKCU\Software\Classes\CLSID`（InprocServer32/LocalServer32）
 - 用户配置单元的路径统一写 `HKCU\...`，`user` 记配置单元属主：`uid` 为 SID，`name` 为 `DOMAIN\user`（解析不到省略）；

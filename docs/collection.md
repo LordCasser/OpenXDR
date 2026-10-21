@@ -279,8 +279,8 @@ region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实�
 |---|---|---|
 | 注册表 Run/RunOnce/Winlogon（HKLM + 每个已加载的用户配置单元） | 201002 | 增(1)/改(3)/删(4)，删除带旧值内容 |
 | Startup 目录（全局+每用户） | 1001 | 增(1)/删(4)，修改不报 |
-| **Windows 服务**（`HKLM\SYSTEM\CurrentControlSet\Services`） | 201002 | `services_snapshot`：ImagePath+启动类型+**运行状态**（SCM 枚举，EventLog 等安全服务被停止产生 Modify；枚举失败整轮跳过防误报）；每用户服务实例（`<模板>_<后缀>`，登录建、登出删）不进快照 |
-| **计划任务**（`C:\Windows\System32\Tasks` 递归） | 1001 | `tasks_snapshot`：快照 路径→(mtime,size)，增/改/删全报 |
+| **Windows 服务**（`HKLM\SYSTEM\CurrentControlSet\Services`） | 201002 | `services_snapshot`：执行目标（ImagePath、`Parameters\ServiceDll`、FailureCommand）+启动类型+**运行状态**（SCM 枚举，EventLog 等安全服务被停止产生 Modify；枚举失败整轮跳过防误报）；修改事件带旧值 `prev_data` 与变了的字段 `changed`；每用户服务实例（`<模板>_<后缀>`，登录建、登出删）不进快照 |
+| **计划任务**（`C:\Windows\System32\Tasks` 递归） | 1001 | `tasks_snapshot`：快照 路径→(mtime,size,动作)，增/改/删全报；动作从任务 XML 的 Exec / ComHandler 取（`task.actions`，只读前 1 MiB），动作变了的修改带 `task.prev_actions`；这一轮读不到（计划任务服务正在写）沿用上一轮的动作，不算变化 |
 | **Defender Exclusions / AppInit_DLLs / IFEO Debugger / 用户 CLSID** | 201002 | `MACHINE_TREES` / `USER_TREES` 递归枚举（键不存在静默跳过）：T1562.001 排除项篡改、T1546.010/012、T1546.015 COM 劫持 |
 | **WMI 事件订阅**（`root\subscription` 的 __EventFilter/__EventConsumer） | 1001 | powershell 子进程查询快照（30s），file.path 用 `wmi:...` 伪路径；T1546.003 |
 
