@@ -39,8 +39,11 @@ mod dnswatch;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod dnsnames;
 
+// 同名 ETW 会话的停止口径只有 Windows 用，口径本身与平台无关，单测在哪都跑
 #[cfg(target_os = "windows")]
 mod dnswatch_win;
+#[cfg(any(target_os = "windows", test))]
+mod etw_session;
 
 // 资产清单（监听端口 + 云环境 + 系统显示名）：共用部分与云探测跨平台，监听表按平台取
 #[cfg(any(target_os = "linux", target_os = "windows"))]

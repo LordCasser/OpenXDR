@@ -26,7 +26,7 @@ use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::{TraceError, UserTrace, stop_trace_by_name};
+use ferrisetw::trace::{TraceError, UserTrace};
 
 use super::inventory::Proto;
 use super::netwatch::{self, ConnInfo, ConnSampler};
@@ -96,14 +96,14 @@ struct Samplers {
     udp_out: ConnSampler,
 }
 
-/// 起一个网络采集会话：先停掉同名旧会话再新建，trace 句柄 drop 即停会话
+/// 起一个网络采集会话：先停掉同名旧会话再新建，句柄 drop 即停会话（停止口径见 etw_session）
 fn start(
     agent_id: &str,
     sink: &EventSink,
     registry: &Arc<Mutex<ProcessRegistry>>,
     samplers: &Arc<Mutex<Samplers>>,
     services: &Arc<Mutex<UdpServices>>,
-) -> Result<UserTrace, TraceError> {
+) -> Result<super::etw_session::Owned<UserTrace>, TraceError> {
     let health_sink = sink.clone();
     // ETW 回调要求 'static，采样表/注册表/出口全部按所有权（Arc）移进闭包；
     // 注册表由 mod.rs 传入，与进程采集共享
@@ -176,11 +176,7 @@ fn start(
         })
         .build();
 
-    let _ = stop_trace_by_name(SESSION);
-    let trace = UserTrace::new()
-        .named(SESSION.to_string())
-        .enable(provider)
-        .start_and_process()?;
+    let trace = super::etw_session::user_trace(SESSION, provider)?;
     health_sink.capability("network", "etw", "active");
     Ok(trace)
 }

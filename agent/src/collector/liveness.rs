@@ -217,8 +217,8 @@ pub fn spawn<H: Send + 'static>(
     instance: H,
     rebuild: impl FnMut() -> Result<H, String> + Send + 'static,
 ) {
-    // 上报侧一关就醒，当场停掉实例：配置切换会马上起新一轮采集，旧 ETW 会话要赶在新的同名会话
-    // 起来之前停，晚了按句柄停可能停错。拿不到运行时（只有单测）才退回整段睡
+    // 上报侧一关就醒，当场停掉实例：配置切换会马上起新一轮采集，旧 ETW 会话尽量赶在新的同名会话
+    // 起来之前停；晚了也不会按句柄停错（见 etw_session）。拿不到运行时（只有单测）才退回整段睡
     let rt = tokio::runtime::Handle::try_current().ok();
     std::thread::spawn(move || {
         let mut supervisor = Supervisor::new(watch, probe, instance, rebuild, now_ms());

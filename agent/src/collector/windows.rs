@@ -12,7 +12,7 @@ use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::{TraceError, UserTrace, stop_trace_by_name};
+use ferrisetw::trace::{TraceError, UserTrace};
 use std::sync::{Arc, Mutex};
 
 const KERNEL_PROCESS_GUID: &str = "22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716";
@@ -44,13 +44,13 @@ pub async fn run(agent_id: String, tx: EventSink, registry: Arc<Mutex<ProcessReg
     }
 }
 
-/// 起一个进程采集会话：先停掉同名旧会话再新建。trace 句柄 drop 即停会话。
+/// 起一个进程采集会话：先停掉同名旧会话再新建。句柄 drop 即停会话（停止口径见 etw_session）。
 /// 注册表在会话之外持有（与网络采集共享），重建后已登记的进程 GUID 照用
 fn start(
     agent_id: &str,
     tx: &EventSink,
     registry: &Arc<Mutex<ProcessRegistry>>,
-) -> Result<UserTrace, TraceError> {
+) -> Result<super::etw_session::Owned<UserTrace>, TraceError> {
     let cb_agent_id = agent_id.to_string();
     let cb_tx = tx.clone();
     let registry = registry.clone();
@@ -114,11 +114,7 @@ fn start(
         })
         .build();
 
-    let _ = stop_trace_by_name(SESSION);
-    let trace = UserTrace::new()
-        .named(SESSION.to_string())
-        .enable(provider)
-        .start_and_process()?;
+    let trace = super::etw_session::user_trace(SESSION, provider)?;
     tx.capability("process", "etw", "active");
     Ok(trace)
 }

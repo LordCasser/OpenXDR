@@ -26,7 +26,6 @@ use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::{UserTrace, stop_trace_by_name};
 use uuid::Uuid;
 
 use super::{EventSink, ProcessRegistry, dnsnames};
@@ -121,12 +120,7 @@ fn run(agent_id: String, sink: EventSink, registry: Arc<Mutex<ProcessRegistry>>)
         })
         .build();
 
-    let _ = stop_trace_by_name(SESSION);
-    match UserTrace::new()
-        .named(SESSION.to_string())
-        .enable(provider)
-        .start_and_process()
-    {
+    match super::etw_session::user_trace(SESSION, provider) {
         Ok(_trace) => {
             health_sink.capability("dns", "etw-dns-client", "active");
             eprintln!("DNS 采集: ETW DNS-Client（查询完成事件，按发起进程归属）");
