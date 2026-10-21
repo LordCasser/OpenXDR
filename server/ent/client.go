@@ -40,6 +40,7 @@ import (
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/setting"
+	"openxdr/server/ent/sshlogin"
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
@@ -112,6 +113,8 @@ type Client struct {
 	Report *ReportClient
 	// ReportRead is the client for interacting with the ReportRead builders.
 	ReportRead *ReportReadClient
+	// SSHLogin is the client for interacting with the SSHLogin builders.
+	SSHLogin *SSHLoginClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
 	// SessionMessage is the client for interacting with the SessionMessage builders.
@@ -169,6 +172,7 @@ func (c *Client) init() {
 	c.ProcessBaseline = NewProcessBaselineClient(c.config)
 	c.Report = NewReportClient(c.config)
 	c.ReportRead = NewReportReadClient(c.config)
+	c.SSHLogin = NewSSHLoginClient(c.config)
 	c.Session = NewSessionClient(c.config)
 	c.SessionMessage = NewSessionMessageClient(c.config)
 	c.Setting = NewSettingClient(c.config)
@@ -297,6 +301,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ProcessBaseline:  NewProcessBaselineClient(cfg),
 		Report:           NewReportClient(cfg),
 		ReportRead:       NewReportReadClient(cfg),
+		SSHLogin:         NewSSHLoginClient(cfg),
 		Session:          NewSessionClient(cfg),
 		SessionMessage:   NewSessionMessageClient(cfg),
 		Setting:          NewSettingClient(cfg),
@@ -352,6 +357,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ProcessBaseline:  NewProcessBaselineClient(cfg),
 		Report:           NewReportClient(cfg),
 		ReportRead:       NewReportReadClient(cfg),
+		SSHLogin:         NewSSHLoginClient(cfg),
 		Session:          NewSessionClient(cfg),
 		SessionMessage:   NewSessionMessageClient(cfg),
 		Setting:          NewSettingClient(cfg),
@@ -395,8 +401,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.DecoyDeployment,
 		c.DecoyObservation, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
 		c.HostCredential, c.IPInfo, c.Incident, c.Intel, c.Memory, c.ProcessBaseline,
-		c.Report, c.ReportRead, c.Session, c.SessionMessage, c.Setting, c.Suppression,
-		c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord, c.Zone,
+		c.Report, c.ReportRead, c.SSHLogin, c.Session, c.SessionMessage, c.Setting,
+		c.Suppression, c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord,
+		c.Zone,
 	} {
 		n.Use(hooks...)
 	}
@@ -410,8 +417,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.DecoyDeployment,
 		c.DecoyObservation, c.EnrollToken, c.Event, c.Finding, c.Group, c.GroupMember,
 		c.HostCredential, c.IPInfo, c.Incident, c.Intel, c.Memory, c.ProcessBaseline,
-		c.Report, c.ReportRead, c.Session, c.SessionMessage, c.Setting, c.Suppression,
-		c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord, c.Zone,
+		c.Report, c.ReportRead, c.SSHLogin, c.Session, c.SessionMessage, c.Setting,
+		c.Suppression, c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord,
+		c.Zone,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -472,6 +480,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Report.mutate(ctx, m)
 	case *ReportReadMutation:
 		return c.ReportRead.mutate(ctx, m)
+	case *SSHLoginMutation:
+		return c.SSHLogin.mutate(ctx, m)
 	case *SessionMutation:
 		return c.Session.mutate(ctx, m)
 	case *SessionMessageMutation:
@@ -4115,6 +4125,139 @@ func (c *ReportReadClient) mutate(ctx context.Context, m *ReportReadMutation) (V
 	}
 }
 
+// SSHLoginClient is a client for the SSHLogin schema.
+type SSHLoginClient struct {
+	config
+}
+
+// NewSSHLoginClient returns a client for the SSHLogin from the given config.
+func NewSSHLoginClient(c config) *SSHLoginClient {
+	return &SSHLoginClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sshlogin.Hooks(f(g(h())))`.
+func (c *SSHLoginClient) Use(hooks ...Hook) {
+	c.hooks.SSHLogin = append(c.hooks.SSHLogin, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sshlogin.Intercept(f(g(h())))`.
+func (c *SSHLoginClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SSHLogin = append(c.inters.SSHLogin, interceptors...)
+}
+
+// Create returns a builder for creating a SSHLogin entity.
+func (c *SSHLoginClient) Create() *SSHLoginCreate {
+	mutation := newSSHLoginMutation(c.config, OpCreate)
+	return &SSHLoginCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SSHLogin entities.
+func (c *SSHLoginClient) CreateBulk(builders ...*SSHLoginCreate) *SSHLoginCreateBulk {
+	return &SSHLoginCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SSHLoginClient) MapCreateBulk(slice any, setFunc func(*SSHLoginCreate, int)) *SSHLoginCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SSHLoginCreateBulk{err: fmt.Errorf("calling to SSHLoginClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SSHLoginCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SSHLoginCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SSHLogin.
+func (c *SSHLoginClient) Update() *SSHLoginUpdate {
+	mutation := newSSHLoginMutation(c.config, OpUpdate)
+	return &SSHLoginUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SSHLoginClient) UpdateOne(_m *SSHLogin) *SSHLoginUpdateOne {
+	mutation := newSSHLoginMutation(c.config, OpUpdateOne, withSSHLogin(_m))
+	return &SSHLoginUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SSHLoginClient) UpdateOneID(id uuid.UUID) *SSHLoginUpdateOne {
+	mutation := newSSHLoginMutation(c.config, OpUpdateOne, withSSHLoginID(id))
+	return &SSHLoginUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SSHLogin.
+func (c *SSHLoginClient) Delete() *SSHLoginDelete {
+	mutation := newSSHLoginMutation(c.config, OpDelete)
+	return &SSHLoginDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SSHLoginClient) DeleteOne(_m *SSHLogin) *SSHLoginDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SSHLoginClient) DeleteOneID(id uuid.UUID) *SSHLoginDeleteOne {
+	builder := c.Delete().Where(sshlogin.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SSHLoginDeleteOne{builder}
+}
+
+// Query returns a query builder for SSHLogin.
+func (c *SSHLoginClient) Query() *SSHLoginQuery {
+	return &SSHLoginQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSSHLogin},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SSHLogin entity by its id.
+func (c *SSHLoginClient) Get(ctx context.Context, id uuid.UUID) (*SSHLogin, error) {
+	return c.Query().Where(sshlogin.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SSHLoginClient) GetX(ctx context.Context, id uuid.UUID) *SSHLogin {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SSHLoginClient) Hooks() []Hook {
+	return c.hooks.SSHLogin
+}
+
+// Interceptors returns the client interceptors.
+func (c *SSHLoginClient) Interceptors() []Interceptor {
+	return c.inters.SSHLogin
+}
+
+func (c *SSHLoginClient) mutate(ctx context.Context, m *SSHLoginMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SSHLoginCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SSHLoginUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SSHLoginUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SSHLoginDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SSHLogin mutation op: %q", m.Op())
+	}
+}
+
 // SessionClient is a client for the Session schema.
 type SessionClient struct {
 	config
@@ -5451,16 +5594,16 @@ type (
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
 		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
 		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, IPInfo,
-		Incident, Intel, Memory, ProcessBaseline, Report, ReportRead, Session,
-		SessionMessage, Setting, Suppression, Task, TaskRun, TrustedSource, User,
-		VulnRecord, Zone []ent.Hook
+		Incident, Intel, Memory, ProcessBaseline, Report, ReportRead, SSHLogin,
+		Session, SessionMessage, Setting, Suppression, Task, TaskRun, TrustedSource,
+		User, VulnRecord, Zone []ent.Hook
 	}
 	inters struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
 		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
 		EnrollToken, Event, Finding, Group, GroupMember, HostCredential, IPInfo,
-		Incident, Intel, Memory, ProcessBaseline, Report, ReportRead, Session,
-		SessionMessage, Setting, Suppression, Task, TaskRun, TrustedSource, User,
-		VulnRecord, Zone []ent.Interceptor
+		Incident, Intel, Memory, ProcessBaseline, Report, ReportRead, SSHLogin,
+		Session, SessionMessage, Setting, Suppression, Task, TaskRun, TrustedSource,
+		User, VulnRecord, Zone []ent.Interceptor
 	}
 )

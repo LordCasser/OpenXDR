@@ -40,6 +40,24 @@ const (
 	FieldRevokedAt = "revoked_at"
 	// FieldRevokedBy holds the string denoting the revoked_by field in the database.
 	FieldRevokedBy = "revoked_by"
+	// FieldOrigin holds the string denoting the origin field in the database.
+	FieldOrigin = "origin"
+	// FieldPinned holds the string denoting the pinned field in the database.
+	FieldPinned = "pinned"
+	// FieldEvidence holds the string denoting the evidence field in the database.
+	FieldEvidence = "evidence"
+	// FieldNotice holds the string denoting the notice field in the database.
+	FieldNotice = "notice"
+	// FieldRevokeCause holds the string denoting the revoke_cause field in the database.
+	FieldRevokeCause = "revoke_cause"
+	// FieldRevokeIncidentID holds the string denoting the revoke_incident_id field in the database.
+	FieldRevokeIncidentID = "revoke_incident_id"
+	// FieldConfirmedAt holds the string denoting the confirmed_at field in the database.
+	FieldConfirmedAt = "confirmed_at"
+	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
+	FieldDeletedAt = "deleted_at"
+	// FieldDeletedBy holds the string denoting the deleted_by field in the database.
+	FieldDeletedBy = "deleted_by"
 	// Table holds the table name of the trustedsource in the database.
 	Table = "trusted_sources"
 )
@@ -60,6 +78,15 @@ var Columns = []string{
 	FieldLastMatchedAt,
 	FieldRevokedAt,
 	FieldRevokedBy,
+	FieldOrigin,
+	FieldPinned,
+	FieldEvidence,
+	FieldNotice,
+	FieldRevokeCause,
+	FieldRevokeIncidentID,
+	FieldConfirmedAt,
+	FieldDeletedAt,
+	FieldDeletedBy,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -79,6 +106,10 @@ var (
 	NameValidator func(string) error
 	// DefaultMatchedCount holds the default value on creation for the "matched_count" field.
 	DefaultMatchedCount int
+	// DefaultOrigin holds the default value on creation for the "origin" field.
+	DefaultOrigin string
+	// DefaultPinned holds the default value on creation for the "pinned" field.
+	DefaultPinned bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -154,4 +185,44 @@ func ByRevokedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByRevokedBy orders the results by the revoked_by field.
 func ByRevokedBy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRevokedBy, opts...).ToFunc()
+}
+
+// ByOrigin orders the results by the origin field.
+func ByOrigin(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOrigin, opts...).ToFunc()
+}
+
+// ByPinned orders the results by the pinned field.
+func ByPinned(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPinned, opts...).ToFunc()
+}
+
+// ByNotice orders the results by the notice field.
+func ByNotice(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNotice, opts...).ToFunc()
+}
+
+// ByRevokeCause orders the results by the revoke_cause field.
+func ByRevokeCause(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRevokeCause, opts...).ToFunc()
+}
+
+// ByRevokeIncidentID orders the results by the revoke_incident_id field.
+func ByRevokeIncidentID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRevokeIncidentID, opts...).ToFunc()
+}
+
+// ByConfirmedAt orders the results by the confirmed_at field.
+func ByConfirmedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConfirmedAt, opts...).ToFunc()
+}
+
+// ByDeletedAt orders the results by the deleted_at field.
+func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
+}
+
+// ByDeletedBy orders the results by the deleted_by field.
+func ByDeletedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeletedBy, opts...).ToFunc()
 }

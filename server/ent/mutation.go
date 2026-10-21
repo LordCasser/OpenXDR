@@ -38,6 +38,7 @@ import (
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/setting"
+	"openxdr/server/ent/sshlogin"
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
@@ -88,6 +89,7 @@ const (
 	TypeProcessBaseline  = "ProcessBaseline"
 	TypeReport           = "Report"
 	TypeReportRead       = "ReportRead"
+	TypeSSHLogin         = "SSHLogin"
 	TypeSession          = "Session"
 	TypeSessionMessage   = "SessionMessage"
 	TypeSetting          = "Setting"
@@ -25228,6 +25230,811 @@ func (m *ReportReadMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown ReportRead edge %s", name)
 }
 
+// SSHLoginMutation represents an operation that mutates the SSHLogin nodes in the graph.
+type SSHLoginMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	ts            *time.Time
+	group_id      *uuid.UUID
+	asset_id      *uuid.UUID
+	login_user    *string
+	src_ip        *string
+	auth_method   *string
+	key_fp        *string
+	key_type      *string
+	recorded_at   *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*SSHLogin, error)
+	predicates    []predicate.SSHLogin
+}
+
+var _ ent.Mutation = (*SSHLoginMutation)(nil)
+
+// sshloginOption allows management of the mutation configuration using functional options.
+type sshloginOption func(*SSHLoginMutation)
+
+// newSSHLoginMutation creates new mutation for the SSHLogin entity.
+func newSSHLoginMutation(c config, op Op, opts ...sshloginOption) *SSHLoginMutation {
+	m := &SSHLoginMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSSHLogin,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSSHLoginID sets the ID field of the mutation.
+func withSSHLoginID(id uuid.UUID) sshloginOption {
+	return func(m *SSHLoginMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SSHLogin
+		)
+		m.oldValue = func(ctx context.Context) (*SSHLogin, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SSHLogin.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSSHLogin sets the old SSHLogin of the mutation.
+func withSSHLogin(node *SSHLogin) sshloginOption {
+	return func(m *SSHLoginMutation) {
+		m.oldValue = func(context.Context) (*SSHLogin, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SSHLoginMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SSHLoginMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of SSHLogin entities.
+func (m *SSHLoginMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SSHLoginMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SSHLoginMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SSHLogin.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTs sets the "ts" field.
+func (m *SSHLoginMutation) SetTs(t time.Time) {
+	m.ts = &t
+}
+
+// Ts returns the value of the "ts" field in the mutation.
+func (m *SSHLoginMutation) Ts() (r time.Time, exists bool) {
+	v := m.ts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTs returns the old "ts" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldTs(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTs: %w", err)
+	}
+	return oldValue.Ts, nil
+}
+
+// ResetTs resets all changes to the "ts" field.
+func (m *SSHLoginMutation) ResetTs() {
+	m.ts = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *SSHLoginMutation) SetGroupID(u uuid.UUID) {
+	m.group_id = &u
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *SSHLoginMutation) GroupID() (r uuid.UUID, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldGroupID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *SSHLoginMutation) ResetGroupID() {
+	m.group_id = nil
+}
+
+// SetAssetID sets the "asset_id" field.
+func (m *SSHLoginMutation) SetAssetID(u uuid.UUID) {
+	m.asset_id = &u
+}
+
+// AssetID returns the value of the "asset_id" field in the mutation.
+func (m *SSHLoginMutation) AssetID() (r uuid.UUID, exists bool) {
+	v := m.asset_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssetID returns the old "asset_id" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldAssetID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssetID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssetID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssetID: %w", err)
+	}
+	return oldValue.AssetID, nil
+}
+
+// ResetAssetID resets all changes to the "asset_id" field.
+func (m *SSHLoginMutation) ResetAssetID() {
+	m.asset_id = nil
+}
+
+// SetLoginUser sets the "login_user" field.
+func (m *SSHLoginMutation) SetLoginUser(s string) {
+	m.login_user = &s
+}
+
+// LoginUser returns the value of the "login_user" field in the mutation.
+func (m *SSHLoginMutation) LoginUser() (r string, exists bool) {
+	v := m.login_user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLoginUser returns the old "login_user" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldLoginUser(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLoginUser is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLoginUser requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLoginUser: %w", err)
+	}
+	return oldValue.LoginUser, nil
+}
+
+// ResetLoginUser resets all changes to the "login_user" field.
+func (m *SSHLoginMutation) ResetLoginUser() {
+	m.login_user = nil
+}
+
+// SetSrcIP sets the "src_ip" field.
+func (m *SSHLoginMutation) SetSrcIP(s string) {
+	m.src_ip = &s
+}
+
+// SrcIP returns the value of the "src_ip" field in the mutation.
+func (m *SSHLoginMutation) SrcIP() (r string, exists bool) {
+	v := m.src_ip
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSrcIP returns the old "src_ip" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldSrcIP(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSrcIP is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSrcIP requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSrcIP: %w", err)
+	}
+	return oldValue.SrcIP, nil
+}
+
+// ResetSrcIP resets all changes to the "src_ip" field.
+func (m *SSHLoginMutation) ResetSrcIP() {
+	m.src_ip = nil
+}
+
+// SetAuthMethod sets the "auth_method" field.
+func (m *SSHLoginMutation) SetAuthMethod(s string) {
+	m.auth_method = &s
+}
+
+// AuthMethod returns the value of the "auth_method" field in the mutation.
+func (m *SSHLoginMutation) AuthMethod() (r string, exists bool) {
+	v := m.auth_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAuthMethod returns the old "auth_method" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldAuthMethod(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAuthMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAuthMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAuthMethod: %w", err)
+	}
+	return oldValue.AuthMethod, nil
+}
+
+// ResetAuthMethod resets all changes to the "auth_method" field.
+func (m *SSHLoginMutation) ResetAuthMethod() {
+	m.auth_method = nil
+}
+
+// SetKeyFp sets the "key_fp" field.
+func (m *SSHLoginMutation) SetKeyFp(s string) {
+	m.key_fp = &s
+}
+
+// KeyFp returns the value of the "key_fp" field in the mutation.
+func (m *SSHLoginMutation) KeyFp() (r string, exists bool) {
+	v := m.key_fp
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyFp returns the old "key_fp" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldKeyFp(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyFp is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyFp requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyFp: %w", err)
+	}
+	return oldValue.KeyFp, nil
+}
+
+// ClearKeyFp clears the value of the "key_fp" field.
+func (m *SSHLoginMutation) ClearKeyFp() {
+	m.key_fp = nil
+	m.clearedFields[sshlogin.FieldKeyFp] = struct{}{}
+}
+
+// KeyFpCleared returns if the "key_fp" field was cleared in this mutation.
+func (m *SSHLoginMutation) KeyFpCleared() bool {
+	_, ok := m.clearedFields[sshlogin.FieldKeyFp]
+	return ok
+}
+
+// ResetKeyFp resets all changes to the "key_fp" field.
+func (m *SSHLoginMutation) ResetKeyFp() {
+	m.key_fp = nil
+	delete(m.clearedFields, sshlogin.FieldKeyFp)
+}
+
+// SetKeyType sets the "key_type" field.
+func (m *SSHLoginMutation) SetKeyType(s string) {
+	m.key_type = &s
+}
+
+// KeyType returns the value of the "key_type" field in the mutation.
+func (m *SSHLoginMutation) KeyType() (r string, exists bool) {
+	v := m.key_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyType returns the old "key_type" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldKeyType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyType: %w", err)
+	}
+	return oldValue.KeyType, nil
+}
+
+// ClearKeyType clears the value of the "key_type" field.
+func (m *SSHLoginMutation) ClearKeyType() {
+	m.key_type = nil
+	m.clearedFields[sshlogin.FieldKeyType] = struct{}{}
+}
+
+// KeyTypeCleared returns if the "key_type" field was cleared in this mutation.
+func (m *SSHLoginMutation) KeyTypeCleared() bool {
+	_, ok := m.clearedFields[sshlogin.FieldKeyType]
+	return ok
+}
+
+// ResetKeyType resets all changes to the "key_type" field.
+func (m *SSHLoginMutation) ResetKeyType() {
+	m.key_type = nil
+	delete(m.clearedFields, sshlogin.FieldKeyType)
+}
+
+// SetRecordedAt sets the "recorded_at" field.
+func (m *SSHLoginMutation) SetRecordedAt(t time.Time) {
+	m.recorded_at = &t
+}
+
+// RecordedAt returns the value of the "recorded_at" field in the mutation.
+func (m *SSHLoginMutation) RecordedAt() (r time.Time, exists bool) {
+	v := m.recorded_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRecordedAt returns the old "recorded_at" field's value of the SSHLogin entity.
+// If the SSHLogin object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SSHLoginMutation) OldRecordedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRecordedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRecordedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRecordedAt: %w", err)
+	}
+	return oldValue.RecordedAt, nil
+}
+
+// ResetRecordedAt resets all changes to the "recorded_at" field.
+func (m *SSHLoginMutation) ResetRecordedAt() {
+	m.recorded_at = nil
+}
+
+// Where appends a list predicates to the SSHLoginMutation builder.
+func (m *SSHLoginMutation) Where(ps ...predicate.SSHLogin) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SSHLoginMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SSHLoginMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SSHLogin, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SSHLoginMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SSHLoginMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SSHLogin).
+func (m *SSHLoginMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SSHLoginMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.ts != nil {
+		fields = append(fields, sshlogin.FieldTs)
+	}
+	if m.group_id != nil {
+		fields = append(fields, sshlogin.FieldGroupID)
+	}
+	if m.asset_id != nil {
+		fields = append(fields, sshlogin.FieldAssetID)
+	}
+	if m.login_user != nil {
+		fields = append(fields, sshlogin.FieldLoginUser)
+	}
+	if m.src_ip != nil {
+		fields = append(fields, sshlogin.FieldSrcIP)
+	}
+	if m.auth_method != nil {
+		fields = append(fields, sshlogin.FieldAuthMethod)
+	}
+	if m.key_fp != nil {
+		fields = append(fields, sshlogin.FieldKeyFp)
+	}
+	if m.key_type != nil {
+		fields = append(fields, sshlogin.FieldKeyType)
+	}
+	if m.recorded_at != nil {
+		fields = append(fields, sshlogin.FieldRecordedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SSHLoginMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case sshlogin.FieldTs:
+		return m.Ts()
+	case sshlogin.FieldGroupID:
+		return m.GroupID()
+	case sshlogin.FieldAssetID:
+		return m.AssetID()
+	case sshlogin.FieldLoginUser:
+		return m.LoginUser()
+	case sshlogin.FieldSrcIP:
+		return m.SrcIP()
+	case sshlogin.FieldAuthMethod:
+		return m.AuthMethod()
+	case sshlogin.FieldKeyFp:
+		return m.KeyFp()
+	case sshlogin.FieldKeyType:
+		return m.KeyType()
+	case sshlogin.FieldRecordedAt:
+		return m.RecordedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SSHLoginMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case sshlogin.FieldTs:
+		return m.OldTs(ctx)
+	case sshlogin.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case sshlogin.FieldAssetID:
+		return m.OldAssetID(ctx)
+	case sshlogin.FieldLoginUser:
+		return m.OldLoginUser(ctx)
+	case sshlogin.FieldSrcIP:
+		return m.OldSrcIP(ctx)
+	case sshlogin.FieldAuthMethod:
+		return m.OldAuthMethod(ctx)
+	case sshlogin.FieldKeyFp:
+		return m.OldKeyFp(ctx)
+	case sshlogin.FieldKeyType:
+		return m.OldKeyType(ctx)
+	case sshlogin.FieldRecordedAt:
+		return m.OldRecordedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown SSHLogin field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SSHLoginMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case sshlogin.FieldTs:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTs(v)
+		return nil
+	case sshlogin.FieldGroupID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case sshlogin.FieldAssetID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssetID(v)
+		return nil
+	case sshlogin.FieldLoginUser:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLoginUser(v)
+		return nil
+	case sshlogin.FieldSrcIP:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSrcIP(v)
+		return nil
+	case sshlogin.FieldAuthMethod:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAuthMethod(v)
+		return nil
+	case sshlogin.FieldKeyFp:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyFp(v)
+		return nil
+	case sshlogin.FieldKeyType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyType(v)
+		return nil
+	case sshlogin.FieldRecordedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRecordedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SSHLogin field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SSHLoginMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SSHLoginMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SSHLoginMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown SSHLogin numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SSHLoginMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(sshlogin.FieldKeyFp) {
+		fields = append(fields, sshlogin.FieldKeyFp)
+	}
+	if m.FieldCleared(sshlogin.FieldKeyType) {
+		fields = append(fields, sshlogin.FieldKeyType)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SSHLoginMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SSHLoginMutation) ClearField(name string) error {
+	switch name {
+	case sshlogin.FieldKeyFp:
+		m.ClearKeyFp()
+		return nil
+	case sshlogin.FieldKeyType:
+		m.ClearKeyType()
+		return nil
+	}
+	return fmt.Errorf("unknown SSHLogin nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SSHLoginMutation) ResetField(name string) error {
+	switch name {
+	case sshlogin.FieldTs:
+		m.ResetTs()
+		return nil
+	case sshlogin.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case sshlogin.FieldAssetID:
+		m.ResetAssetID()
+		return nil
+	case sshlogin.FieldLoginUser:
+		m.ResetLoginUser()
+		return nil
+	case sshlogin.FieldSrcIP:
+		m.ResetSrcIP()
+		return nil
+	case sshlogin.FieldAuthMethod:
+		m.ResetAuthMethod()
+		return nil
+	case sshlogin.FieldKeyFp:
+		m.ResetKeyFp()
+		return nil
+	case sshlogin.FieldKeyType:
+		m.ResetKeyType()
+		return nil
+	case sshlogin.FieldRecordedAt:
+		m.ResetRecordedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SSHLogin field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SSHLoginMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SSHLoginMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SSHLoginMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SSHLoginMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SSHLoginMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SSHLoginMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SSHLoginMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown SSHLogin unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SSHLoginMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown SSHLogin edge %s", name)
+}
+
 // SessionMutation represents an operation that mutates the Session nodes in the graph.
 type SessionMutation struct {
 	config
@@ -30015,27 +30822,36 @@ func (m *TaskRunMutation) ResetEdge(name string) error {
 // TrustedSourceMutation represents an operation that mutates the TrustedSource nodes in the graph.
 type TrustedSourceMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *uuid.UUID
-	created_at       *time.Time
-	group_id         *uuid.UUID
-	name             *string
-	reason           *string
-	created_by       *string
-	expires_at       *time.Time
-	key_fingerprint  *string
-	source_cidr      *string
-	login_user       *string
-	matched_count    *int
-	addmatched_count *int
-	last_matched_at  *time.Time
-	revoked_at       *time.Time
-	revoked_by       *string
-	clearedFields    map[string]struct{}
-	done             bool
-	oldValue         func(context.Context) (*TrustedSource, error)
-	predicates       []predicate.TrustedSource
+	op                 Op
+	typ                string
+	id                 *uuid.UUID
+	created_at         *time.Time
+	group_id           *uuid.UUID
+	name               *string
+	reason             *string
+	created_by         *string
+	expires_at         *time.Time
+	key_fingerprint    *string
+	source_cidr        *string
+	login_user         *string
+	matched_count      *int
+	addmatched_count   *int
+	last_matched_at    *time.Time
+	revoked_at         *time.Time
+	revoked_by         *string
+	origin             *string
+	pinned             *bool
+	evidence           **schema.AutomationEvidence
+	notice             *string
+	revoke_cause       *string
+	revoke_incident_id *uuid.UUID
+	confirmed_at       *time.Time
+	deleted_at         *time.Time
+	deleted_by         *string
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*TrustedSource, error)
+	predicates         []predicate.TrustedSource
 }
 
 var _ ent.Mutation = (*TrustedSourceMutation)(nil)
@@ -30721,6 +31537,421 @@ func (m *TrustedSourceMutation) ResetRevokedBy() {
 	delete(m.clearedFields, trustedsource.FieldRevokedBy)
 }
 
+// SetOrigin sets the "origin" field.
+func (m *TrustedSourceMutation) SetOrigin(s string) {
+	m.origin = &s
+}
+
+// Origin returns the value of the "origin" field in the mutation.
+func (m *TrustedSourceMutation) Origin() (r string, exists bool) {
+	v := m.origin
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrigin returns the old "origin" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldOrigin(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrigin is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrigin requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrigin: %w", err)
+	}
+	return oldValue.Origin, nil
+}
+
+// ResetOrigin resets all changes to the "origin" field.
+func (m *TrustedSourceMutation) ResetOrigin() {
+	m.origin = nil
+}
+
+// SetPinned sets the "pinned" field.
+func (m *TrustedSourceMutation) SetPinned(b bool) {
+	m.pinned = &b
+}
+
+// Pinned returns the value of the "pinned" field in the mutation.
+func (m *TrustedSourceMutation) Pinned() (r bool, exists bool) {
+	v := m.pinned
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPinned returns the old "pinned" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldPinned(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPinned is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPinned requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPinned: %w", err)
+	}
+	return oldValue.Pinned, nil
+}
+
+// ResetPinned resets all changes to the "pinned" field.
+func (m *TrustedSourceMutation) ResetPinned() {
+	m.pinned = nil
+}
+
+// SetEvidence sets the "evidence" field.
+func (m *TrustedSourceMutation) SetEvidence(se *schema.AutomationEvidence) {
+	m.evidence = &se
+}
+
+// Evidence returns the value of the "evidence" field in the mutation.
+func (m *TrustedSourceMutation) Evidence() (r *schema.AutomationEvidence, exists bool) {
+	v := m.evidence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEvidence returns the old "evidence" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldEvidence(ctx context.Context) (v *schema.AutomationEvidence, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEvidence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEvidence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEvidence: %w", err)
+	}
+	return oldValue.Evidence, nil
+}
+
+// ClearEvidence clears the value of the "evidence" field.
+func (m *TrustedSourceMutation) ClearEvidence() {
+	m.evidence = nil
+	m.clearedFields[trustedsource.FieldEvidence] = struct{}{}
+}
+
+// EvidenceCleared returns if the "evidence" field was cleared in this mutation.
+func (m *TrustedSourceMutation) EvidenceCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldEvidence]
+	return ok
+}
+
+// ResetEvidence resets all changes to the "evidence" field.
+func (m *TrustedSourceMutation) ResetEvidence() {
+	m.evidence = nil
+	delete(m.clearedFields, trustedsource.FieldEvidence)
+}
+
+// SetNotice sets the "notice" field.
+func (m *TrustedSourceMutation) SetNotice(s string) {
+	m.notice = &s
+}
+
+// Notice returns the value of the "notice" field in the mutation.
+func (m *TrustedSourceMutation) Notice() (r string, exists bool) {
+	v := m.notice
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNotice returns the old "notice" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldNotice(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNotice is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNotice requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNotice: %w", err)
+	}
+	return oldValue.Notice, nil
+}
+
+// ClearNotice clears the value of the "notice" field.
+func (m *TrustedSourceMutation) ClearNotice() {
+	m.notice = nil
+	m.clearedFields[trustedsource.FieldNotice] = struct{}{}
+}
+
+// NoticeCleared returns if the "notice" field was cleared in this mutation.
+func (m *TrustedSourceMutation) NoticeCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldNotice]
+	return ok
+}
+
+// ResetNotice resets all changes to the "notice" field.
+func (m *TrustedSourceMutation) ResetNotice() {
+	m.notice = nil
+	delete(m.clearedFields, trustedsource.FieldNotice)
+}
+
+// SetRevokeCause sets the "revoke_cause" field.
+func (m *TrustedSourceMutation) SetRevokeCause(s string) {
+	m.revoke_cause = &s
+}
+
+// RevokeCause returns the value of the "revoke_cause" field in the mutation.
+func (m *TrustedSourceMutation) RevokeCause() (r string, exists bool) {
+	v := m.revoke_cause
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokeCause returns the old "revoke_cause" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldRevokeCause(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokeCause is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokeCause requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokeCause: %w", err)
+	}
+	return oldValue.RevokeCause, nil
+}
+
+// ClearRevokeCause clears the value of the "revoke_cause" field.
+func (m *TrustedSourceMutation) ClearRevokeCause() {
+	m.revoke_cause = nil
+	m.clearedFields[trustedsource.FieldRevokeCause] = struct{}{}
+}
+
+// RevokeCauseCleared returns if the "revoke_cause" field was cleared in this mutation.
+func (m *TrustedSourceMutation) RevokeCauseCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldRevokeCause]
+	return ok
+}
+
+// ResetRevokeCause resets all changes to the "revoke_cause" field.
+func (m *TrustedSourceMutation) ResetRevokeCause() {
+	m.revoke_cause = nil
+	delete(m.clearedFields, trustedsource.FieldRevokeCause)
+}
+
+// SetRevokeIncidentID sets the "revoke_incident_id" field.
+func (m *TrustedSourceMutation) SetRevokeIncidentID(u uuid.UUID) {
+	m.revoke_incident_id = &u
+}
+
+// RevokeIncidentID returns the value of the "revoke_incident_id" field in the mutation.
+func (m *TrustedSourceMutation) RevokeIncidentID() (r uuid.UUID, exists bool) {
+	v := m.revoke_incident_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokeIncidentID returns the old "revoke_incident_id" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldRevokeIncidentID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokeIncidentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokeIncidentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokeIncidentID: %w", err)
+	}
+	return oldValue.RevokeIncidentID, nil
+}
+
+// ClearRevokeIncidentID clears the value of the "revoke_incident_id" field.
+func (m *TrustedSourceMutation) ClearRevokeIncidentID() {
+	m.revoke_incident_id = nil
+	m.clearedFields[trustedsource.FieldRevokeIncidentID] = struct{}{}
+}
+
+// RevokeIncidentIDCleared returns if the "revoke_incident_id" field was cleared in this mutation.
+func (m *TrustedSourceMutation) RevokeIncidentIDCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldRevokeIncidentID]
+	return ok
+}
+
+// ResetRevokeIncidentID resets all changes to the "revoke_incident_id" field.
+func (m *TrustedSourceMutation) ResetRevokeIncidentID() {
+	m.revoke_incident_id = nil
+	delete(m.clearedFields, trustedsource.FieldRevokeIncidentID)
+}
+
+// SetConfirmedAt sets the "confirmed_at" field.
+func (m *TrustedSourceMutation) SetConfirmedAt(t time.Time) {
+	m.confirmed_at = &t
+}
+
+// ConfirmedAt returns the value of the "confirmed_at" field in the mutation.
+func (m *TrustedSourceMutation) ConfirmedAt() (r time.Time, exists bool) {
+	v := m.confirmed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfirmedAt returns the old "confirmed_at" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldConfirmedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfirmedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfirmedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfirmedAt: %w", err)
+	}
+	return oldValue.ConfirmedAt, nil
+}
+
+// ClearConfirmedAt clears the value of the "confirmed_at" field.
+func (m *TrustedSourceMutation) ClearConfirmedAt() {
+	m.confirmed_at = nil
+	m.clearedFields[trustedsource.FieldConfirmedAt] = struct{}{}
+}
+
+// ConfirmedAtCleared returns if the "confirmed_at" field was cleared in this mutation.
+func (m *TrustedSourceMutation) ConfirmedAtCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldConfirmedAt]
+	return ok
+}
+
+// ResetConfirmedAt resets all changes to the "confirmed_at" field.
+func (m *TrustedSourceMutation) ResetConfirmedAt() {
+	m.confirmed_at = nil
+	delete(m.clearedFields, trustedsource.FieldConfirmedAt)
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (m *TrustedSourceMutation) SetDeletedAt(t time.Time) {
+	m.deleted_at = &t
+}
+
+// DeletedAt returns the value of the "deleted_at" field in the mutation.
+func (m *TrustedSourceMutation) DeletedAt() (r time.Time, exists bool) {
+	v := m.deleted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedAt returns the old "deleted_at" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
+	}
+	return oldValue.DeletedAt, nil
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (m *TrustedSourceMutation) ClearDeletedAt() {
+	m.deleted_at = nil
+	m.clearedFields[trustedsource.FieldDeletedAt] = struct{}{}
+}
+
+// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
+func (m *TrustedSourceMutation) DeletedAtCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldDeletedAt]
+	return ok
+}
+
+// ResetDeletedAt resets all changes to the "deleted_at" field.
+func (m *TrustedSourceMutation) ResetDeletedAt() {
+	m.deleted_at = nil
+	delete(m.clearedFields, trustedsource.FieldDeletedAt)
+}
+
+// SetDeletedBy sets the "deleted_by" field.
+func (m *TrustedSourceMutation) SetDeletedBy(s string) {
+	m.deleted_by = &s
+}
+
+// DeletedBy returns the value of the "deleted_by" field in the mutation.
+func (m *TrustedSourceMutation) DeletedBy() (r string, exists bool) {
+	v := m.deleted_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedBy returns the old "deleted_by" field's value of the TrustedSource entity.
+// If the TrustedSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TrustedSourceMutation) OldDeletedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedBy: %w", err)
+	}
+	return oldValue.DeletedBy, nil
+}
+
+// ClearDeletedBy clears the value of the "deleted_by" field.
+func (m *TrustedSourceMutation) ClearDeletedBy() {
+	m.deleted_by = nil
+	m.clearedFields[trustedsource.FieldDeletedBy] = struct{}{}
+}
+
+// DeletedByCleared returns if the "deleted_by" field was cleared in this mutation.
+func (m *TrustedSourceMutation) DeletedByCleared() bool {
+	_, ok := m.clearedFields[trustedsource.FieldDeletedBy]
+	return ok
+}
+
+// ResetDeletedBy resets all changes to the "deleted_by" field.
+func (m *TrustedSourceMutation) ResetDeletedBy() {
+	m.deleted_by = nil
+	delete(m.clearedFields, trustedsource.FieldDeletedBy)
+}
+
 // Where appends a list predicates to the TrustedSourceMutation builder.
 func (m *TrustedSourceMutation) Where(ps ...predicate.TrustedSource) {
 	m.predicates = append(m.predicates, ps...)
@@ -30755,7 +31986,7 @@ func (m *TrustedSourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TrustedSourceMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 22)
 	if m.created_at != nil {
 		fields = append(fields, trustedsource.FieldCreatedAt)
 	}
@@ -30795,6 +32026,33 @@ func (m *TrustedSourceMutation) Fields() []string {
 	if m.revoked_by != nil {
 		fields = append(fields, trustedsource.FieldRevokedBy)
 	}
+	if m.origin != nil {
+		fields = append(fields, trustedsource.FieldOrigin)
+	}
+	if m.pinned != nil {
+		fields = append(fields, trustedsource.FieldPinned)
+	}
+	if m.evidence != nil {
+		fields = append(fields, trustedsource.FieldEvidence)
+	}
+	if m.notice != nil {
+		fields = append(fields, trustedsource.FieldNotice)
+	}
+	if m.revoke_cause != nil {
+		fields = append(fields, trustedsource.FieldRevokeCause)
+	}
+	if m.revoke_incident_id != nil {
+		fields = append(fields, trustedsource.FieldRevokeIncidentID)
+	}
+	if m.confirmed_at != nil {
+		fields = append(fields, trustedsource.FieldConfirmedAt)
+	}
+	if m.deleted_at != nil {
+		fields = append(fields, trustedsource.FieldDeletedAt)
+	}
+	if m.deleted_by != nil {
+		fields = append(fields, trustedsource.FieldDeletedBy)
+	}
 	return fields
 }
 
@@ -30829,6 +32087,24 @@ func (m *TrustedSourceMutation) Field(name string) (ent.Value, bool) {
 		return m.RevokedAt()
 	case trustedsource.FieldRevokedBy:
 		return m.RevokedBy()
+	case trustedsource.FieldOrigin:
+		return m.Origin()
+	case trustedsource.FieldPinned:
+		return m.Pinned()
+	case trustedsource.FieldEvidence:
+		return m.Evidence()
+	case trustedsource.FieldNotice:
+		return m.Notice()
+	case trustedsource.FieldRevokeCause:
+		return m.RevokeCause()
+	case trustedsource.FieldRevokeIncidentID:
+		return m.RevokeIncidentID()
+	case trustedsource.FieldConfirmedAt:
+		return m.ConfirmedAt()
+	case trustedsource.FieldDeletedAt:
+		return m.DeletedAt()
+	case trustedsource.FieldDeletedBy:
+		return m.DeletedBy()
 	}
 	return nil, false
 }
@@ -30864,6 +32140,24 @@ func (m *TrustedSourceMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldRevokedAt(ctx)
 	case trustedsource.FieldRevokedBy:
 		return m.OldRevokedBy(ctx)
+	case trustedsource.FieldOrigin:
+		return m.OldOrigin(ctx)
+	case trustedsource.FieldPinned:
+		return m.OldPinned(ctx)
+	case trustedsource.FieldEvidence:
+		return m.OldEvidence(ctx)
+	case trustedsource.FieldNotice:
+		return m.OldNotice(ctx)
+	case trustedsource.FieldRevokeCause:
+		return m.OldRevokeCause(ctx)
+	case trustedsource.FieldRevokeIncidentID:
+		return m.OldRevokeIncidentID(ctx)
+	case trustedsource.FieldConfirmedAt:
+		return m.OldConfirmedAt(ctx)
+	case trustedsource.FieldDeletedAt:
+		return m.OldDeletedAt(ctx)
+	case trustedsource.FieldDeletedBy:
+		return m.OldDeletedBy(ctx)
 	}
 	return nil, fmt.Errorf("unknown TrustedSource field %s", name)
 }
@@ -30964,6 +32258,69 @@ func (m *TrustedSourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRevokedBy(v)
 		return nil
+	case trustedsource.FieldOrigin:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrigin(v)
+		return nil
+	case trustedsource.FieldPinned:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPinned(v)
+		return nil
+	case trustedsource.FieldEvidence:
+		v, ok := value.(*schema.AutomationEvidence)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEvidence(v)
+		return nil
+	case trustedsource.FieldNotice:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNotice(v)
+		return nil
+	case trustedsource.FieldRevokeCause:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokeCause(v)
+		return nil
+	case trustedsource.FieldRevokeIncidentID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokeIncidentID(v)
+		return nil
+	case trustedsource.FieldConfirmedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfirmedAt(v)
+		return nil
+	case trustedsource.FieldDeletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedAt(v)
+		return nil
+	case trustedsource.FieldDeletedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedBy(v)
+		return nil
 	}
 	return fmt.Errorf("unknown TrustedSource field %s", name)
 }
@@ -31030,6 +32387,27 @@ func (m *TrustedSourceMutation) ClearedFields() []string {
 	if m.FieldCleared(trustedsource.FieldRevokedBy) {
 		fields = append(fields, trustedsource.FieldRevokedBy)
 	}
+	if m.FieldCleared(trustedsource.FieldEvidence) {
+		fields = append(fields, trustedsource.FieldEvidence)
+	}
+	if m.FieldCleared(trustedsource.FieldNotice) {
+		fields = append(fields, trustedsource.FieldNotice)
+	}
+	if m.FieldCleared(trustedsource.FieldRevokeCause) {
+		fields = append(fields, trustedsource.FieldRevokeCause)
+	}
+	if m.FieldCleared(trustedsource.FieldRevokeIncidentID) {
+		fields = append(fields, trustedsource.FieldRevokeIncidentID)
+	}
+	if m.FieldCleared(trustedsource.FieldConfirmedAt) {
+		fields = append(fields, trustedsource.FieldConfirmedAt)
+	}
+	if m.FieldCleared(trustedsource.FieldDeletedAt) {
+		fields = append(fields, trustedsource.FieldDeletedAt)
+	}
+	if m.FieldCleared(trustedsource.FieldDeletedBy) {
+		fields = append(fields, trustedsource.FieldDeletedBy)
+	}
 	return fields
 }
 
@@ -31064,6 +32442,27 @@ func (m *TrustedSourceMutation) ClearField(name string) error {
 		return nil
 	case trustedsource.FieldRevokedBy:
 		m.ClearRevokedBy()
+		return nil
+	case trustedsource.FieldEvidence:
+		m.ClearEvidence()
+		return nil
+	case trustedsource.FieldNotice:
+		m.ClearNotice()
+		return nil
+	case trustedsource.FieldRevokeCause:
+		m.ClearRevokeCause()
+		return nil
+	case trustedsource.FieldRevokeIncidentID:
+		m.ClearRevokeIncidentID()
+		return nil
+	case trustedsource.FieldConfirmedAt:
+		m.ClearConfirmedAt()
+		return nil
+	case trustedsource.FieldDeletedAt:
+		m.ClearDeletedAt()
+		return nil
+	case trustedsource.FieldDeletedBy:
+		m.ClearDeletedBy()
 		return nil
 	}
 	return fmt.Errorf("unknown TrustedSource nullable field %s", name)
@@ -31111,6 +32510,33 @@ func (m *TrustedSourceMutation) ResetField(name string) error {
 		return nil
 	case trustedsource.FieldRevokedBy:
 		m.ResetRevokedBy()
+		return nil
+	case trustedsource.FieldOrigin:
+		m.ResetOrigin()
+		return nil
+	case trustedsource.FieldPinned:
+		m.ResetPinned()
+		return nil
+	case trustedsource.FieldEvidence:
+		m.ResetEvidence()
+		return nil
+	case trustedsource.FieldNotice:
+		m.ResetNotice()
+		return nil
+	case trustedsource.FieldRevokeCause:
+		m.ResetRevokeCause()
+		return nil
+	case trustedsource.FieldRevokeIncidentID:
+		m.ResetRevokeIncidentID()
+		return nil
+	case trustedsource.FieldConfirmedAt:
+		m.ResetConfirmedAt()
+		return nil
+	case trustedsource.FieldDeletedAt:
+		m.ResetDeletedAt()
+		return nil
+	case trustedsource.FieldDeletedBy:
+		m.ResetDeletedBy()
 		return nil
 	}
 	return fmt.Errorf("unknown TrustedSource field %s", name)

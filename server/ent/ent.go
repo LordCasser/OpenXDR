@@ -35,6 +35,7 @@ import (
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/setting"
+	"openxdr/server/ent/sshlogin"
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
@@ -134,6 +135,7 @@ func checkColumn(t, c string) error {
 			processbaseline.Table:  processbaseline.ValidColumn,
 			report.Table:           report.ValidColumn,
 			reportread.Table:       reportread.ValidColumn,
+			sshlogin.Table:         sshlogin.ValidColumn,
 			session.Table:          session.ValidColumn,
 			sessionmessage.Table:   sessionmessage.ValidColumn,
 			setting.Table:          setting.ValidColumn,

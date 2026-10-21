@@ -84,6 +84,9 @@ type Report func(*sql.Selector)
 // ReportRead is the predicate function for reportread builders.
 type ReportRead func(*sql.Selector)
 
+// SSHLogin is the predicate function for sshlogin builders.
+type SSHLogin func(*sql.Selector)
+
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)
 

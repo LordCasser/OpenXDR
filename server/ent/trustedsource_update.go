@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"openxdr/server/ent/predicate"
+	"openxdr/server/ent/schema"
 	"openxdr/server/ent/trustedsource"
 	"time"
 
@@ -260,6 +261,166 @@ func (_u *TrustedSourceUpdate) ClearRevokedBy() *TrustedSourceUpdate {
 	return _u
 }
 
+// SetOrigin sets the "origin" field.
+func (_u *TrustedSourceUpdate) SetOrigin(v string) *TrustedSourceUpdate {
+	_u.mutation.SetOrigin(v)
+	return _u
+}
+
+// SetNillableOrigin sets the "origin" field if the given value is not nil.
+func (_u *TrustedSourceUpdate) SetNillableOrigin(v *string) *TrustedSourceUpdate {
+	if v != nil {
+		_u.SetOrigin(*v)
+	}
+	return _u
+}
+
+// SetPinned sets the "pinned" field.
+func (_u *TrustedSourceUpdate) SetPinned(v bool) *TrustedSourceUpdate {
+	_u.mutation.SetPinned(v)
+	return _u
+}
+
+// SetNillablePinned sets the "pinned" field if the given value is not nil.
+func (_u *TrustedSourceUpdate) SetNillablePinned(v *bool) *TrustedSourceUpdate {
+	if v != nil {
+		_u.SetPinned(*v)
+	}
+	return _u
+}
+
+// SetEvidence sets the "evidence" field.
+func (_u *TrustedSourceUpdate) SetEvidence(v *schema.AutomationEvidence) *TrustedSourceUpdate {
+	_u.mutation.SetEvidence(v)
+	return _u
+}
+
+// ClearEvidence clears the value of the "evidence" field.
+func (_u *TrustedSourceUpdate) ClearEvidence() *TrustedSourceUpdate {
+	_u.mutation.ClearEvidence()
+	return _u
+}
+
+// SetNotice sets the "notice" field.
+func (_u *TrustedSourceUpdate) SetNotice(v string) *TrustedSourceUpdate {
+	_u.mutation.SetNotice(v)
+	return _u
+}
+
+// SetNillableNotice sets the "notice" field if the given value is not nil.
+func (_u *TrustedSourceUpdate) SetNillableNotice(v *string) *TrustedSourceUpdate {
+	if v != nil {
+		_u.SetNotice(*v)
+	}
+	return _u
+}
+
+// ClearNotice clears the value of the "notice" field.
+func (_u *TrustedSourceUpdate) ClearNotice() *TrustedSourceUpdate {
+	_u.mutation.ClearNotice()
+	return _u
+}
+
+// SetRevokeCause sets the "revoke_cause" field.
+func (_u *TrustedSourceUpdate) SetRevokeCause(v string) *TrustedSourceUpdate {
+	_u.mutation.SetRevokeCause(v)
+	return _u
+}
+
+// SetNillableRevokeCause sets the "revoke_cause" field if the given value is not nil.
+func (_u *TrustedSourceUpdate) SetNillableRevokeCause(v *string) *TrustedSourceUpdate {
+	if v != nil {
+		_u.SetRevokeCause(*v)
+	}
+	return _u
+}
+
+// ClearRevokeCause clears the value of the "revoke_cause" field.
+func (_u *TrustedSourceUpdate) ClearRevokeCause() *TrustedSourceUpdate {
+	_u.mutation.ClearRevokeCause()
+	return _u
+}
+
+// SetRevokeIncidentID sets the "revoke_incident_id" field.
+func (_u *TrustedSourceUpdate) SetRevokeIncidentID(v uuid.UUID) *TrustedSourceUpdate {
+	_u.mutation.SetRevokeIncidentID(v)
+	return _u
+}
+
+// SetNillableRevokeIncidentID sets the "revoke_incident_id" field if the given value is not nil.
+func (_u *TrustedSourceUpdate) SetNillableRevokeIncidentID(v *uuid.UUID) *TrustedSourceUpdate {
+	if v != nil {
+		_u.SetRevokeIncidentID(*v)
+	}
+	return _u
+}
+
+// ClearRevokeIncidentID clears the value of the "revoke_incident_id" field.
+func (_u *TrustedSourceUpdate) ClearRevokeIncidentID() *TrustedSourceUpdate {
+	_u.mutation.ClearRevokeIncidentID()
+	return _u
+}
+
+// SetConfirmedAt sets the "confirmed_at" field.
+func (_u *TrustedSourceUpdate) SetConfirmedAt(v time.Time) *TrustedSourceUpdate {
+	_u.mutation.SetConfirmedAt(v)
+	return _u
+}
+
+// SetNillableConfirmedAt sets the "confirmed_at" field if the given value is not nil.
+func (_u *TrustedSourceUpdate) SetNillableConfirmedAt(v *time.Time) *TrustedSourceUpdate {
+	if v != nil {
+		_u.SetConfirmedAt(*v)
+	}
+	return _u
+}
+
+// ClearConfirmedAt clears the value of the "confirmed_at" field.
+func (_u *TrustedSourceUpdate) ClearConfirmedAt() *TrustedSourceUpdate {
+	_u.mutation.ClearConfirmedAt()
+	return _u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *TrustedSourceUpdate) SetDeletedAt(v time.Time) *TrustedSourceUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *TrustedSourceUpdate) SetNillableDeletedAt(v *time.Time) *TrustedSourceUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *TrustedSourceUpdate) ClearDeletedAt() *TrustedSourceUpdate {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
+// SetDeletedBy sets the "deleted_by" field.
+func (_u *TrustedSourceUpdate) SetDeletedBy(v string) *TrustedSourceUpdate {
+	_u.mutation.SetDeletedBy(v)
+	return _u
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_u *TrustedSourceUpdate) SetNillableDeletedBy(v *string) *TrustedSourceUpdate {
+	if v != nil {
+		_u.SetDeletedBy(*v)
+	}
+	return _u
+}
+
+// ClearDeletedBy clears the value of the "deleted_by" field.
+func (_u *TrustedSourceUpdate) ClearDeletedBy() *TrustedSourceUpdate {
+	_u.mutation.ClearDeletedBy()
+	return _u
+}
+
 // Mutation returns the TrustedSourceMutation object of the builder.
 func (_u *TrustedSourceUpdate) Mutation() *TrustedSourceMutation {
 	return _u.mutation
@@ -376,6 +537,54 @@ func (_u *TrustedSourceUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.RevokedByCleared() {
 		_spec.ClearField(trustedsource.FieldRevokedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.Origin(); ok {
+		_spec.SetField(trustedsource.FieldOrigin, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Pinned(); ok {
+		_spec.SetField(trustedsource.FieldPinned, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Evidence(); ok {
+		_spec.SetField(trustedsource.FieldEvidence, field.TypeJSON, value)
+	}
+	if _u.mutation.EvidenceCleared() {
+		_spec.ClearField(trustedsource.FieldEvidence, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Notice(); ok {
+		_spec.SetField(trustedsource.FieldNotice, field.TypeString, value)
+	}
+	if _u.mutation.NoticeCleared() {
+		_spec.ClearField(trustedsource.FieldNotice, field.TypeString)
+	}
+	if value, ok := _u.mutation.RevokeCause(); ok {
+		_spec.SetField(trustedsource.FieldRevokeCause, field.TypeString, value)
+	}
+	if _u.mutation.RevokeCauseCleared() {
+		_spec.ClearField(trustedsource.FieldRevokeCause, field.TypeString)
+	}
+	if value, ok := _u.mutation.RevokeIncidentID(); ok {
+		_spec.SetField(trustedsource.FieldRevokeIncidentID, field.TypeUUID, value)
+	}
+	if _u.mutation.RevokeIncidentIDCleared() {
+		_spec.ClearField(trustedsource.FieldRevokeIncidentID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.ConfirmedAt(); ok {
+		_spec.SetField(trustedsource.FieldConfirmedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ConfirmedAtCleared() {
+		_spec.ClearField(trustedsource.FieldConfirmedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(trustedsource.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(trustedsource.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DeletedBy(); ok {
+		_spec.SetField(trustedsource.FieldDeletedBy, field.TypeString, value)
+	}
+	if _u.mutation.DeletedByCleared() {
+		_spec.ClearField(trustedsource.FieldDeletedBy, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -628,6 +837,166 @@ func (_u *TrustedSourceUpdateOne) ClearRevokedBy() *TrustedSourceUpdateOne {
 	return _u
 }
 
+// SetOrigin sets the "origin" field.
+func (_u *TrustedSourceUpdateOne) SetOrigin(v string) *TrustedSourceUpdateOne {
+	_u.mutation.SetOrigin(v)
+	return _u
+}
+
+// SetNillableOrigin sets the "origin" field if the given value is not nil.
+func (_u *TrustedSourceUpdateOne) SetNillableOrigin(v *string) *TrustedSourceUpdateOne {
+	if v != nil {
+		_u.SetOrigin(*v)
+	}
+	return _u
+}
+
+// SetPinned sets the "pinned" field.
+func (_u *TrustedSourceUpdateOne) SetPinned(v bool) *TrustedSourceUpdateOne {
+	_u.mutation.SetPinned(v)
+	return _u
+}
+
+// SetNillablePinned sets the "pinned" field if the given value is not nil.
+func (_u *TrustedSourceUpdateOne) SetNillablePinned(v *bool) *TrustedSourceUpdateOne {
+	if v != nil {
+		_u.SetPinned(*v)
+	}
+	return _u
+}
+
+// SetEvidence sets the "evidence" field.
+func (_u *TrustedSourceUpdateOne) SetEvidence(v *schema.AutomationEvidence) *TrustedSourceUpdateOne {
+	_u.mutation.SetEvidence(v)
+	return _u
+}
+
+// ClearEvidence clears the value of the "evidence" field.
+func (_u *TrustedSourceUpdateOne) ClearEvidence() *TrustedSourceUpdateOne {
+	_u.mutation.ClearEvidence()
+	return _u
+}
+
+// SetNotice sets the "notice" field.
+func (_u *TrustedSourceUpdateOne) SetNotice(v string) *TrustedSourceUpdateOne {
+	_u.mutation.SetNotice(v)
+	return _u
+}
+
+// SetNillableNotice sets the "notice" field if the given value is not nil.
+func (_u *TrustedSourceUpdateOne) SetNillableNotice(v *string) *TrustedSourceUpdateOne {
+	if v != nil {
+		_u.SetNotice(*v)
+	}
+	return _u
+}
+
+// ClearNotice clears the value of the "notice" field.
+func (_u *TrustedSourceUpdateOne) ClearNotice() *TrustedSourceUpdateOne {
+	_u.mutation.ClearNotice()
+	return _u
+}
+
+// SetRevokeCause sets the "revoke_cause" field.
+func (_u *TrustedSourceUpdateOne) SetRevokeCause(v string) *TrustedSourceUpdateOne {
+	_u.mutation.SetRevokeCause(v)
+	return _u
+}
+
+// SetNillableRevokeCause sets the "revoke_cause" field if the given value is not nil.
+func (_u *TrustedSourceUpdateOne) SetNillableRevokeCause(v *string) *TrustedSourceUpdateOne {
+	if v != nil {
+		_u.SetRevokeCause(*v)
+	}
+	return _u
+}
+
+// ClearRevokeCause clears the value of the "revoke_cause" field.
+func (_u *TrustedSourceUpdateOne) ClearRevokeCause() *TrustedSourceUpdateOne {
+	_u.mutation.ClearRevokeCause()
+	return _u
+}
+
+// SetRevokeIncidentID sets the "revoke_incident_id" field.
+func (_u *TrustedSourceUpdateOne) SetRevokeIncidentID(v uuid.UUID) *TrustedSourceUpdateOne {
+	_u.mutation.SetRevokeIncidentID(v)
+	return _u
+}
+
+// SetNillableRevokeIncidentID sets the "revoke_incident_id" field if the given value is not nil.
+func (_u *TrustedSourceUpdateOne) SetNillableRevokeIncidentID(v *uuid.UUID) *TrustedSourceUpdateOne {
+	if v != nil {
+		_u.SetRevokeIncidentID(*v)
+	}
+	return _u
+}
+
+// ClearRevokeIncidentID clears the value of the "revoke_incident_id" field.
+func (_u *TrustedSourceUpdateOne) ClearRevokeIncidentID() *TrustedSourceUpdateOne {
+	_u.mutation.ClearRevokeIncidentID()
+	return _u
+}
+
+// SetConfirmedAt sets the "confirmed_at" field.
+func (_u *TrustedSourceUpdateOne) SetConfirmedAt(v time.Time) *TrustedSourceUpdateOne {
+	_u.mutation.SetConfirmedAt(v)
+	return _u
+}
+
+// SetNillableConfirmedAt sets the "confirmed_at" field if the given value is not nil.
+func (_u *TrustedSourceUpdateOne) SetNillableConfirmedAt(v *time.Time) *TrustedSourceUpdateOne {
+	if v != nil {
+		_u.SetConfirmedAt(*v)
+	}
+	return _u
+}
+
+// ClearConfirmedAt clears the value of the "confirmed_at" field.
+func (_u *TrustedSourceUpdateOne) ClearConfirmedAt() *TrustedSourceUpdateOne {
+	_u.mutation.ClearConfirmedAt()
+	return _u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *TrustedSourceUpdateOne) SetDeletedAt(v time.Time) *TrustedSourceUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *TrustedSourceUpdateOne) SetNillableDeletedAt(v *time.Time) *TrustedSourceUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *TrustedSourceUpdateOne) ClearDeletedAt() *TrustedSourceUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
+// SetDeletedBy sets the "deleted_by" field.
+func (_u *TrustedSourceUpdateOne) SetDeletedBy(v string) *TrustedSourceUpdateOne {
+	_u.mutation.SetDeletedBy(v)
+	return _u
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_u *TrustedSourceUpdateOne) SetNillableDeletedBy(v *string) *TrustedSourceUpdateOne {
+	if v != nil {
+		_u.SetDeletedBy(*v)
+	}
+	return _u
+}
+
+// ClearDeletedBy clears the value of the "deleted_by" field.
+func (_u *TrustedSourceUpdateOne) ClearDeletedBy() *TrustedSourceUpdateOne {
+	_u.mutation.ClearDeletedBy()
+	return _u
+}
+
 // Mutation returns the TrustedSourceMutation object of the builder.
 func (_u *TrustedSourceUpdateOne) Mutation() *TrustedSourceMutation {
 	return _u.mutation
@@ -774,6 +1143,54 @@ func (_u *TrustedSourceUpdateOne) sqlSave(ctx context.Context) (_node *TrustedSo
 	}
 	if _u.mutation.RevokedByCleared() {
 		_spec.ClearField(trustedsource.FieldRevokedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.Origin(); ok {
+		_spec.SetField(trustedsource.FieldOrigin, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Pinned(); ok {
+		_spec.SetField(trustedsource.FieldPinned, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Evidence(); ok {
+		_spec.SetField(trustedsource.FieldEvidence, field.TypeJSON, value)
+	}
+	if _u.mutation.EvidenceCleared() {
+		_spec.ClearField(trustedsource.FieldEvidence, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Notice(); ok {
+		_spec.SetField(trustedsource.FieldNotice, field.TypeString, value)
+	}
+	if _u.mutation.NoticeCleared() {
+		_spec.ClearField(trustedsource.FieldNotice, field.TypeString)
+	}
+	if value, ok := _u.mutation.RevokeCause(); ok {
+		_spec.SetField(trustedsource.FieldRevokeCause, field.TypeString, value)
+	}
+	if _u.mutation.RevokeCauseCleared() {
+		_spec.ClearField(trustedsource.FieldRevokeCause, field.TypeString)
+	}
+	if value, ok := _u.mutation.RevokeIncidentID(); ok {
+		_spec.SetField(trustedsource.FieldRevokeIncidentID, field.TypeUUID, value)
+	}
+	if _u.mutation.RevokeIncidentIDCleared() {
+		_spec.ClearField(trustedsource.FieldRevokeIncidentID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.ConfirmedAt(); ok {
+		_spec.SetField(trustedsource.FieldConfirmedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ConfirmedAtCleared() {
+		_spec.ClearField(trustedsource.FieldConfirmedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(trustedsource.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(trustedsource.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DeletedBy(); ok {
+		_spec.SetField(trustedsource.FieldDeletedBy, field.TypeString, value)
+	}
+	if _u.mutation.DeletedByCleared() {
+		_spec.ClearField(trustedsource.FieldDeletedBy, field.TypeString)
 	}
 	_node = &TrustedSource{config: _u.config}
 	_spec.Assign = _node.assignValues

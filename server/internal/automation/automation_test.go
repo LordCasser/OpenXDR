@@ -3,6 +3,8 @@ package automation
 import (
 	"testing"
 
+	"github.com/google/uuid"
+
 	"openxdr/server/internal/sigma"
 )
 
@@ -85,6 +87,75 @@ func TestNormalize(t *testing.T) {
 	for _, c := range bad {
 		if _, err := c.Normalize(); err == nil {
 			t.Fatalf("%+v 应被拒绝", c)
+		}
+	}
+}
+
+func TestCommonPrefix(t *testing.T) {
+	cases := []struct {
+		addrs []string
+		want  string
+	}{
+		{[]string{"10.1.1.35"}, "10.1.1.35/32"},
+		{[]string{"10.1.1.3", "10.1.1.35"}, "10.1.1.0/24"},
+		{[]string{"10.1.1.3", "10.1.2.3"}, ""},
+		{[]string{"fd00::1"}, "fd00::1/128"},
+		{[]string{"fd00::1", "fd00::2"}, "fd00::/64"},
+		{[]string{"::ffff:10.1.1.9"}, "10.1.1.9/32"},
+		{[]string{"not-an-ip"}, ""},
+	}
+	for _, c := range cases {
+		if got := commonPrefix(c.addrs); got != c.want {
+			t.Errorf("%v: %q，期望 %q", c.addrs, got, c.want)
+		}
+	}
+}
+
+func TestAllInternal(t *testing.T) {
+	cases := []struct {
+		addrs []string
+		want  bool
+	}{
+		{[]string{"10.1.1.3", "192.168.1.2"}, true},
+		{[]string{"100.100.1.1"}, true},
+		{[]string{"fd00::1"}, true},
+		{[]string{"8.8.8.8"}, false},
+		{[]string{"2001:db8::1"}, false},
+		{[]string{"10.1.1.3", "8.8.8.8"}, false},
+		{nil, false},
+	}
+	for _, c := range cases {
+		if got := allInternal(c.addrs); got != c.want {
+			t.Errorf("%v: %v，期望 %v", c.addrs, got, c.want)
+		}
+	}
+}
+
+func TestReason(t *testing.T) {
+	c := DefaultConfig()
+	inc := uuid.New()
+	ok := Assessment{KeyFP: fp, Addresses: []string{"10.1.1.35"}, CIDR: "10.1.1.35/32", Days: 3, Logins: 20, Alerts: 1, HumanBenign: 1}
+	cases := []struct {
+		edit func(*Assessment)
+		want string
+	}{
+		{func(*Assessment) {}, ReasonEligible},
+		{func(a *Assessment) { a.KeyFP = "" }, ReasonNoKey},
+		{func(a *Assessment) { a.Addresses = []string{"1.1.1.1"} }, ReasonPublic},
+		{func(a *Assessment) { a.CIDR = "" }, ReasonScattered},
+		{func(a *Assessment) { a.Flagged = &inc }, ReasonFlagged},
+		{func(a *Assessment) { a.Days = 2 }, ReasonIrregular},
+		{func(a *Assessment) { a.Logins = 19 }, ReasonIrregular},
+		{func(a *Assessment) { a.Alerts, a.HumanBenign = 0, 0 }, ReasonQuiet},
+		{func(a *Assessment) { a.Pending = 1 }, ReasonPending},
+		{func(a *Assessment) { a.HumanBenign, a.AIBenign = 0, 2 }, ReasonFewVerdicts},
+		{func(a *Assessment) { a.HumanBenign, a.AIBenign = 0, 3 }, ReasonEligible},
+	}
+	for i, tc := range cases {
+		a := ok
+		tc.edit(&a)
+		if got := c.reason(&a); got != tc.want {
+			t.Errorf("#%d: %s，期望 %s", i, got, tc.want)
 		}
 	}
 }

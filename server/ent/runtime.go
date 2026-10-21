@@ -33,6 +33,7 @@ import (
 	"openxdr/server/ent/session"
 	"openxdr/server/ent/sessionmessage"
 	"openxdr/server/ent/setting"
+	"openxdr/server/ent/sshlogin"
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
@@ -481,6 +482,12 @@ func init() {
 	reportreadDescID := reportreadFields[0].Descriptor()
 	// reportread.DefaultID holds the default value on creation for the id field.
 	reportread.DefaultID = reportreadDescID.Default.(func() uuid.UUID)
+	sshloginFields := schema.SSHLogin{}.Fields()
+	_ = sshloginFields
+	// sshloginDescRecordedAt is the schema descriptor for recorded_at field.
+	sshloginDescRecordedAt := sshloginFields[9].Descriptor()
+	// sshlogin.DefaultRecordedAt holds the default value on creation for the recorded_at field.
+	sshlogin.DefaultRecordedAt = sshloginDescRecordedAt.Default.(func() time.Time)
 	sessionFields := schema.Session{}.Fields()
 	_ = sessionFields
 	// sessionDescCreatedAt is the schema descriptor for created_at field.
@@ -601,6 +608,14 @@ func init() {
 	trustedsourceDescMatchedCount := trustedsourceFields[10].Descriptor()
 	// trustedsource.DefaultMatchedCount holds the default value on creation for the matched_count field.
 	trustedsource.DefaultMatchedCount = trustedsourceDescMatchedCount.Default.(int)
+	// trustedsourceDescOrigin is the schema descriptor for origin field.
+	trustedsourceDescOrigin := trustedsourceFields[14].Descriptor()
+	// trustedsource.DefaultOrigin holds the default value on creation for the origin field.
+	trustedsource.DefaultOrigin = trustedsourceDescOrigin.Default.(string)
+	// trustedsourceDescPinned is the schema descriptor for pinned field.
+	trustedsourceDescPinned := trustedsourceFields[15].Descriptor()
+	// trustedsource.DefaultPinned holds the default value on creation for the pinned field.
+	trustedsource.DefaultPinned = trustedsourceDescPinned.Default.(bool)
 	// trustedsourceDescID is the schema descriptor for id field.
 	trustedsourceDescID := trustedsourceFields[0].Descriptor()
 	// trustedsource.DefaultID holds the default value on creation for the id field.

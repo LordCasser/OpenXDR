@@ -120,6 +120,46 @@ func RevokedBy(v string) predicate.TrustedSource {
 	return predicate.TrustedSource(sql.FieldEQ(FieldRevokedBy, v))
 }
 
+// Origin applies equality check predicate on the "origin" field. It's identical to OriginEQ.
+func Origin(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldOrigin, v))
+}
+
+// Pinned applies equality check predicate on the "pinned" field. It's identical to PinnedEQ.
+func Pinned(v bool) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldPinned, v))
+}
+
+// Notice applies equality check predicate on the "notice" field. It's identical to NoticeEQ.
+func Notice(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldNotice, v))
+}
+
+// RevokeCause applies equality check predicate on the "revoke_cause" field. It's identical to RevokeCauseEQ.
+func RevokeCause(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldRevokeCause, v))
+}
+
+// RevokeIncidentID applies equality check predicate on the "revoke_incident_id" field. It's identical to RevokeIncidentIDEQ.
+func RevokeIncidentID(v uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldRevokeIncidentID, v))
+}
+
+// ConfirmedAt applies equality check predicate on the "confirmed_at" field. It's identical to ConfirmedAtEQ.
+func ConfirmedAt(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldConfirmedAt, v))
+}
+
+// DeletedAt applies equality check predicate on the "deleted_at" field. It's identical to DeletedAtEQ.
+func DeletedAt(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldDeletedAt, v))
+}
+
+// DeletedBy applies equality check predicate on the "deleted_by" field. It's identical to DeletedByEQ.
+func DeletedBy(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldDeletedBy, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.TrustedSource {
 	return predicate.TrustedSource(sql.FieldEQ(FieldCreatedAt, v))
@@ -883,6 +923,466 @@ func RevokedByEqualFold(v string) predicate.TrustedSource {
 // RevokedByContainsFold applies the ContainsFold predicate on the "revoked_by" field.
 func RevokedByContainsFold(v string) predicate.TrustedSource {
 	return predicate.TrustedSource(sql.FieldContainsFold(FieldRevokedBy, v))
+}
+
+// OriginEQ applies the EQ predicate on the "origin" field.
+func OriginEQ(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldOrigin, v))
+}
+
+// OriginNEQ applies the NEQ predicate on the "origin" field.
+func OriginNEQ(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNEQ(FieldOrigin, v))
+}
+
+// OriginIn applies the In predicate on the "origin" field.
+func OriginIn(vs ...string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIn(FieldOrigin, vs...))
+}
+
+// OriginNotIn applies the NotIn predicate on the "origin" field.
+func OriginNotIn(vs ...string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotIn(FieldOrigin, vs...))
+}
+
+// OriginGT applies the GT predicate on the "origin" field.
+func OriginGT(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGT(FieldOrigin, v))
+}
+
+// OriginGTE applies the GTE predicate on the "origin" field.
+func OriginGTE(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGTE(FieldOrigin, v))
+}
+
+// OriginLT applies the LT predicate on the "origin" field.
+func OriginLT(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLT(FieldOrigin, v))
+}
+
+// OriginLTE applies the LTE predicate on the "origin" field.
+func OriginLTE(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLTE(FieldOrigin, v))
+}
+
+// OriginContains applies the Contains predicate on the "origin" field.
+func OriginContains(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldContains(FieldOrigin, v))
+}
+
+// OriginHasPrefix applies the HasPrefix predicate on the "origin" field.
+func OriginHasPrefix(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldHasPrefix(FieldOrigin, v))
+}
+
+// OriginHasSuffix applies the HasSuffix predicate on the "origin" field.
+func OriginHasSuffix(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldHasSuffix(FieldOrigin, v))
+}
+
+// OriginEqualFold applies the EqualFold predicate on the "origin" field.
+func OriginEqualFold(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEqualFold(FieldOrigin, v))
+}
+
+// OriginContainsFold applies the ContainsFold predicate on the "origin" field.
+func OriginContainsFold(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldContainsFold(FieldOrigin, v))
+}
+
+// PinnedEQ applies the EQ predicate on the "pinned" field.
+func PinnedEQ(v bool) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldPinned, v))
+}
+
+// PinnedNEQ applies the NEQ predicate on the "pinned" field.
+func PinnedNEQ(v bool) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNEQ(FieldPinned, v))
+}
+
+// EvidenceIsNil applies the IsNil predicate on the "evidence" field.
+func EvidenceIsNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIsNull(FieldEvidence))
+}
+
+// EvidenceNotNil applies the NotNil predicate on the "evidence" field.
+func EvidenceNotNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotNull(FieldEvidence))
+}
+
+// NoticeEQ applies the EQ predicate on the "notice" field.
+func NoticeEQ(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldNotice, v))
+}
+
+// NoticeNEQ applies the NEQ predicate on the "notice" field.
+func NoticeNEQ(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNEQ(FieldNotice, v))
+}
+
+// NoticeIn applies the In predicate on the "notice" field.
+func NoticeIn(vs ...string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIn(FieldNotice, vs...))
+}
+
+// NoticeNotIn applies the NotIn predicate on the "notice" field.
+func NoticeNotIn(vs ...string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotIn(FieldNotice, vs...))
+}
+
+// NoticeGT applies the GT predicate on the "notice" field.
+func NoticeGT(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGT(FieldNotice, v))
+}
+
+// NoticeGTE applies the GTE predicate on the "notice" field.
+func NoticeGTE(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGTE(FieldNotice, v))
+}
+
+// NoticeLT applies the LT predicate on the "notice" field.
+func NoticeLT(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLT(FieldNotice, v))
+}
+
+// NoticeLTE applies the LTE predicate on the "notice" field.
+func NoticeLTE(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLTE(FieldNotice, v))
+}
+
+// NoticeContains applies the Contains predicate on the "notice" field.
+func NoticeContains(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldContains(FieldNotice, v))
+}
+
+// NoticeHasPrefix applies the HasPrefix predicate on the "notice" field.
+func NoticeHasPrefix(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldHasPrefix(FieldNotice, v))
+}
+
+// NoticeHasSuffix applies the HasSuffix predicate on the "notice" field.
+func NoticeHasSuffix(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldHasSuffix(FieldNotice, v))
+}
+
+// NoticeIsNil applies the IsNil predicate on the "notice" field.
+func NoticeIsNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIsNull(FieldNotice))
+}
+
+// NoticeNotNil applies the NotNil predicate on the "notice" field.
+func NoticeNotNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotNull(FieldNotice))
+}
+
+// NoticeEqualFold applies the EqualFold predicate on the "notice" field.
+func NoticeEqualFold(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEqualFold(FieldNotice, v))
+}
+
+// NoticeContainsFold applies the ContainsFold predicate on the "notice" field.
+func NoticeContainsFold(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldContainsFold(FieldNotice, v))
+}
+
+// RevokeCauseEQ applies the EQ predicate on the "revoke_cause" field.
+func RevokeCauseEQ(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldRevokeCause, v))
+}
+
+// RevokeCauseNEQ applies the NEQ predicate on the "revoke_cause" field.
+func RevokeCauseNEQ(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNEQ(FieldRevokeCause, v))
+}
+
+// RevokeCauseIn applies the In predicate on the "revoke_cause" field.
+func RevokeCauseIn(vs ...string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIn(FieldRevokeCause, vs...))
+}
+
+// RevokeCauseNotIn applies the NotIn predicate on the "revoke_cause" field.
+func RevokeCauseNotIn(vs ...string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotIn(FieldRevokeCause, vs...))
+}
+
+// RevokeCauseGT applies the GT predicate on the "revoke_cause" field.
+func RevokeCauseGT(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGT(FieldRevokeCause, v))
+}
+
+// RevokeCauseGTE applies the GTE predicate on the "revoke_cause" field.
+func RevokeCauseGTE(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGTE(FieldRevokeCause, v))
+}
+
+// RevokeCauseLT applies the LT predicate on the "revoke_cause" field.
+func RevokeCauseLT(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLT(FieldRevokeCause, v))
+}
+
+// RevokeCauseLTE applies the LTE predicate on the "revoke_cause" field.
+func RevokeCauseLTE(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLTE(FieldRevokeCause, v))
+}
+
+// RevokeCauseContains applies the Contains predicate on the "revoke_cause" field.
+func RevokeCauseContains(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldContains(FieldRevokeCause, v))
+}
+
+// RevokeCauseHasPrefix applies the HasPrefix predicate on the "revoke_cause" field.
+func RevokeCauseHasPrefix(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldHasPrefix(FieldRevokeCause, v))
+}
+
+// RevokeCauseHasSuffix applies the HasSuffix predicate on the "revoke_cause" field.
+func RevokeCauseHasSuffix(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldHasSuffix(FieldRevokeCause, v))
+}
+
+// RevokeCauseIsNil applies the IsNil predicate on the "revoke_cause" field.
+func RevokeCauseIsNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIsNull(FieldRevokeCause))
+}
+
+// RevokeCauseNotNil applies the NotNil predicate on the "revoke_cause" field.
+func RevokeCauseNotNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotNull(FieldRevokeCause))
+}
+
+// RevokeCauseEqualFold applies the EqualFold predicate on the "revoke_cause" field.
+func RevokeCauseEqualFold(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEqualFold(FieldRevokeCause, v))
+}
+
+// RevokeCauseContainsFold applies the ContainsFold predicate on the "revoke_cause" field.
+func RevokeCauseContainsFold(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldContainsFold(FieldRevokeCause, v))
+}
+
+// RevokeIncidentIDEQ applies the EQ predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDEQ(v uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldRevokeIncidentID, v))
+}
+
+// RevokeIncidentIDNEQ applies the NEQ predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDNEQ(v uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNEQ(FieldRevokeIncidentID, v))
+}
+
+// RevokeIncidentIDIn applies the In predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDIn(vs ...uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIn(FieldRevokeIncidentID, vs...))
+}
+
+// RevokeIncidentIDNotIn applies the NotIn predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDNotIn(vs ...uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotIn(FieldRevokeIncidentID, vs...))
+}
+
+// RevokeIncidentIDGT applies the GT predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDGT(v uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGT(FieldRevokeIncidentID, v))
+}
+
+// RevokeIncidentIDGTE applies the GTE predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDGTE(v uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGTE(FieldRevokeIncidentID, v))
+}
+
+// RevokeIncidentIDLT applies the LT predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDLT(v uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLT(FieldRevokeIncidentID, v))
+}
+
+// RevokeIncidentIDLTE applies the LTE predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDLTE(v uuid.UUID) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLTE(FieldRevokeIncidentID, v))
+}
+
+// RevokeIncidentIDIsNil applies the IsNil predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDIsNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIsNull(FieldRevokeIncidentID))
+}
+
+// RevokeIncidentIDNotNil applies the NotNil predicate on the "revoke_incident_id" field.
+func RevokeIncidentIDNotNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotNull(FieldRevokeIncidentID))
+}
+
+// ConfirmedAtEQ applies the EQ predicate on the "confirmed_at" field.
+func ConfirmedAtEQ(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldConfirmedAt, v))
+}
+
+// ConfirmedAtNEQ applies the NEQ predicate on the "confirmed_at" field.
+func ConfirmedAtNEQ(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNEQ(FieldConfirmedAt, v))
+}
+
+// ConfirmedAtIn applies the In predicate on the "confirmed_at" field.
+func ConfirmedAtIn(vs ...time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIn(FieldConfirmedAt, vs...))
+}
+
+// ConfirmedAtNotIn applies the NotIn predicate on the "confirmed_at" field.
+func ConfirmedAtNotIn(vs ...time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotIn(FieldConfirmedAt, vs...))
+}
+
+// ConfirmedAtGT applies the GT predicate on the "confirmed_at" field.
+func ConfirmedAtGT(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGT(FieldConfirmedAt, v))
+}
+
+// ConfirmedAtGTE applies the GTE predicate on the "confirmed_at" field.
+func ConfirmedAtGTE(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGTE(FieldConfirmedAt, v))
+}
+
+// ConfirmedAtLT applies the LT predicate on the "confirmed_at" field.
+func ConfirmedAtLT(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLT(FieldConfirmedAt, v))
+}
+
+// ConfirmedAtLTE applies the LTE predicate on the "confirmed_at" field.
+func ConfirmedAtLTE(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLTE(FieldConfirmedAt, v))
+}
+
+// ConfirmedAtIsNil applies the IsNil predicate on the "confirmed_at" field.
+func ConfirmedAtIsNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIsNull(FieldConfirmedAt))
+}
+
+// ConfirmedAtNotNil applies the NotNil predicate on the "confirmed_at" field.
+func ConfirmedAtNotNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotNull(FieldConfirmedAt))
+}
+
+// DeletedAtEQ applies the EQ predicate on the "deleted_at" field.
+func DeletedAtEQ(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldDeletedAt, v))
+}
+
+// DeletedAtNEQ applies the NEQ predicate on the "deleted_at" field.
+func DeletedAtNEQ(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNEQ(FieldDeletedAt, v))
+}
+
+// DeletedAtIn applies the In predicate on the "deleted_at" field.
+func DeletedAtIn(vs ...time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIn(FieldDeletedAt, vs...))
+}
+
+// DeletedAtNotIn applies the NotIn predicate on the "deleted_at" field.
+func DeletedAtNotIn(vs ...time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotIn(FieldDeletedAt, vs...))
+}
+
+// DeletedAtGT applies the GT predicate on the "deleted_at" field.
+func DeletedAtGT(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGT(FieldDeletedAt, v))
+}
+
+// DeletedAtGTE applies the GTE predicate on the "deleted_at" field.
+func DeletedAtGTE(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGTE(FieldDeletedAt, v))
+}
+
+// DeletedAtLT applies the LT predicate on the "deleted_at" field.
+func DeletedAtLT(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLT(FieldDeletedAt, v))
+}
+
+// DeletedAtLTE applies the LTE predicate on the "deleted_at" field.
+func DeletedAtLTE(v time.Time) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLTE(FieldDeletedAt, v))
+}
+
+// DeletedAtIsNil applies the IsNil predicate on the "deleted_at" field.
+func DeletedAtIsNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIsNull(FieldDeletedAt))
+}
+
+// DeletedAtNotNil applies the NotNil predicate on the "deleted_at" field.
+func DeletedAtNotNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotNull(FieldDeletedAt))
+}
+
+// DeletedByEQ applies the EQ predicate on the "deleted_by" field.
+func DeletedByEQ(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEQ(FieldDeletedBy, v))
+}
+
+// DeletedByNEQ applies the NEQ predicate on the "deleted_by" field.
+func DeletedByNEQ(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNEQ(FieldDeletedBy, v))
+}
+
+// DeletedByIn applies the In predicate on the "deleted_by" field.
+func DeletedByIn(vs ...string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIn(FieldDeletedBy, vs...))
+}
+
+// DeletedByNotIn applies the NotIn predicate on the "deleted_by" field.
+func DeletedByNotIn(vs ...string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotIn(FieldDeletedBy, vs...))
+}
+
+// DeletedByGT applies the GT predicate on the "deleted_by" field.
+func DeletedByGT(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGT(FieldDeletedBy, v))
+}
+
+// DeletedByGTE applies the GTE predicate on the "deleted_by" field.
+func DeletedByGTE(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldGTE(FieldDeletedBy, v))
+}
+
+// DeletedByLT applies the LT predicate on the "deleted_by" field.
+func DeletedByLT(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLT(FieldDeletedBy, v))
+}
+
+// DeletedByLTE applies the LTE predicate on the "deleted_by" field.
+func DeletedByLTE(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldLTE(FieldDeletedBy, v))
+}
+
+// DeletedByContains applies the Contains predicate on the "deleted_by" field.
+func DeletedByContains(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldContains(FieldDeletedBy, v))
+}
+
+// DeletedByHasPrefix applies the HasPrefix predicate on the "deleted_by" field.
+func DeletedByHasPrefix(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldHasPrefix(FieldDeletedBy, v))
+}
+
+// DeletedByHasSuffix applies the HasSuffix predicate on the "deleted_by" field.
+func DeletedByHasSuffix(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldHasSuffix(FieldDeletedBy, v))
+}
+
+// DeletedByIsNil applies the IsNil predicate on the "deleted_by" field.
+func DeletedByIsNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldIsNull(FieldDeletedBy))
+}
+
+// DeletedByNotNil applies the NotNil predicate on the "deleted_by" field.
+func DeletedByNotNil() predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldNotNull(FieldDeletedBy))
+}
+
+// DeletedByEqualFold applies the EqualFold predicate on the "deleted_by" field.
+func DeletedByEqualFold(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldEqualFold(FieldDeletedBy, v))
+}
+
+// DeletedByContainsFold applies the ContainsFold predicate on the "deleted_by" field.
+func DeletedByContainsFold(v string) predicate.TrustedSource {
+	return predicate.TrustedSource(sql.FieldContainsFold(FieldDeletedBy, v))
 }
 
 // And groups predicates with the AND operator between them.

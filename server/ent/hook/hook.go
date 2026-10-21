@@ -320,6 +320,18 @@ func (f ReportReadFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ReportReadMutation", m)
 }
 
+// The SSHLoginFunc type is an adapter to allow the use of ordinary
+// function as SSHLogin mutator.
+type SSHLoginFunc func(context.Context, *ent.SSHLoginMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SSHLoginFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SSHLoginMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SSHLoginMutation", m)
+}
+
 // The SessionFunc type is an adapter to allow the use of ordinary
 // function as Session mutator.
 type SessionFunc func(context.Context, *ent.SessionMutation) (ent.Value, error)

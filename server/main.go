@@ -31,6 +31,7 @@ import (
 	"openxdr/server/internal/api"
 	"openxdr/server/internal/assetmap"
 	"openxdr/server/internal/auth"
+	"openxdr/server/internal/automation"
 	"openxdr/server/internal/beacon"
 	"openxdr/server/internal/cluster"
 	"openxdr/server/internal/commandgate"
@@ -107,6 +108,7 @@ func main() {
 	notifySettings, webhook := startNotify(ctx, db, client, rules, triageEngine.LLM.Enabled)
 	silentAfter := time.Duration(getenvInt("AGENT_SILENT_MINUTES", 10)) * time.Minute
 	startLiveness(ctx, db, client, webhook, silentAfter)
+	startAutomation(ctx, db, client, webhook)
 
 	dedupWindow := time.Duration(getenvInt("ALERT_DEDUP_WINDOW_MINUTES", 5)) * time.Minute
 	registry := prometheus.NewRegistry()
@@ -395,6 +397,38 @@ func startLiveness(ctx context.Context, db *sql.DB, client *ent.Client, webhook 
 		DropAlert:   getenvInt("COLLECTOR_DROP_ALERT", 1000),
 	}
 	go cluster.RunLeader(ctx, db, "liveness", watcher.Run)
+}
+
+// startAutomation 运维自动化的自动识别。参数不合理（非正数、有效期超上限）的退回默认值；
+// 总开关关掉时仍收集登录、按结论停用已识别的条目并通知
+func startAutomation(ctx context.Context, db *sql.DB, client *ent.Client, webhook *notify.Webhook) {
+	def := automation.DefaultConfig()
+	positive := func(key string, d int) int {
+		if v := getenvInt(key, d); v > 0 {
+			return v
+		}
+		return d
+	}
+	conf := automation.Config{
+		Enabled:    getenv("AUTOMATION_AUTO_ENABLED", "true") != "false",
+		WindowDays: positive("AUTOMATION_AUTO_WINDOW_DAYS", def.WindowDays),
+		MinDays:    positive("AUTOMATION_AUTO_MIN_DAYS", def.MinDays),
+		MinLogins:  positive("AUTOMATION_AUTO_MIN_LOGINS", def.MinLogins),
+		AIBenign:   positive("AUTOMATION_AUTO_AI_BENIGN", def.AIBenign),
+		TTLDays:    positive("AUTOMATION_AUTO_TTL_DAYS", def.TTLDays),
+	}
+	if conf.TTLDays > automation.MaxDays {
+		conf.TTLDays = def.TTLDays
+	}
+	if conf.MinDays > conf.WindowDays {
+		conf.MinDays = conf.WindowDays
+	}
+	automation.Configure(conf)
+	auto := &automation.Auto{
+		DB: client, SQL: db, Notify: webhook.Send, Config: conf,
+		Interval: time.Duration(positive("AUTOMATION_AUTO_INTERVAL_SECONDS", 300)) * time.Second,
+	}
+	go cluster.RunLeader(ctx, db, "automation", auto.Run)
 }
 
 // startEventBus 事件处理管道：配了 NATS_URL 走 JetStream 持久队列并挂上跨节点指令路由，

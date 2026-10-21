@@ -845,6 +845,37 @@ var (
 			},
 		},
 	}
+	// SSHLoginsColumns holds the columns for the "ssh_logins" table.
+	SSHLoginsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "ts", Type: field.TypeTime},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "asset_id", Type: field.TypeUUID},
+		{Name: "login_user", Type: field.TypeString},
+		{Name: "src_ip", Type: field.TypeString},
+		{Name: "auth_method", Type: field.TypeString},
+		{Name: "key_fp", Type: field.TypeString, Nullable: true},
+		{Name: "key_type", Type: field.TypeString, Nullable: true},
+		{Name: "recorded_at", Type: field.TypeTime},
+	}
+	// SSHLoginsTable holds the schema information for the "ssh_logins" table.
+	SSHLoginsTable = &schema.Table{
+		Name:       "ssh_logins",
+		Columns:    SSHLoginsColumns,
+		PrimaryKey: []*schema.Column{SSHLoginsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sshlogin_group_id_ts",
+				Unique:  false,
+				Columns: []*schema.Column{SSHLoginsColumns[2], SSHLoginsColumns[1]},
+			},
+			{
+				Name:    "sshlogin_ts",
+				Unique:  false,
+				Columns: []*schema.Column{SSHLoginsColumns[1]},
+			},
+		},
+	}
 	// SessionsColumns holds the columns for the "sessions" table.
 	SessionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -1008,6 +1039,15 @@ var (
 		{Name: "last_matched_at", Type: field.TypeTime, Nullable: true},
 		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
 		{Name: "revoked_by", Type: field.TypeString, Nullable: true},
+		{Name: "origin", Type: field.TypeString, Default: "manual"},
+		{Name: "pinned", Type: field.TypeBool, Default: false},
+		{Name: "evidence", Type: field.TypeJSON, Nullable: true},
+		{Name: "notice", Type: field.TypeString, Nullable: true},
+		{Name: "revoke_cause", Type: field.TypeString, Nullable: true},
+		{Name: "revoke_incident_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "confirmed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "deleted_by", Type: field.TypeString, Nullable: true},
 	}
 	// TrustedSourcesTable holds the schema information for the "trusted_sources" table.
 	TrustedSourcesTable = &schema.Table{
@@ -1019,6 +1059,14 @@ var (
 				Name:    "trustedsource_group_id",
 				Unique:  false,
 				Columns: []*schema.Column{TrustedSourcesColumns[2]},
+			},
+			{
+				Name:    "trustedsource_group_id_key_fingerprint_login_user",
+				Unique:  true,
+				Columns: []*schema.Column{TrustedSourcesColumns[2], TrustedSourcesColumns[7], TrustedSourcesColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "origin = 'auto'",
+				},
 			},
 		},
 	}
@@ -1113,6 +1161,7 @@ var (
 		ProcessBaselinesTable,
 		ReportsTable,
 		ReportReadsTable,
+		SSHLoginsTable,
 		SessionsTable,
 		SessionMessagesTable,
 		SettingsTable,

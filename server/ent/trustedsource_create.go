@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"openxdr/server/ent/schema"
 	"openxdr/server/ent/trustedsource"
 	"time"
 
@@ -171,6 +172,124 @@ func (_c *TrustedSourceCreate) SetNillableRevokedBy(v *string) *TrustedSourceCre
 	return _c
 }
 
+// SetOrigin sets the "origin" field.
+func (_c *TrustedSourceCreate) SetOrigin(v string) *TrustedSourceCreate {
+	_c.mutation.SetOrigin(v)
+	return _c
+}
+
+// SetNillableOrigin sets the "origin" field if the given value is not nil.
+func (_c *TrustedSourceCreate) SetNillableOrigin(v *string) *TrustedSourceCreate {
+	if v != nil {
+		_c.SetOrigin(*v)
+	}
+	return _c
+}
+
+// SetPinned sets the "pinned" field.
+func (_c *TrustedSourceCreate) SetPinned(v bool) *TrustedSourceCreate {
+	_c.mutation.SetPinned(v)
+	return _c
+}
+
+// SetNillablePinned sets the "pinned" field if the given value is not nil.
+func (_c *TrustedSourceCreate) SetNillablePinned(v *bool) *TrustedSourceCreate {
+	if v != nil {
+		_c.SetPinned(*v)
+	}
+	return _c
+}
+
+// SetEvidence sets the "evidence" field.
+func (_c *TrustedSourceCreate) SetEvidence(v *schema.AutomationEvidence) *TrustedSourceCreate {
+	_c.mutation.SetEvidence(v)
+	return _c
+}
+
+// SetNotice sets the "notice" field.
+func (_c *TrustedSourceCreate) SetNotice(v string) *TrustedSourceCreate {
+	_c.mutation.SetNotice(v)
+	return _c
+}
+
+// SetNillableNotice sets the "notice" field if the given value is not nil.
+func (_c *TrustedSourceCreate) SetNillableNotice(v *string) *TrustedSourceCreate {
+	if v != nil {
+		_c.SetNotice(*v)
+	}
+	return _c
+}
+
+// SetRevokeCause sets the "revoke_cause" field.
+func (_c *TrustedSourceCreate) SetRevokeCause(v string) *TrustedSourceCreate {
+	_c.mutation.SetRevokeCause(v)
+	return _c
+}
+
+// SetNillableRevokeCause sets the "revoke_cause" field if the given value is not nil.
+func (_c *TrustedSourceCreate) SetNillableRevokeCause(v *string) *TrustedSourceCreate {
+	if v != nil {
+		_c.SetRevokeCause(*v)
+	}
+	return _c
+}
+
+// SetRevokeIncidentID sets the "revoke_incident_id" field.
+func (_c *TrustedSourceCreate) SetRevokeIncidentID(v uuid.UUID) *TrustedSourceCreate {
+	_c.mutation.SetRevokeIncidentID(v)
+	return _c
+}
+
+// SetNillableRevokeIncidentID sets the "revoke_incident_id" field if the given value is not nil.
+func (_c *TrustedSourceCreate) SetNillableRevokeIncidentID(v *uuid.UUID) *TrustedSourceCreate {
+	if v != nil {
+		_c.SetRevokeIncidentID(*v)
+	}
+	return _c
+}
+
+// SetConfirmedAt sets the "confirmed_at" field.
+func (_c *TrustedSourceCreate) SetConfirmedAt(v time.Time) *TrustedSourceCreate {
+	_c.mutation.SetConfirmedAt(v)
+	return _c
+}
+
+// SetNillableConfirmedAt sets the "confirmed_at" field if the given value is not nil.
+func (_c *TrustedSourceCreate) SetNillableConfirmedAt(v *time.Time) *TrustedSourceCreate {
+	if v != nil {
+		_c.SetConfirmedAt(*v)
+	}
+	return _c
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (_c *TrustedSourceCreate) SetDeletedAt(v time.Time) *TrustedSourceCreate {
+	_c.mutation.SetDeletedAt(v)
+	return _c
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_c *TrustedSourceCreate) SetNillableDeletedAt(v *time.Time) *TrustedSourceCreate {
+	if v != nil {
+		_c.SetDeletedAt(*v)
+	}
+	return _c
+}
+
+// SetDeletedBy sets the "deleted_by" field.
+func (_c *TrustedSourceCreate) SetDeletedBy(v string) *TrustedSourceCreate {
+	_c.mutation.SetDeletedBy(v)
+	return _c
+}
+
+// SetNillableDeletedBy sets the "deleted_by" field if the given value is not nil.
+func (_c *TrustedSourceCreate) SetNillableDeletedBy(v *string) *TrustedSourceCreate {
+	if v != nil {
+		_c.SetDeletedBy(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *TrustedSourceCreate) SetID(v uuid.UUID) *TrustedSourceCreate {
 	_c.mutation.SetID(v)
@@ -228,6 +347,14 @@ func (_c *TrustedSourceCreate) defaults() {
 		v := trustedsource.DefaultMatchedCount
 		_c.mutation.SetMatchedCount(v)
 	}
+	if _, ok := _c.mutation.Origin(); !ok {
+		v := trustedsource.DefaultOrigin
+		_c.mutation.SetOrigin(v)
+	}
+	if _, ok := _c.mutation.Pinned(); !ok {
+		v := trustedsource.DefaultPinned
+		_c.mutation.SetPinned(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := trustedsource.DefaultID()
 		_c.mutation.SetID(v)
@@ -258,6 +385,12 @@ func (_c *TrustedSourceCreate) check() error {
 	}
 	if _, ok := _c.mutation.MatchedCount(); !ok {
 		return &ValidationError{Name: "matched_count", err: errors.New(`ent: missing required field "TrustedSource.matched_count"`)}
+	}
+	if _, ok := _c.mutation.Origin(); !ok {
+		return &ValidationError{Name: "origin", err: errors.New(`ent: missing required field "TrustedSource.origin"`)}
+	}
+	if _, ok := _c.mutation.Pinned(); !ok {
+		return &ValidationError{Name: "pinned", err: errors.New(`ent: missing required field "TrustedSource.pinned"`)}
 	}
 	return nil
 }
@@ -345,6 +478,42 @@ func (_c *TrustedSourceCreate) createSpec() (*TrustedSource, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.RevokedBy(); ok {
 		_spec.SetField(trustedsource.FieldRevokedBy, field.TypeString, value)
 		_node.RevokedBy = &value
+	}
+	if value, ok := _c.mutation.Origin(); ok {
+		_spec.SetField(trustedsource.FieldOrigin, field.TypeString, value)
+		_node.Origin = value
+	}
+	if value, ok := _c.mutation.Pinned(); ok {
+		_spec.SetField(trustedsource.FieldPinned, field.TypeBool, value)
+		_node.Pinned = value
+	}
+	if value, ok := _c.mutation.Evidence(); ok {
+		_spec.SetField(trustedsource.FieldEvidence, field.TypeJSON, value)
+		_node.Evidence = value
+	}
+	if value, ok := _c.mutation.Notice(); ok {
+		_spec.SetField(trustedsource.FieldNotice, field.TypeString, value)
+		_node.Notice = &value
+	}
+	if value, ok := _c.mutation.RevokeCause(); ok {
+		_spec.SetField(trustedsource.FieldRevokeCause, field.TypeString, value)
+		_node.RevokeCause = &value
+	}
+	if value, ok := _c.mutation.RevokeIncidentID(); ok {
+		_spec.SetField(trustedsource.FieldRevokeIncidentID, field.TypeUUID, value)
+		_node.RevokeIncidentID = &value
+	}
+	if value, ok := _c.mutation.ConfirmedAt(); ok {
+		_spec.SetField(trustedsource.FieldConfirmedAt, field.TypeTime, value)
+		_node.ConfirmedAt = &value
+	}
+	if value, ok := _c.mutation.DeletedAt(); ok {
+		_spec.SetField(trustedsource.FieldDeletedAt, field.TypeTime, value)
+		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.DeletedBy(); ok {
+		_spec.SetField(trustedsource.FieldDeletedBy, field.TypeString, value)
+		_node.DeletedBy = &value
 	}
 	return _node, _spec
 }

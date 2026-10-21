@@ -3,7 +3,9 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
+	"openxdr/server/ent/schema"
 	"openxdr/server/ent/trustedsource"
 	"strings"
 	"time"
@@ -43,7 +45,25 @@ type TrustedSource struct {
 	// RevokedAt holds the value of the "revoked_at" field.
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 	// RevokedBy holds the value of the "revoked_by" field.
-	RevokedBy    *string `json:"revoked_by,omitempty"`
+	RevokedBy *string `json:"revoked_by,omitempty"`
+	// Origin holds the value of the "origin" field.
+	Origin string `json:"origin,omitempty"`
+	// Pinned holds the value of the "pinned" field.
+	Pinned bool `json:"pinned,omitempty"`
+	// Evidence holds the value of the "evidence" field.
+	Evidence *schema.AutomationEvidence `json:"evidence,omitempty"`
+	// Notice holds the value of the "notice" field.
+	Notice *string `json:"notice,omitempty"`
+	// RevokeCause holds the value of the "revoke_cause" field.
+	RevokeCause *string `json:"revoke_cause,omitempty"`
+	// RevokeIncidentID holds the value of the "revoke_incident_id" field.
+	RevokeIncidentID *uuid.UUID `json:"revoke_incident_id,omitempty"`
+	// ConfirmedAt holds the value of the "confirmed_at" field.
+	ConfirmedAt *time.Time `json:"confirmed_at,omitempty"`
+	// DeletedAt holds the value of the "deleted_at" field.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	// DeletedBy holds the value of the "deleted_by" field.
+	DeletedBy    *string `json:"deleted_by,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -52,11 +72,17 @@ func (*TrustedSource) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case trustedsource.FieldRevokeIncidentID:
+			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
+		case trustedsource.FieldEvidence:
+			values[i] = new([]byte)
+		case trustedsource.FieldPinned:
+			values[i] = new(sql.NullBool)
 		case trustedsource.FieldMatchedCount:
 			values[i] = new(sql.NullInt64)
-		case trustedsource.FieldName, trustedsource.FieldReason, trustedsource.FieldCreatedBy, trustedsource.FieldKeyFingerprint, trustedsource.FieldSourceCidr, trustedsource.FieldLoginUser, trustedsource.FieldRevokedBy:
+		case trustedsource.FieldName, trustedsource.FieldReason, trustedsource.FieldCreatedBy, trustedsource.FieldKeyFingerprint, trustedsource.FieldSourceCidr, trustedsource.FieldLoginUser, trustedsource.FieldRevokedBy, trustedsource.FieldOrigin, trustedsource.FieldNotice, trustedsource.FieldRevokeCause, trustedsource.FieldDeletedBy:
 			values[i] = new(sql.NullString)
-		case trustedsource.FieldCreatedAt, trustedsource.FieldExpiresAt, trustedsource.FieldLastMatchedAt, trustedsource.FieldRevokedAt:
+		case trustedsource.FieldCreatedAt, trustedsource.FieldExpiresAt, trustedsource.FieldLastMatchedAt, trustedsource.FieldRevokedAt, trustedsource.FieldConfirmedAt, trustedsource.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
 		case trustedsource.FieldID, trustedsource.FieldGroupID:
 			values[i] = new(uuid.UUID)
@@ -166,6 +192,68 @@ func (_m *TrustedSource) assignValues(columns []string, values []any) error {
 				_m.RevokedBy = new(string)
 				*_m.RevokedBy = value.String
 			}
+		case trustedsource.FieldOrigin:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field origin", values[i])
+			} else if value.Valid {
+				_m.Origin = value.String
+			}
+		case trustedsource.FieldPinned:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field pinned", values[i])
+			} else if value.Valid {
+				_m.Pinned = value.Bool
+			}
+		case trustedsource.FieldEvidence:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field evidence", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Evidence); err != nil {
+					return fmt.Errorf("unmarshal field evidence: %w", err)
+				}
+			}
+		case trustedsource.FieldNotice:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field notice", values[i])
+			} else if value.Valid {
+				_m.Notice = new(string)
+				*_m.Notice = value.String
+			}
+		case trustedsource.FieldRevokeCause:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field revoke_cause", values[i])
+			} else if value.Valid {
+				_m.RevokeCause = new(string)
+				*_m.RevokeCause = value.String
+			}
+		case trustedsource.FieldRevokeIncidentID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field revoke_incident_id", values[i])
+			} else if value.Valid {
+				_m.RevokeIncidentID = new(uuid.UUID)
+				*_m.RevokeIncidentID = *value.S.(*uuid.UUID)
+			}
+		case trustedsource.FieldConfirmedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field confirmed_at", values[i])
+			} else if value.Valid {
+				_m.ConfirmedAt = new(time.Time)
+				*_m.ConfirmedAt = value.Time
+			}
+		case trustedsource.FieldDeletedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field deleted_at", values[i])
+			} else if value.Valid {
+				_m.DeletedAt = new(time.Time)
+				*_m.DeletedAt = value.Time
+			}
+		case trustedsource.FieldDeletedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field deleted_by", values[i])
+			} else if value.Valid {
+				_m.DeletedBy = new(string)
+				*_m.DeletedBy = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -252,6 +340,45 @@ func (_m *TrustedSource) String() string {
 	builder.WriteString(", ")
 	if v := _m.RevokedBy; v != nil {
 		builder.WriteString("revoked_by=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("origin=")
+	builder.WriteString(_m.Origin)
+	builder.WriteString(", ")
+	builder.WriteString("pinned=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Pinned))
+	builder.WriteString(", ")
+	builder.WriteString("evidence=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Evidence))
+	builder.WriteString(", ")
+	if v := _m.Notice; v != nil {
+		builder.WriteString("notice=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.RevokeCause; v != nil {
+		builder.WriteString("revoke_cause=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.RevokeIncidentID; v != nil {
+		builder.WriteString("revoke_incident_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.ConfirmedAt; v != nil {
+		builder.WriteString("confirmed_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.DeletedAt; v != nil {
+		builder.WriteString("deleted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.DeletedBy; v != nil {
+		builder.WriteString("deleted_by=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')
