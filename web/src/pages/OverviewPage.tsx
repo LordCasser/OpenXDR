@@ -81,12 +81,12 @@ function ActionCenter({ items }: { items: { icon: ReactNode; label: string; coun
 
 // AI 运营：最近任务运行与报告，体现"纳管即运维"的持续巡检
 function AiOps() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { group } = useSession()
   const tasks = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks })
   const runs = useQuery({
     queryKey: ['taskRuns', 'recent', tasks.data?.map(x => x.id)],
-    queryFn: async () => (await Promise.all((tasks.data ?? []).map(x => fetchTaskRuns(x.id).then(rs => rs.map(r => ({ ...r, name: x.name }))))))
+    queryFn: async () => (await Promise.all((tasks.data ?? []).map(x => fetchTaskRuns(x.id).then(rs => rs.map(r => ({ ...r, name: x.name, nameEn: x.nameEn }))))))
       .flat()
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       .slice(0, 4),
@@ -102,7 +102,7 @@ function AiOps() {
         {(runs.data ?? []).length === 0 && <Typography.Text type="secondary">{t('noTaskRuns')}</Typography.Text>}
         {runs.data?.map(r => (
           <Flex key={r.id} justify="space-between" align="center" className="mini-row">
-            <Typography.Text ellipsis style={{ maxWidth: '55%' }}>{r.name}</Typography.Text>
+            <Typography.Text ellipsis style={{ maxWidth: '55%' }}>{locale === 'en' && r.nameEn ? r.nameEn : r.name}</Typography.Text>
             <Space size={6}>
               <SessionStatusTag value={r.status} />
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(r.startedAt).slice(5, 16)}</Typography.Text>
