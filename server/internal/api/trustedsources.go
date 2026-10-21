@@ -5,19 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
 	entalert "openxdr/server/ent/alert"
-	entasset "openxdr/server/ent/asset"
-	entevent "openxdr/server/ent/event"
-	"openxdr/server/ent/predicate"
+	"openxdr/server/ent/schema"
 	enttrusted "openxdr/server/ent/trustedsource"
 	"openxdr/server/internal/audit"
 	"openxdr/server/internal/auth"
@@ -39,6 +36,12 @@ type trustedSourceRow struct {
 	LastMatchedAt  *time.Time `json:"lastMatchedAt"`
 	RevokedAt      *time.Time `json:"revokedAt"`
 	RevokedBy      *string    `json:"revokedBy"`
+	// manual / auto
+	Origin           string                     `json:"origin"`
+	Pinned           bool                       `json:"pinned"`
+	Evidence         *schema.AutomationEvidence `json:"evidence"`
+	RevokeCause      *string                    `json:"revokeCause"`
+	RevokeIncidentID *uuid.UUID                 `json:"revokeIncidentId"`
 }
 
 func toTrustedSourceRow(t *ent.TrustedSource) trustedSourceRow {
@@ -46,6 +49,7 @@ func toTrustedSourceRow(t *ent.TrustedSource) trustedSourceRow {
 		ID: t.ID, CreatedAt: t.CreatedAt, GroupID: t.GroupID, Name: t.Name, Reason: t.Reason, CreatedBy: t.CreatedBy,
 		ExpiresAt: t.ExpiresAt, KeyFingerprint: t.KeyFingerprint, SourceCIDR: t.SourceCidr, LoginUser: t.LoginUser,
 		MatchedCount: t.MatchedCount, LastMatchedAt: t.LastMatchedAt, RevokedAt: t.RevokedAt, RevokedBy: t.RevokedBy,
+		Origin: t.Origin, Pinned: t.Pinned, Evidence: t.Evidence, RevokeCause: t.RevokeCause, RevokeIncidentID: t.RevokeIncidentID,
 	}
 }
 
@@ -106,27 +110,34 @@ func eventAutomation(ctx context.Context, db *ent.Client, events []uuid.UUID) (m
 	return out, nil
 }
 
-// trustedCandidate 组内近期核对过出处的 SSH 登录，登记可信来源时从这里挑
+// trustedCandidate 组内近期核对过出处的 SSH 登录，按登录身份归并，带「为什么（没）被自动识别」
 type trustedCandidate struct {
-	User      string    `json:"user"`
-	SrcIP     string    `json:"srcIp"`
-	KeyType   *string   `json:"keyType"`
-	KeyFP     *string   `json:"keyFingerprint"`
-	Logins    int       `json:"logins"`
-	Hosts     int       `json:"hosts"`
-	LastSeen  time.Time `json:"lastSeen"`
-	SourceIDs []string  `json:"trustedSourceIds"`
+	User        string    `json:"user"`
+	Addresses   []string  `json:"addresses"`
+	KeyType     *string   `json:"keyType"`
+	KeyFP       *string   `json:"keyFingerprint"`
+	Logins      int       `json:"logins"`
+	Days        int       `json:"days"`
+	Hosts       int       `json:"hosts"`
+	LastSeen    time.Time `json:"lastSeen"`
+	Alerts      int       `json:"alerts"`
+	HumanBenign int       `json:"humanBenign"`
+	AIBenign    int       `json:"aiBenign"`
+	Pending     int       `json:"pending"`
+	// automation.Reason*，另有 covered 已被生效条目覆盖、declined 人停用或删除过、disabled 自动识别已关闭
+	Reason    string   `json:"reason"`
+	SourceIDs []string `json:"trustedSourceIds"`
 }
 
-// mapTrustedSources 可信自动化来源：组管理员登记、撤销，组内成员可看。
-// 只有人能登记——这是降低检测的操作，Pi 没有对应工具
+// mapTrustedSources 运维自动化来源：平台自动识别，组管理员可登记、调整、停用、删除，组内成员可看。
+// 只有人和平台自己的识别逻辑能放宽检测——Pi 没有对应工具
 func mapTrustedSources(api *http.ServeMux, db *ent.Client) {
 	api.HandleFunc("GET /api/trusted-sources", func(w http.ResponseWriter, r *http.Request) {
 		s, ok := requireScope(w, r, db, "viewer")
 		if !ok {
 			return
 		}
-		q := db.TrustedSource.Query()
+		q := db.TrustedSource.Query().Where(enttrusted.DeletedAtIsNil())
 		if !s.all {
 			q = q.Where(enttrusted.GroupIDIn(s.groups...))
 		}
@@ -229,7 +240,8 @@ func mapTrustedSources(api *http.ServeMux, db *ent.Client) {
 		writeJSON(w, toTrustedSourceRow(row))
 	})
 
-	// 撤销即时生效（核对时直接查库），记录保留：已挂在它上面的告警还要说得清来源
+	// 停用即时生效（核对时直接查库），记录保留：已挂在它上面的告警还要说得清来源。
+	// 停用过的自动识别不会被自动加回
 	api.HandleFunc("POST /api/trusted-sources/{id}/revoke", func(w http.ResponseWriter, r *http.Request) {
 		row, ok := getByPath(w, r, "id", "trusted source", db.TrustedSource.Get)
 		if !ok {
@@ -241,7 +253,7 @@ func mapTrustedSources(api *http.ServeMux, db *ent.Client) {
 		actor := auth.From(r.Context()).Username
 		err := withTx(r, db, func(tx *ent.Tx) error {
 			n, err := tx.TrustedSource.Update().Where(enttrusted.IDEQ(row.ID), enttrusted.RevokedAtIsNil()).
-				SetRevokedAt(time.Now()).SetRevokedBy(actor).Save(r.Context())
+				SetRevokedAt(time.Now()).SetRevokedBy(actor).ClearNotice().Save(r.Context())
 			if err != nil {
 				return err
 			}
@@ -264,78 +276,215 @@ func mapTrustedSources(api *http.ServeMux, db *ent.Client) {
 
 var errAlreadyRevoked = fmt.Errorf("已撤销")
 
-// trustedCandidates 组内近 7 天带 login_session 的成功登录（agent 已核对出处），按登录身份归并，
-// 并标出已被哪些生效中的可信来源覆盖。最多看最近 5000 次登录
-func trustedCandidates(ctx context.Context, db *ent.Client, group uuid.UUID) ([]trustedCandidate, error) {
-	assets, err := db.Asset.Query().Where(entasset.GroupIDEQ(group)).IDs(ctx)
-	if err != nil || len(assets) == 0 {
-		return []trustedCandidate{}, err
-	}
-	events, err := db.Event.Query().
-		Where(entevent.AssetIDIn(assets...), entevent.ClassUIDEQ(3002), entevent.SourceEQ("agent"),
-			entevent.TsGT(time.Now().Add(-7*24*time.Hour)),
-			predicate.Event(func(s *sql.Selector) {
-				s.Where(sql.P(func(b *sql.Builder) {
-					b.WriteString("(").WriteString(s.C(entevent.FieldRaw)).WriteString("->'login_session') IS NOT NULL")
-				}))
-			})).
-		Order(ent.Desc(entevent.FieldTs)).Limit(5000).
-		Select(entevent.FieldTs, entevent.FieldAssetID, entevent.FieldRaw).All(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sources, err := db.TrustedSource.Query().
-		Where(enttrusted.GroupIDEQ(group), enttrusted.RevokedAtIsNil(), enttrusted.ExpiresAtGT(time.Now())).
-		Order(ent.Asc(enttrusted.FieldCreatedAt)).All(ctx)
-	if err != nil {
-		return nil, err
-	}
-	type key struct{ user, ip, keyType, fp string }
-	byKey := map[key]*trustedCandidate{}
-	hosts := map[key]map[uuid.UUID]bool{}
-	var order []key
-	for _, e := range events {
-		var raw map[string]any
-		if json.Unmarshal(e.Raw, &raw) != nil {
-			continue
-		}
-		login, ok := automation.Session(raw)
+// mapTrustedSourceEdits 调整与删除：改名与说明、改有效期、固定、停用 / 启用、删除，组管理员，落审计
+func mapTrustedSourceEdits(api *http.ServeMux, db *ent.Client) {
+	api.HandleFunc("PATCH /api/trusted-sources/{id}", func(w http.ResponseWriter, r *http.Request) {
+		row, ok := getByPath(w, r, "id", "trusted source", db.TrustedSource.Get)
 		if !ok {
-			continue
+			return
 		}
-		ls, _ := raw["login_session"].(map[string]any)
-		keyType, _ := ls["key_type"].(string)
-		k := key{login.User, login.SrcIP, keyType, login.KeyFP}
-		c := byKey[k]
-		if c == nil {
-			c = &trustedCandidate{User: login.User, SrcIP: login.SrcIP, LastSeen: e.Ts, SourceIDs: []string{}}
-			if keyType != "" {
-				c.KeyType = &keyType
+		if !requireGroup(w, r, db, row.GroupID, "admin") {
+			return
+		}
+		var body struct {
+			Name          *string `json:"name"`
+			Reason        *string `json:"reason"`
+			ExpiresInDays *int    `json:"expiresInDays"`
+			Pinned        *bool   `json:"pinned"`
+			Enabled       *bool   `json:"enabled"`
+		}
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&body) != nil {
+			http.Error(w, "请求无效", http.StatusBadRequest)
+			return
+		}
+		if row.DeletedAt != nil {
+			http.Error(w, "已删除", http.StatusConflict)
+			return
+		}
+		edit, action, detail, err := trustedEdit(row, body.Name, body.Reason, body.ExpiresInDays, body.Pinned, body.Enabled, auth.From(r.Context()).Username, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		actor := auth.From(r.Context()).Username
+		var saved *ent.TrustedSource
+		err = withTx(r, db, func(tx *ent.Tx) error {
+			upd := tx.TrustedSource.UpdateOneID(row.ID)
+			edit(upd)
+			var err error
+			if saved, err = upd.Save(r.Context()); err != nil {
+				return err
 			}
-			if login.KeyFP != "" {
-				fp := login.KeyFP
-				c.KeyFP = &fp
+			return audit.Checked(r.Context(), tx.AuditLog.Create(), actor, audit.RemoteAddr(r), action, row.ID.String(), row.Name+" "+detail)
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, toTrustedSourceRow(saved))
+	})
+
+	// 删除只是隐藏并停用：已挂上的告警仍说得清来源，自动识别也记得这个身份被人否决过，不会再自动加回
+	api.HandleFunc("DELETE /api/trusted-sources/{id}", func(w http.ResponseWriter, r *http.Request) {
+		row, ok := getByPath(w, r, "id", "trusted source", db.TrustedSource.Get)
+		if !ok {
+			return
+		}
+		if !requireGroup(w, r, db, row.GroupID, "admin") {
+			return
+		}
+		actor := auth.From(r.Context()).Username
+		now := time.Now()
+		err := withTx(r, db, func(tx *ent.Tx) error {
+			upd := tx.TrustedSource.Update().Where(enttrusted.IDEQ(row.ID), enttrusted.DeletedAtIsNil()).
+				SetDeletedAt(now).SetDeletedBy(actor).ClearNotice()
+			if row.RevokedAt == nil {
+				upd.SetRevokedAt(now).SetRevokedBy(actor)
 			}
-			for _, t := range sources {
-				if (automation.Source{ID: t.ID, KeyFingerprint: t.KeyFingerprint, SourceCIDR: t.SourceCidr, LoginUser: t.LoginUser}).Matches(login) {
+			n, err := upd.Save(r.Context())
+			if err != nil {
+				return err
+			}
+			if n != 1 {
+				return errAlreadyRevoked
+			}
+			return audit.Checked(r.Context(), tx.AuditLog.Create(), actor, audit.RemoteAddr(r), "trusted_source_deleted", row.ID.String(), row.Name)
+		})
+		if err == errAlreadyRevoked {
+			http.Error(w, "已删除", http.StatusConflict)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// trustedEdit 校验调整并给出要写的字段、审计动作与说明
+func trustedEdit(row *ent.TrustedSource, name, reason *string, days *int, pinned, enabled *bool, actor string, now time.Time) (func(*ent.TrustedSourceUpdateOne), string, string, error) {
+	var sets []func(*ent.TrustedSourceUpdateOne)
+	var changes []string
+	if name != nil {
+		v := strings.TrimSpace(*name)
+		if n := utf8.RuneCountInString(v); n == 0 || n > 100 {
+			return nil, "", "", fmt.Errorf("名称须为 1–100 字")
+		}
+		sets = append(sets, func(u *ent.TrustedSourceUpdateOne) { u.SetName(v) })
+		changes = append(changes, "名称="+v)
+	}
+	if reason != nil {
+		v := strings.TrimSpace(*reason)
+		if utf8.RuneCountInString(v) > 1000 {
+			return nil, "", "", fmt.Errorf("说明不超过 1000 字")
+		}
+		sets = append(sets, func(u *ent.TrustedSourceUpdateOne) {
+			if v == "" {
+				u.ClearReason()
+			} else {
+				u.SetReason(v)
+			}
+		})
+		changes = append(changes, "说明")
+	}
+	expires := row.ExpiresAt
+	if days != nil {
+		if *days < 1 || *days > automation.MaxDays {
+			return nil, "", "", fmt.Errorf("有效期须为 1–%d 天", automation.MaxDays)
+		}
+		expires = now.AddDate(0, 0, *days)
+		sets = append(sets, func(u *ent.TrustedSourceUpdateOne) { u.SetExpiresAt(expires) })
+		changes = append(changes, fmt.Sprintf("有效期=%d天", *days))
+	}
+	if pinned != nil {
+		v := *pinned
+		sets = append(sets, func(u *ent.TrustedSourceUpdateOne) { u.SetPinned(v) })
+		changes = append(changes, fmt.Sprintf("固定=%v", v))
+	}
+	action := "trusted_source_updated"
+	if enabled != nil {
+		switch {
+		case *enabled && row.RevokedAt != nil:
+			if !expires.After(now) {
+				return nil, "", "", fmt.Errorf("已过期，启用时请同时设置有效期")
+			}
+			// 人看过之后决定继续信任：此前告警上的结论不再触发自动停用。系统因结论停用的，
+			// 重新启用即固定——人推翻了自动判断，自动逻辑不该再替人改它
+			sets = append(sets, func(u *ent.TrustedSourceUpdateOne) {
+				u.ClearRevokedAt().ClearRevokedBy().ClearRevokeCause().ClearRevokeIncidentID().SetConfirmedAt(now)
+			})
+			if row.RevokeCause != nil && pinned == nil {
+				sets = append(sets, func(u *ent.TrustedSourceUpdateOne) { u.SetPinned(true) })
+				changes = append(changes, "固定=true")
+			}
+			action = "trusted_source_enabled"
+		case !*enabled && row.RevokedAt == nil:
+			sets = append(sets, func(u *ent.TrustedSourceUpdateOne) { u.SetRevokedAt(now).SetRevokedBy(actor).ClearNotice() })
+			action = "trusted_source_revoked"
+		}
+	}
+	if len(sets) == 0 {
+		return nil, "", "", fmt.Errorf("没有要改的内容")
+	}
+	return func(u *ent.TrustedSourceUpdateOne) {
+		for _, set := range sets {
+			set(u)
+		}
+	}, action, strings.Join(changes, " "), nil
+}
+
+// trustedCandidates 组内窗口内的 SSH 登录，与后台识别同一套判断，解释每个登录身份为什么（没）被自动识别。
+// 已被生效条目覆盖的标出条目；自动识别被人停用、删除过的标 declined
+func trustedCandidates(ctx context.Context, db *ent.Client, group uuid.UUID) ([]trustedCandidate, error) {
+	conf := automation.CurrentConfig()
+	now := time.Now()
+	assessments, _, err := automation.Assess(ctx, db, conf, &group, now)
+	if err != nil {
+		return nil, err
+	}
+	sources, err := db.TrustedSource.Query().Where(enttrusted.GroupIDEQ(group)).Order(ent.Asc(enttrusted.FieldCreatedAt)).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]trustedCandidate, 0, len(assessments))
+	for _, a := range assessments {
+		c := trustedCandidate{User: a.User, Addresses: a.Addresses, Logins: a.Logins, Days: a.Days, Hosts: a.Hosts, LastSeen: a.LastLogin,
+			Alerts: a.Alerts, HumanBenign: a.HumanBenign, AIBenign: a.AIBenign, Pending: a.Pending, Reason: a.Reason, SourceIDs: []string{}}
+		if a.KeyFP != "" {
+			fp := a.KeyFP
+			c.KeyFP = &fp
+		}
+		if a.KeyType != "" {
+			kt := a.KeyType
+			c.KeyType = &kt
+		}
+		for _, t := range sources {
+			src := automation.Source{ID: t.ID, KeyFingerprint: t.KeyFingerprint, SourceCIDR: t.SourceCidr, LoginUser: t.LoginUser}
+			active := t.RevokedAt == nil && t.ExpiresAt.After(now)
+			mine := t.Origin == "auto" && t.KeyFingerprint != nil && *t.KeyFingerprint == a.KeyFP && t.LoginUser != nil && *t.LoginUser == a.User
+			for _, addr := range a.Addresses {
+				login := automation.Login{User: a.User, SrcIP: addr, KeyFP: a.KeyFP}
+				if active && src.Matches(login) && !slices.Contains(c.SourceIDs, t.ID.String()) {
 					c.SourceIDs = append(c.SourceIDs, t.ID.String())
 				}
 			}
-			byKey[k], hosts[k] = c, map[uuid.UUID]bool{}
-			order = append(order, k)
+			if mine && t.RevokedAt != nil {
+				if t.RevokeCause != nil {
+					c.Reason = automation.ReasonFlagged
+				} else {
+					c.Reason = "declined"
+				}
+			}
 		}
-		c.Logins++
-		if e.AssetID != nil {
-			hosts[k][*e.AssetID] = true
+		switch {
+		case len(c.SourceIDs) > 0:
+			c.Reason = "covered"
+		case c.Reason == automation.ReasonEligible && !conf.Enabled:
+			c.Reason = "disabled"
 		}
+		out = append(out, c)
 	}
-	out := make([]trustedCandidate, 0, len(order))
-	for _, k := range order {
-		c := byKey[k]
-		c.Hosts = len(hosts[k])
-		out = append(out, *c)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Logins > out[j].Logins })
 	if len(out) > 100 {
 		out = out[:100]
 	}

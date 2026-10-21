@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"openxdr/server/ent/auditlog"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/response"
@@ -110,7 +112,9 @@ func TestTrustedSourcesAPI(t *testing.T) {
 		t.Fatalf("组外看不到，实际 %d 条", len(rows))
 	}
 
-	// 候选：只列核对过出处的登录，并标出已被刚登记的来源覆盖
+	// 候选：来自后台收进 ssh_logins 的核对过出处的登录，标出已被刚登记的来源覆盖
+	client.SSHLogin.Create().SetID(uuid.New()).SetTs(time.Now().Add(-time.Hour)).SetGroupID(g.ID).SetAssetID(host.ID).
+		SetLoginUser("root").SetSrcIP("10.1.1.35").SetAuthMethod("publickey").SetKeyFp(fp).SetKeyType("ED25519").ExecX(ctx)
 	cresp, err := http.Get(asLead.URL + "/api/trusted-sources/candidates?groupId=" + g.ID.String())
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +124,7 @@ func TestTrustedSourcesAPI(t *testing.T) {
 	if err := json.NewDecoder(cresp.Body).Decode(&cands); err != nil {
 		t.Fatal(err)
 	}
-	if len(cands) != 1 || cands[0].KeyFP == nil || *cands[0].KeyFP != fp || cands[0].Logins != 1 ||
+	if len(cands) != 1 || cands[0].KeyFP == nil || *cands[0].KeyFP != fp || cands[0].Logins != 1 || cands[0].Reason != "covered" ||
 		len(cands[0].SourceIDs) != 1 || cands[0].SourceIDs[0] != created.ID.String() {
 		t.Fatalf("候选不对: %+v", cands)
 	}
@@ -159,5 +163,54 @@ func TestTrustedSourcesAPI(t *testing.T) {
 	}
 	if n := client.AuditLog.Query().Where(auditlog.ActionEQ("trusted_source_revoked"), auditlog.TargetEQ(created.ID.String())).CountX(ctx); n != 1 {
 		t.Fatalf("撤销应落审计，实际 %d 条", n)
+	}
+
+	// 调整：改名、固定、改有效期、启用；删除后隐藏，再改 409
+	do := func(s *httptest.Server, method, path, body string) int {
+		t.Helper()
+		req, _ := http.NewRequest(method, s.URL+path, strings.NewReader(body))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	item := "/api/trusted-sources/" + created.ID.String()
+	if code := do(asAnalyst, http.MethodPatch, item, `{"enabled":true}`); code != http.StatusForbidden {
+		t.Fatalf("组内 analyst 不能调整，得到 %d", code)
+	}
+	for _, bad := range []string{`{}`, `{"name":" "}`, `{"expiresInDays":0}`} {
+		if code := do(asLead, http.MethodPatch, item, bad); code != http.StatusBadRequest {
+			t.Fatalf("%s 应 400，得到 %d", bad, code)
+		}
+	}
+	if code := do(asLead, http.MethodPatch, item, `{"enabled":true,"name":"Termix AI","pinned":true,"expiresInDays":30}`); code != http.StatusOK {
+		t.Fatalf("启用并调整应 200，得到 %d", code)
+	}
+	got = client.TrustedSource.GetX(ctx, created.ID)
+	if got.RevokedAt != nil || got.Name != "Termix AI" || !got.Pinned || got.ConfirmedAt == nil || got.ExpiresAt.After(time.Now().AddDate(0, 0, 31)) {
+		t.Fatalf("调整结果不对: %+v", got)
+	}
+	if n := client.AuditLog.Query().Where(auditlog.ActionEQ("trusted_source_enabled"), auditlog.TargetEQ(created.ID.String())).CountX(ctx); n != 1 {
+		t.Fatalf("启用应落审计，实际 %d 条", n)
+	}
+	if code := do(asLead, http.MethodPatch, item, `{"enabled":false}`); code != http.StatusOK {
+		t.Fatalf("停用应 200，得到 %d", code)
+	}
+	if code := do(asLead, http.MethodDelete, item, ``); code != http.StatusNoContent {
+		t.Fatalf("删除应 204，得到 %d", code)
+	}
+	if code := do(asLead, http.MethodDelete, item, ``); code != http.StatusConflict {
+		t.Fatalf("重复删除应 409，得到 %d", code)
+	}
+	if code := do(asLead, http.MethodPatch, item, `{"name":"x"}`); code != http.StatusConflict {
+		t.Fatalf("删除后不能再改，得到 %d", code)
+	}
+	if rows := list(asLead); len(rows) != 0 {
+		t.Fatalf("删除后列表不再显示，实际 %d 条", len(rows))
+	}
+	if n := client.AuditLog.Query().Where(auditlog.ActionEQ("trusted_source_deleted"), auditlog.TargetEQ(created.ID.String())).CountX(ctx); n != 1 {
+		t.Fatalf("删除应落审计，实际 %d 条", n)
 	}
 }

@@ -128,6 +128,7 @@ func Handler(db *ent.Client, rules sigma.Catalog, hub *response.Hub, suppression
 	mapAgentSessions(mux, db, chat)
 	mapSuppressions(mux, db, suppressions, rules)
 	mapTrustedSources(mux, db)
+	mapTrustedSourceEdits(mux, db)
 	mapIntel(mux, db, intelStore)
 	mapStats(mux, db, rules)
 	mapEvents(mux, db)
