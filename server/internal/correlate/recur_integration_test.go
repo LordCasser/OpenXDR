@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/schema"
 	"openxdr/server/internal/review"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/testdb"
@@ -374,5 +375,27 @@ func TestEvidenceMarksRetriage(t *testing.T) {
 	f.batch()
 	if got = f.client.Incident.GetX(f.ctx, inc.ID); review.IsUrgent(got) || review.IsRetriage(got) {
 		t.Errorf("同一情报再命中既不是升级也不是新证据：evidence=%v urgent=%v", got.EvidenceAt, got.UrgentAt)
+	}
+}
+
+func TestNewEvidenceInvalidatesClosureProposal(t *testing.T) {
+	f := newRecurFixture(t)
+	host := f.asset("closure-host")
+	base := time.Now().Add(-time.Hour)
+	first := f.dns(host, base, "a.example.top")
+	f.batch()
+	inc := f.incidentOf(first)
+	f.client.Incident.UpdateOneID(inc.ID).SetStatus("triaged").SetTriagedAt(time.Now()).
+		SetClosureProposal(&schema.ClosureProposal{Status: "false_positive", Note: "已核实为良性", At: time.Now()}).ExecX(f.ctx)
+	f.dns(host, base.Add(time.Minute), "a.example.top")
+	f.batch()
+	if f.client.Incident.GetX(f.ctx, inc.ID).ClosureProposal == nil {
+		t.Fatal("相同证据重复不能清除建议")
+	}
+	next := f.dns(host, base.Add(2*time.Minute), "b.example.top")
+	f.batch()
+	got := f.incidentOf(next)
+	if got.ID != inc.ID || got.ClosureProposal != nil || !review.IsRetriage(got) {
+		t.Fatal("新证据应清除旧建议并待重研判")
 	}
 }

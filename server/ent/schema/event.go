@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -42,6 +43,8 @@ func (Event) Indexes() []ent.Index {
 		index.Fields("ts"),
 		index.Fields("asset_id", "ts"),
 		index.Fields("process_guid"),
+		index.Fields("process_guid", "ts").Annotations(entsql.IndexWhere("process_guid IS NOT NULL")),
 		index.Fields("parent_process_guid"),
+		index.Fields("conn_tuple", "ts").Annotations(entsql.IndexWhere("conn_tuple IS NOT NULL")),
 	}
 }

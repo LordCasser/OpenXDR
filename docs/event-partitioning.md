@@ -39,9 +39,38 @@ events (PARTITION BY RANGE (ts))
 - 入库 `INSERT ... ON CONFLICT DO NOTHING` 不写冲突列（`ingest/processor.go`），
   老表（主键 id）与分区表（主键 id, ts）都适用，迁移前后同一份代码。
 - 二级索引与 ent 定义同名同列：`event_ts`、`event_asset_id_ts`、`event_process_guid`、
-  `event_parent_process_guid`，外加 server 启动时建的 `events_raw_trgm`（pg_trgm GIN）。
+  `event_process_guid_ts`、`event_parent_process_guid`、`event_conn_tuple_ts`，外加 server 启动时建的 `events_raw_trgm`（pg_trgm GIN）。
   在父表上建的是分区索引，新分区自动带上。
 - `events_assets_events` 外键（asset_id → assets，ON DELETE SET NULL）保留：分区表**引用**别的表没有限制。
+
+`event_conn_tuple_ts` 是 `(conn_tuple, ts) WHERE conn_tuple IS NOT NULL` 部分索引，
+用于日志关联中按连接取最早事件，避免按时间扫描整个历史库。已有普通表不由启动迁移补索引，
+应在主库单独执行（事务外），先检查空间与复制状态：
+
+```sql
+SET lock_timeout = '5s';
+CREATE INDEX CONCURRENTLY event_conn_tuple_ts
+ON events (conn_tuple, ts) WHERE conn_tuple IS NOT NULL;
+```
+
+同一进程及父进程回溯按 `process_guid` 过滤、按 `ts` 取最早记录，使用
+`event_process_guid_ts` 联合索引。单列 `process_guid` 索引不能同时提供时间顺序，
+优化器可能误选全局时间索引，导致稀疏命中时扫描大量历史事件。已有普通表同样在线补建：
+
+```sql
+SET lock_timeout = '5s';
+CREATE INDEX CONCURRENTLY event_process_guid_ts
+ON events (process_guid, ts) WHERE process_guid IS NOT NULL;
+```
+
+进程字段通常覆盖绝大多数事件，此索引的空间不能按连接部分索引估算；
+需同时预留索引、排序临时文件和 WAL 的空间，并监控主从复制。验收前保留原单列索引。
+
+完成后检查 `pg_index.indisvalid` 与查询计划；中断可能留下无效索引，不能仅凭同名索引存在判断成功。
+并发建索引完成前不要重启 server：启动时的全文索引 DDL 即使带 `IF NOT EXISTS`，
+也可能等待表锁，并使后续写入排在锁队列中。应先完成索引校验，再滚动发布应用。
+已有分区表不能直接在父表上使用 `CONCURRENTLY`：需在各子表并发建立同构索引，再挂到父索引；
+新建库会直接带上该索引。不要为了补索引重新执行事件数据迁移。
 
 ## 3. 指向 events 的引用，逐个处理
 

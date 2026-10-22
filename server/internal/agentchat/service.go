@@ -666,7 +666,11 @@ func (s *Service) tool(ctx context.Context, session *ent.AgentSession, who comma
 			return "", errors.New("timeout 超过 300 秒")
 		}
 		who.GroupID, who.SessionID, who.Origin = session.GroupID, &session.ID, "ai"
-		who.Command = response.Request{Kind: "exec", AssetID: body.Host, Cmd: &body.Cmd, TimeoutMS: body.Timeout * 1000}
+		incidentID, err := s.commandIncident(ctx, session, body.Host)
+		if err != nil {
+			return "", err
+		}
+		who.Command = response.Request{Kind: "exec", AssetID: body.Host, IncidentID: incidentID, Cmd: &body.Cmd, TimeoutMS: body.Timeout * 1000}
 		cmd, err := s.Gate.Issue(ctx, who)
 		if err != nil {
 			return "", err

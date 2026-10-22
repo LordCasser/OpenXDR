@@ -13,13 +13,15 @@ import (
 // glmModel 与 Pi runner 判定 GLM 的规则一致
 var glmModel = regexp.MustCompile(`(?i)(^|/)glm[-_.]`)
 
+var deepseekThinkingModel = regexp.MustCompile(`(?i)(^|/)deepseek-(v4-)?(flash|pro)$`)
+
 // LLM OpenAI 兼容 chat completions 客户端。BaseURL 默认本地 Ollama——安全数据不出内网。
 type LLM struct {
 	BaseURL string
 	Model   string
 	APIKey  string
-	// NoThinking 关掉 GLM 模板里的隐式思考：思考内容不返回却占输出，时长波动大，
-	// 后台批量调用容易超时。只对 GLM 生效，其他端点不认这个参数
+	// NoThinking 关闭 GLM / DeepSeek 的思考，避免后台短输出预算被思考耗尽。
+	// 按模型使用各自的参数，未知模型不发送扩展字段。
 	NoThinking bool
 	// MaxTokens 输出上限，0 表示不设
 	MaxTokens int
@@ -126,6 +128,9 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 	}
 	if l.NoThinking && glmModel.MatchString(model) {
 		payload["chat_template_kwargs"] = map[string]bool{"enable_thinking": false}
+	}
+	if l.NoThinking && deepseekThinkingModel.MatchString(model) {
+		payload["thinking"] = map[string]string{"type": "disabled"}
 	}
 	if l.MaxTokens > 0 {
 		payload["max_tokens"] = l.MaxTokens

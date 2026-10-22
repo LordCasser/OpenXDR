@@ -556,9 +556,25 @@ var (
 				Columns: []*schema.Column{EventsColumns[4]},
 			},
 			{
+				Name:    "event_process_guid_ts",
+				Unique:  false,
+				Columns: []*schema.Column{EventsColumns[4], EventsColumns[1]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "process_guid IS NOT NULL",
+				},
+			},
+			{
 				Name:    "event_parent_process_guid",
 				Unique:  false,
 				Columns: []*schema.Column{EventsColumns[5]},
+			},
+			{
+				Name:    "event_conn_tuple_ts",
+				Unique:  false,
+				Columns: []*schema.Column{EventsColumns[7], EventsColumns[1]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "conn_tuple IS NOT NULL",
+				},
 			},
 		},
 	}

@@ -230,7 +230,7 @@ func (e *Engine) batchTx(ctx context.Context, tx *ent.Tx) error {
 		now := time.Now()
 		upd := e.DB.Incident.UpdateOneID(incID).SetGraph(g.raw())
 		if evidence[incID] {
-			upd.SetEvidenceAt(now)
+			upd.SetEvidenceAt(now).ClearClosureProposal()
 		}
 		if urgent[incID] {
 			upd.SetUrgentAt(now)
