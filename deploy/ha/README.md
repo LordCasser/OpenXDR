@@ -61,6 +61,11 @@ agent 不走这个脚本：把新版本放进节点的 `dist/` 目录，agent �
 开启时在节点 `.env` 设 `TEMPORAL_RULES_PATH=/temporal-rules/current`，server 每 `RULES_RELOAD_SECONDS` 整批重载；
 不设则保持单事件检测。回滚规则：把 `current` 链接切回旧版本目录（`ln -sfn v-<旧> current.tmp && mv -T current.tmp current`）。
 
+## 备份与恢复
+
+节点外逻辑备份、隔离恢复验收和容量处理顺序见 [backup-recovery.md](backup-recovery.md)。
+同步副本不能替代独立备份，切换演练也不能替代恢复验收。
+
 ## 验收
 
 1. `patronictl list` 必须是一主一同步副本；

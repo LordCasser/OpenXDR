@@ -20,9 +20,15 @@ import (
 func TestNotifySettings(t *testing.T) {
 	_, client := testdb.New(t)
 	var hits []string
+	failed := false
 	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		hits = append(hits, string(b))
+		if failed {
+			_, _ = w.Write([]byte(`{"code":9499}`))
+		} else {
+			_, _ = w.Write([]byte(`{"code":0}`))
+		}
 	}))
 	t.Cleanup(hook.Close)
 
@@ -54,6 +60,12 @@ func TestNotifySettings(t *testing.T) {
 	if got := settings.Load(t.Context()); got.URL != "" {
 		t.Fatal("测试推送不应保存配置")
 	}
+
+	failed = true
+	if resp := do(http.MethodPost, "/api/settings/notify/test", `{"url":"`+hook.URL+`","format":"feishu"}`); resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("业务拒绝应返回 502，实际 %d", resp.StatusCode)
+	}
+	failed = false
 
 	body := `{"url":"` + hook.URL + `","format":"dingtalk","linkBase":"https://xdr.example.com","minSeverity":3}`
 	if resp := do(http.MethodPut, "/api/settings/notify", body); resp.StatusCode != http.StatusOK {

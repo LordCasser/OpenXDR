@@ -119,6 +119,7 @@ func TestWebhookSendText(t *testing.T) {
 	var got []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, _ = io.ReadAll(r.Body)
+		_, _ = w.Write([]byte(`{"errcode":0}`))
 	}))
 	defer srv.Close()
 
@@ -140,5 +141,47 @@ func TestWebhookSendText(t *testing.T) {
 	// 未配置 URL：静默不发，也不报错
 	if err := h.SendTo(context.Background(), Target{}, "x", "", ""); err != nil {
 		t.Errorf("未配置时不应报错：%v", err)
+	}
+}
+
+// HTTP 200 不等于机器人接受，坏回执必须阻止上层标记已投递。
+func TestWebhookReceipt(t *testing.T) {
+	for _, tc := range []struct {
+		name, format, body string
+		status             int
+		wantError          bool
+	}{
+		{"钉钉成功", "dingtalk", `{"errcode":0,"errmsg":"ok"}`, 200, false},
+		{"企微拒绝", "wecom", `{"errcode":93000,"errmsg":"secret"}`, 200, true},
+		{"企微成功", "wecom", `{"errcode":0}`, 200, false},
+		{"飞书成功", "feishu", `{"code":0,"data":{}}`, 200, false},
+		{"飞书拒绝", "feishu", `{"code":9499}`, 200, true},
+		{"飞书旧版", "feishu", `{"StatusCode":0}`, 200, false},
+		{"飞书冲突", "feishu", `{"code":0,"StatusCode":1}`, 200, true},
+		{"缺状态", "dingtalk", `{}`, 200, true},
+		{"空状态", "dingtalk", `{"errcode":null}`, 200, true},
+		{"类型错误", "dingtalk", `{"errcode":"0"}`, 200, true},
+		{"坏JSON", "dingtalk", `<html>secret</html>`, 200, true},
+		{"尾部垃圾", "feishu", `{"code":0}secret`, 200, true},
+		{"空回执", "wecom", ``, 204, true},
+		{"超限", "wecom", strings.Repeat(" ", 65537), 200, true},
+		{"通用空回执", "generic", ``, 204, false},
+		{"通用自定义正文", "generic", `{"errcode":1}`, 200, false},
+		{"HTTP失败", "dingtalk", `{"errcode":0}`, 503, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+			err := (&Webhook{}).SendTo(context.Background(), Target{URL: srv.URL, Format: tc.format}, "测试", "", "")
+			if (err != nil) != tc.wantError {
+				t.Fatalf("err=%v, wantError=%v", err, tc.wantError)
+			}
+			if err != nil && strings.Contains(err.Error(), "secret") {
+				t.Fatal("回执正文泄漏")
+			}
+		})
 	}
 }

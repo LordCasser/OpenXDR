@@ -93,18 +93,30 @@ func TestSweep(t *testing.T) {
 
 // webhook 挂掉时不落标记，恢复后重试成功。
 func TestSweepRetries(t *testing.T) {
+	for _, format := range []string{"generic", "wecom"} {
+		t.Run(format, func(t *testing.T) { testSweepRetries(t, format) })
+	}
+}
+
+func testSweepRetries(t *testing.T, format string) {
 	ctx, client := testdb.New(t)
 
 	fail := true
 	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if fail {
-			w.WriteHeader(http.StatusBadGateway)
+			if format == "generic" {
+				w.WriteHeader(http.StatusBadGateway)
+			} else {
+				_, _ = w.Write([]byte(`{"errcode":93000}`))
+			}
+			return
 		}
+		_, _ = w.Write([]byte(`{"errcode":0}`))
 	}))
 	t.Cleanup(hook.Close)
 
 	n := &Notifier{
-		DB: client, Settings: &Settings{DB: client, Default: Target{URL: hook.URL, Format: "generic"}},
+		DB: client, Settings: &Settings{DB: client, Default: Target{URL: hook.URL, Format: format}},
 		Client: hook.Client(), start: time.Now().Add(-time.Minute),
 	}
 	inc, err := client.Incident.Create().

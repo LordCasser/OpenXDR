@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -246,7 +247,7 @@ func payload(format string, generic any, text string) []byte {
 }
 
 func (n *Notifier) post(ctx context.Context, t Target, m Message) error {
-	return send(ctx, n.Client, t.URL, payload(t.Format, m, text(m)))
+	return send(ctx, n.Client, t.URL, t.Format, payload(t.Format, m, text(m)))
 }
 
 // Text 非 incident 的通知：任务报告、任务失败等。也是 generic 格式的推送体。
@@ -284,10 +285,10 @@ func (h *Webhook) SendTo(ctx context.Context, target Target, title, body, path s
 	if t.Link != "" {
 		full += "\n" + t.Link
 	}
-	return send(ctx, client, target.URL, payload(target.Format, t, full))
+	return send(ctx, client, target.URL, target.Format, payload(target.Format, t, full))
 }
 
-func send(ctx context.Context, client *http.Client, url string, body []byte) error {
+func send(ctx context.Context, client *http.Client, url, format string, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -298,8 +299,44 @@ func send(ctx context.Context, client *http.Client, url string, body []byte) err
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook 返回 %d", resp.StatusCode)
+	}
+	field := map[string]string{"dingtalk": "errcode", "wecom": "errcode", "feishu": "code"}[format]
+	if field == "" {
+		return nil // generic 仅约定 HTTP 成功，不猜测接收方正文协议
+	}
+	const maxReceipt = 64 << 10
+	body, err = io.ReadAll(io.LimitReader(resp.Body, maxReceipt+1))
+	if err != nil || len(body) > maxReceipt {
+		return fmt.Errorf("webhook 回执读取失败或超出限制")
+	}
+	// 只解码状态字段，消息正文可能含接收方返回的敏感信息，不写日志。
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return fmt.Errorf("webhook 回执不是有效 JSON 对象")
+	}
+	keys := []string{field}
+	if format == "feishu" {
+		keys = append(keys, "StatusCode") // 兼容旧飞书回执；两者都有时均须成功
+	}
+	found := false
+	for _, key := range keys {
+		value, ok := fields[key]
+		if !ok {
+			continue
+		}
+		var code *int
+		if err := json.Unmarshal(value, &code); err != nil || code == nil {
+			return fmt.Errorf("webhook 回执状态字段无效")
+		}
+		found = true
+		if *code != 0 {
+			return fmt.Errorf("webhook 业务拒绝: %s=%d", key, *code)
+		}
+	}
+	if !found {
+		return fmt.Errorf("webhook 回执缺少状态字段")
 	}
 	return nil
 }
