@@ -44,6 +44,10 @@ type Incident struct {
 	ResolutionSource *string `json:"resolution_source,omitempty"`
 	// TriagedAt holds the value of the "triaged_at" field.
 	TriagedAt *time.Time `json:"triaged_at,omitempty"`
+	// TriageStartedAt holds the value of the "triage_started_at" field.
+	TriageStartedAt *time.Time `json:"triage_started_at,omitempty"`
+	// TriageHeartbeatAt holds the value of the "triage_heartbeat_at" field.
+	TriageHeartbeatAt *time.Time `json:"triage_heartbeat_at,omitempty"`
 	// TriageCount holds the value of the "triage_count" field.
 	TriageCount int `json:"triage_count,omitempty"`
 	// EvidenceAt holds the value of the "evidence_at" field.
@@ -91,7 +95,7 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case incident.FieldStatus, incident.FieldTitle, incident.FieldResolution, incident.FieldResolvedBy, incident.FieldResolutionSource:
 			values[i] = new(sql.NullString)
-		case incident.FieldCreatedAt, incident.FieldNotifiedAt, incident.FieldResolvedAt, incident.FieldTriagedAt, incident.FieldEvidenceAt, incident.FieldUrgentAt, incident.FieldTriageRetryAt:
+		case incident.FieldCreatedAt, incident.FieldNotifiedAt, incident.FieldResolvedAt, incident.FieldTriagedAt, incident.FieldTriageStartedAt, incident.FieldTriageHeartbeatAt, incident.FieldEvidenceAt, incident.FieldUrgentAt, incident.FieldTriageRetryAt:
 			values[i] = new(sql.NullTime)
 		case incident.FieldID:
 			values[i] = new(uuid.UUID)
@@ -198,6 +202,20 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TriagedAt = new(time.Time)
 				*_m.TriagedAt = value.Time
+			}
+		case incident.FieldTriageStartedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field triage_started_at", values[i])
+			} else if value.Valid {
+				_m.TriageStartedAt = new(time.Time)
+				*_m.TriageStartedAt = value.Time
+			}
+		case incident.FieldTriageHeartbeatAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field triage_heartbeat_at", values[i])
+			} else if value.Valid {
+				_m.TriageHeartbeatAt = new(time.Time)
+				*_m.TriageHeartbeatAt = value.Time
 			}
 		case incident.FieldTriageCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -328,6 +346,16 @@ func (_m *Incident) String() string {
 	builder.WriteString(", ")
 	if v := _m.TriagedAt; v != nil {
 		builder.WriteString("triaged_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.TriageStartedAt; v != nil {
+		builder.WriteString("triage_started_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.TriageHeartbeatAt; v != nil {
+		builder.WriteString("triage_heartbeat_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

@@ -176,6 +176,34 @@ func (_c *IncidentCreate) SetNillableTriagedAt(v *time.Time) *IncidentCreate {
 	return _c
 }
 
+// SetTriageStartedAt sets the "triage_started_at" field.
+func (_c *IncidentCreate) SetTriageStartedAt(v time.Time) *IncidentCreate {
+	_c.mutation.SetTriageStartedAt(v)
+	return _c
+}
+
+// SetNillableTriageStartedAt sets the "triage_started_at" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableTriageStartedAt(v *time.Time) *IncidentCreate {
+	if v != nil {
+		_c.SetTriageStartedAt(*v)
+	}
+	return _c
+}
+
+// SetTriageHeartbeatAt sets the "triage_heartbeat_at" field.
+func (_c *IncidentCreate) SetTriageHeartbeatAt(v time.Time) *IncidentCreate {
+	_c.mutation.SetTriageHeartbeatAt(v)
+	return _c
+}
+
+// SetNillableTriageHeartbeatAt sets the "triage_heartbeat_at" field if the given value is not nil.
+func (_c *IncidentCreate) SetNillableTriageHeartbeatAt(v *time.Time) *IncidentCreate {
+	if v != nil {
+		_c.SetTriageHeartbeatAt(*v)
+	}
+	return _c
+}
+
 // SetTriageCount sets the "triage_count" field.
 func (_c *IncidentCreate) SetTriageCount(v int) *IncidentCreate {
 	_c.mutation.SetTriageCount(v)
@@ -444,6 +472,14 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TriagedAt(); ok {
 		_spec.SetField(incident.FieldTriagedAt, field.TypeTime, value)
 		_node.TriagedAt = &value
+	}
+	if value, ok := _c.mutation.TriageStartedAt(); ok {
+		_spec.SetField(incident.FieldTriageStartedAt, field.TypeTime, value)
+		_node.TriageStartedAt = &value
+	}
+	if value, ok := _c.mutation.TriageHeartbeatAt(); ok {
+		_spec.SetField(incident.FieldTriageHeartbeatAt, field.TypeTime, value)
+		_node.TriageHeartbeatAt = &value
 	}
 	if value, ok := _c.mutation.TriageCount(); ok {
 		_spec.SetField(incident.FieldTriageCount, field.TypeInt, value)

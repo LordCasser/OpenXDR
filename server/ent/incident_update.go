@@ -252,6 +252,46 @@ func (_u *IncidentUpdate) ClearTriagedAt() *IncidentUpdate {
 	return _u
 }
 
+// SetTriageStartedAt sets the "triage_started_at" field.
+func (_u *IncidentUpdate) SetTriageStartedAt(v time.Time) *IncidentUpdate {
+	_u.mutation.SetTriageStartedAt(v)
+	return _u
+}
+
+// SetNillableTriageStartedAt sets the "triage_started_at" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableTriageStartedAt(v *time.Time) *IncidentUpdate {
+	if v != nil {
+		_u.SetTriageStartedAt(*v)
+	}
+	return _u
+}
+
+// ClearTriageStartedAt clears the value of the "triage_started_at" field.
+func (_u *IncidentUpdate) ClearTriageStartedAt() *IncidentUpdate {
+	_u.mutation.ClearTriageStartedAt()
+	return _u
+}
+
+// SetTriageHeartbeatAt sets the "triage_heartbeat_at" field.
+func (_u *IncidentUpdate) SetTriageHeartbeatAt(v time.Time) *IncidentUpdate {
+	_u.mutation.SetTriageHeartbeatAt(v)
+	return _u
+}
+
+// SetNillableTriageHeartbeatAt sets the "triage_heartbeat_at" field if the given value is not nil.
+func (_u *IncidentUpdate) SetNillableTriageHeartbeatAt(v *time.Time) *IncidentUpdate {
+	if v != nil {
+		_u.SetTriageHeartbeatAt(*v)
+	}
+	return _u
+}
+
+// ClearTriageHeartbeatAt clears the value of the "triage_heartbeat_at" field.
+func (_u *IncidentUpdate) ClearTriageHeartbeatAt() *IncidentUpdate {
+	_u.mutation.ClearTriageHeartbeatAt()
+	return _u
+}
+
 // SetTriageCount sets the "triage_count" field.
 func (_u *IncidentUpdate) SetTriageCount(v int) *IncidentUpdate {
 	_u.mutation.ResetTriageCount()
@@ -515,6 +555,18 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.TriagedAtCleared() {
 		_spec.ClearField(incident.FieldTriagedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TriageStartedAt(); ok {
+		_spec.SetField(incident.FieldTriageStartedAt, field.TypeTime, value)
+	}
+	if _u.mutation.TriageStartedAtCleared() {
+		_spec.ClearField(incident.FieldTriageStartedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TriageHeartbeatAt(); ok {
+		_spec.SetField(incident.FieldTriageHeartbeatAt, field.TypeTime, value)
+	}
+	if _u.mutation.TriageHeartbeatAtCleared() {
+		_spec.ClearField(incident.FieldTriageHeartbeatAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.TriageCount(); ok {
 		_spec.SetField(incident.FieldTriageCount, field.TypeInt, value)
@@ -836,6 +888,46 @@ func (_u *IncidentUpdateOne) ClearTriagedAt() *IncidentUpdateOne {
 	return _u
 }
 
+// SetTriageStartedAt sets the "triage_started_at" field.
+func (_u *IncidentUpdateOne) SetTriageStartedAt(v time.Time) *IncidentUpdateOne {
+	_u.mutation.SetTriageStartedAt(v)
+	return _u
+}
+
+// SetNillableTriageStartedAt sets the "triage_started_at" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableTriageStartedAt(v *time.Time) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetTriageStartedAt(*v)
+	}
+	return _u
+}
+
+// ClearTriageStartedAt clears the value of the "triage_started_at" field.
+func (_u *IncidentUpdateOne) ClearTriageStartedAt() *IncidentUpdateOne {
+	_u.mutation.ClearTriageStartedAt()
+	return _u
+}
+
+// SetTriageHeartbeatAt sets the "triage_heartbeat_at" field.
+func (_u *IncidentUpdateOne) SetTriageHeartbeatAt(v time.Time) *IncidentUpdateOne {
+	_u.mutation.SetTriageHeartbeatAt(v)
+	return _u
+}
+
+// SetNillableTriageHeartbeatAt sets the "triage_heartbeat_at" field if the given value is not nil.
+func (_u *IncidentUpdateOne) SetNillableTriageHeartbeatAt(v *time.Time) *IncidentUpdateOne {
+	if v != nil {
+		_u.SetTriageHeartbeatAt(*v)
+	}
+	return _u
+}
+
+// ClearTriageHeartbeatAt clears the value of the "triage_heartbeat_at" field.
+func (_u *IncidentUpdateOne) ClearTriageHeartbeatAt() *IncidentUpdateOne {
+	_u.mutation.ClearTriageHeartbeatAt()
+	return _u
+}
+
 // SetTriageCount sets the "triage_count" field.
 func (_u *IncidentUpdateOne) SetTriageCount(v int) *IncidentUpdateOne {
 	_u.mutation.ResetTriageCount()
@@ -1129,6 +1221,18 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if _u.mutation.TriagedAtCleared() {
 		_spec.ClearField(incident.FieldTriagedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TriageStartedAt(); ok {
+		_spec.SetField(incident.FieldTriageStartedAt, field.TypeTime, value)
+	}
+	if _u.mutation.TriageStartedAtCleared() {
+		_spec.ClearField(incident.FieldTriageStartedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.TriageHeartbeatAt(); ok {
+		_spec.SetField(incident.FieldTriageHeartbeatAt, field.TypeTime, value)
+	}
+	if _u.mutation.TriageHeartbeatAtCleared() {
+		_spec.ClearField(incident.FieldTriageHeartbeatAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.TriageCount(); ok {
 		_spec.SetField(incident.FieldTriageCount, field.TypeInt, value)

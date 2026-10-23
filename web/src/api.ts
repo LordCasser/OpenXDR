@@ -45,6 +45,7 @@ export interface IncidentSummary {
   // 研判节奏：上次研判时刻与累计次数；retriage 为 pending（研判后又有新证据，冷却到期重研判）或 urgent（升级类，立即重研判）
   triagedAt: string | null
   triageCount: number
+  triageStartedAt?: string
   retriage?: 'pending' | 'urgent'
   // 研判连续失败次数与下次重试时刻
   triageFailures?: number

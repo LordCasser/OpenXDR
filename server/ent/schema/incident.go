@@ -38,6 +38,9 @@ func (Incident) Fields() []ent.Field {
 		field.String("resolution_source").Optional().Nillable(),
 		// 最近一次完成研判时取上下文的时刻（之后进来的证据都没看过）与累计完成次数
 		field.Time("triaged_at").Optional().Nillable(),
+		// 当前执行的开始时间与心跳；过期心跳不能继续显示正在研判。
+		field.Time("triage_started_at").Optional().Nillable(),
+		field.Time("triage_heartbeat_at").Optional().Nillable(),
 		field.Int("triage_count").Default(0),
 		// 关联引擎最近一次并入新证据的时刻（同实体同规则的重复不算）；晚于 triaged_at 即待重研判，冷却到期再研判
 		field.Time("evidence_at").Optional().Nillable(),

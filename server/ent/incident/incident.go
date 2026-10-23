@@ -39,6 +39,10 @@ const (
 	FieldResolutionSource = "resolution_source"
 	// FieldTriagedAt holds the string denoting the triaged_at field in the database.
 	FieldTriagedAt = "triaged_at"
+	// FieldTriageStartedAt holds the string denoting the triage_started_at field in the database.
+	FieldTriageStartedAt = "triage_started_at"
+	// FieldTriageHeartbeatAt holds the string denoting the triage_heartbeat_at field in the database.
+	FieldTriageHeartbeatAt = "triage_heartbeat_at"
 	// FieldTriageCount holds the string denoting the triage_count field in the database.
 	FieldTriageCount = "triage_count"
 	// FieldEvidenceAt holds the string denoting the evidence_at field in the database.
@@ -79,6 +83,8 @@ var Columns = []string{
 	FieldResolvedAt,
 	FieldResolutionSource,
 	FieldTriagedAt,
+	FieldTriageStartedAt,
+	FieldTriageHeartbeatAt,
 	FieldTriageCount,
 	FieldEvidenceAt,
 	FieldUrgentAt,
@@ -168,6 +174,16 @@ func ByResolutionSource(opts ...sql.OrderTermOption) OrderOption {
 // ByTriagedAt orders the results by the triaged_at field.
 func ByTriagedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTriagedAt, opts...).ToFunc()
+}
+
+// ByTriageStartedAt orders the results by the triage_started_at field.
+func ByTriageStartedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTriageStartedAt, opts...).ToFunc()
+}
+
+// ByTriageHeartbeatAt orders the results by the triage_heartbeat_at field.
+func ByTriageHeartbeatAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTriageHeartbeatAt, opts...).ToFunc()
 }
 
 // ByTriageCount orders the results by the triage_count field.

@@ -438,11 +438,11 @@ func init() {
 	// incident.DefaultIntegrationRevision holds the default value on creation for the integration_revision field.
 	incident.DefaultIntegrationRevision = incidentDescIntegrationRevision.Default.(int64)
 	// incidentDescTriageCount is the schema descriptor for triage_count field.
-	incidentDescTriageCount := incidentFields[13].Descriptor()
+	incidentDescTriageCount := incidentFields[15].Descriptor()
 	// incident.DefaultTriageCount holds the default value on creation for the triage_count field.
 	incident.DefaultTriageCount = incidentDescTriageCount.Default.(int)
 	// incidentDescTriageFailures is the schema descriptor for triage_failures field.
-	incidentDescTriageFailures := incidentFields[16].Descriptor()
+	incidentDescTriageFailures := incidentFields[18].Descriptor()
 	// incident.DefaultTriageFailures holds the default value on creation for the triage_failures field.
 	incident.DefaultTriageFailures = incidentDescTriageFailures.Default.(int)
 	// incidentDescID is the schema descriptor for id field.

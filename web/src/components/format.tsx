@@ -1,3 +1,4 @@
+import { LoadingOutlined } from '@ant-design/icons'
 import { Badge, Tag, Tooltip } from 'antd'
 import { HttpError, type Asset } from '../api'
 import { useI18n, type MsgKey } from '../i18n'
@@ -38,14 +39,15 @@ const RETRIAGE: Record<string, { key: MsgKey; hint: MsgKey; color: string }> = {
   urgent: { key: 'retriageUrgent', hint: 'retriageUrgentHint', color: 'volcano' },
 }
 
-export function IncidentStatusTag({ value, retriage }: { value: string; retriage?: string }) {
+export function IncidentStatusTag({ value, retriage, triageStartedAt }: { value: string; retriage?: string; triageStartedAt?: string }) {
   const { t } = useI18n()
   const s = INCIDENT_STATUS[value]
   const r = retriage ? RETRIAGE[retriage] : undefined
   return (
     <>
       <Tag color={s?.color}>{s ? t(s.key) : value}</Tag>
-      {r && <Tooltip title={t(r.hint)}><Tag color={r.color}>{t(r.key)}</Tag></Tooltip>}
+      {triageStartedAt && <Tooltip title={t('triageStartedDetail', { at: fmtTime(triageStartedAt) })}><Tag color="processing" icon={<LoadingOutlined spin />}>{t('triageRunning')}</Tag></Tooltip>}
+      {!triageStartedAt && r && <Tooltip title={t(r.hint)}><Tag color={r.color}>{t(r.key)}</Tag></Tooltip>}
     </>
   )
 }

@@ -84,7 +84,7 @@ export function SubjectsBar({ subjects, groupId }: { subjects: string[]; groupId
           <AlertOutlined />
           <SeverityTag value={i.severity} />
           <Link to={`/incidents/${i.id}`} style={{ flex: 1, minWidth: 0 }}><Typography.Text ellipsis>{title}</Typography.Text></Link>
-          <IncidentStatusTag value={i.status} />
+          <IncidentStatusTag value={i.status} retriage={i.retriage} triageStartedAt={i.triageStartedAt} />
           {canAct && !done && (
             <Space size={0}>
               <Button type="link" size="small" onClick={() => setResolving({ kind: 'incident', id: i.id, next: 'closed', title })}>{t('markTrue')}</Button>

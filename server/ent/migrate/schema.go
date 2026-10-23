@@ -754,6 +754,8 @@ var (
 		{Name: "resolved_at", Type: field.TypeTime, Nullable: true},
 		{Name: "resolution_source", Type: field.TypeString, Nullable: true},
 		{Name: "triaged_at", Type: field.TypeTime, Nullable: true},
+		{Name: "triage_started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "triage_heartbeat_at", Type: field.TypeTime, Nullable: true},
 		{Name: "triage_count", Type: field.TypeInt, Default: 0},
 		{Name: "evidence_at", Type: field.TypeTime, Nullable: true},
 		{Name: "urgent_at", Type: field.TypeTime, Nullable: true},

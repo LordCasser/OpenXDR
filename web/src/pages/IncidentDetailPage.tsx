@@ -89,7 +89,7 @@ export function IncidentDetailPage() {
   // 采纳 AI 结案建议：带着它的说明打开结案弹窗，人确认后才结案
   const [adopting, setAdopting] = useState(false)
   const [alertView, setAlertView] = useState<'table' | 'timeline'>('timeline')
-  const { data: inc, isPending, error, refetch } = useQuery({ queryKey: ['incident', id], queryFn: () => fetchIncident(id!), refetchInterval: 15_000 })
+  const { data: inc, isPending, error, refetch } = useQuery({ queryKey: ['incident', id], queryFn: () => fetchIncident(id!), refetchInterval: 5_000 })
   const canAct = useCanActIn(inc?.groupId)
   const canChat = useCanChat()(inc?.groupId)
   const handoff = useHandoff()
@@ -131,9 +131,9 @@ export function IncidentDetailPage() {
   return (
     <Page
       crumb={inc.title ?? inc.id}
-      title={<Space align={wide ? "center" : "start"}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} />{wide && <SeverityTag value={inc.severity} />}{inc.title ?? inc.id}{wide && <IncidentStatusTag value={inc.status} retriage={inc.retriage} />}</Space>}
+      title={<Space align={wide ? "center" : "start"}><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/incidents')} />{wide && <SeverityTag value={inc.severity} />}{inc.title ?? inc.id}{wide && <IncidentStatusTag value={inc.status} retriage={inc.retriage} triageStartedAt={inc.triageStartedAt} />}</Space>}
       // 窄屏标题会折行，级别与状态挪到标题下面一行，不夹在折行的标题中间
-      subtitle={!wide && <Space size={4} style={{ marginLeft: 40 }}><SeverityTag value={inc.severity} /><IncidentStatusTag value={inc.status} retriage={inc.retriage} /></Space>}
+      subtitle={!wide && <Space size={4} style={{ marginLeft: 40 }}><SeverityTag value={inc.severity} /><IncidentStatusTag value={inc.status} retriage={inc.retriage} triageStartedAt={inc.triageStartedAt} /></Space>}
       extra={
         <>
           {queue.index >= 0 && (
@@ -250,9 +250,10 @@ export function IncidentDetailPage() {
             <Card title={t('basicInfo')}>
               <Descriptions column={1} size="small">
                 <Descriptions.Item label="ID"><Typography.Text className="mono" copyable ellipsis style={{ maxWidth: 220 }}>{inc.id}</Typography.Text></Descriptions.Item>
-                <Descriptions.Item label={t('thStatus')}><Space size={4} wrap><IncidentStatusTag value={inc.status} retriage={inc.retriage} /></Space></Descriptions.Item>
+                <Descriptions.Item label={t('thStatus')}><Space size={4} wrap><IncidentStatusTag value={inc.status} retriage={inc.retriage} triageStartedAt={inc.triageStartedAt} /></Space></Descriptions.Item>
+                {inc.triageStartedAt && <Descriptions.Item label={t('triageRunning')}>{t('triageStartedDetail', { at: fmtTime(inc.triageStartedAt) })}</Descriptions.Item>}
                 {inc.triagedAt && <Descriptions.Item label={t('lastTriaged')}>{fmtTime(inc.triagedAt)} · {t('triageRounds', { n: inc.triageCount })}</Descriptions.Item>}
-                {!!inc.triageFailures && <Descriptions.Item label={t('triageFailed')}>{t('triageFailedDetail', { n: inc.triageFailures, at: fmtTime(inc.triageRetryAt) })}</Descriptions.Item>}
+                {!inc.triageStartedAt && !!inc.triageFailures && <Descriptions.Item label={t('triageFailed')}>{t('triageFailedDetail', { n: inc.triageFailures, at: fmtTime(inc.triageRetryAt) })}</Descriptions.Item>}
                 <Descriptions.Item label={t('thSeverity')}><SeverityTag value={inc.severity} /></Descriptions.Item>
                 <Descriptions.Item label={t('thCreatedAt')}>{fmtTime(inc.createdAt)}</Descriptions.Item>
                 <Descriptions.Item label={t('thAlerts')}>{inc.alerts.length}</Descriptions.Item>

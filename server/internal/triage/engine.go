@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"openxdr/server/ent/asset"
@@ -13,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
@@ -104,6 +106,10 @@ func (e *Engine) batch(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			// 执行心跳失效或被接管时不修改新执行的失败计数。
+			if errors.Is(err, context.Canceled) {
+				continue
+			}
 			// 一个失败（多半是大上下文超时）只退避它自己，后面的照常研判
 			slog.Error("incident 研判失败，退避后缩小上下文重试", "id", inc.ID, "failures", inc.TriageFailures+1, "err", err)
 			if err := e.backoff(ctx, inc, time.Now()); err != nil {
@@ -164,7 +170,16 @@ func (e *Engine) backoff(ctx context.Context, inc *ent.Incident, now time.Time) 
 
 // triageOne 研判一个 incident 并落库。取上下文的时刻记为 triaged_at：研判期间并进来的证据晚于它，仍算待重研判
 func (e *Engine) triageOne(ctx context.Context, inc *ent.Incident) error {
-	snapshot := time.Now().Add(-clockSkew)
+	started := time.Now().UTC().Truncate(time.Microsecond)
+	n, err := e.DB.Incident.Update().Where(incident.IDEQ(inc.ID), incident.StatusIn("open", "triaged"),
+		incident.Or(incident.TriageStartedAtIsNil(), incident.TriageHeartbeatAtIsNil(), incident.TriageHeartbeatAtLTE(started.Add(-RunningTTL)))).
+		SetTriageStartedAt(started).SetTriageHeartbeatAt(started).Save(ctx)
+	if err != nil || n == 0 {
+		return err
+	}
+	ctx, finish := e.keepRunning(ctx, inc.ID, started)
+	defer finish()
+	snapshot := started.Add(-clockSkew)
 	context_, err := e.buildContext(ctx, inc)
 	if err != nil {
 		return err
@@ -181,7 +196,7 @@ func (e *Engine) triageOne(ctx context.Context, inc *ent.Incident) error {
 		return err
 	}
 	defer tx.Rollback()
-	upd := tx.Incident.UpdateOneID(inc.ID).SetAiVerdict(verdict).
+	upd := tx.Incident.UpdateOneID(inc.ID).Where(incident.TriageStartedAtEQ(started)).SetAiVerdict(verdict).
 		SetTriagedAt(snapshot).AddTriageCount(1).SetTriageFailures(0).ClearTriageRetryAt()
 	// 重研判从良性翻成可疑或恶意：之前按良性静默过的要重新决定推送，升级信号不能被旧结论吞掉
 	if verdictLabel(inc.AiVerdict) == "benign" && verdictLabel(verdict) != "benign" {
@@ -229,7 +244,7 @@ func (e *Engine) toolLoop(ctx context.Context, msgs []Message, nudge string) (st
 			return "", err
 		}
 		if len(msg.ToolCalls) == 0 {
-			return msg.Content, nil
+			return e.finishVerdict(ctx, msgs, msg)
 		}
 		msgs = append(msgs, msg)
 		for _, tc := range msg.ToolCalls {
@@ -244,7 +259,54 @@ func (e *Engine) toolLoop(ctx context.Context, msgs []Message, nudge string) (st
 	if err != nil {
 		return "", err
 	}
-	return msg.Content, nil
+	return e.finishVerdict(ctx, msgs, msg)
+}
+
+// finishVerdict 只修正一次输出格式，不重新执行调查工具；失败交给队列退避重试。
+func (e *Engine) finishVerdict(ctx context.Context, msgs []Message, msg Message) (string, error) {
+	if err := validateVerdict(msg); err == nil {
+		return msg.Content, nil
+	}
+	msgs = append(msgs, msg, Message{Role: "user", Content: `上一条结论格式无效或输出不完整。基于已有调查证据重新输出一个完整、简洁的 JSON 对象，不调用工具，不续写片段，不增加未经证实的事实。
+字段：verdict（malicious/suspicious/benign）、confidence（0 到 100 的数字）、summary（非空字符串）、kill_chain（字符串数组）、actions（字符串数组）。字符串中的反斜杠、引号和换行必须按 JSON 转义；命令无需逐字抄录，可用中文概述。只输出 JSON。`})
+	corrected, err := e.LLM.Chat(ctx, msgs, nil)
+	if err != nil {
+		return "", fmt.Errorf("研判格式修正失败: %w", err)
+	}
+	if err := validateVerdict(corrected); err != nil {
+		return "", fmt.Errorf("研判结论无效，等待重试: %w", err)
+	}
+	return corrected.Content, nil
+}
+
+func validateVerdict(msg Message) error {
+	if msg.FinishReason != "" && msg.FinishReason != "stop" {
+		return fmt.Errorf("模型未完整结束输出（%s）", msg.FinishReason)
+	}
+	if len(msg.ToolCalls) != 0 {
+		return errors.New("最终结论仍包含工具调用")
+	}
+	start, end := strings.Index(msg.Content, "{"), strings.LastIndex(msg.Content, "}")
+	if start < 0 || end <= start {
+		return errors.New("缺少 JSON 结论对象")
+	}
+	var v struct {
+		Verdict    string          `json:"verdict"`
+		Confidence *float64        `json:"confidence"`
+		Summary    string          `json:"summary"`
+		KillChain  []string        `json:"kill_chain"`
+		Actions    []string        `json:"actions"`
+		Error      json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(msg.Content[start:end+1]), &v); err != nil {
+		return fmt.Errorf("JSON 格式错误: %w", err)
+	}
+	if !slices.Contains([]string{"malicious", "suspicious", "benign"}, v.Verdict) ||
+		v.Confidence == nil || *v.Confidence < 0 || *v.Confidence > 100 ||
+		strings.TrimSpace(v.Summary) == "" || len(v.Error) > 0 {
+		return errors.New("结论字段缺失或取值无效")
+	}
+	return nil
 }
 
 func (e *Engine) investigate(ctx context.Context, incidentContext string) (string, error) {
@@ -279,6 +341,9 @@ func parseVerdict(incidentID, answer string) json.RawMessage {
 	slog.Warn("研判输出不是合法 JSON，原样存档", "incident", incidentID)
 	if len(answer) > 2000 {
 		answer = answer[:2000]
+		for !utf8.ValidString(answer) {
+			answer = answer[:len(answer)-1]
+		}
 	}
 	fallback, _ := json.Marshal(map[string]string{"error": "unparseable", "raw": answer})
 	return fallback

@@ -91,7 +91,7 @@ func TestInvestigateWithoutTools(t *testing.T) {
 	ctx, client := testdb.New(t)
 
 	llmSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"verdict\":\"benign\"}"}}]}`))
+		w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"verdict\":\"benign\",\"confidence\":80,\"summary\":\"例行维护\"}"}}]}`))
 	}))
 	t.Cleanup(llmSrv.Close)
 

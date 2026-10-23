@@ -200,7 +200,7 @@ export function AssetDetailPage() {
                       columns={[
                         { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
                         { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: (v, r) => <Link to={`/incidents/${r.id}`} style={{ overflowWrap: 'anywhere' }}>{v ?? r.id}</Link> },
-                        { title: t('thStatus'), dataIndex: 'status', width: 100, render: (v, r) => <Space size={4} wrap><IncidentStatusTag value={v} retriage={r.retriage} /></Space> },
+                        { title: t('thStatus'), dataIndex: 'status', width: 100, render: (v, r) => <Space size={4} wrap><IncidentStatusTag value={v} retriage={r.retriage} triageStartedAt={r.triageStartedAt} /></Space> },
                         { responsive: WIDE_ONLY, title: t('thCreatedAt'), dataIndex: 'createdAt', width: 170, render: fmtTime },
                       ]} />
                   ),

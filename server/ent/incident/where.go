@@ -106,6 +106,16 @@ func TriagedAt(v time.Time) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldTriagedAt, v))
 }
 
+// TriageStartedAt applies equality check predicate on the "triage_started_at" field. It's identical to TriageStartedAtEQ.
+func TriageStartedAt(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageStartedAt, v))
+}
+
+// TriageHeartbeatAt applies equality check predicate on the "triage_heartbeat_at" field. It's identical to TriageHeartbeatAtEQ.
+func TriageHeartbeatAt(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageHeartbeatAt, v))
+}
+
 // TriageCount applies equality check predicate on the "triage_count" field. It's identical to TriageCountEQ.
 func TriageCount(v int) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldTriageCount, v))
@@ -734,6 +744,106 @@ func TriagedAtIsNil() predicate.Incident {
 // TriagedAtNotNil applies the NotNil predicate on the "triaged_at" field.
 func TriagedAtNotNil() predicate.Incident {
 	return predicate.Incident(sql.FieldNotNull(FieldTriagedAt))
+}
+
+// TriageStartedAtEQ applies the EQ predicate on the "triage_started_at" field.
+func TriageStartedAtEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageStartedAt, v))
+}
+
+// TriageStartedAtNEQ applies the NEQ predicate on the "triage_started_at" field.
+func TriageStartedAtNEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldTriageStartedAt, v))
+}
+
+// TriageStartedAtIn applies the In predicate on the "triage_started_at" field.
+func TriageStartedAtIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldTriageStartedAt, vs...))
+}
+
+// TriageStartedAtNotIn applies the NotIn predicate on the "triage_started_at" field.
+func TriageStartedAtNotIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldTriageStartedAt, vs...))
+}
+
+// TriageStartedAtGT applies the GT predicate on the "triage_started_at" field.
+func TriageStartedAtGT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldTriageStartedAt, v))
+}
+
+// TriageStartedAtGTE applies the GTE predicate on the "triage_started_at" field.
+func TriageStartedAtGTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldTriageStartedAt, v))
+}
+
+// TriageStartedAtLT applies the LT predicate on the "triage_started_at" field.
+func TriageStartedAtLT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldTriageStartedAt, v))
+}
+
+// TriageStartedAtLTE applies the LTE predicate on the "triage_started_at" field.
+func TriageStartedAtLTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldTriageStartedAt, v))
+}
+
+// TriageStartedAtIsNil applies the IsNil predicate on the "triage_started_at" field.
+func TriageStartedAtIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldTriageStartedAt))
+}
+
+// TriageStartedAtNotNil applies the NotNil predicate on the "triage_started_at" field.
+func TriageStartedAtNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldTriageStartedAt))
+}
+
+// TriageHeartbeatAtEQ applies the EQ predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldEQ(FieldTriageHeartbeatAt, v))
+}
+
+// TriageHeartbeatAtNEQ applies the NEQ predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtNEQ(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNEQ(FieldTriageHeartbeatAt, v))
+}
+
+// TriageHeartbeatAtIn applies the In predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldIn(FieldTriageHeartbeatAt, vs...))
+}
+
+// TriageHeartbeatAtNotIn applies the NotIn predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtNotIn(vs ...time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldNotIn(FieldTriageHeartbeatAt, vs...))
+}
+
+// TriageHeartbeatAtGT applies the GT predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtGT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGT(FieldTriageHeartbeatAt, v))
+}
+
+// TriageHeartbeatAtGTE applies the GTE predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtGTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldGTE(FieldTriageHeartbeatAt, v))
+}
+
+// TriageHeartbeatAtLT applies the LT predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtLT(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLT(FieldTriageHeartbeatAt, v))
+}
+
+// TriageHeartbeatAtLTE applies the LTE predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtLTE(v time.Time) predicate.Incident {
+	return predicate.Incident(sql.FieldLTE(FieldTriageHeartbeatAt, v))
+}
+
+// TriageHeartbeatAtIsNil applies the IsNil predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtIsNil() predicate.Incident {
+	return predicate.Incident(sql.FieldIsNull(FieldTriageHeartbeatAt))
+}
+
+// TriageHeartbeatAtNotNil applies the NotNil predicate on the "triage_heartbeat_at" field.
+func TriageHeartbeatAtNotNil() predicate.Incident {
+	return predicate.Incident(sql.FieldNotNull(FieldTriageHeartbeatAt))
 }
 
 // TriageCountEQ applies the EQ predicate on the "triage_count" field.

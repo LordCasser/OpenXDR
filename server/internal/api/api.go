@@ -29,6 +29,7 @@ import (
 	"openxdr/server/internal/review"
 	"openxdr/server/internal/sigma"
 	"openxdr/server/internal/suppress"
+	"openxdr/server/internal/triage"
 )
 
 // resolutionOf 结案说明与来源。人写了就用人的（原样是 AI 结案建议的，记为 ai_proposal）；
@@ -82,9 +83,10 @@ type incidentSummary struct {
 	// ClosureProposal AI 的结案建议，人采纳或忽略
 	ClosureProposal *schema.ClosureProposal `json:"closureProposal"`
 	// 研判节奏：上次研判时刻与累计次数；Retriage 为 pending（有新证据，冷却到期重研判）或 urgent（升级类，立即重研判），空为无
-	TriagedAt   *time.Time `json:"triagedAt"`
-	TriageCount int        `json:"triageCount"`
-	Retriage    string     `json:"retriage,omitempty"`
+	TriagedAt       *time.Time `json:"triagedAt"`
+	TriageCount     int        `json:"triageCount"`
+	TriageStartedAt *time.Time `json:"triageStartedAt,omitempty"`
+	Retriage        string     `json:"retriage,omitempty"`
 	// 研判连续失败次数与下次重试时刻
 	TriageFailures int        `json:"triageFailures,omitempty"`
 	TriageRetryAt  *time.Time `json:"triageRetryAt,omitempty"`
@@ -485,6 +487,7 @@ func summarize(inc *ent.Incident, alertCount int, severity int16) incidentSummar
 		ClosureProposal: inc.ClosureProposal,
 		TriagedAt:       inc.TriagedAt, TriageCount: inc.TriageCount, Retriage: retriageOf(inc),
 		TriageFailures: inc.TriageFailures, TriageRetryAt: inc.TriageRetryAt,
+		TriageStartedAt: triage.RunningStartedAt(inc, time.Now()),
 	}
 }
 
