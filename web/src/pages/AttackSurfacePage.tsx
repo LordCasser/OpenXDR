@@ -14,7 +14,7 @@ import { SurfaceGraph } from '../components/SurfaceGraph'
 import { CritTag, ExposureTag, ZoneTag, useZoneColor } from '../components/AssetProfile'
 import { LoadError } from '../components/LoadError'
 import { ScoreTag } from '../components/AssetVulns'
-import { Page } from '../components/Page'
+import { Page, TableCard } from '../components/Page'
 import { errText, fmtTime } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
@@ -68,7 +68,7 @@ export function AttackSurfacePage() {
           {!!s?.summary.noInventory.length && (
             <Alert type="info" showIcon title={t('surfNoInventory', { n: s.summary.noInventory.length, hosts: s.summary.noInventory.slice(0, 8).join('、') })} />
           )}
-          <Card title={t('exposuresTitle')} styles={{ body: { padding: 0 } }}
+          <TableCard title={t('exposuresTitle')}
             extra={<Space wrap>
               <Typography.Text className="card-hint" type="secondary" style={{ fontSize: 12 }}>{view === 'graph' ? t('surfaceGraphHint') : t('portGuessHint')}</Typography.Text>
               {view === 'graph' && <Space size={6}><Switch size="small" checked={hideLow} onChange={setHideLow} aria-label={t('hideLowRisk')} />{t('hideLowRisk')}</Space>}
@@ -107,8 +107,8 @@ export function AttackSurfacePage() {
                 ) },
                 { title: t('actions'), width: 90, fixed: 'right', render: (_, e) => <Button type="link" size="small" onClick={() => setPicked(e)}>{t('serviceDetail')}</Button> },
               ]} />}
-          </Card>
-          <Card title={t('blindTitle')} styles={{ body: { padding: 0 } }}>
+          </TableCard>
+          <TableCard title={t('blindTitle')}>
             <Table<BlindSpot> rowKey="ip" loading={query.isPending} dataSource={s?.blind ?? []} pagination={{ pageSize: 10, hideOnSinglePage: true }}
               scroll={{ x: 900 }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               columns={[
@@ -120,7 +120,7 @@ export function AttackSurfacePage() {
                 { title: t('thConnCount'), dataIndex: 'count', width: 110, align: 'right' },
                 { title: t('thLastActive'), dataIndex: 'lastSeen', width: 170, render: fmtTime },
               ]} />
-          </Card>
+          </TableCard>
         </Flex>
       )}
       {group && <ZonesDrawer open={zonesOpen} groupId={group.id} canEdit={isGroupAdmin} onClose={() => setZonesOpen(false)} />}

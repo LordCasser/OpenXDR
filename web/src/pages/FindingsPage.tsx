@@ -1,3 +1,4 @@
+import { TableActions } from '../components/TableActions'
 import { RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd'
@@ -7,7 +8,7 @@ import { fetchFindings, setFindingStatus, type FindingRow } from '../api'
 import { useCanAct, useSession } from '../app/session'
 import { useCanChat, useHandoff } from '../components/Handoff'
 import { HostLink } from '../components/HostLink'
-import { FilterCard, Page } from '../components/Page'
+import { FilterCard, Page, useWideTable } from '../components/Page'
 import { Ago, EmptyHint, Refreshed } from '../components/Ago'
 import { LoadError } from '../components/LoadError'
 import { ResolveModal } from '../components/ResolveModal'
@@ -29,6 +30,7 @@ const STATUS: Record<FindingRow['status'], { key: MsgKey; color: string }> = {
 
 // 运维待办：巡检 AI 登记、下一轮逐条复查；人标已处理或忽略，忽略原因会告诉 AI
 export function FindingsPage() {
+  const wideTable = useWideTable()
   const { t } = useI18n()
   const { message } = App.useApp()
   const client = useQueryClient()
@@ -95,7 +97,8 @@ export function FindingsPage() {
         }
       >
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<FindingRow>
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1400 }}
+          tableLayout="fixed"
           rowKey="id"
           rowSelection={{ selectedRowKeys: selected, onChange: keys => setSelected(keys as string[]), getCheckboxProps: f => ({ disabled: f.status !== 'open' || !canChat(f.groupId) }) }}
           loading={isPending}
@@ -105,7 +108,7 @@ export function FindingsPage() {
           expandable={{ expandedRowRender: f => <pre className="tooltip-pre">{f.detail || '-'}</pre> }}
           columns={[
             { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: (v: FindingRow['severity']) => <Tag color={SEVERITY[v]?.color}>{t(SEVERITY[v]?.key ?? 'sev1')}</Tag> },
-            { title: t('thTitle'), dataIndex: 'title', render: (v, f) => <Space orientation="vertical" size={0}><span>{v}</span><Typography.Text type="secondary" className="mono" style={{ fontSize: 12 }}>{f.key}</Typography.Text></Space> },
+            { title: t('thTitle'), dataIndex: 'title', render: (v, f) => <Space orientation="vertical" size={0} style={{ width: '100%', overflowWrap: 'anywhere' }}><span>{v}</span><Typography.Text type="secondary" className="mono" style={{ fontSize: 12 }}>{f.key}</Typography.Text></Space> },
             { title: t('thHostname'), dataIndex: 'assetId', width: 140, render: (v, f) => <HostLink id={v} fallback={f.hostname} /> },
             { title: t('group'), dataIndex: 'groupId', width: 120, render: v => groups.find(g => g.id === v)?.name ?? v.slice(0, 8) },
             { title: t('thFirstSeen'), dataIndex: 'firstSeen', width: 110, render: v => <Ago iso={v} /> },
@@ -119,15 +122,15 @@ export function FindingsPage() {
               ),
             },
             {
-              title: '', width: 200,
+              title: t('actions'), width: 300, fixed: wideTable ? 'right' : undefined,
               render: (_, f) => (
-                <Space size={4}>
+                <TableActions>
                   {f.sessionId && <Link to={`/chat/${f.sessionId}`}>{t('openSession')}</Link>}
                   {canChat(f.groupId) && f.status === 'open' && <Button size="small" icon={<RobotOutlined />} onClick={() => handTo([f])}>AI</Button>}
                   {canAct(f.groupId) && f.status === 'open' && <Button size="small" onClick={() => setActing({ row: f, next: 'resolved' })}>{t('markResolved')}</Button>}
                   {canAct(f.groupId) && f.status === 'open' && <Button size="small" onClick={() => setActing({ row: f, next: 'ignored' })}>{t('markIgnored')}</Button>}
                   {canAct(f.groupId) && f.status !== 'open' && <Button size="small" onClick={() => change(f, 'open')}>{t('reopen')}</Button>}
-                </Space>
+                </TableActions>
               ),
             },
           ]}

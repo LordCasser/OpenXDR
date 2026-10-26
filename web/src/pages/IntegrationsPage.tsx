@@ -1,3 +1,4 @@
+import { TableActions } from '../components/TableActions'
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
@@ -51,7 +52,7 @@ export function IntegrationsPage() {
       { title: t('integrationEnabled'), render: (_, row) => <Tag>{t(row.enabled ? 'integrationOn' : 'integrationOff')}</Tag> },
       { title: t('group'), render: (_, row) => row.groupIds.map(id => groups.find(g => g.id === id)?.name ?? id).join(', ') || '—' },
       { title: t('integrationScopes'), render: (_, row) => row.scopes.map(s => <Tag key={s}>{s}</Tag>) },
-      { title: t('integrationActions'), render: (_, row) => <Space><Button onClick={() => edit(row)}>{t('integrationEdit')}</Button><Button onClick={() => openTokens(row)}>{t('integrationTokens')}</Button><Button onClick={() => setSubscriptionsFor(row)}>{t('integrationSubscriptions')}</Button></Space> },
+      { title: t('integrationActions'), render: (_, row) => <TableActions><Button onClick={() => edit(row)}>{t('integrationEdit')}</Button><Button onClick={() => openTokens(row)}>{t('integrationTokens')}</Button><Button onClick={() => setSubscriptionsFor(row)}>{t('integrationSubscriptions')}</Button></TableActions> },
     ]} />}
     <Modal title={t('navIntegrations')} open={!!editing} onCancel={() => setEditing(null)} confirmLoading={busy} okText={t('save')} onOk={() => form.submit()}>
       <Form form={form} layout="vertical" onFinish={body => run(async () => { await saveIntegration(body, editing && editing !== 'new' ? editing.id : undefined); setEditing(null) })}>

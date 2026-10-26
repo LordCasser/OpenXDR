@@ -1,6 +1,6 @@
 import { ClearOutlined, HomeOutlined } from '@ant-design/icons'
 import { Breadcrumb, Button, Card, Flex, Grid, Typography } from 'antd'
-import type { Breakpoint } from 'antd'
+import type { Breakpoint, CardProps } from 'antd'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { crumbsOf } from '../app/nav'
@@ -45,18 +45,29 @@ export const useWideTable = () => !!Grid.useBreakpoint().md
 // 长列表的表头吸在顶栏下面（顶栏高 56），往下翻也知道每列是什么
 export const STICKY_HEADER = { offsetHeader: 56 }
 
+// 表格卡片统一保留边缘与底部留白；不裁剪容器，避免破坏吸顶表头和焦点轮廓。
+export function TableCard({ children, toolbar, className, ...props }: Omit<CardProps, 'styles'> & { toolbar?: ReactNode }) {
+  return (
+    <Card {...props} className={['table-card', className].filter(Boolean).join(' ')} styles={{ body: { padding: 0 } }}>
+      {toolbar}
+      <div className="table-card-content">{children}</div>
+    </Card>
+  )
+}
+
 // 列表卡片：筛选条单独一行在表格上方，右侧放计数或次要操作
 export function FilterCard({ filters, extra, onReset, children }: { filters: ReactNode; extra?: ReactNode; onReset?: () => void; children: ReactNode }) {
   const { t } = useI18n()
   return (
-    <Card styles={{ body: { padding: 0 } }}>
+    <TableCard toolbar={
       <Flex justify="space-between" align="center" gap={12} wrap className="filter-bar">
         <Flex className="filter-controls" gap={8} wrap align="center">{filters}
           {onReset && <Button type="text" icon={<ClearOutlined aria-hidden />} onClick={onReset}>{t('resetFilters')}</Button>}
         </Flex>
         {extra}
       </Flex>
+    }>
       {children}
-    </Card>
+    </TableCard>
   )
 }

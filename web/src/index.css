@@ -154,9 +154,8 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 .palette-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; margin: 0 6px; border-radius: 6px; }
 .palette-foot { display: flex; gap: 18px; padding: 8px 16px; font-size: 12px; }
 
-/* 列表行内操作：悬停整行时才完全显出，平时不抢视线 */
-.row-actions { opacity: .55; transition: opacity .15s; }
-.ant-table-row:hover .row-actions { opacity: 1; }
+/* 行内操作始终清晰可见，兼顾触屏与键盘使用。 */
+.row-actions { opacity: 1; }
 
 /* 研判结论：顶部结论条 + 处置建议编号清单 */
 .verdict-band { padding: 18px 24px; border-left: 4px solid; border-radius: 8px 8px 0 0; }
@@ -343,4 +342,28 @@ a.queue-row:hover { background: var(--ant-color-fill-quaternary); color: inherit
 @media (max-width: 700px) {
   .ant-card-head-wrapper { flex-wrap: wrap; row-gap: 4px; padding: 8px 0; }
   .card-hint { display: none; }
+}
+
+/* 数据页共用布局：沿用主题色和圆角，只统一间距与操作反馈。 */
+.table-card-content { padding: 4px 16px 16px; min-width: 0; }
+.table-card-content > .ant-table-wrapper { min-width: 0; }
+.table-card-content .ant-table-pagination { margin-bottom: 0; }
+.table-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.table-actions > * { flex: 0 0 auto; white-space: nowrap; }
+.table-actions a { display: inline-flex; align-items: center; min-height: 24px; }
+.page-head > div { min-width: 0; }
+.page-title, .page-subtitle { overflow-wrap: anywhere; }
+.page-subtitle { line-height: 1.6; }
+.page .ant-card-head-wrapper { flex-wrap: wrap; gap: 8px 16px; padding-block: 12px; }
+.page .ant-card-head-title { white-space: normal; overflow-wrap: anywhere; }
+.page .ant-card-extra { max-width: 100%; }
+.page .ant-card-extra > .ant-space { flex-wrap: wrap; }
+.page .ant-card[role="button"]:focus-visible, .table-actions a:focus-visible {
+  outline: 2px solid var(--ant-color-primary); outline-offset: 3px;
+}
+@media (max-width: 767px) {
+  .table-card-content { padding-inline: 8px; padding-bottom: 12px; }
+  .filter-bar { padding: 12px; }
+  .page-title { font-size: 24px !important; }
+  .page .ant-card-head { padding-inline: 16px; }
 }

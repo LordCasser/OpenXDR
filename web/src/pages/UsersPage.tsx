@@ -1,11 +1,12 @@
+import { TableActions } from '../components/TableActions'
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd'
+import { App, Button, Form, Input, Modal, Popconfirm, Select, Table, Tag } from 'antd'
 import { useRef, useState } from 'react'
 import { createUser, deleteUser, fetchUsers, resetUserPassword, type UserRow } from '../api'
 import { useSession } from '../app/session'
 import { LoadError } from '../components/LoadError'
-import { Page } from '../components/Page'
+import { Page, TableCard } from '../components/Page'
 import { ROLE_KEY, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
@@ -49,7 +50,7 @@ export function UsersPage() {
       subtitle={t('usersSubtitle')}
       extra={<Button type="primary" icon={<PlusOutlined />} disabled={busy} onClick={() => { createForm.resetFields(); setCreating(true) }}>{t('newUser')}</Button>}
     >
-      <Card styles={{ body: { padding: 0 } }}>
+      <TableCard>
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<UserRow>
           scroll={{ x: 680 }}
           rowKey="id"
@@ -63,19 +64,19 @@ export function UsersPage() {
             {
               title: t('actions'), width: 200,
               render: (_, u) => (
-                <Space>
+                <TableActions>
                   <Button type="link" size="small" disabled={busy} onClick={() => { resetForm.resetFields(); setResetting(u) }}>{t('resetPassword')}</Button>
                   {u.username !== me.username && (
                     <Popconfirm title={t('confirmDeleteUser', { name: u.username })} onConfirm={() => run(() => deleteUser(u.id))}>
                       <Button type="link" danger size="small" disabled={busy}>{t('del')}</Button>
                     </Popconfirm>
                   )}
-                </Space>
+                </TableActions>
               ),
             },
           ]}
         />}
-      </Card>
+      </TableCard>
 
       <Modal open={creating} title={t('newUser')} onCancel={() => { if (!busy) { createForm.resetFields(); setCreating(false) } }} confirmLoading={busy} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => createForm.submit()} destroyOnHidden>
         <Form disabled={busy} form={createForm} layout="vertical" initialValues={{ role: 'analyst' }}

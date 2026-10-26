@@ -11,7 +11,7 @@ import { useTheme } from '../app/theme'
 import { Ago } from '../components/Ago'
 import { GettingStarted } from '../components/GettingStarted'
 import { LoadError } from '../components/LoadError'
-import { Page, WIDE_ONLY, useWideTable } from '../components/Page'
+import { Page, TableCard, WIDE_ONLY, useWideTable } from '../components/Page'
 import { saveQueue } from '../components/incidentQueue'
 import { useRowLink } from '../components/rowLink'
 import { BarList, ColumnChart, SEVERITY_COLOR, compact, useSeriesColor } from '../components/charts'
@@ -142,6 +142,7 @@ export function OverviewPage() {
   const isGroupAdmin = group?.role === 'admin'
   const approvals = useQuery({ queryKey: ['approvals', group?.id], queryFn: () => fetchApprovals(group!.id), enabled: !!group && isGroupAdmin, refetchInterval: 10_000 })
   const s = stats.data
+  const topRules = s?.topRules ?? []
   const offline = (assets.data ?? []).filter(a => ['silent', 'stale'].includes(hostState(a)))
   const sevItems = [5, 4, 3, 2, 1].map(n => ({
     key: String(n),
@@ -161,7 +162,7 @@ export function OverviewPage() {
           <Funnel events={s?.events24h ?? 0} alerts={s?.alerts24h ?? 0} incidents={s?.reviewIncidents ?? 0}
             foot={[
               ...(s && s.openIncidents > s.reviewIncidents ? [t('footBenignPending', { n: s.openIncidents - s.reviewIncidents })] : []),
-              t('footRules', { n: s?.topRules.length ?? 0 }),
+              t('footRules', { n: topRules.length }),
               t('footCritical', { n: (s?.alertsBySeverity?.[5] ?? 0) + (s?.alertsBySeverity?.[4] ?? 0) }),
               t('footHosts', { up: s?.assetsOnline ?? 0, total: s?.assetsTotal ?? 0 }),
             ].map(x => <Typography.Text key={x} type="secondary">{x}</Typography.Text>)} />
@@ -201,7 +202,7 @@ export function OverviewPage() {
         </Col>
 
         <Col xs={24} xl={16}>
-          <Card title={t('reviewIncidents')} extra={<Link to="/incidents">{t('viewAll')}</Link>} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
+          <TableCard title={t('reviewIncidents')} extra={<Link to="/incidents">{t('viewAll')}</Link>} style={{ height: '100%' }}>
             {incidents.isError ? <LoadError error={incidents.error} onRetry={() => incidents.refetch()} /> : (
               <Table<IncidentSummary>
                 size="small"
@@ -221,7 +222,7 @@ export function OverviewPage() {
                 ]}
               />
             )}
-          </Card>
+          </TableCard>
         </Col>
         <Col xs={24} xl={8}>
           <AiOps />
@@ -229,8 +230,8 @@ export function OverviewPage() {
 
         <Col xs={24} xl={16}>
           <Card title={t('topRules')} style={{ height: '100%' }}>
-            {s?.topRules.length ? (
-              <BarList items={s.topRules.map(r => ({ key: r.ruleId, label: <Typography.Text ellipsis title={r.ruleAuthor ? `${r.ruleId} · ${t('ruleBy', { author: r.ruleAuthor })}` : r.ruleId}>{r.ruleTitle ?? r.ruleId}</Typography.Text>, value: r.count, color: series, to: `/rules?q=${encodeURIComponent(r.ruleId)}` }))} />
+            {topRules.length ? (
+              <BarList items={topRules.map(r => ({ key: r.ruleId, label: <Typography.Text ellipsis title={r.ruleAuthor ? `${r.ruleId} · ${t('ruleBy', { author: r.ruleAuthor })}` : r.ruleId}>{r.ruleTitle ?? r.ruleId}</Typography.Text>, value: r.count, color: series, to: `/rules?q=${encodeURIComponent(r.ruleId)}` }))} />
             ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noAlerts24h')} />}
           </Card>
         </Col>

@@ -5,7 +5,7 @@ import {
   Alert, App, Button, Card, Col, Descriptions, Empty, Form, Result, Row, Select, Skeleton, Space, Switch, Table, Tabs, Tag, Tooltip, Typography,
   theme,
 } from 'antd'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
   createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchFindings, fetchIncidents, saveAgentConfig, searchEvents,
@@ -36,7 +36,10 @@ const INCIDENT_PAGE = 10
 function Stat({ label, value, tone, onClick }: { label: string; value: ReactNode; tone?: string; onClick?: () => void }) {
   const { token } = theme.useToken()
   return (
-    <Card size="small" hoverable={!!onClick} onClick={onClick} styles={{ body: { padding: '14px 18px' } }}>
+    <Card size="small" hoverable={!!onClick} onClick={onClick}
+      role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
+      styles={{ body: { padding: '14px 18px' } }}>
       <Typography.Text type="secondary" style={{ fontSize: 13 }}>{label}</Typography.Text>
       <div style={{ fontSize: 24, fontWeight: 600, marginTop: 2, color: tone ?? token.colorText, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
     </Card>
@@ -114,6 +117,14 @@ export function AssetDetailPage() {
   const [starting, setStarting] = useState(false)
   // 从攻击面等处带 ?tab= 进来时直接打开对应标签
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') ?? 'incidents')
+  const detailsRef = useRef<HTMLDivElement>(null)
+  const openTab = (key: string) => {
+    setTab(key)
+    requestAnimationFrame(() => {
+      detailsRef.current?.focus({ preventScroll: true })
+      detailsRef.current?.scrollIntoView({ block: 'start' })
+    })
+  }
   const [verifying, setVerifying] = useState<CommandRow | null>(null)
   const [incPage, setIncPage] = useState(1)
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 15000 })
@@ -170,13 +181,13 @@ export function AssetDetailPage() {
       {verifying?.assetId === asset.id && <CommandVerificationDrawer key={`${verifying.id}:${asset.groupId}`} command={verifying} canEdit={canAct} onClose={() => setVerifying(null)} />}
       <Row gutter={[16, 16]}>
         <Col xs={12} xl={6}>
-          <Stat label={t('unresolvedIncidents')} value={unresolved.data?.total ?? '-'} tone={unresolved.data?.total ? token.colorError : undefined} onClick={() => setTab('incidents')} />
+          <Stat label={t('unresolvedIncidents')} value={unresolved.data?.total ?? '-'} tone={unresolved.data?.total ? token.colorError : undefined} onClick={() => openTab('incidents')} />
         </Col>
         <Col xs={12} xl={6}>
-          <Stat label={t('navFindings')} value={findings.data ? openFindings.length : '-'} tone={openFindings.length ? token.colorWarning : undefined} onClick={() => setTab('findings')} />
+          <Stat label={t('navFindings')} value={findings.data ? openFindings.length : '-'} tone={openFindings.length ? token.colorWarning : undefined} onClick={() => openTab('findings')} />
         </Col>
         <Col xs={12} xl={6}>
-          <Stat label={t('tabEvents')} value={eventCount} onClick={() => setTab('events')} />
+          <Stat label={t('tabEvents')} value={eventCount} onClick={() => openTab('events')} />
         </Col>
         <Col xs={12} xl={6}>
           <Stat label={t('thLastSeen')} value={<span style={{ fontSize: 17 }}>{asset.agentId || asset.sensorSeen ? fmtTime(hostSeen(asset)).slice(5) : '—'}</span>} />
@@ -185,7 +196,7 @@ export function AssetDetailPage() {
         {(asset.agentId || !asset.sensorSeen) && <Col span={24}><CollectorHealth asset={asset} /></Col>}
         {asset.sensorSeen && <Col span={24}><SensorHealth asset={asset} /></Col>}
         <Col xs={24} xl={17}>
-          <Card styles={{ body: { paddingTop: 4 } }}>
+          <Card ref={detailsRef} tabIndex={-1} style={{ scrollMarginTop: 72 }} styles={{ body: { paddingTop: 4 } }}>
             <Tabs
               activeKey={tab}
               onChange={setTab}

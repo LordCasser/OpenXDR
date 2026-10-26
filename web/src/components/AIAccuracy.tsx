@@ -1,3 +1,4 @@
+import { TableCard } from './Page'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, Card, Col, Empty, Flex, Row, Segmented, Skeleton, Table, Typography } from 'antd'
 import { useState } from 'react'
@@ -39,7 +40,7 @@ export function AIAccuracy() {
     { title: t('accAuto'), dataIndex: 'auto', width: 90, align: 'right' as const },
   ]
   const cases = (rows: AccuracyCase[] | null | undefined, empty: string) => (
-    <Table<AccuracyCase> size="small" rowKey="id" pagination={false} dataSource={rows ?? []}
+    <Table<AccuracyCase> size="small" scroll={{ x: 640 }} rowKey="id" pagination={false} dataSource={rows ?? []}
       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} /> }}
       columns={[
         { title: t('thTitle'), dataIndex: 'title', ellipsis: true, render: (v, c) => <Link to={`/incidents/${c.id}`}>{v || c.id}</Link> },
@@ -76,19 +77,19 @@ export function AIAccuracy() {
               </Col>
             ))}
           </Row>
-          <Card title={t('accByModel')} styles={{ body: { padding: 0 } }}>
-            <Table<AccuracyRow> size="small" rowKey="key" pagination={false} dataSource={data.byModel ?? []}
+          <TableCard title={t('accByModel')}>
+            <Table<AccuracyRow> size="small" scroll={{ x: 760 }} rowKey="key" pagination={false} dataSource={data.byModel ?? []}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               columns={columns(t('thModel'), r => (r.key ? <span className="mono">{r.key}</span> : <Typography.Text type="secondary">{t('accNoModel')}</Typography.Text>))} />
-          </Card>
-          <Card title={t('accByRule')} styles={{ body: { padding: 0 } }}>
-            <Table<AccuracyRow> size="small" rowKey="key" pagination={{ pageSize: 10, hideOnSinglePage: true }} dataSource={data.byRule ?? []}
+          </TableCard>
+          <TableCard title={t('accByRule')}>
+            <Table<AccuracyRow> size="small" scroll={{ x: 760 }} rowKey="key" pagination={{ pageSize: 10, hideOnSinglePage: true }} dataSource={data.byRule ?? []}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               columns={columns(t('thRule'), r => r.title || <span className="mono">{r.key}</span>)} />
-          </Card>
+          </TableCard>
           <Row gutter={[16, 16]}>
-            <Col xs={24} xl={12}><Card title={t('accMissed')} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>{cases(data.missed, t('accMissedEmpty'))}</Card></Col>
-            <Col xs={24} xl={12}><Card title={t('accFalseAlarms')} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>{cases(data.falseAlarms, t('accFalseEmpty'))}</Card></Col>
+            <Col xs={24} xl={12}><TableCard title={t('accMissed')} style={{ height: '100%' }}>{cases(data.missed, t('accMissedEmpty'))}</TableCard></Col>
+            <Col xs={24} xl={12}><TableCard title={t('accFalseAlarms')} style={{ height: '100%' }}>{cases(data.falseAlarms, t('accFalseEmpty'))}</TableCard></Col>
           </Row>
         </>
       )}

@@ -1,3 +1,4 @@
+import { TableActions } from './TableActions'
 import { Badge, Button, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
@@ -104,10 +105,10 @@ export function IncidentGroupTable({ groups, loading, emptyText, actable, onReso
             const tooMany = rows.length > BATCH_RESOLVE_MAX
             return (
               <Tooltip title={tooMany ? t('batchTooMany', { n: BATCH_RESOLVE_MAX }) : undefined}>
-                <Space size={0} orientation={wideTable ? 'horizontal' : 'vertical'} className="row-actions" style={{ whiteSpace: 'nowrap' }}>
+                <TableActions className="row-actions">
                   <Button type="link" size="small" disabled={tooMany} onClick={() => onResolve('closed', rows)}>{t('markTrue')}</Button>
                   <Button type="link" size="small" danger disabled={tooMany} onClick={() => onResolve('false_positive', rows)}>{t('markFpShort')}</Button>
-                </Space>
+                </TableActions>
               </Tooltip>
             )
           },

@@ -1,3 +1,4 @@
+import { TableActions } from '../components/TableActions'
 import { RobotOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Checkbox, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd'
@@ -228,11 +229,11 @@ export function IncidentsPage() {
                 responsive: WIDE_ONLY, title: '', width: 230,
                 // 单条处理不用先勾选：直接点，弹窗写结论
                 render: (_: unknown, r: IncidentSummary) => actable(r) && (
-                  <Space size={0} className="row-actions" style={{ whiteSpace: 'nowrap' }}>
+                  <TableActions className="row-actions">
                     {canChat(r.groupId) && <Button type="link" size="small" icon={<RobotOutlined />} onClick={() => handTo([r])}>AI</Button>}
                     <Button type="link" size="small" onClick={() => startResolve('closed', [r])}>{t('markTrue')}</Button>
                     <Button type="link" size="small" danger onClick={() => startResolve('false_positive', [r])}>{t('markFpShort')}</Button>
-                  </Space>
+                  </TableActions>
                 ),
               }] : []),
             ]}

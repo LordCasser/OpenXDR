@@ -1,3 +1,4 @@
+import { TableActions } from '../components/TableActions'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
@@ -72,12 +73,12 @@ export function MemoriesPage() {
             ...(canAct ? [{
               key: 'actions', width: 90,
               render: (_: unknown, r: MemoryRow) => (
-                <Space size={0}>
+                <TableActions>
                   <Tooltip title={t('memoryEditBtn')}><Button type="text" size="small" icon={<EditOutlined />} aria-label={t('memoryEditBtn')} onClick={() => open(r)} /></Tooltip>
                   <Popconfirm title={t('confirmDelete')} onConfirm={() => remove(r)}>
                     <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={t('del')} />
                   </Popconfirm>
-                </Space>
+                </TableActions>
               ),
             }] : []),
           ]}

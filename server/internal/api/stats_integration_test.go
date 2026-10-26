@@ -4,6 +4,9 @@ package api
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"openxdr/server/internal/testdb"
 	"testing"
 )
 
@@ -60,5 +63,28 @@ func TestAPIStats(t *testing.T) {
 	// last_seen 默认为创建时间，刚建的资产在 5 分钟在线窗口内
 	if s.AssetsTotal != 1 || s.AssetsOnline != 1 {
 		t.Errorf("资产计数不对：total=%d online=%d", s.AssetsTotal, s.AssetsOnline)
+	}
+}
+
+// 新安装或当前组没有告警时，列表字段仍应为数组，不能序列化成 null。
+func TestAPIStatsEmpty(t *testing.T) {
+	_, db := testdb.New(t)
+	mux := http.NewServeMux()
+	mapStats(mux, db, loadRules(t))
+	ts := httptest.NewServer(asAdmin(mux))
+	defer ts.Close()
+	resp, body := get(t, ts, "/api/stats")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d: %s", resp.StatusCode, body)
+	}
+	var got statsResponse
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.TopRules == nil || len(got.TopRules) != 0 {
+		t.Fatalf("空规则列表必须是 []: %s", body)
+	}
+	if len(got.AlertTrend) != 24 || got.Events24h != 0 || got.Alerts24h != 0 || got.AssetsTotal != 0 {
+		t.Fatalf("空库统计不正确: %s", body)
 	}
 }

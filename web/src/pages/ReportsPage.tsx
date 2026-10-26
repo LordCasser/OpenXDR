@@ -1,3 +1,4 @@
+import { TableActions } from '../components/TableActions'
 import { ExportOutlined, FilePdfOutlined, FileSearchOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Drawer, Empty, Input, Segmented, Space, Table, Tag, Typography } from 'antd'
@@ -102,10 +103,10 @@ export function ReportsPage() {
             {
               responsive: WIDE_ONLY, title: t('actions'), width: 200,
               render: (_, r) => (
-                <Space>
+                <TableActions>
                   <Button size="small" icon={<ExportOutlined aria-hidden />} onClick={() => html(r)}>HTML</Button>
                   <Button size="small" icon={<FilePdfOutlined aria-hidden />} loading={downloads.has(r.id)} onClick={() => pdf(r)}>PDF</Button>
-                </Space>
+                </TableActions>
               ),
             },
           ]}

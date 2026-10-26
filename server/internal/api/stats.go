@@ -58,6 +58,7 @@ func mapStats(api *http.ServeMux, db *ent.Client, rules ruleTitler) {
 			IncidentsByStatus: map[string]int{},
 			AlertsBySeverity:  map[int16]int{},
 			AlertTrend:        make([]trendBucket, 24),
+			TopRules:          []topRule{},
 		}
 
 		var err error

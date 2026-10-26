@@ -1,3 +1,4 @@
+import { TableCard } from './Page'
 import { useQuery } from '@tanstack/react-query'
 import { Card, Col, Empty, Flex, Row, Segmented, Skeleton, Table, Tag, Typography } from 'antd'
 import { useState } from 'react'
@@ -94,7 +95,7 @@ export function AIUsageOverview() {
                       </div>
                     )} />
                 ) : (
-                  <Table size="small" rowKey="key" pagination={false} scroll={{ y: 260 }}
+                  <Table size="small" rowKey="key" pagination={false} scroll={{ x: 640, y: 260 }}
                     dataSource={daily.filter(d => d.values.some(v => v > 0)).reverse()}
                     columns={[
                       { title: t('thDate'), dataIndex: 'key' },
@@ -110,8 +111,8 @@ export function AIUsageOverview() {
               </Card>
             </Col>
             <Col xs={24} xl={12}>
-              <Card title={t('usageByModel')} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
-                <Table size="small" rowKey="model" pagination={false} dataSource={models}
+              <TableCard title={t('usageByModel')} style={{ height: '100%' }}>
+                <Table size="small" scroll={{ x: 520 }} rowKey="model" pagination={false} dataSource={models}
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
                   columns={[
                     { title: t('thModel'), dataIndex: 'model', ellipsis: true, render: v => <span className="mono">{v || '-'}</span> },
@@ -120,11 +121,11 @@ export function AIUsageOverview() {
                     { title: t('usageOutput'), dataIndex: 'output', width: 80, align: 'right', render: (v: number) => compact(v) },
                     { title: t('usageCacheRead'), dataIndex: 'cacheRead', width: 90, align: 'right', render: (v: number) => (v ? compact(v) : '-') },
                   ]} />
-              </Card>
+              </TableCard>
             </Col>
             <Col xs={24} xl={12}>
-              <Card title={t('usageTopSessions')} styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
-                <Table<AIUsageTop> size="small" rowKey="id" pagination={false} dataSource={query.data.top}
+              <TableCard title={t('usageTopSessions')} style={{ height: '100%' }}>
+                <Table<AIUsageTop> size="small" scroll={{ x: 520 }} rowKey="id" pagination={false} dataSource={query.data.top}
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
                   columns={[
                     {
@@ -135,7 +136,7 @@ export function AIUsageOverview() {
                     { title: t('usageTotal'), dataIndex: 'tokens', width: 90, align: 'right', render: (v: number) => compact(v) },
                     { title: t('thLastActive'), dataIndex: 'lastAt', width: 100, render: v => <Ago iso={v} /> },
                   ]} />
-              </Card>
+              </TableCard>
             </Col>
           </Row>
         </>

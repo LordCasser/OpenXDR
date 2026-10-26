@@ -5,7 +5,7 @@ import { useRef, useState } from 'react'
 import { deleteIntel, fetchIntel, fetchIntelFeeds, importIntel, saveIntelFeeds, syncIntelFeeds, type IntelRow } from '../api'
 import { useSession } from '../app/session'
 import { LoadError } from '../components/LoadError'
-import { Page } from '../components/Page'
+import { Page, TableCard } from '../components/Page'
 import { SeverityTag, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
@@ -127,7 +127,7 @@ export function IntelPage() {
     >
       <Flex vertical gap={16}>
       <FeedsCard />
-      <Card title={t('intelManual')} styles={{ body: { padding: 0 } }}>
+      <TableCard title={t('intelManual')}>
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<IntelRow>
           scroll={{ x: 1100 }}
           rowKey="id"
@@ -155,7 +155,7 @@ export function IntelPage() {
               : []),
           ]}
         />}
-      </Card>
+      </TableCard>
       </Flex>
       <Modal open={importing} title={t('intelImport')} onCancel={() => { if (!busy) setImporting(false) }} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => form.submit()} confirmLoading={busy} width={640} destroyOnHidden>
         <Form disabled={busy} form={form} layout="vertical" onFinish={doImport} initialValues={{ expiresInDays: 0 }}>

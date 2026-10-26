@@ -1,6 +1,7 @@
+import { TableActions } from '../components/TableActions'
 import { PlusOutlined, PushpinFilled } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Collapse, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd'
+import { App, Button, Collapse, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import {
@@ -10,7 +11,7 @@ import {
 import { useSession } from '../app/session'
 import { EmptyHint } from '../components/Ago'
 import { LoadError } from '../components/LoadError'
-import { Page } from '../components/Page'
+import { Page, TableCard } from '../components/Page'
 import { errText, fmtTime } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 
@@ -106,7 +107,7 @@ export function TrustedSourcesPage() {
   }
 
   const actions = (s: TrustedSource) => (
-    <Space size={0} wrap>
+    <TableActions>
       <Button type="link" size="small" onClick={() => setEditing(s)}>{t('tsEdit')}</Button>
       {s.revokedAt
         ? (
@@ -122,7 +123,7 @@ export function TrustedSourcesPage() {
       <Popconfirm title={t('tsConfirmDelete')} onConfirm={() => run(() => deleteTrustedSource(s.id))}>
         <Button type="link" size="small" danger disabled={busy}>{t('tsDelete')}</Button>
       </Popconfirm>
-    </Space>
+    </TableActions>
   )
 
   // 结论按事件计，只列非零的几项
@@ -149,7 +150,7 @@ export function TrustedSourcesPage() {
           children: <Space orientation="vertical" size={8}>{how.map(k => <Typography.Text key={k}>{t(k)}</Typography.Text>)}</Space>,
         }]}
       />
-      <Card styles={{ body: { padding: 0 } }}>
+      <TableCard>
         {sources.isError ? <LoadError error={sources.error} onRetry={() => sources.refetch()} /> : <Table<TrustedSource>
           rowKey="id"
           loading={sources.isPending && !!groupId}
@@ -185,7 +186,7 @@ export function TrustedSourcesPage() {
             ...(manage ? [{ title: t('actions'), key: 'act', width: 170, render: (_: unknown, s: TrustedSource) => actions(s) }] : []),
           ]}
         />}
-      </Card>
+      </TableCard>
 
       {manage && (
         <Collapse

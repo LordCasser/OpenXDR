@@ -1,11 +1,12 @@
+import { TableActions } from '../components/TableActions'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Popconfirm, Popover, Space, Table, Tag, Tooltip } from 'antd'
+import { App, Button, Popconfirm, Popover, Space, Table, Tag, Tooltip } from 'antd'
 import { Link } from 'react-router'
 import { deleteSuppression, fetchAssets, fetchSuppressions, reviewSuppression, type SuppressEvidence, type Suppression } from '../api'
 import { useSession } from '../app/session'
 import { EmptyHint } from '../components/Ago'
 import { HostLink } from '../components/HostLink'
-import { Page, useWideTable } from '../components/Page'
+import { Page, TableCard, useWideTable } from '../components/Page'
 import { fmtTime, errText } from '../components/format'
 import { useI18n, type MsgKey } from '../i18n'
 import { LoadError } from '../components/LoadError'
@@ -48,7 +49,7 @@ export function SuppressionsPage() {
 
   return (
     <Page title={t('navSuppressions')} subtitle={t('suppressionsSubtitle')}>
-      <Card styles={{ body: { padding: 0 } }}>
+      <TableCard>
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<Suppression>
           rowKey="id"
           loading={isPending}
@@ -85,7 +86,7 @@ export function SuppressionsPage() {
                   // 表格要横向滚动才看得全：宽屏把操作列钉在右侧，批准 / 拒绝不用先拖滚动条；窄屏钉住会盖掉一半表格
                   fixed: wideTable ? 'right' as const : undefined,
                   render: (_: unknown, s: Suppression) => (
-                    <Space size={0}>
+                    <TableActions>
                       {s.status === 'proposed' && canReview(s) && <>
                         <Button type="link" size="small" onClick={() => review(s.id, 'approve')}>{t('supApprove')}</Button>
                         <Button type="link" size="small" onClick={() => review(s.id, 'reject')}>{t('supReject')}</Button>
@@ -95,13 +96,13 @@ export function SuppressionsPage() {
                           <Button type="link" danger size="small">{t('revoke')}</Button>
                         </Popconfirm>
                       )}
-                    </Space>
+                    </TableActions>
                   ),
                 }]
               : []),
           ]}
         />}
-      </Card>
+      </TableCard>
     </Page>
   )
 }

@@ -1,6 +1,7 @@
+import { TableActions } from '../components/TableActions'
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Drawer, Empty, Form, Input, Modal, Popconfirm, Select, Space, Spin, Table, Tabs, Transfer } from 'antd'
+import { App, Button, Drawer, Empty, Form, Input, Modal, Popconfirm, Select, Space, Spin, Table, Tabs, Transfer } from 'antd'
 import { useRef, useState } from 'react'
 import {
   assignAsset, createGroup, deleteGroup, fetchAssets, fetchGroups, fetchMembers, fetchUsers, removeMember, setMember, unassignAsset,
@@ -8,7 +9,7 @@ import {
 } from '../api'
 import { LoadError } from '../components/LoadError'
 import { DirectoryStatus } from '../components/DirectoryStatus'
-import { Page } from '../components/Page'
+import { Page, TableCard } from '../components/Page'
 import { ROLE_KEY, fmtTime, errText } from '../components/format'
 import { useI18n } from '../i18n'
 
@@ -162,7 +163,7 @@ export function GroupsPage() {
       subtitle={t('groupsSubtitle')}
       extra={<Button type="primary" icon={<PlusOutlined />} disabled={busy} onClick={() => { form.resetFields(); setCreating(true) }}>{t('newGroup')}</Button>}
     >
-      <Card styles={{ body: { padding: 0 } }}>
+      <TableCard>
         <Table<GroupRow>
           scroll={{ x: 650 }}
           rowKey="id"
@@ -177,17 +178,17 @@ export function GroupsPage() {
             {
               title: t('actions'), width: 160,
               render: (_, g) => (
-                <Space>
+                <TableActions>
                   <Button type="link" size="small" disabled={busy} onClick={() => setManaging(g)}>{t('manage')}</Button>
                   <Popconfirm title={t('groupDeleteConfirm', { name: g.name })} onConfirm={() => run(() => deleteGroup(g.id))}>
                     <Button type="link" danger size="small" disabled={busy}>{t('del')}</Button>
                   </Popconfirm>
-                </Space>
+                </TableActions>
               ),
             },
           ]}
         />
-      </Card>
+      </TableCard>
       <Modal open={creating} title={t('newGroup')} onCancel={() => { if (!busy) setCreating(false) }} confirmLoading={busy} closable={!busy} maskClosable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => form.submit()} destroyOnHidden>
         <Form disabled={busy} form={form} layout="vertical" onFinish={async v => { if (await run(() => createGroup(v.name.trim()))) { setCreating(false); form.resetFields() } }}>
           <Form.Item name="name" label={t('groupName')} rules={[{ required: true, whitespace: true }]}><Input /></Form.Item>
