@@ -111,6 +111,9 @@ services:
     build:
       context: .
       dockerfile: integrations/dygk/Dockerfile
+      args:
+        DYGK_SOURCE: ${DYGK_SOURCE:-local}
+        DYGK_LOCAL_SOURCE: ${DYGK_LOCAL_SOURCE:-local-source}
       secrets:
         - dygk_upstream_token
     image: openxdr-deception:${DYGK_VERSION:-local}

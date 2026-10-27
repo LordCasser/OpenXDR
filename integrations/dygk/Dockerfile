@@ -9,7 +9,9 @@ COPY server/ ./
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /decoyhost ./deception/cmd/decoyhost
 
 FROM --platform=$BUILDPLATFORM node:24.22.1-bookworm-slim AS prepare
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+ARG DYGK_SOURCE=local
+ARG DYGK_LOCAL_SOURCE=local-source
+RUN if [ "$DYGK_SOURCE" = remote ]; then apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*; fi
 WORKDIR /module
 COPY integrations/dygk/ ./
 RUN --mount=type=secret,id=dygk_upstream_token,env=DYGK_UPSTREAM_TOKEN \

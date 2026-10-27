@@ -1,15 +1,22 @@
-import { readFile, writeFile, mkdir, cp } from 'node:fs/promises';
+import { readFile, writeFile, appendFile, mkdir, cp } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve, join, dirname } from 'node:path';
 import { knownSourceKinds } from '../web/state.mjs';
-import { upstreamGit } from './upstream-git.mjs';
+import { sourceSettings, acquireSource, verifySource } from './source.mjs';
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const lock = JSON.parse(await readFile(join(root, 'upstream.lock.json'), 'utf8'));
-export async function prepare(source, allowFetch = true, refresh = false) {
-  const target = join(root, '.upstream', lock.commit);
+export const revision = lock.revision || lock.commit;
+if (!/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,95}$/.test(revision || '')) throw new Error('上游快照版本无效');
+export async function prepare(source, allowPrepare = true, refresh = false) {
+  const target = join(root, '.upstream', revision);
+  let settings, contents;
+  if (allowPrepare) {
+    settings = await sourceSettings({ source });
+    // 本地模式即使存在构建缓存，也必须核验所选源码，不能静默使用旧版本。
+    if (settings.mode === 'local') contents = await verifySource(await acquireSource(settings, lock), lock.files);
+  }
   const overlayHash = createHash('sha256').update(await readFile(join(root, 'web/export-feed.mjs'))).update(await readFile(fileURLToPath(import.meta.url))).digest('hex');
   try {
     if (refresh) { const error = new Error('显式重建缓存'); error.code = 'ENOENT'; throw error; }
@@ -20,26 +27,13 @@ export async function prepare(source, allowFetch = true, refresh = false) {
     }
     return target;
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (!allowFetch) throw new Error('运行依赖缺失，必须在构建阶段准备上游；运行时不下载代码');
-  if (!source) {
-    source = join(root, '.downloads', lock.commit);
-    await mkdir(source, { recursive: true });
-    const git = args => upstreamGit(source, args, lock.repository);
-    git(['init']); git(['fetch', '--depth', '1', lock.repository, lock.commit]); git(['checkout', '--detach', 'FETCH_HEAD']);
-  }
-  source = resolve(source);
-  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: source, encoding: 'utf8' }).trim();
-  if (commit !== lock.commit) throw new Error('上游 commit 不匹配');
+  if (!allowPrepare) throw new Error('运行依赖缺失，必须在构建阶段准备上游；运行时不下载代码');
+  contents ??= await verifySource(await acquireSource(settings, lock), lock.files);
   await mkdir(target, { recursive: true });
-  for (const [file, expected] of Object.entries(lock.files)) {
-    const content = await readFile(join(source, file));
-    // Git 的 Windows checkout 可能把 LF 转成 CRLF；锁定规范化后的文本。
-    const normalized = content.toString('utf8').replaceAll('\r\n', '\n');
-    if (createHash('sha256').update(normalized).digest('hex') !== expected) throw new Error('上游文件摘要不匹配：' + file);
+  for (const [file, content] of Object.entries(contents)) {
     await mkdir(dirname(join(target, file)), { recursive: true });
-    await writeFile(join(target, file), normalized);
+    await writeFile(join(target, file), content);
   }
-  await cp(join(source, 'tests'), join(target, 'tests'), { recursive: true });
   for (const file of Object.keys(lock.files).filter(name => name.startsWith('lib/') && name.endsWith('.js'))) {
     const content = await readFile(join(target, file), 'utf8');
     for (const match of content.matchAll(/event\('([^']+)'/g)) if (!knownSourceKinds.has(match[1])) throw new Error('候选上游新增事实，需先适配：' + match[1]);
@@ -81,5 +75,17 @@ export async function prepare(source, allowFetch = true, refresh = false) {
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const sourceIndex = process.argv.indexOf('--source');
-  console.log(await prepare(sourceIndex < 0 ? undefined : process.argv[sourceIndex + 1], true, process.argv.includes('--refresh')));
+  if (sourceIndex >= 0 && (!process.argv[sourceIndex + 1] || process.argv[sourceIndex + 1].startsWith('--'))) throw new Error('--source 缺少源码目录');
+  const source = sourceIndex < 0 ? undefined : process.argv[sourceIndex + 1];
+  const ci = process.argv.includes('--ci');
+  if (ci && !process.env.GITHUB_OUTPUT) throw new Error('--ci 仅用于提供 GITHUB_OUTPUT 的工作流');
+  const settings = await sourceSettings({ source });
+  let available = true;
+  if (ci && !settings.configured && settings.mode === 'local') {
+    try { await acquireSource(settings, lock); }
+    catch (error) { if (error.code !== 'local_source_missing') throw error; available = false; }
+  }
+  if (available) console.log(await prepare(source, true, process.argv.includes('--refresh')));
+  else console.log('::warning::未提供私有 DYGK 源码，跳过依赖它的集成与镜像检查；来源选择单测和原生引擎检查仍执行。显式配置来源后，缺失源码或权限将使检查失败。');
+  if (ci) await appendFile(process.env.GITHUB_OUTPUT, 'available=' + available + '\n');
 }

@@ -449,8 +449,10 @@ DNS 校验与实际拨号使用同一地址，TLS 证书必须有效。
 | `DYGK_VERSION` | 安装编排 `latest`，源码编排 `local` | 独立引擎镜像标签，生产宜锁定 |
 | `DYGK_BIND_IP` | `127.0.0.1` | 主编排预留端口的宿主绑定地址 |
 | `DYGK_PORT_RANGE` | `18080-18179` | 站点端口范围；登记应选择对应端口 |
-| `DYGK_UPSTREAM_TOKEN` | 空 | 仅源码构建使用的上游读取令牌，经 BuildKit secret 提供；使用已构建镜像时无需设置 |
+| `DYGK_SOURCE` | `local` | 构建源码来源，`local` 使用提供的源码，`remote` 才从锁定的远端版本拉取 |
+| `DYGK_LOCAL_SOURCE` | `local-source` | 相对 `integrations/dygk/` 的源码目录；云端构建需在自己的模块构建上下文内提供 |
+| `DYGK_UPSTREAM_TOKEN` | 空 | 仅远端私有源码需要的读取令牌，经 BuildKit secret 提供；本地模式和预构建镜像运行时无需设置 |
 
 控制 socket 和持久目录由主编排注入命名卷，不是开发机路径；不要将引擎控制卷挂给其他服务。独立镜像的发布授权、云端接入与回退步骤见 [运行包说明](../integrations/dygk/README.md)。
 
-源码构建按锁文件获取并适配 DYGK 上游源码，开发机的 `.downloads/` 和 `.upstream/` 缓存由 Git 与 Docker 构建上下文共同排除；云端构建会重新准备依赖。预构建镜像已包含运行核心，启动时无需上游源码仓库或读取令牌。具体目录与打包范围见 [源码缓存和 Git 管理](../integrations/dygk/README.md#源码缓存和-git-管理)。
+源码来源在同一 `.env` 配置，默认本地模式，不调用 Git 或自动回退远端。默认 `local-source/` 是被 Git 忽略的私有构建输入，Docker 构建会使用它；`.downloads/` 和 `.upstream/` 缓存则同时被 Docker 排除。云端本地模式需提供源码到自身构建上下文，远端模式需具备上游读取权限，两者都核验文件摘要。预构建镜像已包含运行核心，启动时无需源码来源参数或读取令牌。具体配置、目录与打包范围见 [源码来源配置](../integrations/dygk/README.md#源码来源配置)。

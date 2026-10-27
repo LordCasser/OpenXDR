@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile, readdir, mkdir, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { root, lock, prepare } from '../scripts/prepare-upstream.mjs';
+import { root, revision, prepare } from '../scripts/prepare-upstream.mjs';
 import { ConnectorState } from './state.mjs';
 import { Platform } from './platform.mjs';
 
@@ -13,7 +13,7 @@ export async function releaseInfo(core) {
       hash.update(file); hash.update('\0'); hash.update(await readFile(join(folder, file))); hash.update('\0');
     }
   }
-  return { engine: 'dygk', version: lock.commit, digest: 'sha256:' + hash.digest('hex'), protocol: 1, stateSchema: 'dygk-sqlite-v1' };
+  return { engine: 'dygk', version: revision, digest: 'sha256:' + hash.digest('hex'), protocol: 1, stateSchema: 'dygk-sqlite-v1' };
 }
 
 async function runtimeToken(env) {

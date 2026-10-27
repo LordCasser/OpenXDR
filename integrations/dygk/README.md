@@ -16,7 +16,7 @@ COMPOSE_PROFILES=dygk
 docker compose up -d
 ```
 
-源码编排会构建 `integrations/dygk/Dockerfile`；安装编排使用独立镜像。默认关闭该 profile，不影响原有 OpenXDR 部署。生产可在同一 `.env` 中用 `DYGK_VERSION` 锁定引擎镜像标签，独立于 `OPENXDR_VERSION`。当前镜像发布尚受上游分发授权约束，见文末。
+源码编排会构建 `integrations/dygk/Dockerfile`，构建前需按下文选择本地或远端源码来源；安装编排使用独立镜像。默认关闭该 profile，不影响原有 OpenXDR 部署。生产可在同一 `.env` 中用 `DYGK_VERSION` 锁定引擎镜像标签，独立于 `OPENXDR_VERSION`。当前镜像发布尚受上游分发授权约束，见文末。
 
 容器地址、控制通道和数据卷由主编排设置。平台与引擎使用仅挂给这两个服务、0700 目录和 0600 socket 的 Unix 控制通道，不增加网络管理端口，不向引擎提供数据库密码或平台凭据主密钥。控制通道和托管进程面向 Linux 容器。
 
@@ -40,11 +40,40 @@ docker compose up -d
 | Web 连接器与托管管理器 | 本目录 `web/` | DYGK Web 调用、持久补传和平台自动启动 |
 | 平台控制面 | `server/internal/api/deception*.go` | 组范围、版本与修订、内部实例分配、审计和待复核事件 |
 
-Go 沿用仓库 `server/go.mod`，没有本地 `replace`、额外工作区或构建机绝对路径。DYGK Web 锁定完整 commit 和文件摘要，在镜像构建阶段准备；运行时只验证包内依赖，不下载代码。Node 24 在独立引擎镜像中，不改变 Pi 的 Node 环境。
+Go 沿用仓库 `server/go.mod`，没有本地 `replace`、额外工作区或构建机绝对路径。DYGK Web 在构建阶段从所选来源准备依赖，并校验锁文件中的快照版本和文件摘要；运行时只验证包内依赖，不下载代码。Node 24 在独立引擎镜像中，不改变 Pi 的 Node 环境。
+
+### 源码来源配置
+
+源码来源复用仓库根的同一份 `.env`，环境变量优先。以下选项仅影响构建与候选更新，不增加实例启动参数：
+
+| 配置 | 默认值 | 用途 |
+| --- | --- | --- |
+| `DYGK_SOURCE` | `local` | `local` 使用提供的源码；`remote` 按锁文件拉取远端 commit |
+| `DYGK_LOCAL_SOURCE` | `local-source` | 本地源码目录，相对 `integrations/dygk/` 解析；容器构建需位于该模块的构建上下文内 |
+| `DYGK_UPSTREAM_TOKEN` | 空 | 仅远端私有仓库需要的读取令牌，通过构建 secret 临时使用 |
+
+本地模式配置：
+
+```dotenv
+DYGK_SOURCE=local
+DYGK_LOCAL_SOURCE=local-source
+```
+
+将有权限使用的 DYGK 源码放入 `integrations/dygk/local-source/`，或配置模块内其他源码子目录。目录可以是无 Git 历史的源码导出，但须包含锁文件列出的运行源码及测试材料。准备脚本会核验这些文件；来源缺失或摘要不符时直接拒绝，不会回退到远端。私有源码由使用者提供，默认目录保持 Git 忽略。
+
+需要远端来源时，显式修改同一 `.env`：
+
+```dotenv
+DYGK_SOURCE=remote
+# 私有仓库填写有读取权限的令牌；公开仓库可以省略。
+DYGK_UPSTREAM_TOKEN=<读取令牌>
+```
+
+远端仓库和完整 commit 由 `upstream.lock.json` 指定。两种来源都使用同一套文件摘要、适配位置和事件契约检查；本地模式不调用 Git，也不要求配置上游读取令牌。
 
 ### 源码缓存和 Git 管理
 
-当前采用构建时源码集成：本目录既有 OpenXDR 维护的接入代码，也可能存在准备脚本生成的 DYGK 上游源码缓存。Git 忽略缓存表示它不随项目提交，磁盘上仍然会有这些源码。
+当前采用构建时源码集成：本目录既有 OpenXDR 维护的接入代码，也可能存在本地私有源码和准备脚本生成的上游缓存。Git 忽略这些目录表示它们不随项目提交，磁盘上仍然会有这些源码。
 
 下表路径相对本目录：
 
@@ -52,11 +81,12 @@ Go 沿用仓库 `server/go.mod`，没有本地 `replace`、额外工作区或构
 | --- | --- | --- |
 | `web/`、`scripts/`、`tests/` | OpenXDR 的连接器、托管管理器、事件导出适配、构建与接入测试 | 纳入版本管理 |
 | `Dockerfile`、`package.json`、`upstream.lock.json` 等 | 构建入口、运行元数据、上游版本和文件摘要 | 纳入版本管理 |
-| `.downloads/<commit>/` | 自动下载的上游 Git checkout，供准备和更新脚本使用；指定已有源码时可以不生成 | 由 `.gitignore` 排除 |
-| `.upstream/<commit>/` | 适配后的上游源码缓存，包含 `lib/` 及测试所需的 `tests/`、`examples/` 和部分 `experiments/` 文件 | 由 `.gitignore` 排除 |
+| `local-source/` | 默认本地来源，由使用者提供的 DYGK 源码；自定义目录也应加入 Git 忽略规则 | 由 `.gitignore` 排除 |
+| `.downloads/<commit>/` | 远端模式下载的上游 Git checkout，供准备和更新脚本使用 | 由 `.gitignore` 排除 |
+| `.upstream/<revision>/` | 适配后的上游源码缓存，包含 `lib/` 及测试所需的 `tests/`、`examples/` 和部分 `experiments/` 文件 | 由 `.gitignore` 排除 |
 | `*.sqlite*`、`runtime-state/` | 开发时产生的运行状态；部署时状态保存在命名卷 | 由 `.gitignore` 排除 |
 
-新克隆的 OpenXDR 不含这些上游缓存，需要在准备或镜像构建阶段按锁文件获取源码。根目录 `.dockerignore` 同样排除开发机的 `.downloads/` 和 `.upstream/`；镜像构建在构建阶段重新准备依赖，不依赖开发机缓存或目录。
+新克隆的 OpenXDR 不含私有本地源码和上游缓存。使用本地模式时，需要把源码一同提供给构建环境；使用远端模式时，由构建阶段按锁文件获取源码。根目录 `.dockerignore` 排除 `.downloads/` 和 `.upstream/`，但保留作为构建输入的 `local-source/`；其中的 Git 历史、环境文件、依赖目录和 SQLite 数据另行排除。云端构建使用其自身构建上下文，不挂载开发机目录。
 
 `stage-runtime.mjs` 将上游的 `lib/`、`package.json` 和 `.prepared.json` 放入最终运行包，再加入 OpenXDR 的接入代码和产物清单。上游的 `tests/`、`examples/`、`experiments/` 和 `.git/` 不进入最终运行镜像。镜像内仍包含运行所需的 DYGK 核心源码，运行时无需访问上游仓库。
 
@@ -64,7 +94,11 @@ Go 沿用仓库 `server/go.mod`，没有本地 `replace`、额外工作区或构
 
 ### 构建凭据和持久卷
 
-上游当前匿名读取返回 404。源码部署需在同一 `.env` 配置有该仓库读取权限的 `DYGK_UPSTREAM_TOKEN`；CI 在仓库 Secrets 中设置同名项。主编排通过 BuildKit 构建 secret 临时提供凭据，令牌不进入镜像、运行环境或源码 URL。安装编排使用已构建镜像，运行时不需要上游令牌。公开上游可将此构建项设为空。
+上游仍为私有仓库。本地模式由使用者提供源码，不需要上游读取令牌；远端模式在同一 `.env` 配置 `DYGK_UPSTREAM_TOKEN`。主编排通过 BuildKit 构建 secret 临时提供凭据，令牌不进入镜像、运行环境或源码 URL。安装编排使用已构建镜像，运行时不需要上游令牌。
+
+GitHub CI 和独立镜像工作流通过仓库 Variables 的 `DYGK_SOURCE`、`DYGK_LOCAL_SOURCE` 选择来源，默认同样为 `local`；远端令牌使用同名 Secret `DYGK_UPSTREAM_TOKEN`。全新 runner 不携带被 Git 忽略的本地源码，选择本地模式时应在 checkout 后由前置步骤提供源码，或显式选择有权限的远端模式。
+
+普通 CI 在未配置任何来源且没有默认本地源码时，会明确警告并跳过依赖私有源码的端到端、上游行为和镜像检查，来源选择单测与原生引擎检查仍执行。显式配置来源后，缺失源码、摘要不符或无读取权限均使检查失败，不自动切换来源。正式构建和发布始终要求来源可用；CI 跳过不表示完整引擎已经验收。
 
 引擎状态使用主编排命名卷，按登记隔离数据子目录；控制通道使用另一命名卷。Kubernetes 等环境对应使用同一组平台配置、受限共享控制卷和引擎持久卷。分离到不同 Pod 或节点时应改用高级远端运行协议和受信 HTTPS，不能把 Unix socket 路径当网络地址。
 
@@ -86,13 +120,25 @@ DYGK 基线为 `bd8515a0b930f530eec0d13955fe502d8c8e9e25`，包含正式库的�
 
 ## 上游更新与部署回退
 
-更新候选版本只修改锁文件和必要适配，使用完整上游 commit：
+本地来源更新时，先替换有权限使用的本地源码，再运行候选检查：
+
+```bash
+node integrations/dygk/scripts/update-upstream.mjs
+```
+
+也可显式指定源码目录（相对模块目录解析）和可选的快照版本：
+
+```bash
+node integrations/dygk/scripts/update-upstream.mjs --source local-source --revision local-candidate-1
+```
+
+没有提供快照版本时，内容变化会生成 `local-<摘要>` 标识，无需 Git 历史或 commit。只有显式选用远端来源时，才使用完整上游 commit：
 
 ```bash
 node integrations/dygk/scripts/update-upstream.mjs <完整commit>
 ```
 
-脚本检查源码摘要、事件契约、适配位置和上游行为；失败恢复锁文件。继续通过平台端到端和兼容检查后发布独立引擎运行包，原生与 Web 运行实现不再复制进平台内部包。
+脚本读取所选来源，更新快照与文件摘要，检查事件契约、适配位置和上游行为；失败恢复锁文件。本地和远端源码都需通过平台端到端和兼容检查后再发布独立引擎运行包，原生与 Web 运行实现不再复制进平台内部包。
 
 部署升级时，先在控制台停止旧实例，再在同一 `.env` 更新 `DYGK_VERSION`，通过主编排拉取并更新引擎服务。新运行包自动回报版本，控制台选择对应修订后自动启动。平台修改修订不直接控制 Docker，也不会用未准入的未来能力自动改变正在运行的策略。
 

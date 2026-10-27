@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
 
 // 凭据只通过子进程环境传递，不写 Git 配置、远端 URL 或运行包。
-export function upstreamGit(cwd, args, repository) {
+export function upstreamGit(cwd, args, repository, suppliedToken) {
   const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
-  const token = env.DYGK_UPSTREAM_TOKEN?.trim();
+  const token = (suppliedToken ?? env.DYGK_UPSTREAM_TOKEN)?.trim();
   delete env.DYGK_UPSTREAM_TOKEN;
   if (token) {
     const url = new URL(repository);

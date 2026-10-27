@@ -62,6 +62,9 @@ jobs:
         with:
           context: .
           file: integrations/dygk/Dockerfile
+          build-args: |
+            DYGK_SOURCE=${{ vars.DYGK_SOURCE || 'local' }}
+            DYGK_LOCAL_SOURCE=${{ vars.DYGK_LOCAL_SOURCE || 'local-source' }}
           platforms: linux/amd64,linux/arm64
           push: true
           secrets: |
