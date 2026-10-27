@@ -19,7 +19,9 @@ import (
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/ent/decoyenginerelease"
 	"openxdr/server/ent/decoyobservation"
+	"openxdr/server/ent/decoyrevision"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/externalticket"
@@ -84,7 +86,9 @@ const (
 	TypeCommand                 = "Command"
 	TypeCommandPolicy           = "CommandPolicy"
 	TypeDecoyDeployment         = "DecoyDeployment"
+	TypeDecoyEngineRelease      = "DecoyEngineRelease"
 	TypeDecoyObservation        = "DecoyObservation"
+	TypeDecoyRevision           = "DecoyRevision"
 	TypeEnrollToken             = "EnrollToken"
 	TypeEvent                   = "Event"
 	TypeExternalTicket          = "ExternalTicket"
@@ -12384,6 +12388,9 @@ type DecoyDeploymentMutation struct {
 	runtime_generation  *string
 	install_state       *decoydeployment.InstallState
 	install_started_at  *time.Time
+	active_revision_id  *uuid.UUID
+	token_revision_id   *uuid.UUID
+	stop_requested      *bool
 	clearedFields       map[string]struct{}
 	done                bool
 	oldValue            func(context.Context) (*DecoyDeployment, error)
@@ -13400,6 +13407,140 @@ func (m *DecoyDeploymentMutation) ResetInstallStartedAt() {
 	delete(m.clearedFields, decoydeployment.FieldInstallStartedAt)
 }
 
+// SetActiveRevisionID sets the "active_revision_id" field.
+func (m *DecoyDeploymentMutation) SetActiveRevisionID(u uuid.UUID) {
+	m.active_revision_id = &u
+}
+
+// ActiveRevisionID returns the value of the "active_revision_id" field in the mutation.
+func (m *DecoyDeploymentMutation) ActiveRevisionID() (r uuid.UUID, exists bool) {
+	v := m.active_revision_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActiveRevisionID returns the old "active_revision_id" field's value of the DecoyDeployment entity.
+// If the DecoyDeployment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyDeploymentMutation) OldActiveRevisionID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActiveRevisionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActiveRevisionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActiveRevisionID: %w", err)
+	}
+	return oldValue.ActiveRevisionID, nil
+}
+
+// ClearActiveRevisionID clears the value of the "active_revision_id" field.
+func (m *DecoyDeploymentMutation) ClearActiveRevisionID() {
+	m.active_revision_id = nil
+	m.clearedFields[decoydeployment.FieldActiveRevisionID] = struct{}{}
+}
+
+// ActiveRevisionIDCleared returns if the "active_revision_id" field was cleared in this mutation.
+func (m *DecoyDeploymentMutation) ActiveRevisionIDCleared() bool {
+	_, ok := m.clearedFields[decoydeployment.FieldActiveRevisionID]
+	return ok
+}
+
+// ResetActiveRevisionID resets all changes to the "active_revision_id" field.
+func (m *DecoyDeploymentMutation) ResetActiveRevisionID() {
+	m.active_revision_id = nil
+	delete(m.clearedFields, decoydeployment.FieldActiveRevisionID)
+}
+
+// SetTokenRevisionID sets the "token_revision_id" field.
+func (m *DecoyDeploymentMutation) SetTokenRevisionID(u uuid.UUID) {
+	m.token_revision_id = &u
+}
+
+// TokenRevisionID returns the value of the "token_revision_id" field in the mutation.
+func (m *DecoyDeploymentMutation) TokenRevisionID() (r uuid.UUID, exists bool) {
+	v := m.token_revision_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTokenRevisionID returns the old "token_revision_id" field's value of the DecoyDeployment entity.
+// If the DecoyDeployment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyDeploymentMutation) OldTokenRevisionID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTokenRevisionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTokenRevisionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTokenRevisionID: %w", err)
+	}
+	return oldValue.TokenRevisionID, nil
+}
+
+// ClearTokenRevisionID clears the value of the "token_revision_id" field.
+func (m *DecoyDeploymentMutation) ClearTokenRevisionID() {
+	m.token_revision_id = nil
+	m.clearedFields[decoydeployment.FieldTokenRevisionID] = struct{}{}
+}
+
+// TokenRevisionIDCleared returns if the "token_revision_id" field was cleared in this mutation.
+func (m *DecoyDeploymentMutation) TokenRevisionIDCleared() bool {
+	_, ok := m.clearedFields[decoydeployment.FieldTokenRevisionID]
+	return ok
+}
+
+// ResetTokenRevisionID resets all changes to the "token_revision_id" field.
+func (m *DecoyDeploymentMutation) ResetTokenRevisionID() {
+	m.token_revision_id = nil
+	delete(m.clearedFields, decoydeployment.FieldTokenRevisionID)
+}
+
+// SetStopRequested sets the "stop_requested" field.
+func (m *DecoyDeploymentMutation) SetStopRequested(b bool) {
+	m.stop_requested = &b
+}
+
+// StopRequested returns the value of the "stop_requested" field in the mutation.
+func (m *DecoyDeploymentMutation) StopRequested() (r bool, exists bool) {
+	v := m.stop_requested
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStopRequested returns the old "stop_requested" field's value of the DecoyDeployment entity.
+// If the DecoyDeployment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyDeploymentMutation) OldStopRequested(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStopRequested is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStopRequested requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStopRequested: %w", err)
+	}
+	return oldValue.StopRequested, nil
+}
+
+// ResetStopRequested resets all changes to the "stop_requested" field.
+func (m *DecoyDeploymentMutation) ResetStopRequested() {
+	m.stop_requested = nil
+}
+
 // Where appends a list predicates to the DecoyDeploymentMutation builder.
 func (m *DecoyDeploymentMutation) Where(ps ...predicate.DecoyDeployment) {
 	m.predicates = append(m.predicates, ps...)
@@ -13434,7 +13575,7 @@ func (m *DecoyDeploymentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DecoyDeploymentMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 24)
 	if m.asset_id != nil {
 		fields = append(fields, decoydeployment.FieldAssetID)
 	}
@@ -13498,6 +13639,15 @@ func (m *DecoyDeploymentMutation) Fields() []string {
 	if m.install_started_at != nil {
 		fields = append(fields, decoydeployment.FieldInstallStartedAt)
 	}
+	if m.active_revision_id != nil {
+		fields = append(fields, decoydeployment.FieldActiveRevisionID)
+	}
+	if m.token_revision_id != nil {
+		fields = append(fields, decoydeployment.FieldTokenRevisionID)
+	}
+	if m.stop_requested != nil {
+		fields = append(fields, decoydeployment.FieldStopRequested)
+	}
 	return fields
 }
 
@@ -13548,6 +13698,12 @@ func (m *DecoyDeploymentMutation) Field(name string) (ent.Value, bool) {
 		return m.InstallState()
 	case decoydeployment.FieldInstallStartedAt:
 		return m.InstallStartedAt()
+	case decoydeployment.FieldActiveRevisionID:
+		return m.ActiveRevisionID()
+	case decoydeployment.FieldTokenRevisionID:
+		return m.TokenRevisionID()
+	case decoydeployment.FieldStopRequested:
+		return m.StopRequested()
 	}
 	return nil, false
 }
@@ -13599,6 +13755,12 @@ func (m *DecoyDeploymentMutation) OldField(ctx context.Context, name string) (en
 		return m.OldInstallState(ctx)
 	case decoydeployment.FieldInstallStartedAt:
 		return m.OldInstallStartedAt(ctx)
+	case decoydeployment.FieldActiveRevisionID:
+		return m.OldActiveRevisionID(ctx)
+	case decoydeployment.FieldTokenRevisionID:
+		return m.OldTokenRevisionID(ctx)
+	case decoydeployment.FieldStopRequested:
+		return m.OldStopRequested(ctx)
 	}
 	return nil, fmt.Errorf("unknown DecoyDeployment field %s", name)
 }
@@ -13755,6 +13917,27 @@ func (m *DecoyDeploymentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetInstallStartedAt(v)
 		return nil
+	case decoydeployment.FieldActiveRevisionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActiveRevisionID(v)
+		return nil
+	case decoydeployment.FieldTokenRevisionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTokenRevisionID(v)
+		return nil
+	case decoydeployment.FieldStopRequested:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStopRequested(v)
+		return nil
 	}
 	return fmt.Errorf("unknown DecoyDeployment field %s", name)
 }
@@ -13830,6 +14013,12 @@ func (m *DecoyDeploymentMutation) ClearedFields() []string {
 	if m.FieldCleared(decoydeployment.FieldInstallStartedAt) {
 		fields = append(fields, decoydeployment.FieldInstallStartedAt)
 	}
+	if m.FieldCleared(decoydeployment.FieldActiveRevisionID) {
+		fields = append(fields, decoydeployment.FieldActiveRevisionID)
+	}
+	if m.FieldCleared(decoydeployment.FieldTokenRevisionID) {
+		fields = append(fields, decoydeployment.FieldTokenRevisionID)
+	}
 	return fields
 }
 
@@ -13873,6 +14062,12 @@ func (m *DecoyDeploymentMutation) ClearField(name string) error {
 		return nil
 	case decoydeployment.FieldInstallStartedAt:
 		m.ClearInstallStartedAt()
+		return nil
+	case decoydeployment.FieldActiveRevisionID:
+		m.ClearActiveRevisionID()
+		return nil
+	case decoydeployment.FieldTokenRevisionID:
+		m.ClearTokenRevisionID()
 		return nil
 	}
 	return fmt.Errorf("unknown DecoyDeployment nullable field %s", name)
@@ -13945,6 +14140,15 @@ func (m *DecoyDeploymentMutation) ResetField(name string) error {
 	case decoydeployment.FieldInstallStartedAt:
 		m.ResetInstallStartedAt()
 		return nil
+	case decoydeployment.FieldActiveRevisionID:
+		m.ResetActiveRevisionID()
+		return nil
+	case decoydeployment.FieldTokenRevisionID:
+		m.ResetTokenRevisionID()
+		return nil
+	case decoydeployment.FieldStopRequested:
+		m.ResetStopRequested()
+		return nil
 	}
 	return fmt.Errorf("unknown DecoyDeployment field %s", name)
 }
@@ -13997,6 +14201,752 @@ func (m *DecoyDeploymentMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown DecoyDeployment edge %s", name)
 }
 
+// DecoyEngineReleaseMutation represents an operation that mutates the DecoyEngineRelease nodes in the graph.
+type DecoyEngineReleaseMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	engine        *string
+	version       *string
+	digest        *string
+	protocol      *int
+	addprotocol   *int
+	state_schema  *string
+	enabled       *bool
+	created_at    *time.Time
+	created_by    *string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*DecoyEngineRelease, error)
+	predicates    []predicate.DecoyEngineRelease
+}
+
+var _ ent.Mutation = (*DecoyEngineReleaseMutation)(nil)
+
+// decoyenginereleaseOption allows management of the mutation configuration using functional options.
+type decoyenginereleaseOption func(*DecoyEngineReleaseMutation)
+
+// newDecoyEngineReleaseMutation creates new mutation for the DecoyEngineRelease entity.
+func newDecoyEngineReleaseMutation(c config, op Op, opts ...decoyenginereleaseOption) *DecoyEngineReleaseMutation {
+	m := &DecoyEngineReleaseMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDecoyEngineRelease,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDecoyEngineReleaseID sets the ID field of the mutation.
+func withDecoyEngineReleaseID(id uuid.UUID) decoyenginereleaseOption {
+	return func(m *DecoyEngineReleaseMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DecoyEngineRelease
+		)
+		m.oldValue = func(ctx context.Context) (*DecoyEngineRelease, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DecoyEngineRelease.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDecoyEngineRelease sets the old DecoyEngineRelease of the mutation.
+func withDecoyEngineRelease(node *DecoyEngineRelease) decoyenginereleaseOption {
+	return func(m *DecoyEngineReleaseMutation) {
+		m.oldValue = func(context.Context) (*DecoyEngineRelease, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DecoyEngineReleaseMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DecoyEngineReleaseMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of DecoyEngineRelease entities.
+func (m *DecoyEngineReleaseMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DecoyEngineReleaseMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DecoyEngineReleaseMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DecoyEngineRelease.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetEngine sets the "engine" field.
+func (m *DecoyEngineReleaseMutation) SetEngine(s string) {
+	m.engine = &s
+}
+
+// Engine returns the value of the "engine" field in the mutation.
+func (m *DecoyEngineReleaseMutation) Engine() (r string, exists bool) {
+	v := m.engine
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEngine returns the old "engine" field's value of the DecoyEngineRelease entity.
+// If the DecoyEngineRelease object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyEngineReleaseMutation) OldEngine(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEngine is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEngine requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEngine: %w", err)
+	}
+	return oldValue.Engine, nil
+}
+
+// ResetEngine resets all changes to the "engine" field.
+func (m *DecoyEngineReleaseMutation) ResetEngine() {
+	m.engine = nil
+}
+
+// SetVersion sets the "version" field.
+func (m *DecoyEngineReleaseMutation) SetVersion(s string) {
+	m.version = &s
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *DecoyEngineReleaseMutation) Version() (r string, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the DecoyEngineRelease entity.
+// If the DecoyEngineRelease object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyEngineReleaseMutation) OldVersion(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *DecoyEngineReleaseMutation) ResetVersion() {
+	m.version = nil
+}
+
+// SetDigest sets the "digest" field.
+func (m *DecoyEngineReleaseMutation) SetDigest(s string) {
+	m.digest = &s
+}
+
+// Digest returns the value of the "digest" field in the mutation.
+func (m *DecoyEngineReleaseMutation) Digest() (r string, exists bool) {
+	v := m.digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDigest returns the old "digest" field's value of the DecoyEngineRelease entity.
+// If the DecoyEngineRelease object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyEngineReleaseMutation) OldDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDigest: %w", err)
+	}
+	return oldValue.Digest, nil
+}
+
+// ResetDigest resets all changes to the "digest" field.
+func (m *DecoyEngineReleaseMutation) ResetDigest() {
+	m.digest = nil
+}
+
+// SetProtocol sets the "protocol" field.
+func (m *DecoyEngineReleaseMutation) SetProtocol(i int) {
+	m.protocol = &i
+	m.addprotocol = nil
+}
+
+// Protocol returns the value of the "protocol" field in the mutation.
+func (m *DecoyEngineReleaseMutation) Protocol() (r int, exists bool) {
+	v := m.protocol
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProtocol returns the old "protocol" field's value of the DecoyEngineRelease entity.
+// If the DecoyEngineRelease object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyEngineReleaseMutation) OldProtocol(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProtocol is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProtocol requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProtocol: %w", err)
+	}
+	return oldValue.Protocol, nil
+}
+
+// AddProtocol adds i to the "protocol" field.
+func (m *DecoyEngineReleaseMutation) AddProtocol(i int) {
+	if m.addprotocol != nil {
+		*m.addprotocol += i
+	} else {
+		m.addprotocol = &i
+	}
+}
+
+// AddedProtocol returns the value that was added to the "protocol" field in this mutation.
+func (m *DecoyEngineReleaseMutation) AddedProtocol() (r int, exists bool) {
+	v := m.addprotocol
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProtocol resets all changes to the "protocol" field.
+func (m *DecoyEngineReleaseMutation) ResetProtocol() {
+	m.protocol = nil
+	m.addprotocol = nil
+}
+
+// SetStateSchema sets the "state_schema" field.
+func (m *DecoyEngineReleaseMutation) SetStateSchema(s string) {
+	m.state_schema = &s
+}
+
+// StateSchema returns the value of the "state_schema" field in the mutation.
+func (m *DecoyEngineReleaseMutation) StateSchema() (r string, exists bool) {
+	v := m.state_schema
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStateSchema returns the old "state_schema" field's value of the DecoyEngineRelease entity.
+// If the DecoyEngineRelease object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyEngineReleaseMutation) OldStateSchema(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStateSchema is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStateSchema requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStateSchema: %w", err)
+	}
+	return oldValue.StateSchema, nil
+}
+
+// ResetStateSchema resets all changes to the "state_schema" field.
+func (m *DecoyEngineReleaseMutation) ResetStateSchema() {
+	m.state_schema = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *DecoyEngineReleaseMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *DecoyEngineReleaseMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the DecoyEngineRelease entity.
+// If the DecoyEngineRelease object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyEngineReleaseMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *DecoyEngineReleaseMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DecoyEngineReleaseMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DecoyEngineReleaseMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DecoyEngineRelease entity.
+// If the DecoyEngineRelease object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyEngineReleaseMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DecoyEngineReleaseMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *DecoyEngineReleaseMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *DecoyEngineReleaseMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the DecoyEngineRelease entity.
+// If the DecoyEngineRelease object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyEngineReleaseMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *DecoyEngineReleaseMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// Where appends a list predicates to the DecoyEngineReleaseMutation builder.
+func (m *DecoyEngineReleaseMutation) Where(ps ...predicate.DecoyEngineRelease) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DecoyEngineReleaseMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DecoyEngineReleaseMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DecoyEngineRelease, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DecoyEngineReleaseMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DecoyEngineReleaseMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DecoyEngineRelease).
+func (m *DecoyEngineReleaseMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DecoyEngineReleaseMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.engine != nil {
+		fields = append(fields, decoyenginerelease.FieldEngine)
+	}
+	if m.version != nil {
+		fields = append(fields, decoyenginerelease.FieldVersion)
+	}
+	if m.digest != nil {
+		fields = append(fields, decoyenginerelease.FieldDigest)
+	}
+	if m.protocol != nil {
+		fields = append(fields, decoyenginerelease.FieldProtocol)
+	}
+	if m.state_schema != nil {
+		fields = append(fields, decoyenginerelease.FieldStateSchema)
+	}
+	if m.enabled != nil {
+		fields = append(fields, decoyenginerelease.FieldEnabled)
+	}
+	if m.created_at != nil {
+		fields = append(fields, decoyenginerelease.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, decoyenginerelease.FieldCreatedBy)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DecoyEngineReleaseMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case decoyenginerelease.FieldEngine:
+		return m.Engine()
+	case decoyenginerelease.FieldVersion:
+		return m.Version()
+	case decoyenginerelease.FieldDigest:
+		return m.Digest()
+	case decoyenginerelease.FieldProtocol:
+		return m.Protocol()
+	case decoyenginerelease.FieldStateSchema:
+		return m.StateSchema()
+	case decoyenginerelease.FieldEnabled:
+		return m.Enabled()
+	case decoyenginerelease.FieldCreatedAt:
+		return m.CreatedAt()
+	case decoyenginerelease.FieldCreatedBy:
+		return m.CreatedBy()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DecoyEngineReleaseMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case decoyenginerelease.FieldEngine:
+		return m.OldEngine(ctx)
+	case decoyenginerelease.FieldVersion:
+		return m.OldVersion(ctx)
+	case decoyenginerelease.FieldDigest:
+		return m.OldDigest(ctx)
+	case decoyenginerelease.FieldProtocol:
+		return m.OldProtocol(ctx)
+	case decoyenginerelease.FieldStateSchema:
+		return m.OldStateSchema(ctx)
+	case decoyenginerelease.FieldEnabled:
+		return m.OldEnabled(ctx)
+	case decoyenginerelease.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case decoyenginerelease.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	}
+	return nil, fmt.Errorf("unknown DecoyEngineRelease field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DecoyEngineReleaseMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case decoyenginerelease.FieldEngine:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEngine(v)
+		return nil
+	case decoyenginerelease.FieldVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
+		return nil
+	case decoyenginerelease.FieldDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDigest(v)
+		return nil
+	case decoyenginerelease.FieldProtocol:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProtocol(v)
+		return nil
+	case decoyenginerelease.FieldStateSchema:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStateSchema(v)
+		return nil
+	case decoyenginerelease.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	case decoyenginerelease.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case decoyenginerelease.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DecoyEngineRelease field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DecoyEngineReleaseMutation) AddedFields() []string {
+	var fields []string
+	if m.addprotocol != nil {
+		fields = append(fields, decoyenginerelease.FieldProtocol)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DecoyEngineReleaseMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case decoyenginerelease.FieldProtocol:
+		return m.AddedProtocol()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DecoyEngineReleaseMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case decoyenginerelease.FieldProtocol:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProtocol(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DecoyEngineRelease numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DecoyEngineReleaseMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DecoyEngineReleaseMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DecoyEngineReleaseMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown DecoyEngineRelease nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DecoyEngineReleaseMutation) ResetField(name string) error {
+	switch name {
+	case decoyenginerelease.FieldEngine:
+		m.ResetEngine()
+		return nil
+	case decoyenginerelease.FieldVersion:
+		m.ResetVersion()
+		return nil
+	case decoyenginerelease.FieldDigest:
+		m.ResetDigest()
+		return nil
+	case decoyenginerelease.FieldProtocol:
+		m.ResetProtocol()
+		return nil
+	case decoyenginerelease.FieldStateSchema:
+		m.ResetStateSchema()
+		return nil
+	case decoyenginerelease.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	case decoyenginerelease.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case decoyenginerelease.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown DecoyEngineRelease field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DecoyEngineReleaseMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DecoyEngineReleaseMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DecoyEngineReleaseMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DecoyEngineReleaseMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DecoyEngineReleaseMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DecoyEngineReleaseMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DecoyEngineReleaseMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown DecoyEngineRelease unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DecoyEngineReleaseMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown DecoyEngineRelease edge %s", name)
+}
+
 // DecoyObservationMutation represents an operation that mutates the DecoyObservation nodes in the graph.
 type DecoyObservationMutation struct {
 	config
@@ -14008,6 +14958,12 @@ type DecoyObservationMutation struct {
 	kind          *string
 	generation    *string
 	received_at   *time.Time
+	revision_id   *uuid.UUID
+	session_id    *string
+	trigger_key   *string
+	payload_hash  *string
+	occurred_at   *time.Time
+	details       *map[string]interface{}
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*DecoyObservation, error)
@@ -14311,6 +15267,261 @@ func (m *DecoyObservationMutation) ResetReceivedAt() {
 	m.received_at = nil
 }
 
+// SetRevisionID sets the "revision_id" field.
+func (m *DecoyObservationMutation) SetRevisionID(u uuid.UUID) {
+	m.revision_id = &u
+}
+
+// RevisionID returns the value of the "revision_id" field in the mutation.
+func (m *DecoyObservationMutation) RevisionID() (r uuid.UUID, exists bool) {
+	v := m.revision_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevisionID returns the old "revision_id" field's value of the DecoyObservation entity.
+// If the DecoyObservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyObservationMutation) OldRevisionID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevisionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevisionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevisionID: %w", err)
+	}
+	return oldValue.RevisionID, nil
+}
+
+// ClearRevisionID clears the value of the "revision_id" field.
+func (m *DecoyObservationMutation) ClearRevisionID() {
+	m.revision_id = nil
+	m.clearedFields[decoyobservation.FieldRevisionID] = struct{}{}
+}
+
+// RevisionIDCleared returns if the "revision_id" field was cleared in this mutation.
+func (m *DecoyObservationMutation) RevisionIDCleared() bool {
+	_, ok := m.clearedFields[decoyobservation.FieldRevisionID]
+	return ok
+}
+
+// ResetRevisionID resets all changes to the "revision_id" field.
+func (m *DecoyObservationMutation) ResetRevisionID() {
+	m.revision_id = nil
+	delete(m.clearedFields, decoyobservation.FieldRevisionID)
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *DecoyObservationMutation) SetSessionID(s string) {
+	m.session_id = &s
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *DecoyObservationMutation) SessionID() (r string, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the DecoyObservation entity.
+// If the DecoyObservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyObservationMutation) OldSessionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *DecoyObservationMutation) ResetSessionID() {
+	m.session_id = nil
+}
+
+// SetTriggerKey sets the "trigger_key" field.
+func (m *DecoyObservationMutation) SetTriggerKey(s string) {
+	m.trigger_key = &s
+}
+
+// TriggerKey returns the value of the "trigger_key" field in the mutation.
+func (m *DecoyObservationMutation) TriggerKey() (r string, exists bool) {
+	v := m.trigger_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTriggerKey returns the old "trigger_key" field's value of the DecoyObservation entity.
+// If the DecoyObservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyObservationMutation) OldTriggerKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTriggerKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTriggerKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTriggerKey: %w", err)
+	}
+	return oldValue.TriggerKey, nil
+}
+
+// ResetTriggerKey resets all changes to the "trigger_key" field.
+func (m *DecoyObservationMutation) ResetTriggerKey() {
+	m.trigger_key = nil
+}
+
+// SetPayloadHash sets the "payload_hash" field.
+func (m *DecoyObservationMutation) SetPayloadHash(s string) {
+	m.payload_hash = &s
+}
+
+// PayloadHash returns the value of the "payload_hash" field in the mutation.
+func (m *DecoyObservationMutation) PayloadHash() (r string, exists bool) {
+	v := m.payload_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPayloadHash returns the old "payload_hash" field's value of the DecoyObservation entity.
+// If the DecoyObservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyObservationMutation) OldPayloadHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPayloadHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPayloadHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPayloadHash: %w", err)
+	}
+	return oldValue.PayloadHash, nil
+}
+
+// ResetPayloadHash resets all changes to the "payload_hash" field.
+func (m *DecoyObservationMutation) ResetPayloadHash() {
+	m.payload_hash = nil
+}
+
+// SetOccurredAt sets the "occurred_at" field.
+func (m *DecoyObservationMutation) SetOccurredAt(t time.Time) {
+	m.occurred_at = &t
+}
+
+// OccurredAt returns the value of the "occurred_at" field in the mutation.
+func (m *DecoyObservationMutation) OccurredAt() (r time.Time, exists bool) {
+	v := m.occurred_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOccurredAt returns the old "occurred_at" field's value of the DecoyObservation entity.
+// If the DecoyObservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyObservationMutation) OldOccurredAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOccurredAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOccurredAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOccurredAt: %w", err)
+	}
+	return oldValue.OccurredAt, nil
+}
+
+// ClearOccurredAt clears the value of the "occurred_at" field.
+func (m *DecoyObservationMutation) ClearOccurredAt() {
+	m.occurred_at = nil
+	m.clearedFields[decoyobservation.FieldOccurredAt] = struct{}{}
+}
+
+// OccurredAtCleared returns if the "occurred_at" field was cleared in this mutation.
+func (m *DecoyObservationMutation) OccurredAtCleared() bool {
+	_, ok := m.clearedFields[decoyobservation.FieldOccurredAt]
+	return ok
+}
+
+// ResetOccurredAt resets all changes to the "occurred_at" field.
+func (m *DecoyObservationMutation) ResetOccurredAt() {
+	m.occurred_at = nil
+	delete(m.clearedFields, decoyobservation.FieldOccurredAt)
+}
+
+// SetDetails sets the "details" field.
+func (m *DecoyObservationMutation) SetDetails(value map[string]interface{}) {
+	m.details = &value
+}
+
+// Details returns the value of the "details" field in the mutation.
+func (m *DecoyObservationMutation) Details() (r map[string]interface{}, exists bool) {
+	v := m.details
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDetails returns the old "details" field's value of the DecoyObservation entity.
+// If the DecoyObservation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyObservationMutation) OldDetails(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDetails is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDetails requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDetails: %w", err)
+	}
+	return oldValue.Details, nil
+}
+
+// ClearDetails clears the value of the "details" field.
+func (m *DecoyObservationMutation) ClearDetails() {
+	m.details = nil
+	m.clearedFields[decoyobservation.FieldDetails] = struct{}{}
+}
+
+// DetailsCleared returns if the "details" field was cleared in this mutation.
+func (m *DecoyObservationMutation) DetailsCleared() bool {
+	_, ok := m.clearedFields[decoyobservation.FieldDetails]
+	return ok
+}
+
+// ResetDetails resets all changes to the "details" field.
+func (m *DecoyObservationMutation) ResetDetails() {
+	m.details = nil
+	delete(m.clearedFields, decoyobservation.FieldDetails)
+}
+
 // Where appends a list predicates to the DecoyObservationMutation builder.
 func (m *DecoyObservationMutation) Where(ps ...predicate.DecoyObservation) {
 	m.predicates = append(m.predicates, ps...)
@@ -14345,7 +15556,7 @@ func (m *DecoyObservationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DecoyObservationMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 11)
 	if m.deployment_id != nil {
 		fields = append(fields, decoyobservation.FieldDeploymentID)
 	}
@@ -14360,6 +15571,24 @@ func (m *DecoyObservationMutation) Fields() []string {
 	}
 	if m.received_at != nil {
 		fields = append(fields, decoyobservation.FieldReceivedAt)
+	}
+	if m.revision_id != nil {
+		fields = append(fields, decoyobservation.FieldRevisionID)
+	}
+	if m.session_id != nil {
+		fields = append(fields, decoyobservation.FieldSessionID)
+	}
+	if m.trigger_key != nil {
+		fields = append(fields, decoyobservation.FieldTriggerKey)
+	}
+	if m.payload_hash != nil {
+		fields = append(fields, decoyobservation.FieldPayloadHash)
+	}
+	if m.occurred_at != nil {
+		fields = append(fields, decoyobservation.FieldOccurredAt)
+	}
+	if m.details != nil {
+		fields = append(fields, decoyobservation.FieldDetails)
 	}
 	return fields
 }
@@ -14379,6 +15608,18 @@ func (m *DecoyObservationMutation) Field(name string) (ent.Value, bool) {
 		return m.Generation()
 	case decoyobservation.FieldReceivedAt:
 		return m.ReceivedAt()
+	case decoyobservation.FieldRevisionID:
+		return m.RevisionID()
+	case decoyobservation.FieldSessionID:
+		return m.SessionID()
+	case decoyobservation.FieldTriggerKey:
+		return m.TriggerKey()
+	case decoyobservation.FieldPayloadHash:
+		return m.PayloadHash()
+	case decoyobservation.FieldOccurredAt:
+		return m.OccurredAt()
+	case decoyobservation.FieldDetails:
+		return m.Details()
 	}
 	return nil, false
 }
@@ -14398,6 +15639,18 @@ func (m *DecoyObservationMutation) OldField(ctx context.Context, name string) (e
 		return m.OldGeneration(ctx)
 	case decoyobservation.FieldReceivedAt:
 		return m.OldReceivedAt(ctx)
+	case decoyobservation.FieldRevisionID:
+		return m.OldRevisionID(ctx)
+	case decoyobservation.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case decoyobservation.FieldTriggerKey:
+		return m.OldTriggerKey(ctx)
+	case decoyobservation.FieldPayloadHash:
+		return m.OldPayloadHash(ctx)
+	case decoyobservation.FieldOccurredAt:
+		return m.OldOccurredAt(ctx)
+	case decoyobservation.FieldDetails:
+		return m.OldDetails(ctx)
 	}
 	return nil, fmt.Errorf("unknown DecoyObservation field %s", name)
 }
@@ -14442,6 +15695,48 @@ func (m *DecoyObservationMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetReceivedAt(v)
 		return nil
+	case decoyobservation.FieldRevisionID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevisionID(v)
+		return nil
+	case decoyobservation.FieldSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case decoyobservation.FieldTriggerKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTriggerKey(v)
+		return nil
+	case decoyobservation.FieldPayloadHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPayloadHash(v)
+		return nil
+	case decoyobservation.FieldOccurredAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOccurredAt(v)
+		return nil
+	case decoyobservation.FieldDetails:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDetails(v)
+		return nil
 	}
 	return fmt.Errorf("unknown DecoyObservation field %s", name)
 }
@@ -14475,6 +15770,15 @@ func (m *DecoyObservationMutation) ClearedFields() []string {
 	if m.FieldCleared(decoyobservation.FieldIncidentID) {
 		fields = append(fields, decoyobservation.FieldIncidentID)
 	}
+	if m.FieldCleared(decoyobservation.FieldRevisionID) {
+		fields = append(fields, decoyobservation.FieldRevisionID)
+	}
+	if m.FieldCleared(decoyobservation.FieldOccurredAt) {
+		fields = append(fields, decoyobservation.FieldOccurredAt)
+	}
+	if m.FieldCleared(decoyobservation.FieldDetails) {
+		fields = append(fields, decoyobservation.FieldDetails)
+	}
 	return fields
 }
 
@@ -14491,6 +15795,15 @@ func (m *DecoyObservationMutation) ClearField(name string) error {
 	switch name {
 	case decoyobservation.FieldIncidentID:
 		m.ClearIncidentID()
+		return nil
+	case decoyobservation.FieldRevisionID:
+		m.ClearRevisionID()
+		return nil
+	case decoyobservation.FieldOccurredAt:
+		m.ClearOccurredAt()
+		return nil
+	case decoyobservation.FieldDetails:
+		m.ClearDetails()
 		return nil
 	}
 	return fmt.Errorf("unknown DecoyObservation nullable field %s", name)
@@ -14514,6 +15827,24 @@ func (m *DecoyObservationMutation) ResetField(name string) error {
 		return nil
 	case decoyobservation.FieldReceivedAt:
 		m.ResetReceivedAt()
+		return nil
+	case decoyobservation.FieldRevisionID:
+		m.ResetRevisionID()
+		return nil
+	case decoyobservation.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case decoyobservation.FieldTriggerKey:
+		m.ResetTriggerKey()
+		return nil
+	case decoyobservation.FieldPayloadHash:
+		m.ResetPayloadHash()
+		return nil
+	case decoyobservation.FieldOccurredAt:
+		m.ResetOccurredAt()
+		return nil
+	case decoyobservation.FieldDetails:
+		m.ResetDetails()
 		return nil
 	}
 	return fmt.Errorf("unknown DecoyObservation field %s", name)
@@ -14565,6 +15896,644 @@ func (m *DecoyObservationMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *DecoyObservationMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown DecoyObservation edge %s", name)
+}
+
+// DecoyRevisionMutation represents an operation that mutates the DecoyRevision nodes in the graph.
+type DecoyRevisionMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	deployment_id *uuid.UUID
+	number        *int
+	addnumber     *int
+	release_id    *uuid.UUID
+	spec          *map[string]interface{}
+	created_at    *time.Time
+	created_by    *string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*DecoyRevision, error)
+	predicates    []predicate.DecoyRevision
+}
+
+var _ ent.Mutation = (*DecoyRevisionMutation)(nil)
+
+// decoyrevisionOption allows management of the mutation configuration using functional options.
+type decoyrevisionOption func(*DecoyRevisionMutation)
+
+// newDecoyRevisionMutation creates new mutation for the DecoyRevision entity.
+func newDecoyRevisionMutation(c config, op Op, opts ...decoyrevisionOption) *DecoyRevisionMutation {
+	m := &DecoyRevisionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDecoyRevision,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDecoyRevisionID sets the ID field of the mutation.
+func withDecoyRevisionID(id uuid.UUID) decoyrevisionOption {
+	return func(m *DecoyRevisionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DecoyRevision
+		)
+		m.oldValue = func(ctx context.Context) (*DecoyRevision, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DecoyRevision.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDecoyRevision sets the old DecoyRevision of the mutation.
+func withDecoyRevision(node *DecoyRevision) decoyrevisionOption {
+	return func(m *DecoyRevisionMutation) {
+		m.oldValue = func(context.Context) (*DecoyRevision, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DecoyRevisionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DecoyRevisionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of DecoyRevision entities.
+func (m *DecoyRevisionMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DecoyRevisionMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DecoyRevisionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DecoyRevision.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetDeploymentID sets the "deployment_id" field.
+func (m *DecoyRevisionMutation) SetDeploymentID(u uuid.UUID) {
+	m.deployment_id = &u
+}
+
+// DeploymentID returns the value of the "deployment_id" field in the mutation.
+func (m *DecoyRevisionMutation) DeploymentID() (r uuid.UUID, exists bool) {
+	v := m.deployment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeploymentID returns the old "deployment_id" field's value of the DecoyRevision entity.
+// If the DecoyRevision object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyRevisionMutation) OldDeploymentID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeploymentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeploymentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeploymentID: %w", err)
+	}
+	return oldValue.DeploymentID, nil
+}
+
+// ResetDeploymentID resets all changes to the "deployment_id" field.
+func (m *DecoyRevisionMutation) ResetDeploymentID() {
+	m.deployment_id = nil
+}
+
+// SetNumber sets the "number" field.
+func (m *DecoyRevisionMutation) SetNumber(i int) {
+	m.number = &i
+	m.addnumber = nil
+}
+
+// Number returns the value of the "number" field in the mutation.
+func (m *DecoyRevisionMutation) Number() (r int, exists bool) {
+	v := m.number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNumber returns the old "number" field's value of the DecoyRevision entity.
+// If the DecoyRevision object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyRevisionMutation) OldNumber(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNumber is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNumber requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNumber: %w", err)
+	}
+	return oldValue.Number, nil
+}
+
+// AddNumber adds i to the "number" field.
+func (m *DecoyRevisionMutation) AddNumber(i int) {
+	if m.addnumber != nil {
+		*m.addnumber += i
+	} else {
+		m.addnumber = &i
+	}
+}
+
+// AddedNumber returns the value that was added to the "number" field in this mutation.
+func (m *DecoyRevisionMutation) AddedNumber() (r int, exists bool) {
+	v := m.addnumber
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetNumber resets all changes to the "number" field.
+func (m *DecoyRevisionMutation) ResetNumber() {
+	m.number = nil
+	m.addnumber = nil
+}
+
+// SetReleaseID sets the "release_id" field.
+func (m *DecoyRevisionMutation) SetReleaseID(u uuid.UUID) {
+	m.release_id = &u
+}
+
+// ReleaseID returns the value of the "release_id" field in the mutation.
+func (m *DecoyRevisionMutation) ReleaseID() (r uuid.UUID, exists bool) {
+	v := m.release_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReleaseID returns the old "release_id" field's value of the DecoyRevision entity.
+// If the DecoyRevision object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyRevisionMutation) OldReleaseID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReleaseID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReleaseID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReleaseID: %w", err)
+	}
+	return oldValue.ReleaseID, nil
+}
+
+// ResetReleaseID resets all changes to the "release_id" field.
+func (m *DecoyRevisionMutation) ResetReleaseID() {
+	m.release_id = nil
+}
+
+// SetSpec sets the "spec" field.
+func (m *DecoyRevisionMutation) SetSpec(value map[string]interface{}) {
+	m.spec = &value
+}
+
+// Spec returns the value of the "spec" field in the mutation.
+func (m *DecoyRevisionMutation) Spec() (r map[string]interface{}, exists bool) {
+	v := m.spec
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSpec returns the old "spec" field's value of the DecoyRevision entity.
+// If the DecoyRevision object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyRevisionMutation) OldSpec(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSpec is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSpec requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSpec: %w", err)
+	}
+	return oldValue.Spec, nil
+}
+
+// ResetSpec resets all changes to the "spec" field.
+func (m *DecoyRevisionMutation) ResetSpec() {
+	m.spec = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DecoyRevisionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DecoyRevisionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DecoyRevision entity.
+// If the DecoyRevision object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyRevisionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DecoyRevisionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *DecoyRevisionMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *DecoyRevisionMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the DecoyRevision entity.
+// If the DecoyRevision object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyRevisionMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *DecoyRevisionMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// Where appends a list predicates to the DecoyRevisionMutation builder.
+func (m *DecoyRevisionMutation) Where(ps ...predicate.DecoyRevision) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DecoyRevisionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DecoyRevisionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DecoyRevision, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DecoyRevisionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DecoyRevisionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DecoyRevision).
+func (m *DecoyRevisionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DecoyRevisionMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.deployment_id != nil {
+		fields = append(fields, decoyrevision.FieldDeploymentID)
+	}
+	if m.number != nil {
+		fields = append(fields, decoyrevision.FieldNumber)
+	}
+	if m.release_id != nil {
+		fields = append(fields, decoyrevision.FieldReleaseID)
+	}
+	if m.spec != nil {
+		fields = append(fields, decoyrevision.FieldSpec)
+	}
+	if m.created_at != nil {
+		fields = append(fields, decoyrevision.FieldCreatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, decoyrevision.FieldCreatedBy)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DecoyRevisionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case decoyrevision.FieldDeploymentID:
+		return m.DeploymentID()
+	case decoyrevision.FieldNumber:
+		return m.Number()
+	case decoyrevision.FieldReleaseID:
+		return m.ReleaseID()
+	case decoyrevision.FieldSpec:
+		return m.Spec()
+	case decoyrevision.FieldCreatedAt:
+		return m.CreatedAt()
+	case decoyrevision.FieldCreatedBy:
+		return m.CreatedBy()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DecoyRevisionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case decoyrevision.FieldDeploymentID:
+		return m.OldDeploymentID(ctx)
+	case decoyrevision.FieldNumber:
+		return m.OldNumber(ctx)
+	case decoyrevision.FieldReleaseID:
+		return m.OldReleaseID(ctx)
+	case decoyrevision.FieldSpec:
+		return m.OldSpec(ctx)
+	case decoyrevision.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case decoyrevision.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	}
+	return nil, fmt.Errorf("unknown DecoyRevision field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DecoyRevisionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case decoyrevision.FieldDeploymentID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeploymentID(v)
+		return nil
+	case decoyrevision.FieldNumber:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNumber(v)
+		return nil
+	case decoyrevision.FieldReleaseID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReleaseID(v)
+		return nil
+	case decoyrevision.FieldSpec:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSpec(v)
+		return nil
+	case decoyrevision.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case decoyrevision.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DecoyRevision field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DecoyRevisionMutation) AddedFields() []string {
+	var fields []string
+	if m.addnumber != nil {
+		fields = append(fields, decoyrevision.FieldNumber)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DecoyRevisionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case decoyrevision.FieldNumber:
+		return m.AddedNumber()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DecoyRevisionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case decoyrevision.FieldNumber:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNumber(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DecoyRevision numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DecoyRevisionMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DecoyRevisionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DecoyRevisionMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown DecoyRevision nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DecoyRevisionMutation) ResetField(name string) error {
+	switch name {
+	case decoyrevision.FieldDeploymentID:
+		m.ResetDeploymentID()
+		return nil
+	case decoyrevision.FieldNumber:
+		m.ResetNumber()
+		return nil
+	case decoyrevision.FieldReleaseID:
+		m.ResetReleaseID()
+		return nil
+	case decoyrevision.FieldSpec:
+		m.ResetSpec()
+		return nil
+	case decoyrevision.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case decoyrevision.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown DecoyRevision field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DecoyRevisionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DecoyRevisionMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DecoyRevisionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DecoyRevisionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DecoyRevisionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DecoyRevisionMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DecoyRevisionMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown DecoyRevision unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DecoyRevisionMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown DecoyRevision edge %s", name)
 }
 
 // EnrollTokenMutation represents an operation that mutates the EnrollToken nodes in the graph.

@@ -60,7 +60,13 @@ type DecoyDeployment struct {
 	InstallState decoydeployment.InstallState `json:"install_state,omitempty"`
 	// InstallStartedAt holds the value of the "install_started_at" field.
 	InstallStartedAt *time.Time `json:"install_started_at,omitempty"`
-	selectValues     sql.SelectValues
+	// ActiveRevisionID holds the value of the "active_revision_id" field.
+	ActiveRevisionID *uuid.UUID `json:"active_revision_id,omitempty"`
+	// TokenRevisionID holds the value of the "token_revision_id" field.
+	TokenRevisionID *uuid.UUID `json:"token_revision_id,omitempty"`
+	// StopRequested holds the value of the "stop_requested" field.
+	StopRequested bool `json:"stop_requested,omitempty"`
+	selectValues  sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -68,8 +74,10 @@ func (*DecoyDeployment) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case decoydeployment.FieldTokenGroupID, decoydeployment.FieldRuntimeInstanceID:
+		case decoydeployment.FieldTokenGroupID, decoydeployment.FieldRuntimeInstanceID, decoydeployment.FieldActiveRevisionID, decoydeployment.FieldTokenRevisionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
+		case decoydeployment.FieldStopRequested:
+			values[i] = new(sql.NullBool)
 		case decoydeployment.FieldPort:
 			values[i] = new(sql.NullInt64)
 		case decoydeployment.FieldProfile, decoydeployment.FieldTemplate, decoydeployment.FieldStatus, decoydeployment.FieldCreatedBy, decoydeployment.FieldRevokedBy, decoydeployment.FieldKind, decoydeployment.FieldResource, decoydeployment.FieldMarker, decoydeployment.FieldTokenHash, decoydeployment.FieldRuntimeState, decoydeployment.FieldRuntimeGeneration, decoydeployment.FieldInstallState:
@@ -232,6 +240,26 @@ func (_m *DecoyDeployment) assignValues(columns []string, values []any) error {
 				_m.InstallStartedAt = new(time.Time)
 				*_m.InstallStartedAt = value.Time
 			}
+		case decoydeployment.FieldActiveRevisionID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field active_revision_id", values[i])
+			} else if value.Valid {
+				_m.ActiveRevisionID = new(uuid.UUID)
+				*_m.ActiveRevisionID = *value.S.(*uuid.UUID)
+			}
+		case decoydeployment.FieldTokenRevisionID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field token_revision_id", values[i])
+			} else if value.Valid {
+				_m.TokenRevisionID = new(uuid.UUID)
+				*_m.TokenRevisionID = *value.S.(*uuid.UUID)
+			}
+		case decoydeployment.FieldStopRequested:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field stop_requested", values[i])
+			} else if value.Valid {
+				_m.StopRequested = value.Bool
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -341,6 +369,19 @@ func (_m *DecoyDeployment) String() string {
 		builder.WriteString("install_started_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	if v := _m.ActiveRevisionID; v != nil {
+		builder.WriteString("active_revision_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.TokenRevisionID; v != nil {
+		builder.WriteString("token_revision_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("stop_requested=")
+	builder.WriteString(fmt.Sprintf("%v", _m.StopRequested))
 	builder.WriteByte(')')
 	return builder.String()
 }

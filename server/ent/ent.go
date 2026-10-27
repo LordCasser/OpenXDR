@@ -18,7 +18,9 @@ import (
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/ent/decoyenginerelease"
 	"openxdr/server/ent/decoyobservation"
+	"openxdr/server/ent/decoyrevision"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/externalticket"
@@ -130,7 +132,9 @@ func checkColumn(t, c string) error {
 			command.Table:                 command.ValidColumn,
 			commandpolicy.Table:           commandpolicy.ValidColumn,
 			decoydeployment.Table:         decoydeployment.ValidColumn,
+			decoyenginerelease.Table:      decoyenginerelease.ValidColumn,
 			decoyobservation.Table:        decoyobservation.ValidColumn,
+			decoyrevision.Table:           decoyrevision.ValidColumn,
 			enrolltoken.Table:             enrolltoken.ValidColumn,
 			event.Table:                   event.ValidColumn,
 			externalticket.Table:          externalticket.ValidColumn,

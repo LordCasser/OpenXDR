@@ -437,3 +437,20 @@ DNS 校验与实际拨号使用同一地址，TLS 证书必须有效。
 `openxdr_integration_oldest_pending_seconds`、`openxdr_integration_attempts_retained`
 以及集成 API 的 429 计数。队列指标是数据库全局快照，跨节点采集应取 max 而不是求和；
 尝试数量是保留期内的 gauge，不是永久累计 counter。
+
+
+## 独立欺骗引擎统一启动
+
+在原安装目录的 `.env` 中追加 `COMPOSE_PROFILES=dygk`，继续使用主 `docker compose up -d`。原有 profile 以逗号保留。引擎版本和运行身份由平台与受限控制通道自动登记、签发；控制台选择平台托管后无需再配置独立启动参数。
+
+| 配置 | 默认 | 用途 |
+| --- | --- | --- |
+| `COMPOSE_PROFILES` | 未启用 DYGK | 包含 `dygk` 时随主编排启用引擎 |
+| `DYGK_VERSION` | 安装编排 `latest`，源码编排 `local` | 独立引擎镜像标签，生产宜锁定 |
+| `DYGK_BIND_IP` | `127.0.0.1` | 主编排预留端口的宿主绑定地址 |
+| `DYGK_PORT_RANGE` | `18080-18179` | 站点端口范围；登记应选择对应端口 |
+| `DYGK_UPSTREAM_TOKEN` | 空 | 仅源码构建使用的上游读取令牌，经 BuildKit secret 提供；使用已构建镜像时无需设置 |
+
+控制 socket 和持久目录由主编排注入命名卷，不是开发机路径；不要将引擎控制卷挂给其他服务。独立镜像的发布授权、云端接入与回退步骤见 [运行包说明](../integrations/dygk/README.md)。
+
+源码构建按锁文件获取并适配 DYGK 上游源码，开发机的 `.downloads/` 和 `.upstream/` 缓存由 Git 与 Docker 构建上下文共同排除；云端构建会重新准备依赖。预构建镜像已包含运行核心，启动时无需上游源码仓库或读取令牌。具体目录与打包范围见 [源码缓存和 Git 管理](../integrations/dygk/README.md#源码缓存和-git-管理)。

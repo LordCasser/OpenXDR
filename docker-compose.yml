@@ -93,16 +93,44 @@ services:
       HOST_CREDENTIAL_KEY: ${HOST_CREDENTIAL_KEY:-}
       ENROLL_PUBLIC_URL: ${ENROLL_PUBLIC_URL:-}
       ENROLL_SSH_ENABLED: ${ENROLL_SSH_ENABLED:-false}
+      DYGK_CONTROL_SOCKET: /run/openxdr/deception/control.sock
     volumes:
       - ./rules:/rules:ro
       - ./tasks:/tasks:ro
       - ./certs:/certs:ro
       - ./dist:/dist:ro
+      - deception-control:/run/openxdr/deception
     ports:
       - "8080:8080"   # REST API
       - "8081:8081"   # gRPC：agent / sensor 接入
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  deception:
+    profiles: [dygk]
+    build:
+      context: .
+      dockerfile: integrations/dygk/Dockerfile
+      secrets:
+        - dygk_upstream_token
+    image: openxdr-deception:${DYGK_VERSION:-local}
+    depends_on:
+      - server
+    environment:
+      DYGK_CONTROL_SOCKET: /run/openxdr/deception/control.sock
+      DYGK_STATE_DIR: /data
+      DYGK_LISTEN_HOST: 0.0.0.0
+    volumes:
+      - deception-control:/run/openxdr/deception
+      - deception-data:/data
+    ports:
+      - "${DYGK_BIND_IP:-127.0.0.1}:${DYGK_PORT_RANGE:-18080-18179}:${DYGK_PORT_RANGE:-18080-18179}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    pids_limit: 64
+    stop_grace_period: 30s
 
   web:
     build:
@@ -117,3 +145,9 @@ services:
 volumes:
   pgdata:
   natsdata:
+  deception-control:
+  deception-data:
+
+secrets:
+  dygk_upstream_token:
+    environment: DYGK_UPSTREAM_TOKEN

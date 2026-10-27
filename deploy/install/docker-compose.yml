@@ -65,10 +65,34 @@ services:
       RETENTION_DAYS: ${RETENTION_DAYS:-30}
       # 跨事件的计数与序列检测（开发中，默认关闭）：在 .env 写 TEMPORAL_RULES_PATH=/opt/openxdr/temporal-rules 开启，规则已随镜像带上
       TEMPORAL_RULES_PATH: ${TEMPORAL_RULES_PATH:-}
+      DYGK_CONTROL_SOCKET: /run/openxdr/deception/control.sock
     volumes:
       - ./certs:/certs:ro
+      - deception-control:/run/openxdr/deception
     ports:
       - "8081:8081"
+
+  deception:
+    profiles: [dygk]
+    image: ghcr.io/yaklang/openxdr-deception:${DYGK_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      DYGK_CONTROL_SOCKET: /run/openxdr/deception/control.sock
+      DYGK_STATE_DIR: /data
+      DYGK_LISTEN_HOST: 0.0.0.0
+    volumes:
+      - deception-control:/run/openxdr/deception
+      - deception-data:/data
+    ports:
+      - "${DYGK_BIND_IP:-127.0.0.1}:${DYGK_PORT_RANGE:-18080-18179}:${DYGK_PORT_RANGE:-18080-18179}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    pids_limit: 64
+    stop_grace_period: 30s
 
   web:
     image: ghcr.io/yaklang/openxdr-web:${OPENXDR_VERSION:-latest}
@@ -99,3 +123,5 @@ volumes:
   pgdata:
   natsdata:
   caddydata:
+  deception-control:
+  deception-data:

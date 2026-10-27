@@ -78,6 +78,8 @@ func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 		func(ctx context.Context) (int, error) { return c.IntegrationGroup.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.Integration.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.DecoyObservation.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.DecoyRevision.Delete().Exec(ctx) },
+		func(ctx context.Context) (int, error) { return c.DecoyEngineRelease.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.DecoyDeployment.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.AIJob.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.HostCredential.Delete().Exec(ctx) },

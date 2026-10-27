@@ -4,4 +4,10 @@
 !rules
 !tasks
 !temporal-rules
+!integrations
+!integrations/dygk
+integrations/dygk/.upstream
+integrations/dygk/.downloads
+integrations/dygk/node_modules
+integrations/dygk/runtime-state
 server/pi-runtime/node_modules

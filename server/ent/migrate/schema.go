@@ -423,6 +423,9 @@ var (
 		{Name: "runtime_generation", Type: field.TypeString, Nullable: true},
 		{Name: "install_state", Type: field.TypeEnum, Enums: []string{"idle", "installing", "installed", "unconfirmed"}, Default: "idle"},
 		{Name: "install_started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "active_revision_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "token_revision_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "stop_requested", Type: field.TypeBool, Default: false},
 	}
 	// DecoyDeploymentsTable holds the schema information for the "decoy_deployments" table.
 	DecoyDeploymentsTable = &schema.Table{
@@ -453,6 +456,31 @@ var (
 			},
 		},
 	}
+	// DecoyEngineReleasesColumns holds the columns for the "decoy_engine_releases" table.
+	DecoyEngineReleasesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "engine", Type: field.TypeString},
+		{Name: "version", Type: field.TypeString},
+		{Name: "digest", Type: field.TypeString},
+		{Name: "protocol", Type: field.TypeInt},
+		{Name: "state_schema", Type: field.TypeString},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString},
+	}
+	// DecoyEngineReleasesTable holds the schema information for the "decoy_engine_releases" table.
+	DecoyEngineReleasesTable = &schema.Table{
+		Name:       "decoy_engine_releases",
+		Columns:    DecoyEngineReleasesColumns,
+		PrimaryKey: []*schema.Column{DecoyEngineReleasesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "decoyenginerelease_engine_version_digest",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyEngineReleasesColumns[1], DecoyEngineReleasesColumns[2], DecoyEngineReleasesColumns[3]},
+			},
+		},
+	}
 	// DecoyObservationsColumns holds the columns for the "decoy_observations" table.
 	DecoyObservationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -461,6 +489,12 @@ var (
 		{Name: "kind", Type: field.TypeString},
 		{Name: "generation", Type: field.TypeString, Default: ""},
 		{Name: "received_at", Type: field.TypeTime},
+		{Name: "revision_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "session_id", Type: field.TypeString, Default: ""},
+		{Name: "trigger_key", Type: field.TypeString, Default: ""},
+		{Name: "payload_hash", Type: field.TypeString, Default: ""},
+		{Name: "occurred_at", Type: field.TypeTime, Nullable: true},
+		{Name: "details", Type: field.TypeJSON, Nullable: true},
 	}
 	// DecoyObservationsTable holds the schema information for the "decoy_observations" table.
 	DecoyObservationsTable = &schema.Table{
@@ -485,6 +519,42 @@ var (
 				Annotation: &entsql.IndexAnnotation{
 					Where: "kind = 'marker_used'",
 				},
+			},
+			{
+				Name:    "decoyobservation_deployment_id_trigger_key",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyObservationsColumns[1], DecoyObservationsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "trigger_key <> ''",
+				},
+			},
+			{
+				Name:    "decoyobservation_deployment_id_session_id",
+				Unique:  false,
+				Columns: []*schema.Column{DecoyObservationsColumns[1], DecoyObservationsColumns[7]},
+			},
+		},
+	}
+	// DecoyRevisionsColumns holds the columns for the "decoy_revisions" table.
+	DecoyRevisionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "deployment_id", Type: field.TypeUUID},
+		{Name: "number", Type: field.TypeInt},
+		{Name: "release_id", Type: field.TypeUUID},
+		{Name: "spec", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString},
+	}
+	// DecoyRevisionsTable holds the schema information for the "decoy_revisions" table.
+	DecoyRevisionsTable = &schema.Table{
+		Name:       "decoy_revisions",
+		Columns:    DecoyRevisionsColumns,
+		PrimaryKey: []*schema.Column{DecoyRevisionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "decoyrevision_deployment_id_number",
+				Unique:  true,
+				Columns: []*schema.Column{DecoyRevisionsColumns[1], DecoyRevisionsColumns[2]},
 			},
 		},
 	}
@@ -1410,7 +1480,9 @@ var (
 		CommandsTable,
 		CommandPoliciesTable,
 		DecoyDeploymentsTable,
+		DecoyEngineReleasesTable,
 		DecoyObservationsTable,
+		DecoyRevisionsTable,
 		EnrollTokensTable,
 		EventsTable,
 		ExternalTicketsTable,

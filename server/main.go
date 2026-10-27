@@ -154,6 +154,10 @@ func main() {
 		os.Exit(1)
 	}
 	httpServer := &http.Server{Addr: httpAddr, Handler: realip.Middleware(trustedProxies, mux), ReadHeaderTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	if err := api.StartDeceptionHost(ctx, client, os.Getenv("DYGK_CONTROL_SOCKET")); err != nil {
+		slog.Error("欺骗引擎控制通道启动失败", "err", err)
+		os.Exit(1)
+	}
 	serveUntilDone(ctx, httpServer, chat, scheduler, grpcServer)
 }
 
@@ -730,6 +734,7 @@ func publicMux(app http.Handler, db *sql.DB, client *ent.Client, registry *prome
 	// 接入端点免登录：安装脚本与二进制公开，注册靠令牌
 	mux.Handle("/api/enroll/", enrollSvc.Public(dists))
 	mux.Handle("/api/decoy-runtime/", api.DecoyRuntime(client))
+	mux.Handle("/api/deception-runtime/", api.DeceptionRuntime(client))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := db.PingContext(r.Context()); err != nil || !events.Ready() {

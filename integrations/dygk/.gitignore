@@ -1,0 +1,4 @@
+.upstream/
+.downloads/
+*.sqlite*
+runtime-state/

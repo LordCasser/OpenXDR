@@ -275,6 +275,48 @@ func (_c *DecoyDeploymentCreate) SetNillableInstallStartedAt(v *time.Time) *Deco
 	return _c
 }
 
+// SetActiveRevisionID sets the "active_revision_id" field.
+func (_c *DecoyDeploymentCreate) SetActiveRevisionID(v uuid.UUID) *DecoyDeploymentCreate {
+	_c.mutation.SetActiveRevisionID(v)
+	return _c
+}
+
+// SetNillableActiveRevisionID sets the "active_revision_id" field if the given value is not nil.
+func (_c *DecoyDeploymentCreate) SetNillableActiveRevisionID(v *uuid.UUID) *DecoyDeploymentCreate {
+	if v != nil {
+		_c.SetActiveRevisionID(*v)
+	}
+	return _c
+}
+
+// SetTokenRevisionID sets the "token_revision_id" field.
+func (_c *DecoyDeploymentCreate) SetTokenRevisionID(v uuid.UUID) *DecoyDeploymentCreate {
+	_c.mutation.SetTokenRevisionID(v)
+	return _c
+}
+
+// SetNillableTokenRevisionID sets the "token_revision_id" field if the given value is not nil.
+func (_c *DecoyDeploymentCreate) SetNillableTokenRevisionID(v *uuid.UUID) *DecoyDeploymentCreate {
+	if v != nil {
+		_c.SetTokenRevisionID(*v)
+	}
+	return _c
+}
+
+// SetStopRequested sets the "stop_requested" field.
+func (_c *DecoyDeploymentCreate) SetStopRequested(v bool) *DecoyDeploymentCreate {
+	_c.mutation.SetStopRequested(v)
+	return _c
+}
+
+// SetNillableStopRequested sets the "stop_requested" field if the given value is not nil.
+func (_c *DecoyDeploymentCreate) SetNillableStopRequested(v *bool) *DecoyDeploymentCreate {
+	if v != nil {
+		_c.SetStopRequested(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *DecoyDeploymentCreate) SetID(v uuid.UUID) *DecoyDeploymentCreate {
 	_c.mutation.SetID(v)
@@ -348,6 +390,10 @@ func (_c *DecoyDeploymentCreate) defaults() {
 		v := decoydeployment.DefaultInstallState
 		_c.mutation.SetInstallState(v)
 	}
+	if _, ok := _c.mutation.StopRequested(); !ok {
+		v := decoydeployment.DefaultStopRequested
+		_c.mutation.SetStopRequested(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		v := decoydeployment.DefaultID()
 		_c.mutation.SetID(v)
@@ -413,6 +459,9 @@ func (_c *DecoyDeploymentCreate) check() error {
 		if err := decoydeployment.InstallStateValidator(v); err != nil {
 			return &ValidationError{Name: "install_state", err: fmt.Errorf(`ent: validator failed for field "DecoyDeployment.install_state": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.StopRequested(); !ok {
+		return &ValidationError{Name: "stop_requested", err: errors.New(`ent: missing required field "DecoyDeployment.stop_requested"`)}
 	}
 	return nil
 }
@@ -532,6 +581,18 @@ func (_c *DecoyDeploymentCreate) createSpec() (*DecoyDeployment, *sqlgraph.Creat
 	if value, ok := _c.mutation.InstallStartedAt(); ok {
 		_spec.SetField(decoydeployment.FieldInstallStartedAt, field.TypeTime, value)
 		_node.InstallStartedAt = &value
+	}
+	if value, ok := _c.mutation.ActiveRevisionID(); ok {
+		_spec.SetField(decoydeployment.FieldActiveRevisionID, field.TypeUUID, value)
+		_node.ActiveRevisionID = &value
+	}
+	if value, ok := _c.mutation.TokenRevisionID(); ok {
+		_spec.SetField(decoydeployment.FieldTokenRevisionID, field.TypeUUID, value)
+		_node.TokenRevisionID = &value
+	}
+	if value, ok := _c.mutation.StopRequested(); ok {
+		_spec.SetField(decoydeployment.FieldStopRequested, field.TypeBool, value)
+		_node.StopRequested = value
 	}
 	return _node, _spec
 }
