@@ -38,7 +38,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 `GET /api/events` 参数：`from`/`to`（RFC3339，默认近 24h）、`assetId`、
 `classUid`（1001 文件 / 1007 进程 / 3002 认证 / 4001 网络 / 4003 DNS /
 201002 注册表 / 100001 日志）、
-`source`（agent/sensor/syslog）、`q`（对事件体子串匹配，通配符按字面量处理）、
+`source`（agent/sensor/syslog）、`q`（对事件里的字段值做不区分大小写的子串匹配，通配符按字面量处理；不匹配字段名，口径见 [事件表分区](event-partitioning.md#关键词检索索引)）、
 `limit`（≤200，默认 100）。返回条数等于 `limit` 时带响应头 `X-Truncated: 1`，
 提示可能还有更多、应收窄条件。各类事件的字段 schema 见
 [events.md](events.md)。

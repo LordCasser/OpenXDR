@@ -415,7 +415,7 @@ C2 心跳的样子是同一进程隔着差不多的时间反复连同一个公�
 - **主动调查式**：模型可调用三个有边界的调查工具（`tools.go:21-39`）：
   | 工具 | 参数边界 |
   |---|---|
-  | `query_events(keyword, hours)` | raw 全文 ILIKE，关键词转义 `% _ \`；hours 默认 24、超界回落；返回最近 15 条 |
+  | `query_events(keyword, hours)` | 事件字段值 ILIKE（与控制台检索同口径，`eventsearch.Keyword`），关键词转义 `% _ \`；hours 默认 24、超界回落；返回最近 15 条 |
   | `process_lineage(process_guid)` | GUID 必须合法 UUID；祖先上溯 10 层、子进程最多 10 条 |
   | `host_alerts(asset_id, days)` | UUID 校验；days 默认 7、>90 回落；最多 20 条 |
 - 事件 raw 截断 300 字符；工具错误以 JSON 回给模型不中断

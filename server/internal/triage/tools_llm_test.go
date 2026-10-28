@@ -15,22 +15,6 @@ import (
 	"openxdr/server/ent"
 )
 
-func TestEscapeLikeTriage(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"plain", "plain"},
-		{"100%", `100\%`},
-		{"a_b", `a\_b`},
-		{`path\file`, `path\\file`},
-		{`%_\`, `\%\_\\`},
-		{"", ""},
-	}
-	for _, c := range cases {
-		if got := escapeLike(c.in); got != c.want {
-			t.Errorf("escapeLike(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
-
 func TestBrief(t *testing.T) {
 	ts := time.Date(2026, 8, 8, 14, 30, 0, 0, time.UTC)
 	long := strings.Repeat("x", 400)

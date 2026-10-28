@@ -39,6 +39,7 @@ import (
 	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/eventpart"
+	"openxdr/server/internal/eventsearch"
 	"openxdr/server/internal/fpstats"
 	"openxdr/server/internal/grpcsvc"
 	"openxdr/server/internal/hostimport"
@@ -177,7 +178,7 @@ func migrateSchema(ctx context.Context, db *sql.DB, client *ent.Client) error {
 	if err := eventpart.Migrate(ctx, client, db); err != nil {
 		return err
 	}
-	ensureSearchIndex(ctx, db)
+	eventsearch.Ensure(ctx, db)
 	// 旧版 AI 免审批名单换成高风险名单；放在 schema 锁里，多节点同时启动只迁一次
 	if err := commandgate.MigrateAllowToDeny(ctx, client); err != nil {
 		return err
@@ -789,22 +790,6 @@ func configureLogging() {
 		return
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, opts)))
-}
-
-// ensureSearchIndex 事件全文检索的 trgm 索引。没有它，关键词检索在大表上
-// 是全表扫。CREATE EXTENSION 需要数据库权限，失败只降级警告——检索仍然可用，
-// 只是慢，比起启动失败这是正确的取舍。
-func ensureSearchIndex(ctx context.Context, db *sql.DB) {
-	stmts := []string{
-		"CREATE EXTENSION IF NOT EXISTS pg_trgm",
-		"CREATE INDEX IF NOT EXISTS events_raw_trgm ON events USING gin ((raw::text) gin_trgm_ops)",
-	}
-	for _, stmt := range stmts {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			slog.Warn("检索索引未启用，大数据量下关键词搜索会退化为全表扫描", "err", err)
-			return
-		}
-	}
 }
 
 // isolationAllowlist 隔离主机时必须放行的地址。默认放行 server 的 gRPC 端点，
