@@ -33,6 +33,9 @@ func parseThreatFoxZIP(r io.Reader) ([]Entry, error) {
 	limited := &io.LimitedReader{R: content, N: maxFeedBytes + 1}
 	entries, err := parseThreatFox(limited)
 	if err != nil {
+		if errors.Is(err, errFeedEntryLimit) {
+			return nil, errFeedEntryLimit
+		}
 		return nil, errors.New("情报压缩包中的 CSV 不完整或损坏")
 	}
 	if limited.N == 0 {

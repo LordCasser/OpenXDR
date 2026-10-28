@@ -233,7 +233,12 @@ export interface FindingRow {
   note: string | null
 }
 
-export const fetchFindings = (status?: string) => get<FindingRow[]>(`/api/findings${status ? `?status=${status}` : ''}`)
+export const fetchFindingsByID = (ids: string[]) => get<FindingRow[]>(`/api/findings?${new URLSearchParams({ ids: ids.join(',') })}`)
+export const fetchFindingsPage = (params: { status?: string; assetId?: string; ids?: string; limit?: number; offset?: number } = {}) => {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) if (value !== undefined) query.set(key, String(value))
+  return list<FindingRow>(`/api/findings?${query}`)
+}
 export const setFindingStatus = (id: string, status: string, note?: string) =>
   send('POST', `/api/findings/${id}/status`, { status, note })
 

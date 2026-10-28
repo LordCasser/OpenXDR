@@ -68,6 +68,8 @@ const (
 	maxFeedEntries = 100_000
 )
 
+var errFeedEntryLimit = errors.New("情报源超过 10 万条上限")
+
 // FeedSettings 控制台保存的开关。从没保存过时内置源全部开启——没有情报等于没开碰撞。
 type FeedSettings struct {
 	Enabled []string `json:"enabled"`
@@ -108,29 +110,46 @@ func (f *Feeds) Run(ctx context.Context) {
 	}
 }
 
-func (f *Feeds) Settings(ctx context.Context) FeedSettings {
+func (f *Feeds) Settings(ctx context.Context) (FeedSettings, error) {
 	var s FeedSettings
-	if !f.getSetting(ctx, feedSettingsKey, &s) {
+	err := f.getSetting(ctx, feedSettingsKey, &s)
+	if ent.IsNotFound(err) {
 		for _, feed := range Catalog {
 			s.Enabled = append(s.Enabled, feed.ID)
 		}
+		return s, nil
 	}
-	return s
+	if err != nil {
+		return s, err
+	}
+	return s, s.validate()
 }
 
 // SaveSettings 保存开关，只认内置源 ID。
 func (f *Feeds) SaveSettings(ctx context.Context, s FeedSettings) error {
+	if err := s.validate(); err != nil {
+		return err
+	}
+	return f.putSetting(ctx, feedSettingsKey, s)
+}
+
+func (s FeedSettings) validate() error {
+	if s.Enabled == nil {
+		return errors.New("情报订阅配置缺少 enabled 数组")
+	}
 	for _, id := range s.Enabled {
 		if !slices.ContainsFunc(Catalog, func(feed Feed) bool { return feed.ID == id }) {
 			return fmt.Errorf("未知情报源：%s", id)
 		}
 	}
-	return f.putSetting(ctx, feedSettingsKey, s)
+	return nil
 }
 
-func (f *Feeds) Status(ctx context.Context) map[string]FeedStatus {
+func (f *Feeds) Status(ctx context.Context) (map[string]FeedStatus, error) {
 	status := map[string]FeedStatus{}
-	f.getSetting(ctx, feedStatusKey, &status)
+	if err := f.getSetting(ctx, feedStatusKey, &status); err != nil && !ent.IsNotFound(err) {
+		return nil, err
+	}
 	// 旧版本把失败时间也写入 syncedAt；无法还原成功时间时明确留空。
 	for id, st := range status {
 		if st.AttemptedAt == nil {
@@ -141,14 +160,21 @@ func (f *Feeds) Status(ctx context.Context) map[string]FeedStatus {
 			status[id] = st
 		}
 	}
-	return status
+	return status, nil
 }
 
 // Sync 拉取开启的源并落库，清掉关闭的源与过期条目。集群内串行，控制台「立即同步」与定时任务不会撞车。
 func (f *Feeds) Sync(ctx context.Context) error {
 	return cluster.WithLock(ctx, f.DB, "intel-feeds-sync", func() error {
-		enabled := f.Settings(ctx).Enabled
-		status := f.Status(ctx)
+		settings, err := f.Settings(ctx)
+		if err != nil {
+			return err
+		}
+		enabled := settings.Enabled
+		status, err := f.Status(ctx)
+		if err != nil {
+			return err
+		}
 		for _, feed := range Catalog {
 			if !slices.Contains(enabled, feed.ID) {
 				if _, err := f.DB.ExecContext(ctx, `DELETE FROM intels WHERE source = $1`, "feed:"+feed.ID); err != nil {
@@ -227,18 +253,20 @@ func (f *Feeds) fetch(ctx context.Context, feed Feed) ([]Entry, error) {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+		if errors.Is(err, errFeedEntryLimit) {
+			return nil, errFeedEntryLimit
+		}
 		return nil, errors.New("情报源解析失败：数据不完整或格式错误")
 	}
 	if limited.N == 0 {
 		return nil, errors.New("情报源超过 50 MiB 下载上限")
 	}
-	entries = dedupe(entries)
 	if len(entries) == 0 {
 		// 空源多半是格式变了或被限流，不能当成"情报全部撤销"
 		return nil, errors.New("情报源没有解析出任何条目")
 	}
 	if len(entries) > maxFeedEntries {
-		return nil, errors.New("情报源超过 10 万条上限")
+		return nil, errFeedEntryLimit
 	}
 	return entries, nil
 }
@@ -260,12 +288,18 @@ WHERE intels.source LIKE 'feed:%'`,
 	return err
 }
 
-func (f *Feeds) getSetting(ctx context.Context, key string, v any) bool {
+func (f *Feeds) getSetting(ctx context.Context, key string, v any) error {
 	row, err := f.Client.Setting.Get(ctx, key)
 	if err != nil {
-		return false
+		return err
 	}
-	return json.Unmarshal(row.Value, v) == nil
+	if strings.TrimSpace(string(row.Value)) == "null" {
+		return fmt.Errorf("情报订阅配置 %s 不能为 null", key)
+	}
+	if err := json.Unmarshal(row.Value, v); err != nil {
+		return fmt.Errorf("情报订阅配置 %s 格式错误", key)
+	}
+	return nil
 }
 
 func (f *Feeds) putSetting(ctx context.Context, key string, v any) error {
@@ -285,6 +319,8 @@ func (f *Feeds) putSetting(ctx context.Context, key string, v any) error {
 var (
 	domainRe = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,62}$`)
 	hashRe   = regexp.MustCompile(`^([0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})$`)
+	// RFC 6598 共享地址不属于 IsPrivate 覆盖的 RFC 1918 私网。
+	cgnat = netip.MustParsePrefix("100.64.0.0/10")
 )
 
 // normalize 校验并规范化一条 IOC，不合格返回 false。
@@ -298,7 +334,7 @@ func normalize(kind, value string) (Entry, bool) {
 		}
 		addr = addr.Unmap()
 		// 内网与保留地址出现在公开情报里只会误伤自己人
-		if !addr.IsGlobalUnicast() || addr.IsPrivate() {
+		if !addr.IsGlobalUnicast() || addr.IsPrivate() || cgnat.Contains(addr) {
 			return Entry{}, false
 		}
 		return Entry{Kind: "ip", Value: addr.String()}, true
@@ -317,27 +353,37 @@ func normalize(kind, value string) (Entry, bool) {
 	return Entry{}, false
 }
 
-// dedupe 同一个源里同值只留第一条：同一 IP 换端口在 ThreatFox 里很常见，
-// 而一条 INSERT … ON CONFLICT 里出现重复键会整批失败。
-func dedupe(entries []Entry) []Entry {
-	seen := make(map[string]bool, len(entries))
-	out := entries[:0]
-	for _, e := range entries {
-		if key := e.Kind + ":" + e.Value; !seen[key] {
-			seen[key] = true
-			out = append(out, e)
-		}
-	}
-	return out
+// 解析时去重并限制唯一条目数，避免先积累整份重复数据再分配去重表。
+type feedEntries struct {
+	entries []Entry
+	seen    map[[2]string]bool
 }
 
-func lines(r io.Reader, each func(string)) error {
+func (out *feedEntries) add(e Entry) error {
+	key := [2]string{e.Kind, e.Value}
+	if out.seen[key] {
+		return nil
+	}
+	if len(out.entries) >= maxFeedEntries {
+		return errFeedEntryLimit
+	}
+	if out.seen == nil {
+		out.seen = make(map[[2]string]bool)
+	}
+	out.seen[key] = true
+	out.entries = append(out.entries, e)
+	return nil
+}
+
+func lines(r io.Reader, each func(string) error) error {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if line != "" && !strings.HasPrefix(line, "#") {
-			each(line)
+			if err := each(line); err != nil {
+				return err
+			}
 		}
 	}
 	return sc.Err()
@@ -345,40 +391,51 @@ func lines(r io.Reader, each func(string)) error {
 
 // parseList 每行一个 IP。
 func parseList(r io.Reader) ([]Entry, error) {
-	var out []Entry
-	err := lines(r, func(line string) {
+	var out feedEntries
+	err := lines(r, func(line string) error {
 		if e, ok := normalize("ip", strings.Fields(line)[0]); ok {
-			out = append(out, e)
+			return out.add(e)
 		}
+		return nil
 	})
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	return out.entries, nil
 }
 
 // parseHostsFile hosts 格式：127.0.0.1<空白>域名。
 func parseHostsFile(r io.Reader) ([]Entry, error) {
-	var out []Entry
-	err := lines(r, func(line string) {
+	var out feedEntries
+	err := lines(r, func(line string) error {
 		if fields := strings.Fields(line); len(fields) >= 2 {
 			if e, ok := normalize("domain", fields[1]); ok {
-				out = append(out, e)
+				return out.add(e)
 			}
 		}
+		return nil
 	})
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	return out.entries, nil
 }
 
 // parseThreatFox ThreatFox CSV 导出。URL 只取主机为 IP 的：挂在公共平台上的恶意 URL
 // 若按主机名入库，访问正常的 GitHub、Google 也会报警。
 func parseThreatFox(r io.Reader) ([]Entry, error) {
 	var body strings.Builder
-	err := lines(r, func(line string) { body.WriteString(line + "\n") })
+	err := lines(r, func(line string) error {
+		body.WriteString(line + "\n")
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
 	rd := csv.NewReader(strings.NewReader(body.String()))
 	rd.TrimLeadingSpace = true
 	rd.FieldsPerRecord = -1
-	var out []Entry
+	var out feedEntries
 	for {
 		rec, err := rd.Read()
 		if err == io.EOF {
@@ -410,8 +467,10 @@ func parseThreatFox(r io.Reader) ([]Entry, error) {
 			if malware != "" && malware != "None" {
 				e.Note = "ThreatFox：" + malware
 			}
-			out = append(out, e)
+			if err := out.add(e); err != nil {
+				return nil, err
+			}
 		}
 	}
-	return out, nil
+	return out.entries, nil
 }

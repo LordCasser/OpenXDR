@@ -7,7 +7,7 @@ import { App, Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout as AntLayout
 import type { MenuProps } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
-import { fetchAgentReports, fetchApprovals, fetchFindings, fetchStats, fetchSuppressions } from '../api'
+import { fetchAgentReports, fetchApprovals, fetchFindingsPage, fetchStats, fetchSuppressions } from '../api'
 import { errText, ROLE_KEY } from '../components/format'
 import { useI18n } from '../i18n'
 import { Logo } from '../components/Logo'
@@ -22,7 +22,7 @@ import { TourProvider, useTour } from './tour'
 function useNavCounts(): Record<string, number | undefined> {
   const { group } = useSession()
   const stats = useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 30_000 })
-  const findings = useQuery({ queryKey: ['findings', 'open'], queryFn: () => fetchFindings('open'), refetchInterval: 60_000 })
+  const findings = useQuery({ queryKey: ['findings', 'count', 'open'], queryFn: () => fetchFindingsPage({ status: 'open', limit: 1 }), refetchInterval: 60_000 })
   const approvals = useQuery({
     queryKey: ['approvals', group?.id],
     queryFn: () => fetchApprovals(group!.id),
@@ -36,7 +36,7 @@ function useNavCounts(): Record<string, number | undefined> {
     '/reports': reports.data?.filter(r => !r.read && r.level !== 'ok').length || undefined,
     '/suppressions': suppressions.data?.filter(s => s.status === 'proposed').length || undefined,
     '/incidents': stats.data?.reviewIncidents,
-    '/findings': findings.data?.length,
+    '/findings': findings.data?.total,
     '/approvals': approvals.data?.filter(a => a.status === 'pending').length,
   }
 }

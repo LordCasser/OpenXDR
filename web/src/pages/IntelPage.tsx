@@ -31,6 +31,11 @@ function FeedsCard() {
       await client.invalidateQueries({ queryKey: ['intel'] })
     } catch (e) {
       message.error(errText(e, t))
+      // 配置可能已保存、同步才失败；重新读取实际开关与情报，避免旧快照覆盖下一次操作。
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['intel-feeds'] }),
+        client.invalidateQueries({ queryKey: ['intel'] }),
+      ])
     } finally {
       pending.current = false
       setBusy(undefined)

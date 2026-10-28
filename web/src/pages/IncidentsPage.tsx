@@ -56,6 +56,15 @@ export function IncidentsPage() {
     refetchInterval: 10_000,
     enabled: view === 'groups',
   })
+  useEffect(() => {
+    if (view !== 'list' || !query.isSuccess || query.isFetching || query.data.total === undefined) return
+    const lastPage = Math.max(1, Math.ceil(query.data.total / PAGE_SIZE))
+    if (page > lastPage) setParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('page', String(lastPage))
+      return next
+    }, { replace: true })
+  }, [view, query.data?.total, query.isSuccess, query.isFetching, page, setParams])
   const rows = query.data?.items ?? []
   const actable = (r: IncidentSummary) => !done(r) && canAct(r.groupId)
   const selected = rows.filter(r => selectedKeys.includes(r.id) && actable(r)).map(r => r.id)

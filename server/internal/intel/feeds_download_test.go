@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 type feedTransport func(*http.Request) (*http.Response, error)
@@ -55,6 +57,53 @@ func TestFeedDownloadCancelled(t *testing.T) {
 	_, err := f.fetch(ctx, Feed{URL: "https://feed.example.test/list", parse: parseList})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("取消应透传: %v", err)
+	}
+}
+
+// 已收到有效条目后取消，必须中断读流，不能把半份下载当成成功。
+func TestFeedDownloadCancelledDuringBody(t *testing.T) {
+	for _, tc := range []struct {
+		name, prefix string
+		parse        func(io.Reader) ([]Entry, error)
+	}{
+		{"IP列表", "8.8.8.8\n", parseList},
+		{"hosts列表", "127.0.0.1 malware.example.com\n", parseHostsFile},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			started := make(chan struct{})
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, tc.prefix)
+				w.(http.Flusher).Flush()
+				close(started)
+				<-r.Context().Done()
+			}))
+			defer srv.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			f := &Feeds{HTTP: srv.Client()}
+			done := make(chan error, 1)
+			go func() {
+				entries, err := f.fetch(ctx, Feed{URL: srv.URL, parse: tc.parse})
+				if len(entries) != 0 {
+					err = fmt.Errorf("取消后仍返回 %d 条部分情报", len(entries))
+				}
+				done <- err
+			}()
+			select {
+			case <-started:
+				cancel()
+			case <-ctx.Done():
+				t.Fatal("未开始读取测试数据")
+			}
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("读流取消应透传且不返回部分数据: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("取消后下载没有结束")
+			}
+		})
 	}
 }
 

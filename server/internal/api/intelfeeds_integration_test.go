@@ -87,4 +87,54 @@ func TestIntelFeedsAPI(t *testing.T) {
 
 type failing struct{}
 
+func TestIntelFeedsAPIRequiresExplicitEnabled(t *testing.T) {
+	for _, body := range []string{`null`, `{}`, `{"enabled":null}`, `{"enabled":false}`, `{"enabled":["unknown-feed"]}`} {
+		t.Run(body, func(t *testing.T) {
+			ctx, client := testdb.New(t)
+			db, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { db.Close() })
+			original := json.RawMessage(`{"enabled":["feodo"]}`)
+			client.Setting.Create().SetID("intel_feeds").SetValue(original).SaveX(ctx)
+			client.Intel.Create().SetKind("ip").SetValue("8.8.8.8").SetSource("feed:feodo").SaveX(ctx)
+			feeds := &intel.Feeds{DB: db, Client: client, Interval: time.Hour, HTTP: &http.Client{Transport: failing{}}}
+			recorder := httptest.NewRecorder()
+			asAdmin(IntelFeeds(client, feeds)).ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/api/intel/feeds", bytes.NewBufferString(body)))
+			if recorder.Code != http.StatusBadRequest {
+				t.Errorf("缺失或无效 enabled 应返回 400: %d", recorder.Code)
+			}
+			settings, err := feeds.Settings(ctx)
+			if err != nil || len(settings.Enabled) != 1 || settings.Enabled[0] != "feodo" {
+				t.Errorf("错误请求不能覆盖订阅配置: %+v err=%v", settings, err)
+			}
+			if count := client.Intel.Query().CountX(ctx); count != 1 {
+				t.Errorf("错误请求不能删除订阅情报: count=%d", count)
+			}
+		})
+	}
+}
+
+func TestIntelFeedsAPIRejectsCorruptSettings(t *testing.T) {
+	for _, tc := range []struct{ key, value string }{
+		{"intel_feeds", `null`},
+		{"intel_feeds", `{}`},
+		{"intel_feeds", `{"enabled":null}`},
+		{"intel_feeds", `{"enabled":["unknown-feed"]}`},
+		{"intel_feed_status", `null`},
+	} {
+		t.Run(tc.key+tc.value, func(t *testing.T) {
+			ctx, client := testdb.New(t)
+			client.Setting.Create().SetID(tc.key).SetValue(json.RawMessage(tc.value)).SaveX(ctx)
+			handler := IntelFeeds(client, &intel.Feeds{Client: client})
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/intel/feeds", nil))
+			if recorder.Code != http.StatusInternalServerError {
+				t.Fatalf("配置损坏应返回错误，而不是伪造正常状态: status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+		})
+	}
+}
+
 func (failing) RoundTrip(*http.Request) (*http.Response, error) { return nil, http.ErrHandlerTimeout }

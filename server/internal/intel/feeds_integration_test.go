@@ -3,10 +3,15 @@
 package intel
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +19,53 @@ import (
 	"openxdr/server/ent/intel"
 	"openxdr/server/internal/testdb"
 )
+
+func TestFeedsRejectCorruptSettings(t *testing.T) {
+	for _, tc := range []struct{ key, value string }{
+		{feedSettingsKey, `null`},
+		{feedSettingsKey, `{}`},
+		{feedSettingsKey, `{"enabled":null}`},
+		{feedSettingsKey, `{"enabled":42}`},
+		{feedSettingsKey, `{"enabled":["unknown-feed"]}`},
+		{feedStatusKey, `null`},
+		{feedStatusKey, `{"feodo":42}`},
+	} {
+		t.Run(tc.key+tc.value, func(t *testing.T) {
+			ctx, client := testdb.New(t)
+			db, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { db.Close() })
+			client.Setting.Create().SetID(tc.key).SetValue(json.RawMessage(tc.value)).SaveX(ctx)
+			client.Intel.Create().SetKind("ip").SetValue("8.8.8.8").SetSource("feed:feodo").SaveX(ctx)
+			var calls atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}))
+			t.Cleanup(srv.Close)
+			saved := Catalog
+			Catalog = []Feed{{ID: "feodo", URL: srv.URL, parse: parseList}}
+			t.Cleanup(func() { Catalog = saved })
+			f := &Feeds{DB: db, Client: client, Interval: time.Hour}
+			defer func() {
+				if p := recover(); p != nil {
+					t.Errorf("配置损坏不能导致 panic: %v", p)
+				}
+			}()
+			if err := f.Sync(ctx); err == nil {
+				t.Error("配置损坏必须明确返回错误")
+			}
+			if calls.Load() != 0 {
+				t.Error("不能把配置读取失败当成首次安装并下载全部源")
+			}
+			if !client.Intel.Query().Where(intel.SourceEQ("feed:feodo")).ExistX(ctx) {
+				t.Error("配置损坏不能被当成全部关闭并删除既有情报")
+			}
+		})
+	}
+}
 
 // 同步落库、手工情报不被覆盖、关掉的源立即清掉、拉取失败保留旧条目并记下原因。
 func TestFeedsSync(t *testing.T) {
@@ -64,7 +116,7 @@ func TestFeedsSync(t *testing.T) {
 	if row.Source != "feed:threatfox" || row.Note == nil || *row.Note != "ThreatFox：Jackskid" || row.ExpiresAt == nil {
 		t.Errorf("订阅条目应带来源、备注与有效期：%+v", row)
 	}
-	st := f.Status(ctx)
+	st := readFeedStatus(t, ctx, f)
 	if st["feodo"].Count != 5 || st["feodo"].SyncedAt == nil || st["feodo"].Error != "" {
 		t.Errorf("应记录同步结果：%+v", st["feodo"])
 	}
@@ -82,11 +134,11 @@ func TestFeedsSync(t *testing.T) {
 	if n := client.Intel.Query().Where(intel.SourceEQ("feed:feodo")).CountX(ctx); n != 4 {
 		t.Errorf("拉取失败不应丢旧条目，剩 %d", n)
 	}
-	if st := f.Status(ctx)["feodo"]; st.Error == "" || st.Count != 5 {
+	if st := readFeedStatus(t, ctx, f)["feodo"]; st.Error == "" || st.Count != 5 {
 		t.Errorf("应记下失败原因并保留上次条目数：%+v", st)
 	}
 
-	failed := f.Status(ctx)["feodo"]
+	failed := readFeedStatus(t, ctx, f)["feodo"]
 	if failed.SyncedAt == nil || !failed.SyncedAt.Equal(lastSuccess) || failed.AttemptedAt == nil || failed.AttemptedAt.Equal(lastSuccess) {
 		t.Fatalf("失败只能刷新尝试时间，不得伪造成功时间：%+v", failed)
 	}
@@ -94,7 +146,7 @@ func TestFeedsSync(t *testing.T) {
 	if err := f.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
-	recovered := f.Status(ctx)["feodo"]
+	recovered := readFeedStatus(t, ctx, f)["feodo"]
 	if recovered.Error != "" || recovered.SyncedAt == nil || recovered.AttemptedAt == nil || !recovered.SyncedAt.Equal(*recovered.AttemptedAt) || recovered.SyncedAt.Equal(*failed.AttemptedAt) {
 		t.Fatalf("恢复后必须清除错误并更新成功时间：%+v", recovered)
 	}
@@ -112,7 +164,7 @@ func TestFeedsSync(t *testing.T) {
 	if !after.ExpiresAt.Equal(*before.ExpiresAt) {
 		t.Fatal("断流不应刷新旧情报有效期")
 	}
-	if st := f.Status(ctx)["feodo"]; st.Error == "" || !st.SyncedAt.Equal(*recovered.SyncedAt) {
+	if st := readFeedStatus(t, ctx, f)["feodo"]; st.Error == "" || !st.SyncedAt.Equal(*recovered.SyncedAt) {
 		t.Fatalf("断流不能标记成功：%+v", st)
 	}
 	truncated.Store(false)
@@ -128,11 +180,58 @@ func TestFeedsSync(t *testing.T) {
 	if n := client.Intel.Query().Where(intel.SourceEQ("feed:threatfox")).CountX(ctx); n != 0 {
 		t.Errorf("关掉的源应清空，剩 %d", n)
 	}
-	if _, ok := f.Status(ctx)["threatfox"]; ok {
+	if _, ok := readFeedStatus(t, ctx, f)["threatfox"]; ok {
 		t.Error("关掉的源不应再有状态")
 	}
 	if err := f.SaveSettings(ctx, FeedSettings{Enabled: []string{"nope"}}); err == nil {
 		t.Error("未知源 ID 应拒绝")
+	}
+}
+
+func TestFeedsOversizedSourcePreservesStoredIntel(t *testing.T) {
+	ctx, client := testdb.New(t)
+	db, err := sql.Open("pgx", os.Getenv("INTEGRATION_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	lastSuccess := now.Add(-time.Hour)
+	before := client.Intel.Create().SetKind("ip").SetValue("8.8.8.8").SetSource("feed:feodo").
+		SetSeverity(2).SetNote("原有备注").SetExpiresAt(now.Add(time.Hour)).SaveX(ctx)
+	var body strings.Builder
+	body.WriteString("8.8.8.8\n")
+	for i := range maxFeedEntries {
+		fmt.Fprintf(&body, "11.%d.%d.%d\n", i>>16, (i>>8)&255, i&255)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, body.String())
+	}))
+	t.Cleanup(srv.Close)
+	saved := Catalog
+	Catalog = []Feed{{ID: "feodo", URL: srv.URL, Severity: 5, parse: parseList}}
+	t.Cleanup(func() { Catalog = saved })
+	f := &Feeds{DB: db, Client: client, Interval: time.Hour}
+	if err := f.putSetting(ctx, feedStatusKey, map[string]FeedStatus{
+		"feodo": {SyncedAt: &lastSuccess, AttemptedAt: &lastSuccess, Count: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := client.Intel.Query().CountX(ctx); n != 1 {
+		t.Fatalf("超限响应不能部分入库: count=%d", n)
+	}
+	after := client.Intel.GetX(ctx, before.ID)
+	if after.Source != before.Source || after.Severity != before.Severity || after.Note == nil ||
+		*after.Note != *before.Note || after.ExpiresAt == nil || !after.ExpiresAt.Equal(*before.ExpiresAt) {
+		t.Fatalf("超限响应不得覆盖旧情报或刷新有效期: %+v", after)
+	}
+	status := readFeedStatus(t, ctx, f)["feodo"]
+	if status.Error != errFeedEntryLimit.Error() || status.Count != 1 || status.SyncedAt == nil ||
+		!status.SyncedAt.Equal(lastSuccess) || status.AttemptedAt == nil || !status.AttemptedAt.After(lastSuccess) {
+		t.Fatalf("超限只能刷新失败原因与尝试时间: %+v", status)
 	}
 }
 
@@ -148,7 +247,7 @@ func TestFeedStatusLegacyTimes(t *testing.T) {
 		if err := f.putSetting(ctx, feedStatusKey, map[string]FeedStatus{"feodo": st}); err != nil {
 			t.Fatal(err)
 		}
-		got := f.Status(ctx)["feodo"]
+		got := readFeedStatus(t, ctx, f)["feodo"]
 		if got.AttemptedAt == nil || !got.AttemptedAt.Equal(at) || got.Count != 5 {
 			t.Fatalf("旧记录的尝试时间和计数必须保留：%+v", got)
 		}
@@ -159,4 +258,13 @@ func TestFeedStatusLegacyTimes(t *testing.T) {
 			t.Fatal("旧版成功时间必须保留")
 		}
 	}
+}
+
+func readFeedStatus(t *testing.T, ctx context.Context, f *Feeds) map[string]FeedStatus {
+	t.Helper()
+	status, err := f.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return status
 }

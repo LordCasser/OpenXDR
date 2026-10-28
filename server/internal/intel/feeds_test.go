@@ -65,6 +65,12 @@ func TestNormalize(t *testing.T) {
 		{"ip", "192.168.0.1", false, ""},
 		{"ip", "127.0.0.1", false, ""},
 		{"ip", "0.0.0.0", false, ""},
+		{"ip", "100.64.0.0", false, ""},
+		{"ip", "100.100.100.100", false, ""},
+		{"ip", "100.127.255.255", false, ""},
+		{"ip", "::ffff:100.64.0.1", false, ""},
+		{"ip", "100.63.255.255", true, "100.63.255.255"},
+		{"ip", "100.128.0.0", true, "100.128.0.0"},
 		{"ip", "::ffff:1.2.3.4", true, "1.2.3.4"},
 		{"domain", "Evil.Example.COM.", true, "evil.example.com"},
 		{"domain", "localhost", false, ""},
@@ -81,9 +87,15 @@ func TestNormalize(t *testing.T) {
 	}
 }
 
-func TestDedupe(t *testing.T) {
+func TestFeedEntriesDedupe(t *testing.T) {
 	in := []Entry{{Kind: "ip", Value: "1.2.3.4", Note: "a"}, {Kind: "ip", Value: "1.2.3.4", Note: "b"}, {Kind: "domain", Value: "1.2.3.4"}}
-	out := dedupe(in)
+	var collected feedEntries
+	for _, e := range in {
+		if err := collected.add(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := collected.entries
 	if len(out) != 2 || out[0].Note != "a" {
 		t.Errorf("同值只留第一条，实际 %v", out)
 	}

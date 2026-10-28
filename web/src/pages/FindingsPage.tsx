@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { fetchFindings, setFindingStatus, type FindingRow } from '../api'
+import { fetchFindingsPage, setFindingStatus, type FindingRow } from '../api'
 import { useCanAct, useSession } from '../app/session'
 import { useCanChat, useHandoff } from '../components/Handoff'
 import { HostLink } from '../components/HostLink'
@@ -37,16 +37,24 @@ export function FindingsPage() {
   const { groups } = useSession()
   const canAct = useCanAct()
   const [params, setParams] = useSearchParams()
-  const status = params.get('status') ?? 'open'
+  const ids = params.get('ids') ?? undefined
+  const status = params.get('status') ?? (ids !== undefined ? 'all' : 'open')
+  const requestedPage = Number(params.get('page'))
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
   const [acting, setActing] = useState<{ row: FindingRow; next: 'resolved' | 'ignored' } | null>(null)
   const [selectedKeys, setSelected] = useState<string[]>([])
   const canChat = useCanChat()
   const handoff = useHandoff()
   const { data, isPending, isError, error, refetch, dataUpdatedAt, isFetching } = useQuery({
-    queryKey: ['findings', status],
-    queryFn: () => fetchFindings(status === 'all' ? undefined : status),
+    queryKey: ['findings', 'list', status, ids, page],
+    queryFn: () => fetchFindingsPage({ ids, status: status === 'all' ? undefined : status, limit: 20, offset: (page - 1) * 20 }),
     refetchInterval: 30_000,
   })
+  useEffect(() => {
+    if (isError || isFetching || data?.total === undefined) return
+    const lastPage = Math.max(1, Math.ceil(data.total / 20))
+    if (page > lastPage) setParams(prev => { const next = new URLSearchParams(prev); next.set('page', String(lastPage)); return next }, { replace: true })
+  }, [data?.total, isError, isFetching, page, status, setParams])
 
   // 返回是否成功：弹窗靠它决定关不关、原因留不留
   const change = async (row: FindingRow, next: string, note?: string) => {
@@ -61,8 +69,8 @@ export function FindingsPage() {
     return true
   }
 
-  useEffect(() => { setSelected([]); setActing(null) }, [status])
-  const picked = (data ?? []).filter(f => selectedKeys.includes(f.id) && f.status === 'open' && canChat(f.groupId))
+  useEffect(() => { setSelected([]); setActing(null) }, [status, ids, page])
+  const picked = (data?.items ?? []).filter(f => selectedKeys.includes(f.id) && f.status === 'open' && canChat(f.groupId))
   const selected = picked.map(f => f.id)
   const sameGroup = picked.length > 0 && picked.every(f => f.groupId === picked[0].groupId)
   const handTo = (list: FindingRow[]) => handoff.start(list[0].groupId, list.map(f => `finding:${f.id}`),
@@ -86,14 +94,17 @@ export function FindingsPage() {
           </Space>
         )}
         filters={
+          <Space wrap>
           <Segmented
             value={status}
-            onChange={v => { setSelected([]); setParams({ status: String(v) }) }}
+            onChange={v => { setSelected([]); setParams(prev => { const next = new URLSearchParams(prev); next.set('status', String(v)); next.delete('page'); return next }) }}
             options={[
               ...(['open', 'resolved', 'ignored'] as const).map(s => ({ value: s, label: t(STATUS[s].key) })),
               { value: 'all', label: t('all') },
             ]}
           />
+          {ids !== undefined && <><Tag>{t('findingLinkedFilter')}</Tag><Button size="small" onClick={() => setParams({ status: 'open' })}>{t('resetFilters')}</Button></>}
+          </Space>
         }
       >
         {isError ? <LoadError error={error} onRetry={() => refetch()} /> : <Table<FindingRow>
@@ -102,8 +113,8 @@ export function FindingsPage() {
           rowKey="id"
           rowSelection={{ selectedRowKeys: selected, onChange: keys => setSelected(keys as string[]), getCheckboxProps: f => ({ disabled: f.status !== 'open' || !canChat(f.groupId) }) }}
           loading={isPending}
-          dataSource={data ?? []}
-          pagination={{ pageSize: 20, hideOnSinglePage: true }}
+          dataSource={data?.items ?? []}
+          pagination={{ current: page, pageSize: 20, total: data?.total, showSizeChanger: false, hideOnSinglePage: true, onChange: p => { setSelected([]); setParams(prev => { const next = new URLSearchParams(prev); next.set('page', String(p)); return next }) } }}
           locale={{ emptyText: <EmptyHint title={t('noFindings')} hint={t('noFindingsHint')} action={<Link to="/tasks">{t('goTasks')}</Link>} /> }}
           expandable={{ expandedRowRender: f => <pre className="tooltip-pre">{f.detail || '-'}</pre> }}
           columns={[

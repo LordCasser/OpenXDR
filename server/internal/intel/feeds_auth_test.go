@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,7 @@ import (
 	"testing"
 )
 
-func feedZIP(t *testing.T, names ...string) []byte {
+func feedZIP(t testing.TB, names ...string) []byte {
 	t.Helper()
 	csv, err := os.ReadFile("testdata/threatfox.csv")
 	if err != nil {
@@ -128,5 +129,41 @@ func TestThreatFoxZIPRejectsOversizedExpansion(t *testing.T) {
 	}
 	if entries, err := parseThreatFoxZIP(bytes.NewReader(body.Bytes())); err == nil || len(entries) != 0 {
 		t.Fatal("超限的解压大小必须在展开前拒绝")
+	}
+}
+
+// ZIP 目录完整且 CSV 内容合法，也必须消费到 EOF 才能发现 CRC 损坏。
+func TestThreatFoxZIPChecksum(t *testing.T) {
+	csv, err := os.ReadFile("testdata/threatfox.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, corrupt := range []bool{false, true} {
+		checksum := crc32.ChecksumIEEE(csv)
+		if corrupt {
+			checksum ^= 1
+		}
+		var body bytes.Buffer
+		writer := zip.NewWriter(&body)
+		file, err := writer.CreateRaw(&zip.FileHeader{
+			Name: "full.csv", Method: zip.Store, CRC32: checksum,
+			CompressedSize64: uint64(len(csv)), UncompressedSize64: uint64(len(csv)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := file.Write(csv); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		entries, err := parseThreatFoxZIP(bytes.NewReader(body.Bytes()))
+		if corrupt && (err == nil || len(entries) != 0) {
+			t.Fatal("CRC 损坏时不能接受已解析的 CSV 条目")
+		}
+		if !corrupt && (err != nil || len(entries) != 6) {
+			t.Fatalf("相同内容在 CRC 正确时应被完整接受: count=%d err=%v", len(entries), err)
+		}
 	}
 }
