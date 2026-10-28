@@ -59,6 +59,7 @@ function FeedsCard() {
                   <span>{t('intelFeedCount', { n: f.count })}</span>
                   <span>{t('intelFeedHits', { n: f.hits })}</span>
                   <span>{f.syncedAt ? t('intelFeedSynced', { time: fmtTime(f.syncedAt) }) : t('intelFeedNever')}</span>
+                  {f.error && f.attemptedAt && <span>{t('intelFeedAttempted', { time: fmtTime(f.attemptedAt) })}</span>}
                   {f.error && <Typography.Text type="danger">{t('intelFeedError', { err: f.error })}</Typography.Text>}
                 </Space>
               }

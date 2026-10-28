@@ -29,16 +29,27 @@ func TestIntelFeedsAPI(t *testing.T) {
 	client.Intel.Create().SetKind("ip").SetValue("1.1.1.1").SetSource("feed:feodo").SaveX(ctx)
 	client.Intel.Create().SetKind("ip").SetValue("2.2.2.2").SetSource("manual").SaveX(ctx)
 
+	lastSuccess := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	lastAttempt := lastSuccess.Add(time.Minute)
+	value, err := json.Marshal(map[string]intel.FeedStatus{"feodo": {
+		SyncedAt: &lastSuccess, AttemptedAt: &lastAttempt, Count: 1, Error: "情报源返回 410",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.Setting.Create().SetID("intel_feed_status").SetValue(value).SaveX(ctx)
 	feeds := &intel.Feeds{DB: db, Client: client, Interval: time.Hour, HTTP: &http.Client{Transport: failing{}}}
 	ts := httptest.NewServer(asAdmin(IntelFeeds(client, feeds)))
 	t.Cleanup(ts.Close)
 
 	var got struct {
 		Feeds []struct {
-			ID      string
-			Enabled bool
-			Count   int
-			Error   string
+			ID          string
+			Enabled     bool
+			Count       int
+			Error       string
+			SyncedAt    *time.Time
+			AttemptedAt *time.Time
 		}
 		IntervalHours int
 	}
@@ -48,6 +59,10 @@ func TestIntelFeedsAPI(t *testing.T) {
 	}
 	if len(got.Feeds) != len(intel.Catalog) || !got.Feeds[0].Enabled || got.Feeds[0].Count != 1 || got.IntervalHours != 1 {
 		t.Fatalf("未保存过时内置源应全开并统计条目：%+v", got)
+	}
+
+	if got.Feeds[0].SyncedAt == nil || !got.Feeds[0].SyncedAt.Equal(lastSuccess) || got.Feeds[0].AttemptedAt == nil || !got.Feeds[0].AttemptedAt.Equal(lastAttempt) {
+		t.Fatalf("接口必须分别返回成功与尝试时间：%+v", got.Feeds[0])
 	}
 
 	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/intel/feeds", bytes.NewBufferString(`{"enabled":[]}`))

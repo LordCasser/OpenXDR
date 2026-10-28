@@ -117,3 +117,9 @@ sensor 安装包同样内置在 server 镜像里，升级 OpenXDR 后在线探�
 ### 队列持久确认
 
 安装脚本同时下载该 Release 的 `nats.conf`，编排将其只读挂载给 NATS。配置包含 4 MiB 消息上限与 `sync_interval: 1s`（每秒落盘，断电最多丢 1 秒已确认事件，理由与实测见 cluster.md）；手动安装也需下载同版本配置，不能退回只带 `--jetstream` 的默认启动方式。
+
+### 情报订阅认证
+
+ThreatFox 与 URLhaus 需要 abuse.ch Auth-Key。可在「系统设置 → 外部情报查询」保存（需要
+`HOST_CREDENTIAL_KEY`），或在部署 `.env` 中设置 `ABUSE_CH_AUTH_KEY` 后重建 server 容器。
+不要把密钥或包含密钥的下载链接提交到仓库。配置后在「威胁情报」点击「立即同步」，以最近成功时间和同步结果验收。

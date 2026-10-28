@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,9 +24,14 @@ func TestFeedsSync(t *testing.T) {
 	}
 	t.Cleanup(func() { db.Close() })
 
-	broken := false
+	var broken, truncated atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if broken {
+		if truncated.Load() {
+			w.Header().Set("Content-Length", "10000")
+			_, _ = w.Write([]byte("8.8.8.8\n"))
+			return
+		}
+		if broken.Load() {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
@@ -63,8 +69,13 @@ func TestFeedsSync(t *testing.T) {
 		t.Errorf("应记录同步结果：%+v", st["feodo"])
 	}
 
+	lastSuccess := *st["feodo"].SyncedAt
+	if st["feodo"].AttemptedAt == nil || !st["feodo"].AttemptedAt.Equal(lastSuccess) {
+		t.Fatal("首次成功的尝试与成功时间应一致")
+	}
+
 	// 拉取失败：旧条目保留，记下原因
-	broken = true
+	broken.Store(true)
 	if err := f.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -75,8 +86,39 @@ func TestFeedsSync(t *testing.T) {
 		t.Errorf("应记下失败原因并保留上次条目数：%+v", st)
 	}
 
+	failed := f.Status(ctx)["feodo"]
+	if failed.SyncedAt == nil || !failed.SyncedAt.Equal(lastSuccess) || failed.AttemptedAt == nil || failed.AttemptedAt.Equal(lastSuccess) {
+		t.Fatalf("失败只能刷新尝试时间，不得伪造成功时间：%+v", failed)
+	}
+	broken.Store(false)
+	if err := f.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	recovered := f.Status(ctx)["feodo"]
+	if recovered.Error != "" || recovered.SyncedAt == nil || recovered.AttemptedAt == nil || !recovered.SyncedAt.Equal(*recovered.AttemptedAt) || recovered.SyncedAt.Equal(*failed.AttemptedAt) {
+		t.Fatalf("恢复后必须清除错误并更新成功时间：%+v", recovered)
+	}
+
+	// 读到一条合法 IOC 后断流，也不能更新情报或续期旧记录。
+	before := client.Intel.Query().Where(intel.ValueEQ("152.42.212.170")).OnlyX(ctx)
+	truncated.Store(true)
+	if err := f.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if client.Intel.Query().Where(intel.ValueEQ("8.8.8.8")).ExistX(ctx) {
+		t.Fatal("断流响应的部分情报不应入库")
+	}
+	after := client.Intel.Query().Where(intel.ValueEQ("152.42.212.170")).OnlyX(ctx)
+	if !after.ExpiresAt.Equal(*before.ExpiresAt) {
+		t.Fatal("断流不应刷新旧情报有效期")
+	}
+	if st := f.Status(ctx)["feodo"]; st.Error == "" || !st.SyncedAt.Equal(*recovered.SyncedAt) {
+		t.Fatalf("断流不能标记成功：%+v", st)
+	}
+	truncated.Store(false)
+
 	// 关掉 threatfox：立即清掉
-	broken = false
+	broken.Store(false)
 	if err := f.SaveSettings(ctx, FeedSettings{Enabled: []string{"feodo"}}); err != nil {
 		t.Fatal(err)
 	}
@@ -91,5 +133,30 @@ func TestFeedsSync(t *testing.T) {
 	}
 	if err := f.SaveSettings(ctx, FeedSettings{Enabled: []string{"nope"}}); err == nil {
 		t.Error("未知源 ID 应拒绝")
+	}
+}
+
+func TestFeedStatusLegacyTimes(t *testing.T) {
+	ctx, client := testdb.New(t)
+	f := &Feeds{Client: client}
+	at := time.Now().UTC().Truncate(time.Second)
+	for _, failed := range []bool{false, true} {
+		st := FeedStatus{SyncedAt: &at, Count: 5}
+		if failed {
+			st.Error = "情报源返回 410"
+		}
+		if err := f.putSetting(ctx, feedStatusKey, map[string]FeedStatus{"feodo": st}); err != nil {
+			t.Fatal(err)
+		}
+		got := f.Status(ctx)["feodo"]
+		if got.AttemptedAt == nil || !got.AttemptedAt.Equal(at) || got.Count != 5 {
+			t.Fatalf("旧记录的尝试时间和计数必须保留：%+v", got)
+		}
+		if failed && got.SyncedAt != nil {
+			t.Fatal("旧版失败时间不能当作成功时间")
+		}
+		if !failed && (got.SyncedAt == nil || !got.SyncedAt.Equal(at)) {
+			t.Fatal("旧版成功时间必须保留")
+		}
 	}
 }

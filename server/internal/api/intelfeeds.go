@@ -12,15 +12,16 @@ import (
 )
 
 type feedRow struct {
-	ID       string     `json:"id"`
-	Name     string     `json:"name"`
-	URL      string     `json:"url"`
-	Severity int16      `json:"severity"`
-	Enabled  bool       `json:"enabled"`
-	Count    int        `json:"count"`
-	Hits     int        `json:"hits"`
-	SyncedAt *time.Time `json:"syncedAt"`
-	Error    string     `json:"error,omitempty"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	URL         string     `json:"url"`
+	Severity    int16      `json:"severity"`
+	Enabled     bool       `json:"enabled"`
+	Count       int        `json:"count"`
+	Hits        int        `json:"hits"`
+	SyncedAt    *time.Time `json:"syncedAt"`
+	AttemptedAt *time.Time `json:"attemptedAt"`
+	Error       string     `json:"error,omitempty"`
 }
 
 // IntelFeeds 情报订阅：各源开关与同步状态、命中过的订阅情报、立即同步。改动只有 admin 能做（见 auth.minRole）。
@@ -54,7 +55,7 @@ func IntelFeeds(db *ent.Client, feeds *intel.Feeds) http.Handler {
 		for i, f := range intel.Catalog {
 			st := status[f.ID]
 			rows[i] = feedRow{f.ID, f.Name, f.URL, f.Severity, enabled[f.ID],
-				bySource["feed:"+f.ID], hitsBy["feed:"+f.ID], st.SyncedAt, st.Error}
+				bySource["feed:"+f.ID], hitsBy["feed:"+f.ID], st.SyncedAt, st.AttemptedAt, st.Error}
 		}
 		// 命中过的订阅情报：订阅是否起作用，看这里一眼就知道
 		hit, err := db.Intel.Query().

@@ -821,6 +821,7 @@ export interface IntelFeed {
   count: number
   hits: number
   syncedAt: string | null
+  attemptedAt?: string | null
   error?: string
 }
 export interface IntelFeeds {
@@ -973,13 +974,13 @@ export const testNotifySettings = (s: NotifySettings) => send('POST', '/api/sett
 // AI 与外部情报配置：密钥只回是否已设与末四位；source 标明每项来自控制台还是环境变量
 export interface AISettings {
   baseUrl: string; model: string; piModel: string; ptr: boolean; vtAlertMin: number
-  apiKeySet: boolean; apiKeyHint?: string; vtKeySet: boolean; vtKeyHint?: string
+  apiKeySet: boolean; apiKeyHint?: string; vtKeySet: boolean; vtKeyHint?: string; abuseCHKeySet: boolean; abuseCHKeyHint?: string
   source: Record<string, 'console' | 'env'>
   canSaveSecrets: boolean
 }
 // 只发改动的项；密钥传空串表示清空；reset 里的项回到环境变量
 export interface AISettingsPatch {
-  baseUrl?: string; model?: string; piModel?: string; ptr?: boolean; vtAlertMin?: number; apiKey?: string; vtKey?: string; reset?: string[]
+  baseUrl?: string; model?: string; piModel?: string; ptr?: boolean; vtAlertMin?: number; apiKey?: string; vtKey?: string; abuseCHKey?: string; reset?: string[]
 }
 export const fetchAISettings = () => get<AISettings>('/api/settings/ai')
 export const saveAISettings = async (p: AISettingsPatch): Promise<AISettings> => (await send('PUT', '/api/settings/ai', p)).json()

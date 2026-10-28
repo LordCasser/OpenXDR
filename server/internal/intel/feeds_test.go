@@ -1,32 +1,37 @@
 package intel
 
 import (
+	"io"
 	"os"
 	"testing"
 )
 
-func parseFixture(t *testing.T, name string, parse func(r *os.File) []Entry) []Entry {
+func parseFixture(t *testing.T, name string, parse func(io.Reader) ([]Entry, error)) []Entry {
 	t.Helper()
 	f, err := os.Open("testdata/" + name)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	return parse(f)
+	entries, err := parse(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return entries
 }
 
 func TestParseFeeds(t *testing.T) {
-	feodo := parseFixture(t, "feodo.txt", func(f *os.File) []Entry { return parseList(f) })
+	feodo := parseFixture(t, "feodo.txt", parseList)
 	if len(feodo) != 5 || feodo[0] != (Entry{Kind: "ip", Value: "162.243.103.246"}) {
 		t.Errorf("Feodo 应解析出 5 个 IP，实际 %v", feodo)
 	}
 
-	urlhaus := parseFixture(t, "urlhaus.txt", func(f *os.File) []Entry { return parseHostsFile(f) })
+	urlhaus := parseFixture(t, "urlhaus.txt", parseHostsFile)
 	if len(urlhaus) == 0 || urlhaus[0].Kind != "domain" || urlhaus[0].Value != "123.ywxww.net" {
 		t.Errorf("URLhaus 应解析出域名，实际 %v", urlhaus)
 	}
 
-	tf := parseFixture(t, "threatfox.csv", func(f *os.File) []Entry { return parseThreatFox(f) })
+	tf := parseFixture(t, "threatfox.csv", parseThreatFox)
 	got := map[string]string{}
 	for _, e := range tf {
 		got[e.Kind+":"+e.Value] = e.Note
