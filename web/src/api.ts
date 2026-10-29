@@ -1317,6 +1317,11 @@ export interface MapNode {
   ports?: string[]
 }
 // 公网目的地址：按地址合并的外联明细，带反向解析、离线归属库、VirusTotal 信息与 AI 给的用途
+export interface PeerStat {
+  count: number
+  lastSeen: string
+}
+
 export interface PublicDest {
   ip: string; ports: string[]; processes?: string[]; count: number; lastSeen: string
   ptr?: string; owner?: string; asn?: number; country?: string; malicious?: number; suspicious?: number; domains?: string[]; checked?: boolean; purpose?: string
@@ -1362,6 +1367,9 @@ export interface AssetProfile {
   services?: Record<string, ServiceNote> | null
   outbound: string[] | null
   inbound: string[] | null
+  // 按对端合计的连接次数与最近一次时间，键与 outbound / inbound 里的对端一致
+  outboundStats?: Record<string, PeerStat> | null
+  inboundStats?: Record<string, PeerStat> | null
   publicDestinations: number
   public?: PublicDest[] | null
   role?: string | null
