@@ -28,11 +28,15 @@ const SOURCE_KEY: Record<string, MsgKey> = { ai: 'noteSourceAi', investigation: 
 type Box = { x: number; y: number; w: number; h: number; col: number }
 type Card = { id: string; label: string; peer?: SurfacePeer; rows: ExposedService[]; box: Box }
 
+// 低危要有依据才藏：端口表认得出的服务，或调查与人工给了低危。认不出又没查过的（docker-proxy 映射出来的端口多是这样）
+// 端口表只能默认算低危，藏起来就看不到暴露面里最该查的那部分
+const knownLow = (e: ExposedService) => e.service.risk === 'low' && (e.service.category !== 'other' || e.note?.risk === 'low')
+
 // 卡片按最高风险分排在本栏上方；只作为访问方出现的节点（未纳管地址、别组资产、没有暴露面的本组资产）收成小标签
 function layout(surface: AttackSurface, hideLow: boolean) {
   const rowsOf = new Map<string, ExposedService[]>()
   for (const e of surface.exposures) {
-    if (hideLow && e.service.risk === 'low' && !e.fromPublic) continue
+    if (hideLow && knownLow(e) && !e.fromPublic) continue
     rowsOf.set(e.assetId, [...(rowsOf.get(e.assetId) ?? []), e])
   }
   const peerOf = new Map(surface.peers.map(p => [p.id, p]))
