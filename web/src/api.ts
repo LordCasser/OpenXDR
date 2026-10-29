@@ -1559,14 +1559,14 @@ export interface TriageRun {
   status: 'running' | 'succeeded' | 'failed' | 'interrupted'
   model: string
   error_code: string
-  duration_ms: number
-  model_ms: number
-  tool_ms: number
-  model_calls: number
-  tool_calls: number
-  tool_errors: number
+  duration_ms?: number
+  model_ms?: number
+  tool_ms?: number
+  model_calls?: number
+  tool_calls?: number
+  tool_errors?: number
   tool_details?: { tool: string; duration_ms: number; failed: boolean; returned?: number; truncated?: boolean }[]
-  input_tokens: number
-  output_tokens: number
+  input_tokens?: number
+  output_tokens?: number
 }
 export const fetchTriageRuns = (id: string, page: number) => get<{ items: TriageRun[]; more: boolean }>(`/api/incidents/${id}/triage-runs?page=${page}`)

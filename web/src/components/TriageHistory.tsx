@@ -11,7 +11,7 @@ export function TriageHistory({ id }: { id: string }) {
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState(1)
   const query = useQuery({ queryKey: ['triage-runs', id, page], queryFn: () => fetchTriageRuns(id, page), enabled: open, refetchInterval: open ? 10000 : false })
-  const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`
+  const seconds = (ms = 0) => `${(ms / 1000).toFixed(1)} s`
   const statuses = { running: 'triageRunRunning', succeeded: 'triageRunSucceeded', failed: 'triageRunFailed', interrupted: 'triageRunInterrupted' } as const
   const triggers = { initial: 'triageRunInitial', reopened: 'triageRunReopened', urgent: 'triageRunUrgent', evidence: 'triageRunEvidence' } as const
   return <Card title={t('triageRunHistory')} extra={<Button type="link" onClick={() => setOpen(!open)}>{t(open ? 'triageRunHide' : 'triageRunShow')}</Button>}>
@@ -24,9 +24,9 @@ export function TriageHistory({ id }: { id: string }) {
         { title: t('triageRunTrigger'), width: 120, render: (_, row) => t(triggers[row.trigger]) },
         { title: t('triageRunWait'), width: 100, render: (_, row) => row.ready_at ? seconds(Math.max(0, Date.parse(row.started_at) - Date.parse(row.ready_at))) : '—' },
         { title: t('triageRunDuration'), width: 110, render: (_, row) => row.status === 'running' ? '—' : row.error_code === 'lease_replaced' ? t('triageRunUnknown') : seconds(row.duration_ms) },
-        { title: t('triageRunModel'), width: 180, render: (_, row) => `${row.model || '—'} · ${row.model_calls} / ${seconds(row.model_ms)}` },
-        { title: t('triageRunTools'), width: 150, render: (_, row) => `${row.tool_calls} / ${seconds(row.tool_ms)} (${row.tool_errors})` },
-        { title: 'Token', width: 120, render: (_, row) => row.input_tokens + row.output_tokens },
+        { title: t('triageRunModel'), width: 180, render: (_, row) => `${row.model || '—'} · ${row.model_calls ?? 0} / ${seconds(row.model_ms)}` },
+        { title: t('triageRunTools'), width: 150, render: (_, row) => `${row.tool_calls ?? 0} / ${seconds(row.tool_ms)} (${row.tool_errors ?? 0})` },
+        { title: 'Token', width: 120, render: (_, row) => (row.input_tokens ?? 0) + (row.output_tokens ?? 0) },
       ]} expandable={{ expandedRowRender: row => <Space orientation="vertical" style={{ width: '100%' }}>
         <Typography.Text>{t('triageRunError')}: {row.error_code || '—'}</Typography.Text>
         {(row.tool_details ?? []).map((tool, index) => <Typography.Text key={index}>
