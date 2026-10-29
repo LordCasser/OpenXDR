@@ -40,7 +40,7 @@ func TestTrustedSourcesAPI(t *testing.T) {
 	client.Event.Create().SetTs(time.Now().Add(-time.Hour)).SetClassUID(3002).SetSource("agent").SetAssetID(host.ID).
 		SetRaw(json.RawMessage(`{"status_id":1}`)).SaveX(ctx)
 
-	h := Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
+	h := Handler(client, nil, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
 	asAnalyst := httptest.NewServer(as(analyst, h))
 	t.Cleanup(asAnalyst.Close)
 	asLead := httptest.NewServer(as(lead, h))

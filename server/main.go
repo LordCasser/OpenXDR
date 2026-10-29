@@ -37,6 +37,7 @@ import (
 	"openxdr/server/internal/commandgate"
 	"openxdr/server/internal/correlate"
 	"openxdr/server/internal/enroll"
+	"openxdr/server/internal/eventarchive"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/eventpart"
 	"openxdr/server/internal/eventsearch"
@@ -146,7 +147,8 @@ func main() {
 	routes.Handle("/api/system-integrations", integrations)
 	routes.Handle("/api/system-integrations/", integrations)
 	startIntegrationDelivery(ctx, client, credentialVault, outboundAllow)
-	routes.Handle("/", api.Handler(client, rules, hub, suppressions, intelStore, allowlist, chat))
+	// 冷归档读取默认关闭：EVENT_ARCHIVE_READ=1 才把连接交给 /api/events，关着时行为与改动前一致
+	routes.Handle("/", api.Handler(client, archiveConn(ctx, db), rules, hub, suppressions, intelStore, allowlist, chat))
 	mux := publicMux(auth.Middleware(client, routes), db, client, registry, enrollSvc, dists, events)
 	// 经反向代理时还原客户端地址，登录退避与审计才按真人计
 	trustedProxies, err := realip.Parse(os.Getenv("TRUSTED_PROXIES"))
@@ -644,6 +646,20 @@ func newImportLLM(conf func() aiconf.Config, model string) *triage.LLM {
 		return c.BaseURL, cmp.Or(model, c.Model, c.PiModel), c.APIKey
 	}
 	return l
+}
+
+// archiveConn 冷归档读取用的连接：只有 EVENT_ARCHIVE_READ=1 才接上，默认关闭。
+// 开启时先确保冷归档表存在；建表失败只记日志并降级为「没有冷层」——事件页不能因为
+// 冷归档起不来就整页报错，server 更不该因此起不来。阶段 B1 只读，归档写入仍然走 CLI。
+func archiveConn(ctx context.Context, db *sql.DB) *sql.DB {
+	if getenv("EVENT_ARCHIVE_READ", "") != "1" {
+		return nil
+	}
+	if err := eventarchive.EnsureSchema(ctx, db); err != nil {
+		slog.Warn("冷归档读取已开启，但初始化冷归档表失败，本次按没有冷层运行", "err", err)
+		return nil
+	}
+	return db
 }
 
 // registerSQLRoutes 直接查库的接口：时序缺口、指令核验与身份观测。

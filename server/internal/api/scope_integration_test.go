@@ -44,7 +44,7 @@ func TestAPIGroupScope(t *testing.T) {
 	alice := client.User.Create().SetUsername("alice").SetPasswordHash("x").SetRole("analyst").SaveX(ctx)
 	client.GroupMember.Create().SetGroupID(gA.ID).SetUserID(alice.ID).SetRole("viewer").SaveX(ctx)
 
-	h := Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
+	h := Handler(client, nil, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
 	ts := httptest.NewServer(as(alice, h))
 	t.Cleanup(ts.Close)
 
@@ -143,7 +143,7 @@ func TestAPISuppressionScope(t *testing.T) {
 		client.GroupMember.Create().SetGroupID(gA.ID).SetUserID(u.ID).SetRole(role).SaveX(ctx)
 		return u
 	}
-	h := Handler(client, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
+	h := Handler(client, nil, loadRules(t), response.NewHub(client, false), suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)
 	serve := func(u *ent.User) *httptest.Server {
 		ts := httptest.NewServer(as(u, h))
 		t.Cleanup(ts.Close)

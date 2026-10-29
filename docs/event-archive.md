@@ -12,7 +12,8 @@ events 保留期内的数据在日分区里，过期分区由 `eventpart.Retire`
 | 阶段 | 做什么 | 状态 |
 |---|---|---|
 | **A 影子归档** | 只读 events，把候选事件编码成冷块写进两张新表，逐事件对拍 + 度量 | **已实现** |
-| B 冷热查询 | 热数据仍查 events，冷块按 (day, class_uid, source) 定位后解压回放 | 未实现 |
+| **B1 冷热读取** | `/api/events` 先查热表，再按同一组参数与同一个组权限查冷块，合流去重；覆盖度用响应头如实标注 | **已实现** |
+| B2 证据与生命周期 | 冷块支撑告警证据物化、重传存在性检查、按 run 的回收与覆盖度统计 | 未实现 |
 | C 切换与释放 | 冷块验证覆盖足够后，才谈退役分区、删行、真正释放空间 | 未实现 |
 
 阶段 A 的铁律：**不改动、删除或切换 events 的任何一行**。不改 `events` 与其索引，
@@ -194,7 +195,72 @@ events 侧（同一批被归档事件，仍在 events 里）：3000 条，整行
 命令与上面完全一致。同一批数据上再跑一轮 shadow（新的 run id）前后，`events` 的
 `count(*)`、`sum(pg_column_size(t.*))` 与按 id 的全行 md5 摘要完全一致，分区清单也一字不差。
 
-## 7. 命令行
+## 7. 读取契约（阶段 B1）
+
+冷读只读，不改冷块格式、不动 events，也不改变热表查询的参数语义。
+
+**开关**：`EVENT_ARCHIVE_READ=1` 才把 `*sql.DB` 交给 `/api/events`，默认关闭。
+开启时启动阶段先跑一次 `EnsureSchema`；建表失败只记警告并降级为「没有冷层」，
+不让事件页因为冷归档起不来就整页报错。开关关着（连接为 nil）时，响应与改动前逐字节一致。
+
+**候选块收窄**：按块元数据收窄——时间窗用块上的 `first_ts` / `last_ts`（块与 `[From, To)` 有交集
+等价于 `last_ts >= From AND first_ts < To`），再叠加 `class_uid` 与 `source`；`day` 就是块内事件的
+UTC 日，被时间窗完全覆盖，所以不单独传日期参数（也就不引入 date/timestamptz 的隐式转换）。
+`event_archive_chunks_ts` 与 `event_archive_chunks_day` 两个索引服务这两个方向。
+块与事件在 Go 侧用同一套条件再筛一次，任何来源都绕不过时间窗与类别、来源。
+
+**`eventarchive.Query`**：
+
+```go
+Query(ctx context.Context, db *sql.DB, f Filter) ([]Event, Coverage, error)
+```
+
+| 条件 | 含义 |
+|---|---|
+| `From` / `To` | 按 `ts`，左闭右开 |
+| `AssetIDs` | **nil 表示不限**（全局 admin）；**非 nil 表示受限**：事件 `asset_id` 为 NULL 或不在集合里的一律丢弃，空切片表示「一无所见」，直接返回空结果。与热表 `AssetIDIn()` 的空集合口径一致，没有可见资产的用户不能因为传了空集合就变成不限 |
+| `Classes` / `Sources` | 空表示不限 |
+| `IDs` | 按事件 ID 精确定位，可与其它条件叠加；ID 不在块元数据里，只能靠时间窗与类别先收窄 |
+| `Limit` | `<=0` 用 1000 |
+
+- 结果是 `(ts, id)` 倒序、按 `(ts, id)` 去重（同一轮或多轮 run 重复归档同一事件时只留一条），最多 `Limit` 条。
+- **预算**：单次最多解压 200 块（`maxScannedChunks`）。每块都要整块解压，不设上限时一个宽时间窗会把
+  整个归档读进内存；用完预算就停，并把 `Coverage.Truncated` 置真。
+- **内存**：候选块只取元数据，载荷一块一块取；命中的事件只在内存里保留 `Limit` 条（小顶堆），
+  被挤掉的条数记进 `Coverage.Matched` 与 `Truncated`。
+- **块损坏**：头部/`sha256`/条数/块内 (日, 类别, 来源) 与首末 ts 任一不符，`Query` **整体返回错误**
+  并带块 id，不返回部分结果——「跳过坏块」等于把「查不到」伪装成「不存在」。
+- **表不存在**：返回 `ErrNoSchema`（不是数据错误，是部署状态）；**表在但没有块**：返回空结果、不报错。
+
+**`/api/events` 合流**：
+
+1. 热表查询与参数语义完全不变（`from` / `to` / `assetId` / `classUid` / `source` / `q` / `limit`，
+   默认 24 小时，取满上限带 `X-Truncated`）。
+2. 冷查询用同一组参数构造 `Filter`：`From`/`To` 取同一对时间，`To` 补 1ns——热表是 `ts <= to`，
+   冷查询是左闭右开，补一个纳秒才不会漏掉恰好等于 `to` 的事件；`assetId` / `classUid` / `source`
+   逐项对应；`Limit` 与热表相同。
+3. 权限用同一个 `scope`：`s.all` 传 `nil`（不限），否则传 `s.assets`（受限，可能是空集合）。
+   `assetId` 与 scope 同时生效：资产不在可见范围时交集为空，冷热两边都返回空。
+4. 合流：热表行优先（它带着告警与自动化信息），冷块事件补进来，按 `(ts, id)` 去重、倒序、截到 `limit`。
+   冷块为空时原样返回热表结果，不重排、不截断。
+5. 关键词（`q`）**跳过冷查询**：冷块没有关键词索引，逐块解压全文扫的代价与窗口大小无关、不可控。
+
+**覆盖度**（`X-Archive-Coverage`）：调用方据此区分「查过、没有」与「没查」。
+
+| 情形 | 响应头 |
+|---|---|
+| 冷读开关关闭（连接为 nil），或归档表在但没有块 | 不写这个头，响应与改动前逐字节一致 |
+| 开关开着但库里没有冷归档表 | `skipped=no-schema` |
+| 归档有数据、关键词查询 | `skipped=keyword` |
+| 归档有数据、查询窗口整体早于最早一块冷数据 | `skipped=before_archive` |
+| 已执行冷读 | `chunks=<扫过的块数>;matched=<冷层命中去重后条数>;truncated=<0 或 1>` |
+
+- `chunks>0 && matched=0` 是真实的「查过、没有」，与「没查」严格区分。
+- `matched` 是**冷层**的命中数（含与热表重复的事件），不是合流后的新增条数。
+- `truncated=1` 表示冷层结果被截断：命中数超过 `limit`，或有候选块因 200 块预算没扫。
+- 冷块解码失败、读块出错等真实错误：`500` 并带块 id，**不降级**成只返回热表结果。
+
+## 8. 命令行
 
 ```
 DATABASE_URL=... eventarchive ensure-schema
@@ -207,7 +273,7 @@ DATABASE_URL=... eventarchive report -run <uuid>
 失败一律非零退出码。与其他运维命令（`cmd/eventpartition`、`cmd/backtest`）一样，二进制要放进能连到
 主库的环境里跑。
 
-## 8. 已验证的内容
+## 9. 已验证的内容
 
 单元测试（`server/internal/eventarchive/chunk_test.go`，无 DB）：全字段往返（含 NULL 可空列、
 带未转义 Unicode 与转义字符的 raw）、空块拒绝、头部 magic/format/codec/count/plainLen/sha 逐项篡改
@@ -220,7 +286,21 @@ DATABASE_URL=... eventarchive report -run <uuid>
 构建后新写入报「候选集已变化」、影子归档前后 `events` 的 `count(*)` 与按 id 的 raw 摘要完全一致、
 `ratio` 与手工 `sum(plain_len)/sum(payload_len)` 一致。
 
-## 9. 已知限制与后续
+读取（阶段 B1）：
+
+- 单元（`query_test.go`，无 DB，用内存块）：时间/类别/来源/ID 过滤（含左闭右开边界）、
+  `AssetIDs` 的 nil 与空集合两种语义（NULL 资产被排除、集合外被排除、空集合一无所见）、
+  `(ts, id)` 去重与倒序、`Limit` 截断、坏块整体报错并带块 id、块头与内容不符报错、
+  200 块预算、窗口外的块连解压都不发生。
+- 集成（`query_integration_test.go`）：影子归档后用 `Query` 读回（顺序、raw 与 events 逐字节一致）、
+  资产集合过滤、块损坏报错带块 id、表在但无块、表不存在的 `ErrNoSchema`。
+- 接口（`events_archive_integration_test.go`）：热冷合流（只存在于冷块的事件也返回、重复归档只留一条、
+  热表优先取原文）、组权限（admin 看到全部，组内 viewer 只见本组资产，没有组时一无所见，
+  组外资产筛选冷热都为空）、覆盖度头（`chunks/matched/truncated`、`limit` 截断时 `truncated=1`
+  且带 `X-Truncated`、`skipped=keyword` 且不返回冷数据、`skipped=before_archive`）、坏块 500 带块 id、
+  冷层不可用时响应逐字节不变（连接为 nil / 表不存在 / 表为空三种情形）。
+
+## 10. 已知限制与后续
 
 - **事件不删、分区不动**：阶段 A 只证明「能正确编码与对拍」，不释放任何空间。
 - **超大事件（> 4 MiB）不归档**：记在 `detail.oversized` 里，阶段 B 之前要想清楚是拆块还是留在热库。
@@ -228,7 +308,14 @@ DATABASE_URL=... eventarchive report -run <uuid>
   由运维按范围管理；阶段 C 之前应能按 run 回收（删 `event_archive_chunks` 里该 run 的行即可）。
 - **对拍要求候选集不变**：构建期间大量写入时对拍会失败，这是设计上的如实报告，
   应在低峰期跑，或用较老的日期区间。
-- **未接 server 启动、没有查询入口**：阶段 B 才加冷热读取，届时 `(day, class_uid, source)` 索引
-  与 `first_ts/last_ts` 就是挑块的入口。
+- **读取默认关闭**：`EVENT_ARCHIVE_READ=1` 才接上，且只是读取层——生产归档仍由 CLI 跑，
+  没有评测过线上默认开启的开销。
+- **关键词不进冷层**：冷块没有关键词索引，带 `q` 的查询只查热表，用 `X-Archive-Coverage: skipped=keyword` 说明。
+- **冷查询有时间边界差**：热表含 `ts <= to`，冷块是 `[from, to)`；接口给冷查询补了 1ns，直接调
+  `eventarchive.Query` 的调用方要自己处理这个边界。
+- **没有跨 run 的覆盖度统计**：查询只说「这次扫了几块、命中几条、是否被预算/上限截断」。
+  某段时间到底有没有被完整归档，仍需按 run 的 `detail` 与对拍结果判断（B2）。
+- **审计与限流没有跟进**：冷读没有单独的审计事件，也没有按调用方的配额；两者都要在真正扩大使用范围
+  之前定下来。
 - **`report` 要解码全部冷块**：为了按 id 回查 events 的整行字节，它逐块解码取 id（顺带又校验了一遍
   块完整性），耗时与归档条数成正比；大 run 上先在低峰期跑。
