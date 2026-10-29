@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"time"
 )
@@ -14,6 +15,10 @@ import (
 var glmModel = regexp.MustCompile(`(?i)(^|/)glm[-_.]`)
 
 var deepseekThinkingModel = regexp.MustCompile(`(?i)(^|/)deepseek-(v4-)?(flash|pro)$`)
+
+// templateNoThinking 自部署 vLLM 的模型名常是路径（如 /model），按名字认不出是哪家：
+// 开了 AI_TEMPLATE_NO_THINKING 后，认不出的模型关思考时同时发 DeepSeek 与 GLM/Qwen 的模板参数，模板只认自己那个
+var templateNoThinking = os.Getenv("AI_TEMPLATE_NO_THINKING") == "true"
 
 // LLM OpenAI 兼容 chat completions 客户端。BaseURL 默认本地 Ollama——安全数据不出内网。
 type LLM struct {
@@ -131,6 +136,9 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 	}
 	if l.NoThinking && deepseekThinkingModel.MatchString(model) {
 		payload["thinking"] = map[string]string{"type": "disabled"}
+	}
+	if l.NoThinking && templateNoThinking && !glmModel.MatchString(model) && !deepseekThinkingModel.MatchString(model) {
+		payload["chat_template_kwargs"] = map[string]bool{"thinking": false, "enable_thinking": false}
 	}
 	if l.MaxTokens > 0 {
 		payload["max_tokens"] = l.MaxTokens

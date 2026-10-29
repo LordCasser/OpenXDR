@@ -52,6 +52,8 @@ services:
       AI_API_KEY: ${AI_API_KEY:-}
       # Pi 对话与预设任务：留空则不启用，与模型端点共用 AI_BASE_URL / AI_API_KEY
       PI_MODEL: ${PI_MODEL:-}
+      # 自部署 vLLM 且模型名是路径（如 /model）时设 true，后台短输出才能关掉思考
+      AI_TEMPLATE_NO_THINKING: ${AI_TEMPLATE_NO_THINKING:-false}
       # 每组近 24 小时 Pi 用量上限（输入加输出 token），0 不限
       PI_GROUP_DAILY_TOKENS: ${PI_GROUP_DAILY_TOKENS:-0}
       # 配置后 Pi 在独立沙箱主机的隔离容器里运行，见 docs/pi-backend.md#沙箱模式
