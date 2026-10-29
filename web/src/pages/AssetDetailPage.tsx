@@ -283,7 +283,7 @@ function AssetDetail() {
                   key: 'commands',
                   label: t('tabCommands'),
                   children: commands.isError ? <LoadError error={commands.error} onRetry={() => commands.refetch()} /> : (
-                    <Table size="small" rowKey="id" loading={commands.isPending} dataSource={commands.data?.items ?? []} pagination={{ current: commandPage, pageSize: 10, total: commands.data?.total ?? 0, onChange: setCommandPage, showSizeChanger: false, hideOnSinglePage: true }}
+                    <Table size="small" rowKey="id" scroll={{ x: 1140 }} loading={commands.isPending} dataSource={commands.data?.items ?? []} pagination={{ current: commandPage, pageSize: 10, total: commands.data?.total ?? 0, onChange: setCommandPage, showSizeChanger: false, hideOnSinglePage: true }}
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noCommands')} /> }}
                       columns={[
                         { title: t('thTime'), dataIndex: 'createdAt', render: fmtTime, width: 170 },
@@ -291,7 +291,7 @@ function AssetDetail() {
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <CommandStatusTag value={v} /> },
                         { title: t('thCreatedBy'), dataIndex: 'issuedBy', width: 110 },
                         { title: t('verificationTitle'), width: 100, render: (_, row: CommandRow) => <Button size="small" onClick={() => setVerifying(row)}>{t('verificationTitle')}</Button> },
-                        { title: t('thResult'), dataIndex: 'detail', ellipsis: true, render: (value, row) => <Button type="link" onClick={() => setCommandDetail(row.id)}>{value || t('commandViewDetail')}</Button> },
+                        { title: t('thResult'), width: 140, render: (_, row) => <Button type="link" onClick={() => setCommandDetail(row.id)}>{t('commandViewDetail')}</Button> },
                         {
                           title: t('thDetections'), dataIndex: 'detections', width: 220,
                           render: (v: CommandRow['detections']) => v?.length
