@@ -542,6 +542,8 @@ Prometheus 指标 `openxdr_collector_capability_problem_hosts{capability,state,s
 server 返回的注册身份和缓存里的不同（server 重装、数据库重建）时，旧身份的批次与注册配置移入隔离区，agent 退出一次，
 由服务管理器以新身份拉起，不陷入重启循环。
 
+批次落盘带格式版本与压缩（`OXDRSPL1` 魔数 + codec + 对 plaintext 的 sha256 + body，codec 1 = gzip）：代表性进程事件实测磁盘占用约为原文的 9%（约 11 倍），内容重复度越低比值越小；升级前的旧格式批次照常补传，旧版 agent 读到新格式批次只会把它移进 `quarantine/` 而不是删除。
+
 单条超过 3 MiB 的事件丢弃并计入丢失数，不让 agent 退出；进程事件的命令行在采集侧截到 32 KiB
 （argv 在 `ulimit -s unlimited` 下能到几 MB）。缓存积压超过 16 批时（离线或 server 慢）改为 30 秒或满 500 条落一批，
 在线时仍每秒或满 128 条一批：8192 个批次文件的上限因此能覆盖几十小时离线，而不是约 2 小时就先于字节上限撞满。
