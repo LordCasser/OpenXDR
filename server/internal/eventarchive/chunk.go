@@ -1,8 +1,10 @@
-// Package eventarchive 是冷归档的阶段 A（影子归档）：只读地从 events 取候选事件，编码成
-// 自校验的冷块写进新建的 event_archive_chunks / event_archive_runs，再逐事件对拍与度量。
+// Package eventarchive 是冷归档：把 events 里过期的候选事件编码成自校验的冷块，
+// 写进新建的 event_archive_chunks / event_archive_runs，再逐事件对拍与度量；
+// 读取侧提供冷块查询（Query）、按事件 ID 定位（Locate / Exists）与证据物化（Materialize）。
 //
-// 本包不改动、删除或切换 events 的任何一行，也不 DETACH / ATTACH / DROP 任何分区：
-// 写入只发生在上面两张新建表。格式、口径与后续阶段见 docs/event-archive.md。
+// 本包不修改、删除或切换 events 的任何既有行，也不 DETACH / ATTACH / DROP 任何分区：
+// 唯一的 events 写入是 Materialize 往 events **插入**缺失的事件（ON CONFLICT DO NOTHING）。
+// 格式、口径与阶段见 docs/event-archive.md。
 package eventarchive
 
 import (
@@ -38,6 +40,18 @@ const (
 
 	// headerLen = magic(8) + format(1) + codec(1) + count(4) + plainLen(8) + sha256(32)。
 	headerLen = len(Magic) + 1 + 1 + 4 + 8 + sha256.Size
+
+	// BloomBits 是每个事件在 ID Bloom filter 里占的比特数：10 bit/事件 + 3 个 hash，
+	// 理论假阳性率约 1.7%。假阳性只是多重解压几块，**漏报不可接受**（见 BuildIDBloom）。
+	BloomBits = 10
+	// bloomHashes 是每个 ID 在 filter 上置位的个数，与 BloomBits 一起决定假阳性率。
+	bloomHashes = 3
+	// bloomMinBytes 是 filter 的最小字节数（64 B = 512 bit）：小块也留出足够余量，
+	// 让只有几块、几十块的归档几乎不会产生假阳性。
+	bloomMinBytes = 64
+	// bloomAlign 是 filter 的字节对齐：bit 数必须是 8 字节（64 bit）的整数倍，
+	// 这样字节长度本身就唯一确定 bit 数，读端不需要额外长度字段。
+	bloomAlign = 8
 )
 
 // Event 是冷块里的一条事件，字段与 events 公共列一一对应（顺序即 JSON 字段顺序）。
@@ -426,4 +440,100 @@ func parseUUIDPtr(s *string) (*uuid.UUID, error) {
 		return nil, fmt.Errorf("%q 不是 UUID: %w", *s, err)
 	}
 	return &id, nil
+}
+
+// ---- ID Bloom filter（阶段 B2：按 ID 定位冷事件）----
+//
+// 冷块元数据里没有 ID 索引，按 ID 查一条事件只能逐块解压全文扫。filter 的职责只有一个：
+// **排除不可能命中的块**，把解压次数压到常数级。命中仍必须解压并逐事件精确比对 ID，
+// 所以假阳性只是多解压几块；漏报则会把重传当成新事件（重复告警）、让证据物化找不到事件，
+// 绝对不允许。
+//
+// 零漏报由构造保证，不依赖参数选择：
+//   - 只置位、从不复位，filter 里只有「写进去的 id 的位」；
+//   - bit 数只由 len(bloom) 决定（8 字节对齐），写端读端共用 bloomPositions，
+//     不存在「写的时候算一个位、读的时候算另一个位」的可能；
+//   - 位宽不够只抬高假阳性率，不会漏报。
+// 唯一会漏报的情形是 filter 本身被截断或改坏，用长度校验挡掉：长度不是 8 字节对齐
+// （或为空）就当作「没有过滤器」，MayContainID 返回 true，退回解压后精确比对。
+
+// BuildIDBloom 给一块里的 id 建 ID Bloom filter，写进 event_archive_chunks.id_bloom。
+//
+// n 是块的声明条数（event_count），用来定 filter 大小；ids 条数比 n 多时按实际条数取大——
+// 宁可 filter 大一点，也不能有 id 装不进去。count <= 0 返回 nil（没有 id 就没有 filter）。
+// 同样的 ids 与 n 两次调用得到完全相同的字节（没有随机种子、没有时间戳）。
+func BuildIDBloom(ids []uuid.UUID, n int) []byte {
+	count := n
+	if len(ids) > count {
+		count = len(ids)
+	}
+	if count <= 0 {
+		return nil
+	}
+	// ceil(count*BloomBits / (bloomAlign*8)) * bloomAlign，最小 bloomMinBytes
+	bytesLen := (count*BloomBits + bloomAlign*8 - 1) / (bloomAlign * 8) * bloomAlign
+	if bytesLen < bloomMinBytes {
+		bytesLen = bloomMinBytes
+	}
+	bloom := make([]byte, bytesLen)
+	bits := uint64(bytesLen) * 8
+	for _, id := range ids {
+		for _, pos := range bloomPositions(id, bits) {
+			bloom[pos>>3] |= 1 << (pos & 7)
+		}
+	}
+	return bloom
+}
+
+// MayContainID 报告 id 是否**可能**在这一块里。
+//
+//   - bloom == nil（阶段 B2 之前写的老块，id_bloom 为 NULL）恒为 true：没有过滤器，
+//     调用方必须解压后精确比对；
+//   - 长度不是 8 字节对齐（filter 被截断或不是本包写的）同样返回 true，宁可多解压一块；
+//   - 返回 false 是确定的「这块里没有这条事件」。
+func MayContainID(bloom []byte, id uuid.UUID) bool {
+	bits, ok := bloomBits(bloom)
+	if !ok {
+		return true
+	}
+	for _, pos := range bloomPositions(id, bits) {
+		if bloom[pos>>3]&(1<<(pos&7)) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// bloomBits 返回 filter 的 bit 数；没有可用过滤器时 ok=false。
+func bloomBits(bloom []byte) (uint64, bool) {
+	if len(bloom) == 0 || len(bloom)%bloomAlign != 0 {
+		return 0, false
+	}
+	return uint64(len(bloom)) * 8, true
+}
+
+// bloomPositions 把 id 映射到 bloomHashes 个 bit 位：sha256 前两段加 FNV-1a 64，三个独立值
+// 直接取模。不用「双哈希派生第三位」那类做法：多算一个独立值更省心，反正每块只算 count 次。
+func bloomPositions(id uuid.UUID, bits uint64) [bloomHashes]uint64 {
+	sum := sha256.Sum256(id[:])
+	return [bloomHashes]uint64{
+		binary.BigEndian.Uint64(sum[0:8]) % bits,
+		binary.BigEndian.Uint64(sum[8:16]) % bits,
+		fnv1a64(id[:]) % bits,
+	}
+}
+
+// fnv1a64 是标准 FNV-1a 64 位（offset basis 14695981039346656037、prime 1099511628211）。
+// 内联展开只是为了避免每次调用都新建一个 hash.Hash64。
+func fnv1a64(b []byte) uint64 {
+	const (
+		offset64 uint64 = 14695981039346656037
+		prime64  uint64 = 1099511628211
+	)
+	h := offset64
+	for _, c := range b {
+		h ^= uint64(c)
+		h *= prime64
+	}
+	return h
 }

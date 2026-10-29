@@ -225,6 +225,7 @@ type shadowWriter struct {
 	seq       int // 已写入的块数，也是下一块的序号（从 1 开始）
 	plain     []byte
 	count     int
+	ids       []uuid.UUID // 当前块里的事件 id，封块时建 ID Bloom filter
 	day       time.Time
 	class     int32
 	source    string
@@ -260,6 +261,7 @@ func (w *shadowWriter) add(ctx context.Context, e Event) error {
 		w.plain = append(w.plain, '\n')
 	}
 	w.plain = append(w.plain, line...)
+	w.ids = append(w.ids, e.ID)
 	w.count++
 	w.lastTs = e.Ts
 	return nil
@@ -279,16 +281,19 @@ func (w *shadowWriter) flush(ctx context.Context) error {
 		ID: uuid.New(), RunID: w.runID, Seq: w.seq, Day: w.day,
 		ClassUID: int(w.class), Source: w.source, FirstTs: w.firstTs, LastTs: w.lastTs,
 		EventCount: w.count, Block: block,
+		// ID Bloom filter 与块一起落库：只用来排除不可能命中的块，漏报会让按 ID 定位
+		// 与重传判重失效，所以按实际写进块里的 id 建（与 event_count 一致）。
+		Bloom: BuildIDBloom(w.ids, w.count),
 	}
 	if err := writeChunk(ctx, w.db, chunk); err != nil {
 		return err
 	}
 	w.archived += int64(w.count)
-	w.plain, w.count = nil, 0
+	w.plain, w.count, w.ids = nil, 0, nil
 	return nil
 }
 
-// chunkRow 是 event_archive_chunks 的一行。
+// chunkRow 是 event_archive_chunks 的一行。Bloom 是阶段 B2 的 ID Bloom filter（可空列）。
 type chunkRow struct {
 	ID         uuid.UUID
 	RunID      uuid.UUID
@@ -299,6 +304,7 @@ type chunkRow struct {
 	FirstTs    time.Time
 	LastTs     time.Time
 	EventCount int
+	Bloom      []byte
 	Block
 }
 
@@ -311,10 +317,11 @@ func writeChunk(ctx context.Context, db *sql.DB, ch chunkRow) error {
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO event_archive_chunks
  (id, run_id, seq, day, class_uid, source, first_ts, last_ts, event_count, format, codec,
-  plain_len, payload_len, plain_sha256, payload)
- VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+  plain_len, payload_len, plain_sha256, payload, id_bloom)
+ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
 		ch.ID, ch.RunID, ch.Seq, ch.Day, ch.ClassUID, ch.Source, ch.FirstTs, ch.LastTs, ch.EventCount,
-		int16(ch.Format), int16(ch.Codec), ch.PlainLen, len(ch.Payload), ch.PlainSHA256[:], ch.Payload); err != nil {
+		int16(ch.Format), int16(ch.Codec), ch.PlainLen, len(ch.Payload), ch.PlainSHA256[:], ch.Payload,
+		ch.Bloom); err != nil {
 		return fmt.Errorf("写第 %d 块: %w", ch.Seq, err)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE event_archive_runs

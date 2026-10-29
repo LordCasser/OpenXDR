@@ -1,4 +1,4 @@
-// eventarchive 是冷归档阶段 A（影子归档）的命令行：只写新建的 event_archive_chunks /
+// eventarchive 是冷归档的阶段 A（影子归档）的命令行：只写新建的 event_archive_chunks /
 // event_archive_runs 两张表，**不改动 events 的任何一行**，也不 DETACH / ATTACH / DROP 分区。
 //
 // 用法: DATABASE_URL=... eventarchive <子命令>
@@ -8,9 +8,12 @@
 //	       [-chunk-events 2048] [-chunk-bytes 1048576] -confirm
 //	verify -run <uuid>                               按 run 口径重扫对拍，通过才置 verified
 //	report -run <uuid>                               归档前后的真实大小与压缩比
+//	locate -id <uuid>                                按事件 ID 找一条冷事件（只读）
+//	materialize -id <uuid> -confirm                  把一条冷事件物化回 events（幂等，不产告警）
 //
-// shadow 会写库，不加 -confirm 直接拒绝（没有演练模式）。verify 只改 run 的状态列。
-// 设计与阶段见 docs/event-archive.md；分区侧的工程口径见 docs/event-partitioning.md。
+// shadow / materialize 会写库，不加 -confirm 直接拒绝（没有演练模式）。verify 只改 run 的
+// 状态列；locate 只读。设计与阶段见 docs/event-archive.md；分区侧的工程口径见
+// docs/event-partitioning.md。
 package main
 
 import (
@@ -64,7 +67,9 @@ func usage() {
        -chunk-events 2048     单块事件条数上限
        -chunk-bytes 1048576   单块未压缩明文字节上限
   verify -run <uuid>                                重扫对拍，通过后置 verified
-  report -run <uuid>                                归档前后大小、压缩比与含索引对比`)
+  report -run <uuid>                                归档前后大小、压缩比与含索引对比
+  locate -id <uuid>                                 按事件 ID 找一条冷事件（只读）
+  materialize -id <uuid> -confirm                   把一条冷事件物化回 events（幂等，不产告警）`)
 	os.Exit(2)
 }
 
@@ -148,6 +153,63 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 		}
 		fmt.Print(r.String())
 		return nil
+
+	case "locate":
+		fs := flag.NewFlagSet("locate", flag.ExitOnError)
+		id := fs.String("id", "", "要定位的事件 id（uuid）")
+		fs.Parse(args)
+		eventID, err := parseID(*id)
+		if err != nil {
+			return err
+		}
+		e, found, err := eventarchive.Locate(ctx, db, eventID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			fmt.Printf("冷层命中：否（候选块全部解压比对过，冷层确实没有这条事件）\n")
+			fmt.Printf("  id = %s\n", eventID)
+			return nil
+		}
+		fmt.Printf("冷层命中：是（在冷块中找到）\n")
+		fmt.Printf("  id        = %s\n", e.ID)
+		fmt.Printf("  ts        = %s\n", e.Ts.Format(time.RFC3339Nano))
+		fmt.Printf("  class_uid = %d\n", e.ClassUID)
+		fmt.Printf("  source    = %s\n", e.Source)
+		fmt.Printf("  asset_id  = %s\n", optionalUUID(e.AssetID))
+		return nil
+
+	case "materialize":
+		fs := flag.NewFlagSet("materialize", flag.ExitOnError)
+		id := fs.String("id", "", "要物化的事件 id（uuid）")
+		confirm := fs.Bool("confirm", false, "确认执行会写库的步骤")
+		fs.Parse(args)
+		eventID, err := parseID(*id)
+		if err != nil {
+			return err
+		}
+		if !*confirm {
+			return fmt.Errorf("物化会往 events 插入一行，必须显式确认（-confirm）")
+		}
+		inserted, err := eventarchive.Materialize(ctx, db, eventID)
+		if err != nil {
+			return err
+		}
+		if inserted {
+			fmt.Printf("已物化事件 %s：往 events 插入 1 行（复制，不经过检测器，不产告警）\n", eventID)
+			return nil
+		}
+		// inserted=false 有两种原因，用 Locate 分清：events 里本来就有（幂等），还是冷层没有。
+		_, found, locateErr := eventarchive.Locate(ctx, db, eventID)
+		switch {
+		case locateErr != nil:
+			fmt.Printf("未插入（inserted=false）：events 里已有这条事件，或冷层没有；复查冷层失败: %v\n", locateErr)
+		case !found:
+			fmt.Printf("冷层没有事件 %s：未插入任何行\n", eventID)
+		default:
+			fmt.Printf("事件 %s 已在 events 里：未插入（物化幂等，events 里只有这一行）\n", eventID)
+		}
+		return nil
 	}
 	usage()
 	return nil
@@ -169,6 +231,24 @@ func parseRun(s string) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("-run %q 不是 uuid: %w", s, err)
 	}
 	return id, nil
+}
+
+func parseID(s string) (uuid.UUID, error) {
+	if s == "" {
+		return uuid.Nil, fmt.Errorf("-id 必填（uuid）")
+	}
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("-id %q 不是 uuid: %w", s, err)
+	}
+	return id, nil
+}
+
+func optionalUUID(id *uuid.UUID) string {
+	if id == nil {
+		return "NULL"
+	}
+	return id.String()
 }
 
 func parseList(s string) []string {
