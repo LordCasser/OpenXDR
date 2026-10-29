@@ -58,6 +58,8 @@ curl -fsS https://<地址>/ -o /dev/null -w '%{http_code}\n'   # 自建 CA 时�
 3. **添加主机**：「资产 → 添加主机」选组，复制安装命令到主机上执行（Linux root / Windows 管理员）。agent 安装包已内置在 server 镜像里，
    之后升级 OpenXDR，在线 agent 会自动跟着升级。
 
+自部署 vLLM 若使用 `/model` 等路径型模型名，且测试连接返回空内容或资产标注被思考耗尽预算，可在 `.env` 设置 `AI_TEMPLATE_NO_THINKING=true`，执行 `docker compose up -d server` 重建服务端容器。此项不由控制台覆盖，只对请求关闭思考的调用生效；已识别模型沿用原协议。
+
 ### 放一台流量探针（可选）
 
 在公网入口（反代网关）上或交换机镜像口旁放一台 sensor，就能看到「只握手不发请求」的扫描、TLS 指纹（JA3 / JA3S）、

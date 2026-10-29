@@ -78,6 +78,7 @@ services:
       TLS_KEY_FILE: /certs/server.key
       AI_BASE_URL: ${AI_BASE_URL:-http://10.1.1.180:80/v1}
       AI_MODEL: ${AI_MODEL:-}
+      AI_TEMPLATE_NO_THINKING: ${AI_TEMPLATE_NO_THINKING:-false}
       AI_API_KEY: ${AI_API_KEY:-}
       PI_MODEL: ${PI_MODEL:-}
       # 每组近 24 小时 Pi 用量上限（输入加输出 token），0 不限
