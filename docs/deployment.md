@@ -132,7 +132,8 @@ sudo env SENSOR_IFACE=eth0 OPENXDR_SERVER=http://<server>:8081 ./target/release/
 | `afxdp` | 绕过协议栈，吞吐更高。需 `--features xdp` 构建、驱动支持，进程会在网卡上挂载 XDP 程序；**只能看到入向流量**，镜像口场景够用 |
 
 `SENSOR_WORKERS` 决定并行度。afpacket 下多个 worker 共享 FANOUT 组；afxdp 下
-worker 号即网卡队列号，数量不应超过网卡实际队列数。
+worker 号即网卡队列号，数量不应超过网卡实际队列数。`SENSOR_GRPC_COMPRESSION=gzip`
+让上行 gRPC 消息走 gzip（默认关闭，server 侧已注册编码器，清空该变量重启即回滚）。
 
 ### 按主机下发采集配置
 
@@ -382,6 +383,7 @@ server 全部通过环境变量配置，均有默认值：
 | `TLS_CA_KEY_FILE` | 空 | CA 私钥，开了 mTLS 时在线接入用它签发主机证书 |
 | `AGENT_DIST_DIR` | 空 | agent 与 sensor 安装包目录，供安装脚本下载，也是在线 agent / sensor 自动升级的目标版本 |
 | `AGENT_AUTO_UPGRADE` | `true` | 在线 agent / sensor 与安装包哈希不同时自动升级，`false` 同时关闭两者 |
+| `SENSOR_GRPC_COMPRESSION` | 空（关闭） | 探针侧变量：设为 `gzip` 时 sensor 上行 gRPC 消息（注册、状态、会话批量上报）压缩，默认关闭，清空后重启即回滚；先升级 server 再开（server 始终能解压），只改线上字节，事件内容与身份不变 |
 | `TRUSTED_PROXIES` | 空 | 可信反向代理的地址或网段（逗号分隔）。只有来自这些地址的请求才采信 `X-Forwarded-For`，从右往左取第一个不可信地址作为客户端，登录退避与审计按它记来源；留空不还原 |
 | `ABUSE_CH_AUTH_KEY` | 空 | ThreatFox / URLhaus 认证导出密钥，可在「系统设置 → 外部情报查询」加密保存 |
 | `INTEL_FEED_INTERVAL_HOURS` | `6` | 情报订阅同步周期（小时），订阅条目有效期为它的 8 倍 |
