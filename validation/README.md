@@ -17,6 +17,8 @@ cd server && go run ./cmd/detectcheck --strict   # 有未达预期用例则非�
 那部分由实机回放覆盖：见 [replay/](replay/README.md)（脚本 + 各系统×
 采集路径验证矩阵）。
 
+AI 研判的证据与建议质量另见 [研判证据回归](triage/README.md)，不与规则检出率混算。
+
 ## 判定标准
 
 命中的规则**必须标了该技术**。只要"有规则响了"就算过，ATT&CK 标注错了
