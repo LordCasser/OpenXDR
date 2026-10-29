@@ -51,7 +51,12 @@ func mapEvents(api *http.ServeMux, db *ent.Client) {
 		}
 
 		preds := append([]predicate.Event{entevent.TsGTE(from), entevent.TsLTE(to)}, s.event()...)
-		if id, err := uuid.Parse(p.Get("assetId")); err == nil {
+		if value := p.Get("assetId"); value != "" {
+			id, err := uuid.Parse(value)
+			if err != nil {
+				http.Error(w, "无效的 assetId", http.StatusBadRequest)
+				return
+			}
 			preds = append(preds, entevent.AssetIDEQ(id))
 		}
 		if class, err := strconv.Atoi(p.Get("classUid")); err == nil {
