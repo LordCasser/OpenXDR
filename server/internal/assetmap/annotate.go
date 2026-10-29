@@ -60,6 +60,24 @@ type Facts struct {
 	Programs           []string     `json:"programs"`
 	// 模型给关系说明时只能引用这些对端
 	Peers []string `json:"-"`
+	// 按对端汇总的连接次数与最近一次时间，只给详情页看：次数一直在涨，进事实会让指纹天天变、反复触发标注
+	OutboundStats map[string]PeerStat `json:"-"`
+	InboundStats  map[string]PeerStat `json:"-"`
+}
+
+// PeerStat 与一个对端之间的连接次数（各端口、进程合计）与最近一次时间
+type PeerStat struct {
+	Count    int64     `json:"count"`
+	LastSeen time.Time `json:"lastSeen"`
+}
+
+func addStat(m map[string]PeerStat, peer string, count int64, last time.Time) {
+	s := m[peer]
+	s.Count += count
+	if last.After(s.LastSeen) {
+		s.LastSeen = last
+	}
+	m[peer] = s
 }
 
 func (f Facts) fingerprint() string {
@@ -154,7 +172,8 @@ func FactsOf(ctx context.Context, db *ent.Client, w *World, a *ent.Asset) (Facts
 		}
 	}
 	z, exposure := ZoneOf(a, zones)
-	f := Facts{Hostname: a.Hostname, IPs: a.IPAddrs, Zone: z, Exposure: exposure, Cloud: cloudOf(a)}
+	f := Facts{Hostname: a.Hostname, IPs: a.IPAddrs, Zone: z, Exposure: exposure, Cloud: cloudOf(a),
+		OutboundStats: map[string]PeerStat{}, InboundStats: map[string]PeerStat{}}
 	if a.Os != nil {
 		f.OS = *a.Os
 	}
@@ -206,6 +225,7 @@ func FactsOf(ctx context.Context, db *ent.Client, w *World, a *ent.Asset) (Facts
 			procs[target] = []string{}
 		}
 		f.Peers = append(f.Peers, peer)
+		addStat(f.OutboundStats, peer, l.Count, l.LastSeen)
 	}
 	for target, names := range procs {
 		slices.Sort(names)
@@ -228,6 +248,7 @@ func FactsOf(ctx context.Context, db *ent.Client, w *World, a *ent.Asset) (Facts
 		}
 		f.Inbound = append(f.Inbound, fmt.Sprintf("%s → %d", peer, l.DstPort))
 		f.Peers = append(f.Peers, peer)
+		addStat(f.InboundStats, peer, l.Count, l.LastSeen)
 	}
 	f.Outbound, f.Inbound, f.Peers = capSorted(f.Outbound), capSorted(f.Inbound), capSorted(f.Peers)
 

@@ -262,3 +262,44 @@ func TestEngineUnspecifiedSource(t *testing.T) {
 		}
 	}
 }
+
+// 详情页的连接次数：同一对端多个端口、多个进程的边合计次数，最近时间取最晚；
+// 次数只进统计不进事实，涨了也不改指纹
+func TestFactsPeerStats(t *testing.T) {
+	ctx, client := testdb.New(t)
+	group := client.Group.Create().SetName("prod").SaveX(ctx)
+	web := client.Asset.Create().SetHostname("web-01").SetIPAddrs([]string{"10.0.0.1"}).SetGroupID(group.ID).SaveX(ctx)
+	client.Asset.Create().SetHostname("db-01").SetIPAddrs([]string{"10.0.0.2"}).SetGroupID(group.ID).SaveX(ctx)
+	now := time.Now().Truncate(time.Second)
+	link := func(src, dst string, port int, count int64, at time.Time) {
+		q := client.AssetLink.Create().SetSrcIP(src).SetDstIP(dst).SetDstPort(port).SetProto("tcp").
+			SetCount(count).SetFirstSeen(at).SetLastSeen(at)
+		if src == "10.0.0.1" {
+			q.SetSrcAssetID(web.ID)
+		}
+		q.ExecX(ctx)
+	}
+	link("10.0.0.1", "10.0.0.2", 5432, 30, now.Add(-time.Hour))
+	link("10.0.0.1", "10.0.0.2", 6379, 12, now)
+	link("10.0.0.9", "10.0.0.1", 443, 7, now)
+
+	g, err := LoadGroup(ctx, client, group.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := FactsOf(ctx, client, g.World, web)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := f.OutboundStats["db-01"]; s.Count != 42 || !s.LastSeen.Equal(now) {
+		t.Fatalf("出向统计不对: %+v", f.OutboundStats)
+	}
+	if s := f.InboundStats["10.0.0.9"]; s.Count != 7 {
+		t.Fatalf("入向统计不对: %+v", f.InboundStats)
+	}
+	before := f.fingerprint()
+	client.AssetLink.Update().Where(assetlink.DstPortEQ(5432)).AddCount(1000).ExecX(ctx)
+	if f, _ = FactsOf(ctx, client, g.World, web); f.fingerprint() != before {
+		t.Fatal("连接次数变化不该改变事实指纹")
+	}
+}
