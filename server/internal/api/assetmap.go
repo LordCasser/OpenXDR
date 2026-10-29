@@ -174,7 +174,7 @@ func assetProfile(db *ent.Client, aiEnabled func() bool) http.HandlerFunc {
 		writeJSON(w, map[string]any{
 			"zone": facts.Zone, "exposure": facts.Exposure, "cloud": facts.Cloud,
 			"listening": listening, "inventoryAt": a.InventoryAt, "services": assetmap.NotesOf(a),
-			"outbound": facts.Outbound, "inbound": facts.Inbound, "outboundStats": facts.OutboundStats, "inboundStats": facts.InboundStats, "publicDestinations": facts.PublicDestinations, "public": assetmap.WithNotes(facts.Public, a),
+			"outbound": facts.OutboundDetails, "inbound": facts.InboundDetails, "outboundStats": facts.OutboundStats, "inboundStats": facts.InboundStats, "publicDestinations": facts.PublicDestinations, "public": assetmap.WithNotes(facts.Public, a),
 			"role": a.Role, "summary": a.Summary, "criticality": a.Criticality, "reason": a.AnnotationReason,
 			"relationNotes": a.RelationNotes, "lockedFields": a.LockedFields,
 			"annotatedAt": a.AnnotatedAt, "annotateRequestedAt": a.AnnotateRequestedAt, "aiEnabled": aiEnabled(),

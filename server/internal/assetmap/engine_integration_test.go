@@ -5,9 +5,11 @@ package assetmap
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -302,5 +304,46 @@ func TestFactsPeerStats(t *testing.T) {
 	client.AssetLink.Update().Where(assetlink.DstPortEQ(5432)).AddCount(1000).ExecX(ctx)
 	if f, _ = FactsOf(ctx, client, g.World, web); f.fingerprint() != before {
 		t.Fatal("连接次数变化不该改变事实指纹")
+	}
+}
+
+// 详情页不能沿用模型的40条事实限额，否则按连接次数排序会漏掉名称靠后的高频对端。
+func TestFactsDetailsRetainPeersBeyondModelLimit(t *testing.T) {
+	ctx, client := testdb.New(t)
+	host := client.Asset.Create().SetHostname("host").SetIPAddrs([]string{"10.0.0.1"}).SaveX(ctx)
+	now := time.Now()
+	for i := 100; i <= 100+maxPeers; i++ {
+		ip := fmt.Sprintf("10.2.%d.1", i)
+		count := int64(i)
+		if i == 100+maxPeers {
+			count = 100000
+		}
+		client.AssetLink.Create().SetSrcAssetID(host.ID).SetSrcIP("10.0.0.1").SetDstIP(ip).
+			SetDstPort(443).SetProto("tcp").SetCount(count).SetFirstSeen(now).SetLastSeen(now).ExecX(ctx)
+		client.AssetLink.Create().SetSrcIP(ip).SetDstIP("10.0.0.1").
+			SetDstPort(443).SetProto("tcp").SetCount(count).SetFirstSeen(now).SetLastSeen(now).ExecX(ctx)
+	}
+	world, err := LoadWorld(ctx, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := FactsOf(ctx, client, world, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Outbound) != maxPeers || len(f.Inbound) != maxPeers ||
+		len(f.OutboundDetails) != maxPeers+1 || len(f.InboundDetails) != maxPeers+1 {
+		t.Fatalf("模型/详情条数错误: %d/%d %d/%d", len(f.Outbound), len(f.OutboundDetails), len(f.Inbound), len(f.InboundDetails))
+	}
+	peer := fmt.Sprintf("10.2.%d.1", 100+maxPeers)
+	if !slices.Contains(f.OutboundDetails, peer+":443 ← ?") || !slices.Contains(f.InboundDetails, peer+" → 443") ||
+		f.OutboundStats[peer].Count != 100000 || f.InboundStats[peer].Count != 100000 {
+		t.Fatal("详情丢失最高频对端")
+	}
+	before := f.fingerprint()
+	client.AssetLink.Update().AddCount(1).ExecX(ctx)
+	after, err := FactsOf(ctx, client, world, host)
+	if err != nil || after.fingerprint() != before {
+		t.Fatalf("计数改变事实指纹: %v", err)
 	}
 }
