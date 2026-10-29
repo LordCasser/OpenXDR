@@ -12384,6 +12384,9 @@ type DecoyDeploymentMutation struct {
 	token_expires_at    *time.Time
 	runtime_instance_id *uuid.UUID
 	runtime_seen_at     *time.Time
+	runtime_pending     *int
+	addruntime_pending  *int
+	runtime_error       *string
 	runtime_state       *decoydeployment.RuntimeState
 	runtime_generation  *string
 	install_state       *decoydeployment.InstallState
@@ -13237,6 +13240,112 @@ func (m *DecoyDeploymentMutation) ResetRuntimeSeenAt() {
 	delete(m.clearedFields, decoydeployment.FieldRuntimeSeenAt)
 }
 
+// SetRuntimePending sets the "runtime_pending" field.
+func (m *DecoyDeploymentMutation) SetRuntimePending(i int) {
+	m.runtime_pending = &i
+	m.addruntime_pending = nil
+}
+
+// RuntimePending returns the value of the "runtime_pending" field in the mutation.
+func (m *DecoyDeploymentMutation) RuntimePending() (r int, exists bool) {
+	v := m.runtime_pending
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuntimePending returns the old "runtime_pending" field's value of the DecoyDeployment entity.
+// If the DecoyDeployment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyDeploymentMutation) OldRuntimePending(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuntimePending is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuntimePending requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuntimePending: %w", err)
+	}
+	return oldValue.RuntimePending, nil
+}
+
+// AddRuntimePending adds i to the "runtime_pending" field.
+func (m *DecoyDeploymentMutation) AddRuntimePending(i int) {
+	if m.addruntime_pending != nil {
+		*m.addruntime_pending += i
+	} else {
+		m.addruntime_pending = &i
+	}
+}
+
+// AddedRuntimePending returns the value that was added to the "runtime_pending" field in this mutation.
+func (m *DecoyDeploymentMutation) AddedRuntimePending() (r int, exists bool) {
+	v := m.addruntime_pending
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRuntimePending clears the value of the "runtime_pending" field.
+func (m *DecoyDeploymentMutation) ClearRuntimePending() {
+	m.runtime_pending = nil
+	m.addruntime_pending = nil
+	m.clearedFields[decoydeployment.FieldRuntimePending] = struct{}{}
+}
+
+// RuntimePendingCleared returns if the "runtime_pending" field was cleared in this mutation.
+func (m *DecoyDeploymentMutation) RuntimePendingCleared() bool {
+	_, ok := m.clearedFields[decoydeployment.FieldRuntimePending]
+	return ok
+}
+
+// ResetRuntimePending resets all changes to the "runtime_pending" field.
+func (m *DecoyDeploymentMutation) ResetRuntimePending() {
+	m.runtime_pending = nil
+	m.addruntime_pending = nil
+	delete(m.clearedFields, decoydeployment.FieldRuntimePending)
+}
+
+// SetRuntimeError sets the "runtime_error" field.
+func (m *DecoyDeploymentMutation) SetRuntimeError(s string) {
+	m.runtime_error = &s
+}
+
+// RuntimeError returns the value of the "runtime_error" field in the mutation.
+func (m *DecoyDeploymentMutation) RuntimeError() (r string, exists bool) {
+	v := m.runtime_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuntimeError returns the old "runtime_error" field's value of the DecoyDeployment entity.
+// If the DecoyDeployment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DecoyDeploymentMutation) OldRuntimeError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuntimeError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuntimeError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuntimeError: %w", err)
+	}
+	return oldValue.RuntimeError, nil
+}
+
+// ResetRuntimeError resets all changes to the "runtime_error" field.
+func (m *DecoyDeploymentMutation) ResetRuntimeError() {
+	m.runtime_error = nil
+}
+
 // SetRuntimeState sets the "runtime_state" field.
 func (m *DecoyDeploymentMutation) SetRuntimeState(ds decoydeployment.RuntimeState) {
 	m.runtime_state = &ds
@@ -13575,7 +13684,7 @@ func (m *DecoyDeploymentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DecoyDeploymentMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 26)
 	if m.asset_id != nil {
 		fields = append(fields, decoydeployment.FieldAssetID)
 	}
@@ -13626,6 +13735,12 @@ func (m *DecoyDeploymentMutation) Fields() []string {
 	}
 	if m.runtime_seen_at != nil {
 		fields = append(fields, decoydeployment.FieldRuntimeSeenAt)
+	}
+	if m.runtime_pending != nil {
+		fields = append(fields, decoydeployment.FieldRuntimePending)
+	}
+	if m.runtime_error != nil {
+		fields = append(fields, decoydeployment.FieldRuntimeError)
 	}
 	if m.runtime_state != nil {
 		fields = append(fields, decoydeployment.FieldRuntimeState)
@@ -13690,6 +13805,10 @@ func (m *DecoyDeploymentMutation) Field(name string) (ent.Value, bool) {
 		return m.RuntimeInstanceID()
 	case decoydeployment.FieldRuntimeSeenAt:
 		return m.RuntimeSeenAt()
+	case decoydeployment.FieldRuntimePending:
+		return m.RuntimePending()
+	case decoydeployment.FieldRuntimeError:
+		return m.RuntimeError()
 	case decoydeployment.FieldRuntimeState:
 		return m.RuntimeState()
 	case decoydeployment.FieldRuntimeGeneration:
@@ -13747,6 +13866,10 @@ func (m *DecoyDeploymentMutation) OldField(ctx context.Context, name string) (en
 		return m.OldRuntimeInstanceID(ctx)
 	case decoydeployment.FieldRuntimeSeenAt:
 		return m.OldRuntimeSeenAt(ctx)
+	case decoydeployment.FieldRuntimePending:
+		return m.OldRuntimePending(ctx)
+	case decoydeployment.FieldRuntimeError:
+		return m.OldRuntimeError(ctx)
 	case decoydeployment.FieldRuntimeState:
 		return m.OldRuntimeState(ctx)
 	case decoydeployment.FieldRuntimeGeneration:
@@ -13889,6 +14012,20 @@ func (m *DecoyDeploymentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRuntimeSeenAt(v)
 		return nil
+	case decoydeployment.FieldRuntimePending:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuntimePending(v)
+		return nil
+	case decoydeployment.FieldRuntimeError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuntimeError(v)
+		return nil
 	case decoydeployment.FieldRuntimeState:
 		v, ok := value.(decoydeployment.RuntimeState)
 		if !ok {
@@ -13949,6 +14086,9 @@ func (m *DecoyDeploymentMutation) AddedFields() []string {
 	if m.addport != nil {
 		fields = append(fields, decoydeployment.FieldPort)
 	}
+	if m.addruntime_pending != nil {
+		fields = append(fields, decoydeployment.FieldRuntimePending)
+	}
 	return fields
 }
 
@@ -13959,6 +14099,8 @@ func (m *DecoyDeploymentMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case decoydeployment.FieldPort:
 		return m.AddedPort()
+	case decoydeployment.FieldRuntimePending:
+		return m.AddedRuntimePending()
 	}
 	return nil, false
 }
@@ -13974,6 +14116,13 @@ func (m *DecoyDeploymentMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddPort(v)
+		return nil
+	case decoydeployment.FieldRuntimePending:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRuntimePending(v)
 		return nil
 	}
 	return fmt.Errorf("unknown DecoyDeployment numeric field %s", name)
@@ -14006,6 +14155,9 @@ func (m *DecoyDeploymentMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(decoydeployment.FieldRuntimeSeenAt) {
 		fields = append(fields, decoydeployment.FieldRuntimeSeenAt)
+	}
+	if m.FieldCleared(decoydeployment.FieldRuntimePending) {
+		fields = append(fields, decoydeployment.FieldRuntimePending)
 	}
 	if m.FieldCleared(decoydeployment.FieldRuntimeGeneration) {
 		fields = append(fields, decoydeployment.FieldRuntimeGeneration)
@@ -14056,6 +14208,9 @@ func (m *DecoyDeploymentMutation) ClearField(name string) error {
 		return nil
 	case decoydeployment.FieldRuntimeSeenAt:
 		m.ClearRuntimeSeenAt()
+		return nil
+	case decoydeployment.FieldRuntimePending:
+		m.ClearRuntimePending()
 		return nil
 	case decoydeployment.FieldRuntimeGeneration:
 		m.ClearRuntimeGeneration()
@@ -14127,6 +14282,12 @@ func (m *DecoyDeploymentMutation) ResetField(name string) error {
 		return nil
 	case decoydeployment.FieldRuntimeSeenAt:
 		m.ResetRuntimeSeenAt()
+		return nil
+	case decoydeployment.FieldRuntimePending:
+		m.ResetRuntimePending()
+		return nil
+	case decoydeployment.FieldRuntimeError:
+		m.ResetRuntimeError()
 		return nil
 	case decoydeployment.FieldRuntimeState:
 		m.ResetRuntimeState()

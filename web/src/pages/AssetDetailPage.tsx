@@ -8,13 +8,14 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import {
-  createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchFindingsPage, fetchIncidents, saveAgentConfig, searchEvents,
+  createAgentSession, fetchAgentConfig, fetchAssets, fetchCommandsPage, fetchFindingsPage, fetchIncidents, saveAgentConfig, searchEvents,
   type AgentConfig, type CommandRow, type FindingRow, type IncidentSummary,
 } from '../api'
 import { useRemember } from '../app/recent'
 import { saveQueue } from '../components/incidentQueue'
 import { useRowLink } from '../components/rowLink'
 import { useCanActIn, useSession } from '../app/session'
+import { CommandDetailDrawer } from '../components/CommandDetailDrawer'
 import { CommandVerificationDrawer } from '../components/CommandVerificationDrawer'
 import { LocalAccounts } from '../components/LocalAccounts'
 import { IdentityObservations } from '../components/IdentityObservations'
@@ -137,9 +138,12 @@ function AssetDetail() {
       detailsRef.current?.scrollIntoView({ block: 'start' })
     })
   }
+  const [commandPage, setCommandPage] = useState(1)
+  const [commandDetail, setCommandDetail] = useState<string | null>(null)
   const [verifying, setVerifying] = useState<CommandRow | null>(null)
   const [incPage, setIncPage] = useState(1)
   const [findingPage, setFindingPage] = useState(1)
+  useEffect(() => { setCommandPage(1); setCommandDetail(null) }, [id])
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 15000 })
   const asset = assets.data?.find(a => a.id === id)
   const canAct = useCanActIn(asset?.groupId)
@@ -152,7 +156,7 @@ function AssetDetail() {
   const findings = useQuery({ queryKey: ['findings', 'asset', id, findingPage], queryFn: () => fetchFindingsPage({ assetId: id, limit: 10, offset: (findingPage - 1) * 10 }), enabled: !!asset })
   const findingCount = useQuery({ queryKey: ['findings', 'asset', id, 'open-count'], queryFn: () => fetchFindingsPage({ assetId: id, status: 'open', limit: 1 }), enabled: !!asset })
   const events = useQuery({ queryKey: ['events', 'asset', id], queryFn: () => searchEvents({ assetId: id, hours: 168 }), enabled: !!asset })
-  const commands = useQuery({ queryKey: ['commands', 'asset', id], queryFn: () => fetchCommands({ assetId: id! }), enabled: !!asset })
+  const commands = useQuery({ queryKey: ['commands', 'asset', id, commandPage], queryFn: () => fetchCommandsPage({ assetId: id! }, commandPage), enabled: !!asset })
   useEffect(() => {
     if (!incidents.isSuccess || incidents.isFetching || incidents.data.total === undefined) return
     const lastPage = Math.max(1, Math.ceil(incidents.data.total / INCIDENT_PAGE))
@@ -204,6 +208,7 @@ function AssetDetail() {
       subtitle={[asset.osDisplay ?? asset.os, asset.ipAddrs?.join(', '), group?.name ?? t('ungrouped')].filter(Boolean).join(' · ')}
       extra={canChat && asset.groupId && <Button type="primary" icon={<RobotOutlined />} loading={starting} onClick={investigate}>{t('investigateHost')}</Button>}
     >
+      {commandDetail && <CommandDetailDrawer id={commandDetail} onClose={() => setCommandDetail(null)} />}
       {verifying?.assetId === asset.id && <CommandVerificationDrawer key={`${verifying.id}:${asset.groupId}`} command={verifying} canEdit={canAct} onClose={() => setVerifying(null)} />}
       <Row gutter={[16, 16]}>
         <Col xs={12} xl={6}>
@@ -278,7 +283,7 @@ function AssetDetail() {
                   key: 'commands',
                   label: t('tabCommands'),
                   children: commands.isError ? <LoadError error={commands.error} onRetry={() => commands.refetch()} /> : (
-                    <Table size="small" rowKey="id" loading={commands.isPending} dataSource={commands.data ?? []} pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                    <Table size="small" rowKey="id" loading={commands.isPending} dataSource={commands.data?.items ?? []} pagination={{ current: commandPage, pageSize: 10, total: commands.data?.total ?? 0, onChange: setCommandPage, showSizeChanger: false, hideOnSinglePage: true }}
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noCommands')} /> }}
                       columns={[
                         { title: t('thTime'), dataIndex: 'createdAt', render: fmtTime, width: 170 },
@@ -286,7 +291,7 @@ function AssetDetail() {
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <CommandStatusTag value={v} /> },
                         { title: t('thCreatedBy'), dataIndex: 'issuedBy', width: 110 },
                         { title: t('verificationTitle'), width: 100, render: (_, row: CommandRow) => <Button size="small" onClick={() => setVerifying(row)}>{t('verificationTitle')}</Button> },
-                        { title: t('thResult'), dataIndex: 'detail', ellipsis: true },
+                        { title: t('thResult'), dataIndex: 'detail', ellipsis: true, render: (value, row) => <Button type="link" onClick={() => setCommandDetail(row.id)}>{value || t('commandViewDetail')}</Button> },
                         {
                           title: t('thDetections'), dataIndex: 'detections', width: 220,
                           render: (v: CommandRow['detections']) => v?.length

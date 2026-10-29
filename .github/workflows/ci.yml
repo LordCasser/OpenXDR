@@ -36,6 +36,8 @@ jobs:
       - name: 格式检查
         working-directory: server
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: 日志归档回归
+        run: python3 -m unittest discover -s deploy/ha/logs -p 'test_*.py'
       - name: 构建
         working-directory: server
         run: go build ./...

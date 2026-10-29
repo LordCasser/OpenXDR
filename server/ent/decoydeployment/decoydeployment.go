@@ -49,6 +49,10 @@ const (
 	FieldRuntimeInstanceID = "runtime_instance_id"
 	// FieldRuntimeSeenAt holds the string denoting the runtime_seen_at field in the database.
 	FieldRuntimeSeenAt = "runtime_seen_at"
+	// FieldRuntimePending holds the string denoting the runtime_pending field in the database.
+	FieldRuntimePending = "runtime_pending"
+	// FieldRuntimeError holds the string denoting the runtime_error field in the database.
+	FieldRuntimeError = "runtime_error"
 	// FieldRuntimeState holds the string denoting the runtime_state field in the database.
 	FieldRuntimeState = "runtime_state"
 	// FieldRuntimeGeneration holds the string denoting the runtime_generation field in the database.
@@ -87,6 +91,8 @@ var Columns = []string{
 	FieldTokenExpiresAt,
 	FieldRuntimeInstanceID,
 	FieldRuntimeSeenAt,
+	FieldRuntimePending,
+	FieldRuntimeError,
 	FieldRuntimeState,
 	FieldRuntimeGeneration,
 	FieldInstallState,
@@ -113,6 +119,10 @@ var (
 	DefaultCreatedAt func() time.Time
 	// DefaultResource holds the default value on creation for the "resource" field.
 	DefaultResource string
+	// RuntimePendingValidator is a validator for the "runtime_pending" field. It is called by the builders before save.
+	RuntimePendingValidator func(int) error
+	// DefaultRuntimeError holds the default value on creation for the "runtime_error" field.
+	DefaultRuntimeError string
 	// DefaultStopRequested holds the default value on creation for the "stop_requested" field.
 	DefaultStopRequested bool
 	// DefaultID holds the default value on creation for the "id" field.
@@ -321,6 +331,16 @@ func ByRuntimeInstanceID(opts ...sql.OrderTermOption) OrderOption {
 // ByRuntimeSeenAt orders the results by the runtime_seen_at field.
 func ByRuntimeSeenAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRuntimeSeenAt, opts...).ToFunc()
+}
+
+// ByRuntimePending orders the results by the runtime_pending field.
+func ByRuntimePending(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRuntimePending, opts...).ToFunc()
+}
+
+// ByRuntimeError orders the results by the runtime_error field.
+func ByRuntimeError(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRuntimeError, opts...).ToFunc()
 }
 
 // ByRuntimeState orders the results by the runtime_state field.

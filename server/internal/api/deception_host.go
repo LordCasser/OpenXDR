@@ -80,10 +80,12 @@ func HostedDeception(db *ent.Client) http.Handler {
 		var body struct {
 			Release   contract.Release `json:"release"`
 			Instances []struct {
-				ID       uuid.UUID `json:"id"`
-				Instance uuid.UUID `json:"instance"`
-				Revision uuid.UUID `json:"revision"`
-				State    string    `json:"state"`
+				ID        uuid.UUID `json:"id"`
+				Instance  uuid.UUID `json:"instance"`
+				Revision  uuid.UUID `json:"revision"`
+				State     string    `json:"state"`
+				Pending   *int      `json:"pending,omitempty"`
+				ErrorCode string    `json:"errorCode,omitempty"`
 			} `json:"instances"`
 		}
 		if !decodeDeception(w, r, &body) {
@@ -94,6 +96,16 @@ func HostedDeception(db *ent.Client) http.Handler {
 			return
 		}
 		for _, item := range body.Instances {
+			if item.Pending != nil && (*item.Pending < 0 || *item.Pending > 10000) {
+				http.Error(w, "积压数量无效", 400)
+				return
+			}
+			switch item.ErrorCode {
+			case "", "delivery_failed", "platform_unavailable", "startup_failed", "pending_on_stop":
+			default:
+				http.Error(w, "错误码无效", 400)
+				return
+			}
 			if item.ID == uuid.Nil || item.Instance == uuid.Nil || item.Revision == uuid.Nil || (item.State != "stopped" && item.State != "failed") {
 				http.Error(w, "实例退出状态无效", 400)
 				return
@@ -147,10 +159,14 @@ func HostedDeception(db *ent.Client) http.Handler {
 				if !cfg.Hosted || releaseSpec(release) != body.Release {
 					return fmt.Errorf("退出声明与托管实例不一致")
 				}
-				if string(current.RuntimeState) == item.State {
+				if string(current.RuntimeState) == item.State && current.RuntimeError == item.ErrorCode && (item.Pending == nil || current.RuntimePending != nil && *current.RuntimePending == *item.Pending) {
 					return nil
 				}
-				e = tx.DecoyDeployment.UpdateOneID(row.ID).SetRuntimeState(decoydeployment.RuntimeState(item.State)).SetRuntimeSeenAt(time.Now()).Exec(r.Context())
+				update := tx.DecoyDeployment.UpdateOneID(row.ID).SetRuntimeState(decoydeployment.RuntimeState(item.State)).SetRuntimeSeenAt(time.Now()).SetRuntimeError(item.ErrorCode)
+				if item.Pending != nil {
+					update.SetRuntimePending(*item.Pending)
+				}
+				e = update.Exec(r.Context())
 				if e == nil {
 					e = audit.Checked(r.Context(), tx.AuditLog.Create(), "system", "", "deception_host_exit_confirmed", row.ID.String(), "受控引擎确认实例 "+item.Instance.String()+" 已退出，状态 "+item.State)
 				}
@@ -286,7 +302,7 @@ func HostedDeception(db *ent.Client) http.Handler {
 					return
 				}
 				token, marker, instance := randomDecoyToken(), randomDecoyToken(), uuid.New()
-				err := tx.DecoyDeployment.UpdateOneID(row.ID).SetTokenHash(decoyTokenHash(token)).SetMarker(marker).SetTokenGroupID(*host.GroupID).SetTokenRevisionID(rev.ID).SetTokenExpiresAt(time.Now().Add(decoyTokenTTL)).SetRuntimeInstanceID(instance).SetRuntimeState(decoydeployment.RuntimeStateStarting).SetRuntimeSeenAt(time.Now()).SetRuntimeGeneration(decoyTokenHash(token)).Exec(r.Context())
+				err := tx.DecoyDeployment.UpdateOneID(row.ID).SetTokenHash(decoyTokenHash(token)).SetMarker(marker).SetTokenGroupID(*host.GroupID).SetTokenRevisionID(rev.ID).SetTokenExpiresAt(time.Now().Add(decoyTokenTTL)).SetRuntimeInstanceID(instance).SetRuntimeState(decoydeployment.RuntimeStateStarting).ClearRuntimePending().SetRuntimeError("").SetRuntimeSeenAt(time.Now()).SetRuntimeGeneration(decoyTokenHash(token)).Exec(r.Context())
 				if err == nil {
 					err = audit.Checked(r.Context(), tx.AuditLog.Create(), "system", "", "deception_host_instance_assigned", row.ID.String(), "平台签发运行身份并分配修订 "+rev.ID.String())
 				}

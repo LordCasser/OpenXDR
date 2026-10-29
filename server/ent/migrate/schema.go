@@ -419,6 +419,8 @@ var (
 		{Name: "token_expires_at", Type: field.TypeTime, Nullable: true},
 		{Name: "runtime_instance_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "runtime_seen_at", Type: field.TypeTime, Nullable: true},
+		{Name: "runtime_pending", Type: field.TypeInt, Nullable: true},
+		{Name: "runtime_error", Type: field.TypeString, Default: ""},
 		{Name: "runtime_state", Type: field.TypeEnum, Enums: []string{"unknown", "starting", "running", "stopped", "failed"}, Default: "unknown"},
 		{Name: "runtime_generation", Type: field.TypeString, Nullable: true},
 		{Name: "install_state", Type: field.TypeEnum, Enums: []string{"idle", "installing", "installed", "unconfirmed"}, Default: "idle"},

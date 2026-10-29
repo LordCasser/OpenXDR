@@ -243,8 +243,30 @@ func init() {
 	decoydeploymentDescResource := decoydeploymentFields[11].Descriptor()
 	// decoydeployment.DefaultResource holds the default value on creation for the resource field.
 	decoydeployment.DefaultResource = decoydeploymentDescResource.Default.(string)
+	// decoydeploymentDescRuntimePending is the schema descriptor for runtime_pending field.
+	decoydeploymentDescRuntimePending := decoydeploymentFields[18].Descriptor()
+	// decoydeployment.RuntimePendingValidator is a validator for the "runtime_pending" field. It is called by the builders before save.
+	decoydeployment.RuntimePendingValidator = func() func(int) error {
+		validators := decoydeploymentDescRuntimePending.Validators
+		fns := [...]func(int) error{
+			validators[0].(func(int) error),
+			validators[1].(func(int) error),
+		}
+		return func(runtime_pending int) error {
+			for _, fn := range fns {
+				if err := fn(runtime_pending); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// decoydeploymentDescRuntimeError is the schema descriptor for runtime_error field.
+	decoydeploymentDescRuntimeError := decoydeploymentFields[19].Descriptor()
+	// decoydeployment.DefaultRuntimeError holds the default value on creation for the runtime_error field.
+	decoydeployment.DefaultRuntimeError = decoydeploymentDescRuntimeError.Default.(string)
 	// decoydeploymentDescStopRequested is the schema descriptor for stop_requested field.
-	decoydeploymentDescStopRequested := decoydeploymentFields[24].Descriptor()
+	decoydeploymentDescStopRequested := decoydeploymentFields[26].Descriptor()
 	// decoydeployment.DefaultStopRequested holds the default value on creation for the stop_requested field.
 	decoydeployment.DefaultStopRequested = decoydeploymentDescStopRequested.Default.(bool)
 	// decoydeploymentDescID is the schema descriptor for id field.

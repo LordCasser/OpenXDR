@@ -43,6 +43,29 @@ func revisionConfig(rev *ent.DecoyRevision) (contract.EngineConfig, error) {
 }
 
 func mapDeceptionManagement(mux *http.ServeMux, db *ent.Client) {
+	mux.HandleFunc("GET /api/deception/hosted-status", func(w http.ResponseWriter, r *http.Request) {
+		if !decoyAuthenticated(w, r) {
+			return
+		}
+		var status struct {
+			SeenAt *time.Time `json:"seenAt"`
+			Online bool       `json:"online"`
+		}
+		row, err := db.Setting.Get(r.Context(), "deception.hosted")
+		if err != nil && !ent.IsNotFound(err) {
+			http.Error(w, "读取管理器状态失败", 503)
+			return
+		}
+		if err == nil {
+			if json.Unmarshal(row.Value, &status) != nil {
+				http.Error(w, "管理器状态无效", 503)
+				return
+			}
+			status.Online = status.SeenAt != nil && time.Since(*status.SeenAt) >= 0 && time.Since(*status.SeenAt) <= 30*time.Second
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, status)
+	})
 	mux.HandleFunc("GET /api/deception/hosted-release", func(w http.ResponseWriter, r *http.Request) {
 		if !decoyAuthenticated(w, r) {
 			return
@@ -359,8 +382,10 @@ func DeceptionRuntime(db *ent.Client) http.Handler {
 			if operation == "lease" {
 				if row.StopRequested {
 					var state struct {
-						Instance string `json:"instance"`
-						State    string `json:"state"`
+						Instance  string `json:"instance"`
+						State     string `json:"state"`
+						Pending   *int   `json:"pending,omitempty"`
+						ErrorCode string `json:"errorCode,omitempty"`
 					}
 					if !decodeDeception(w, r, &state) {
 						return

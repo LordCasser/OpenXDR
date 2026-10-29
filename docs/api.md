@@ -83,7 +83,8 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/commands?incidentId=&assetId=` | 指令历史，可按事件或主机筛选 |
+| GET | `/api/commands?incidentId=&assetId=&view=summary` | 指令历史，可按事件或主机筛选；传 `page`（1–100000）和 `pageSize`（1–100，默认 20）返回 `{items,total}`，不传 `page` 保持最多 100 条数组。控制台使用 `summary`，不读取或返回 `cmd/stdout/stderr`，保留结果摘要与检测关联。省略 `view` 或使用 `full` 保留完整返回；其他值返回 400 |
+| GET | `/api/commands/{id}` | 指令详情，按资产组校验权限，包含完整命令与输出 |
 | POST | `/api/commands` | `{"kind":"kill_process\|isolate_host\|unisolate_host\|exec\|block_network\|unblock_network\|quarantine_file\|restore_file\|disable_account\|enable_account","assetId","incidentId","pid","target"}`（一律真执行，没有演练模式）；封锁、隔离文件、锁定账号必须带 `target`（IP / 网段 / 域名、文件绝对路径、账号名），不合法或会封到 server 自己时 400；`exec` 另带 `"cmd"`（必填）与 `"timeoutMs"`（0 = agent 默认 60s），结果回写 `exitCode` / `stdout` / `stderr` / `truncated`（各截断到 64KB） |
 
 需 server 配置 `RESPONSE_ENABLED=true`；隔离要求 `ISOLATION_ALLOW` 包含 server

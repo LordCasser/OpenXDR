@@ -44,6 +44,8 @@ export async function start(env = process.env) {
   gateway.server.removeAllListeners('close');
   const host = env.DYGK_LISTEN_HOST || '127.0.0.1';
   let closed = false, pumping, timer, heartbeat, fallback, stopping;
+  let errorCode = '';
+  platform.health = () => ({ pending: state.size(), errorCode });
   const pump = () => {
     if (closed) return Promise.resolve(true);
     if (pumping) return pumping;
@@ -55,10 +57,10 @@ export async function start(env = process.env) {
         state.collect(page);
         const items = state.pending();
         if (items.length) state.acknowledge(await platform.send(items));
-        if (!page.items.length && !state.size()) return true;
+        if (!page.items.length && !state.size()) { if (errorCode === 'delivery_failed') errorCode = ''; return true; }
       }
       return false;
-    })().finally(() => { pumping = undefined; });
+    })().catch(error => { errorCode = 'delivery_failed'; throw error; }).finally(() => { pumping = undefined; });
     return pumping;
   };
   const stop = (failed = false) => stopping ??= (async () => {
@@ -74,12 +76,15 @@ export async function start(env = process.env) {
       if (!drained || state.size()) failed = true;
     } catch { failed = true; }
     closed = true;
+    if (failed && !errorCode) errorCode = 'pending_on_stop';
     try { await platform.lease(failed ? 'failed' : 'stopped'); } catch { /* 平台不可用时保留本地回执，控制台最终显示心跳过期。 */ }
     if (fallback) fallback.defense.close();
+    const health = platform.health();
     gateway.defense.close(); state.close();
-    return { failed };
+    return { failed, ...health };
   })();
   const degrade = async error => {
+    errorCode = 'platform_unavailable';
     console.error(error.message);
     if (config.attachment !== 'gateway') { await stop(true); return; }
     if (fallback) return;
@@ -121,7 +126,7 @@ export async function start(env = process.env) {
       } finally { checking = false; }
     }, 30000);
     return { gateway, platform, state, stop, pump, degrade, get closed() { return closed; } };
-  } catch (error) { await stop(true); throw error; }
+  } catch (error) { errorCode = 'startup_failed'; await stop(true); throw error; }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

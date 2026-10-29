@@ -33,6 +33,8 @@ func (DecoyDeployment) Fields() []ent.Field {
 		field.Time("token_expires_at").Optional().Nillable(),
 		field.UUID("runtime_instance_id", uuid.UUID{}).Optional().Nillable(),
 		field.Time("runtime_seen_at").Optional().Nillable(),
+		field.Int("runtime_pending").Min(0).Max(10000).Optional().Nillable(),
+		field.String("runtime_error").Default(""),
 		field.Enum("runtime_state").Values("unknown", "starting", "running", "stopped", "failed").Default("unknown"),
 		field.String("runtime_generation").Optional().Sensitive(),
 		field.Enum("install_state").Values("idle", "installing", "installed", "unconfirmed").Default("idle"),

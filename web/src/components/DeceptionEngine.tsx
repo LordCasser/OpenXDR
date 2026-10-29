@@ -1,7 +1,8 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Alert, App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import { useState } from 'react'
-import { admitDeceptionRelease, disableDeceptionRelease, fetchDeceptionReleases, fetchDeceptionRevisions, fetchHostedDeceptionRelease, selectDeceptionRevision, stopDeceptionRuntime, type DecoyDeployment, type DeceptionConfig, type DeceptionReleaseInput } from '../api'
+import { admitDeceptionRelease, disableDeceptionRelease, fetchDeceptionReleases, fetchDeceptionRevisions, fetchHostedDeceptionRelease, fetchHostedDeceptionStatus, selectDeceptionRevision, stopDeceptionRuntime, type DecoyDeployment, type DeceptionConfig, type DeceptionReleaseInput } from '../api'
+import { Ago } from './Ago'
 import { errText } from './format'
 import { useI18n } from '../i18n'
 
@@ -85,4 +86,13 @@ export function DeceptionEngine({ row, refresh }: { row: DecoyDeployment; refres
       {revisions.data?.more && <Alert type="info" title={t('deceptionHistoryTruncated')} />}
     </Modal>
   </>
+}
+
+export function DeceptionStatus() {
+  const { t } = useI18n()
+  const status = useQuery({ queryKey: ['deception-hosted-status'], queryFn: fetchHostedDeceptionStatus, refetchInterval: 10000 })
+  return <Alert type={status.data?.online ? 'success' : 'warning'} showIcon title={<Space wrap>
+    <span>{t('deceptionManager')}: {status.isError ? t('deceptionLoadFailed') : status.data?.online ? t('deceptionManagerOnline') : t('deceptionManagerOffline')}</span>
+    {status.data?.seenAt && <Ago iso={status.data.seenAt} />}
+  </Space>} description={t('deceptionReachabilityUnknown')} />
 }

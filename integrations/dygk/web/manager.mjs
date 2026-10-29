@@ -18,7 +18,7 @@ export async function runManager(env = process.env) {
   };
   const stopInstance = async (id, item) => {
     const result = await item.runtime.stop();
-    finished.set(id, { id, instance: item.runtime.platform.instance, revision: item.revision, state: result?.failed ? 'failed' : 'stopped' });
+    finished.set(id, { id, instance: item.runtime.platform.instance, revision: item.revision, state: result?.failed ? 'failed' : 'stopped', pending: result?.pending, errorCode: result?.errorCode });
     active.delete(id);
   };
   const poll = async () => {
@@ -42,7 +42,7 @@ export async function runManager(env = process.env) {
         try {
           const runtime = await start({ ...env, DECOY_PLATFORM_URL: undefined, DECOY_DEPLOYMENT: job.id, DECOY_INSTANCE: job.instance, DECOY_RUNTIME_TOKEN: job.token, DECOY_TOKEN_FILE: undefined, DYGK_STATE_DIR: join(env.DYGK_STATE_DIR, job.id) });
           active.set(job.id, { revision: job.revision, runtime });
-        } catch (error) { console.error('托管登记 ' + job.id + ' 启动失败：' + error.message); }
+        } catch (error) { finished.set(job.id, { id: job.id, instance: job.instance, revision: job.revision, state: 'failed', errorCode: 'startup_failed' }); console.error('托管登记 ' + job.id + ' 启动失败：' + error.message); }
       }
     } catch (error) {
       if (error.status === 403) {

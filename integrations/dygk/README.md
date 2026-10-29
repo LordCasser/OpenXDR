@@ -31,6 +31,12 @@ docker compose up -d
 
 版本准入和令牌工具保留在高级入口，供兼容原生或远端运行包使用；平台托管路径不要求用户操作这些内部身份参数。
 
+## 运行状态与恢复验证
+
+控制台分别展示管理器心跳和实例回报，过期心跳不显示在线。新运行包通过租约回报待补传数量与受限错误码；旧运行包未回报时显示“未上报”，不按 0 处理。管理器启动失败也会回写失败状态。外部入口明确标记“未验证”，不对任意业务 URL 发起自动探测。
+
+恢复回归覆盖 SQLite 重新打开后的积压/游标/匿名会话标识、确认丢失后的稳定 ID 重试、错误产物拒绝、恢复原配置，以及管理器进程异常退出后的同卷重新领取。该测试使用隔离数据库和测试站点，不代表生产跨节点状态接管已实现。
+
 ## 运行实现与云端构建
 
 | 组成 | 位置 | 作用 |
@@ -153,8 +159,10 @@ npm --prefix integrations/dygk test
 npm --prefix integrations/dygk run test:upstream
 ```
 
-Node 需要 24；上游测试还使用 Python 3 和 POSIX shell。Linux CI 验证原生行为、上游行为、实际 Node 到 PostgreSQL 复核闭环，以及托管引擎通过平台配置自动启动。Windows 上游测试存在清理仍打开的 SQLite 文件的权限限制，不能据此跳过 Linux CI。
+Node 需要 24；上游测试还使用 Python 3 和 POSIX shell。提供上游源码后，Linux CI 验证原生行为、上游行为、实际 Node 到 PostgreSQL 复核闭环，以及托管引擎通过平台配置自动启动；缺少源码时的跳过条件见前文，不能把 CI 通过视为这些项目全部通过。Windows 上游测试存在清理仍打开的 SQLite 文件的权限限制，不能据此跳过 Linux CI。
 
-独立发布工作流为 `.github/workflows/deception-engine.yml`，由手动运行或 `dygk-v*` 标签触发。DYGK 当前为 `UNLICENSED`，公开镜像发布仅在确认授权并配置仓库变量 `DYGK_DISTRIBUTION_AUTHORIZED=true` 后开启。当前改动未发布、未部署；本机环境没有 Docker，镜像构建仍需 Linux CI 验收。
+独立发布工作流为 `.github/workflows/deception-engine.yml`，由手动运行或 `dygk-v*` 标签触发。DYGK 当前为 `UNLICENSED`，公开镜像发布仅在确认授权并配置仓库变量 `DYGK_DISTRIBUTION_AUTHORIZED=true` 后开启。私有环境部署与公开镜像发布是两项独立交付。
+
+2026-10-29，OpenXDR `7f400b4` 已部署到现有 HA 环境，独立引擎完成本地 Docker 构建和单节点生产回环验收：自动识别版本、启动、HTTP 访问观察入库、停止及监听关闭。测试登记已撤销。这不代表真实业务入口接入、生产拦截、引擎故障切换或持久化恢复演练已完成；源码缺失时的 CI 检查也不能由本地验证替代。HA 配置和恢复验收步骤见 [HA DYGK 部署说明](../../deploy/ha/dygk.md)。
 
 构建机无法访问默认 Go 模块代理时，可给 Docker 构建传入 `--build-arg GOPROXY=https://goproxy.cn,direct`；这只影响原生引擎构建，不改变运行配置。

@@ -101,9 +101,55 @@ func TestDeceptionManagedNodeStartsFromPlatformConfiguration(t *testing.T) {
 	if response.StatusCode != 200 || !strings.Contains(string(body), "data-dygk") {
 		t.Fatal("托管站点未实际提供诱饵")
 	}
+	previous := db.DecoyDeployment.GetX(ctx, deployment.ID).RuntimeInstanceID
+	env := cmd.Env
+	if err := cmd.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = cmd.Wait()
+	// 模拟故障实例的租约过期，保留同一磁盘状态目录。
+	db.DecoyDeployment.UpdateOneID(deployment.ID).SetRuntimeSeenAt(time.Now().Add(-2 * time.Minute)).ExecX(ctx)
+	cmd = exec.CommandContext(ctx, node, filepath.Join(module, "web", "manager.mjs"))
+	cmd.Env = env
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	wait(func() bool {
+		row := db.DecoyDeployment.GetX(ctx, deployment.ID)
+		return row.RuntimeState == "running" && row.RuntimeInstanceID != nil && *row.RuntimeInstanceID != *previous
+	})
+	response, err = http.Get("http://127.0.0.1:" + strconv.Itoa(port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatal("重启后站点不可用")
+	}
 	request("/api/decoys/"+deployment.ID.String()+"/stop", nil, nil)
 	wait(func() bool {
 		row, _ := db.DecoyDeployment.Get(ctx, deployment.ID)
 		return row != nil && row.RuntimeState == "stopped"
 	})
+	occupied, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer occupied.Close()
+	row := db.DecoyDeployment.GetX(ctx, deployment.ID)
+	request("/api/decoys/"+deployment.ID.String()+"/revisions", map[string]any{"releaseId": release.ID, "config": cfg, "expectedRevision": row.ActiveRevisionID}, nil)
+	wait(func() bool {
+		row := db.DecoyDeployment.GetX(ctx, deployment.ID)
+		return row.RuntimeState == "failed" && row.RuntimeError == "startup_failed"
+	})
+	occupied.Close()
+	row = db.DecoyDeployment.GetX(ctx, deployment.ID)
+	request("/api/decoys/"+deployment.ID.String()+"/revisions", map[string]any{"releaseId": release.ID, "config": cfg, "expectedRevision": row.ActiveRevisionID}, nil)
+	wait(func() bool {
+		row := db.DecoyDeployment.GetX(ctx, deployment.ID)
+		return row.RuntimeState == "running" && row.RuntimeError == ""
+	})
+	request("/api/decoys/"+deployment.ID.String()+"/stop", nil, nil)
+	wait(func() bool { return db.DecoyDeployment.GetX(ctx, deployment.ID).RuntimeState == "stopped" })
+
 }

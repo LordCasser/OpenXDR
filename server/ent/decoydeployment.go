@@ -52,6 +52,10 @@ type DecoyDeployment struct {
 	RuntimeInstanceID *uuid.UUID `json:"runtime_instance_id,omitempty"`
 	// RuntimeSeenAt holds the value of the "runtime_seen_at" field.
 	RuntimeSeenAt *time.Time `json:"runtime_seen_at,omitempty"`
+	// RuntimePending holds the value of the "runtime_pending" field.
+	RuntimePending *int `json:"runtime_pending,omitempty"`
+	// RuntimeError holds the value of the "runtime_error" field.
+	RuntimeError string `json:"runtime_error,omitempty"`
 	// RuntimeState holds the value of the "runtime_state" field.
 	RuntimeState decoydeployment.RuntimeState `json:"runtime_state,omitempty"`
 	// RuntimeGeneration holds the value of the "runtime_generation" field.
@@ -78,9 +82,9 @@ func (*DecoyDeployment) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case decoydeployment.FieldStopRequested:
 			values[i] = new(sql.NullBool)
-		case decoydeployment.FieldPort:
+		case decoydeployment.FieldPort, decoydeployment.FieldRuntimePending:
 			values[i] = new(sql.NullInt64)
-		case decoydeployment.FieldProfile, decoydeployment.FieldTemplate, decoydeployment.FieldStatus, decoydeployment.FieldCreatedBy, decoydeployment.FieldRevokedBy, decoydeployment.FieldKind, decoydeployment.FieldResource, decoydeployment.FieldMarker, decoydeployment.FieldTokenHash, decoydeployment.FieldRuntimeState, decoydeployment.FieldRuntimeGeneration, decoydeployment.FieldInstallState:
+		case decoydeployment.FieldProfile, decoydeployment.FieldTemplate, decoydeployment.FieldStatus, decoydeployment.FieldCreatedBy, decoydeployment.FieldRevokedBy, decoydeployment.FieldKind, decoydeployment.FieldResource, decoydeployment.FieldMarker, decoydeployment.FieldTokenHash, decoydeployment.FieldRuntimeError, decoydeployment.FieldRuntimeState, decoydeployment.FieldRuntimeGeneration, decoydeployment.FieldInstallState:
 			values[i] = new(sql.NullString)
 		case decoydeployment.FieldCreatedAt, decoydeployment.FieldRevokedAt, decoydeployment.FieldTokenExpiresAt, decoydeployment.FieldRuntimeSeenAt, decoydeployment.FieldInstallStartedAt:
 			values[i] = new(sql.NullTime)
@@ -214,6 +218,19 @@ func (_m *DecoyDeployment) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.RuntimeSeenAt = new(time.Time)
 				*_m.RuntimeSeenAt = value.Time
+			}
+		case decoydeployment.FieldRuntimePending:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field runtime_pending", values[i])
+			} else if value.Valid {
+				_m.RuntimePending = new(int)
+				*_m.RuntimePending = int(value.Int64)
+			}
+		case decoydeployment.FieldRuntimeError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field runtime_error", values[i])
+			} else if value.Valid {
+				_m.RuntimeError = value.String
 			}
 		case decoydeployment.FieldRuntimeState:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -356,6 +373,14 @@ func (_m *DecoyDeployment) String() string {
 		builder.WriteString("runtime_seen_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	if v := _m.RuntimePending; v != nil {
+		builder.WriteString("runtime_pending=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("runtime_error=")
+	builder.WriteString(_m.RuntimeError)
 	builder.WriteString(", ")
 	builder.WriteString("runtime_state=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RuntimeState))

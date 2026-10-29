@@ -2,6 +2,21 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 // 全部界面文案。自制轻量字典：英文由 satisfies 约束，缺键编译不过
 const zh = {
+  commandViewDetail: "查看指令详情",
+  commandExitCode: "退出码",
+  commandOutputTruncated: "输出已由采集端截断",
+  deceptionManager: "托管管理器",
+  deceptionManagerOnline: "在线",
+  deceptionManagerOffline: "未连接或心跳过期",
+  deceptionReachabilityUnknown: "管理器心跳与实例状态独立。平台尚未验证外部入口可达性；运行中不代表业务流量已接入。",
+  deceptionPending: "待补传",
+  deceptionNotReported: "未上报",
+  deceptionEntranceUnverified: "外部入口：未验证",
+  deceptionDeliveryFailed: "观察补传失败，保留积压重试",
+  deceptionPlatformUnavailable: "平台连接或授权异常",
+  deceptionStartupFailed: "实例启动失败，请检查引擎日志",
+  deceptionPendingOnStop: "停止时仍有未确认观察",
+
   deceptionHostedHint: "托管引擎跟随主编排启动。在 OpenXDR 同一份 .env 中启用 COMPOSE_PROFILES=dygk 后，运行版本会自动出现；无需逐个配置身份、令牌或数据目录。托管端口默认范围为 18080–18179。",
   deceptionHosted: "平台统一启动",
   deceptionReleases: "高级引擎版本管理",
@@ -1703,6 +1718,21 @@ const zh = {
 export type MsgKey = keyof typeof zh
 
 const en = {
+  commandViewDetail: "View command details",
+  commandExitCode: "Exit code",
+  commandOutputTruncated: "Output was truncated by the collector",
+  deceptionManager: "Hosted manager",
+  deceptionManagerOnline: "Online",
+  deceptionManagerOffline: "Disconnected or heartbeat expired",
+  deceptionReachabilityUnknown: "Manager heartbeat and instance state are independent. External reachability has not been verified; running does not mean business traffic is connected.",
+  deceptionPending: "Pending delivery",
+  deceptionNotReported: "Not reported",
+  deceptionEntranceUnverified: "External entrance: unverified",
+  deceptionDeliveryFailed: "Observation delivery failed; pending data retained",
+  deceptionPlatformUnavailable: "Platform connection or authorization failed",
+  deceptionStartupFailed: "Runtime startup failed; check engine logs",
+  deceptionPendingOnStop: "Unacknowledged observations remain at stop",
+
   deceptionHostedHint: "Enable COMPOSE_PROFILES=dygk in the same OpenXDR .env and use the normal startup command. The runtime registers automatically; per-deployment identity, token and storage are assigned internally. Hosted ports default to 18080–18179.",
   deceptionHosted: "Start with platform",
   deceptionReleases: "Advanced engine releases",

@@ -265,13 +265,22 @@ export interface CommandRow {
   issuedBy: string
   detail: string | null
   completedAt: string | null
+  cmd?: string
+  stdout?: string
+  stderr?: string
+  exitCode?: number
+  truncated?: boolean
   target?: string
   // 这条指令拉起的进程触发的检测（来源已知，不进事件）
   detections?: { ruleId: string; title?: string; author?: string; count: number }[]
 }
 
 export const fetchCommands = (filter: { incidentId?: string; assetId?: string }) =>
-  get<CommandRow[]>(`/api/commands?${new URLSearchParams(filter as Record<string, string>)}`)
+  get<CommandRow[]>(`/api/commands?${new URLSearchParams({ ...filter, view: 'summary' })}`)
+
+export const fetchCommandsPage = (filter: { incidentId?: string; assetId?: string }, page: number, pageSize = 10) =>
+  get<{ items: CommandRow[]; total: number }>(`/api/commands?${new URLSearchParams({ ...filter, view: 'summary', page: String(page), pageSize: String(pageSize) })}`)
+export const fetchCommand = (id: string) => get<CommandRow>(`/api/commands/${id}`)
 
 export async function issueCommand(body: {
   kind: string
@@ -1431,6 +1440,8 @@ export interface DecoyProfile {
 export const fetchDecoyInstallStatus = () => get<{ enabled: boolean }>('/api/decoy-install/status')
 export const installDecoy = (id: string, body: { fingerprint: string; arch: string; listenHost: string; fileRoot?: string }) => send('POST', `/api/decoy-install/${encodeURIComponent(id)}`, body)
 export interface DecoyDeployment {
+  runtime_pending?: number | null
+  runtime_error?: string
   hosted?: boolean
   active_revision_id?: string | null
   stop_requested?: boolean
@@ -1535,3 +1546,5 @@ export const fetchIntegrationAttempts = (id: string, did: string) => get<Deliver
 export const retryIntegrationDelivery = (id: string, did: string) => send('POST', `/api/system-integrations/${id}/deliveries/${did}/retry`)
 export interface ExternalTicket { id: string; integrationId: string; incidentId: string; externalId: string; title: string; status: string; url: string; updatedAt: string }
 export const fetchIncidentTickets = (id: string) => get<ExternalTicket[]>(`/api/incidents/${id}/tickets`)
+
+export const fetchHostedDeceptionStatus = () => get<{ online: boolean; seenAt: string | null }>('/api/deception/hosted-status')

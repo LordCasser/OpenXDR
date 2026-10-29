@@ -73,6 +73,17 @@ func TestDeceptionRevisionAndReliableObservations(t *testing.T) {
 	must("POST", base+"/handshake", contract.Handshake{Instance: instance, Revision: revision, Release: bad}, 409, nil)
 	must("POST", base+"/handshake", contract.Handshake{Instance: instance, Revision: revision, Release: release}, 204, nil)
 	must("POST", base+"/lease", map[string]string{"instance": instance, "state": "running"}, 204, nil)
+	must("POST", base+"/lease", map[string]any{"instance": instance, "state": "running", "pending": 3, "errorCode": "delivery_failed"}, 204, nil)
+	current := db.DecoyDeployment.GetX(ctx, deployment.ID)
+	if current.RuntimePending == nil || *current.RuntimePending != 3 || current.RuntimeError != "delivery_failed" {
+		t.Fatal("健康状态未保存")
+	}
+	must("POST", base+"/lease", map[string]any{"instance": instance, "state": "running", "pending": -1}, 400, nil)
+	must("POST", base+"/lease", map[string]any{"instance": instance, "state": "running", "pending": 0, "errorCode": "raw secret"}, 400, nil)
+	must("POST", base+"/lease", map[string]any{"instance": instance, "state": "running", "pending": 0}, 204, nil)
+	if db.DecoyDeployment.GetX(ctx, deployment.ID).RuntimeError != "" {
+		t.Fatal("恢复后错误未清除")
+	}
 	session := strings.Repeat("c", 64)
 	epoch := uuid.NewString()
 	fact := contract.Fact{ID: uuid.NewString(), Epoch: epoch, Sequence: 1, Time: time.Now().UTC().Truncate(time.Millisecond), Session: session, Kind: "honeypot_triggered", Count: 1}
@@ -101,4 +112,24 @@ func TestDeceptionRevisionAndReliableObservations(t *testing.T) {
 	if n := db.DecoyObservation.Query().Where(decoyobservation.DeploymentIDEQ(deployment.ID)).CountX(ctx); n != 2 {
 		t.Fatalf("幂等观察数量错误: %d", n)
 	}
+	var manager struct {
+		Online bool `json:"online"`
+	}
+	must("GET", "/api/deception/hosted-status", nil, 200, &manager)
+	if manager.Online {
+		t.Fatal("未连接管理器不能显示在线")
+	}
+	value, _ := json.Marshal(map[string]any{"seenAt": time.Now()})
+	db.Setting.Create().SetID("deception.hosted").SetValue(value).SaveX(ctx)
+	must("GET", "/api/deception/hosted-status", nil, 200, &manager)
+	if !manager.Online {
+		t.Fatal("新心跳未显示在线")
+	}
+	value, _ = json.Marshal(map[string]any{"seenAt": time.Now().Add(-time.Minute)})
+	db.Setting.UpdateOneID("deception.hosted").SetValue(value).ExecX(ctx)
+	must("GET", "/api/deception/hosted-status", nil, 200, &manager)
+	if manager.Online {
+		t.Fatal("过期心跳仍显示在线")
+	}
+
 }

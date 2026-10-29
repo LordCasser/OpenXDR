@@ -219,6 +219,34 @@ func (_c *DecoyDeploymentCreate) SetNillableRuntimeSeenAt(v *time.Time) *DecoyDe
 	return _c
 }
 
+// SetRuntimePending sets the "runtime_pending" field.
+func (_c *DecoyDeploymentCreate) SetRuntimePending(v int) *DecoyDeploymentCreate {
+	_c.mutation.SetRuntimePending(v)
+	return _c
+}
+
+// SetNillableRuntimePending sets the "runtime_pending" field if the given value is not nil.
+func (_c *DecoyDeploymentCreate) SetNillableRuntimePending(v *int) *DecoyDeploymentCreate {
+	if v != nil {
+		_c.SetRuntimePending(*v)
+	}
+	return _c
+}
+
+// SetRuntimeError sets the "runtime_error" field.
+func (_c *DecoyDeploymentCreate) SetRuntimeError(v string) *DecoyDeploymentCreate {
+	_c.mutation.SetRuntimeError(v)
+	return _c
+}
+
+// SetNillableRuntimeError sets the "runtime_error" field if the given value is not nil.
+func (_c *DecoyDeploymentCreate) SetNillableRuntimeError(v *string) *DecoyDeploymentCreate {
+	if v != nil {
+		_c.SetRuntimeError(*v)
+	}
+	return _c
+}
+
 // SetRuntimeState sets the "runtime_state" field.
 func (_c *DecoyDeploymentCreate) SetRuntimeState(v decoydeployment.RuntimeState) *DecoyDeploymentCreate {
 	_c.mutation.SetRuntimeState(v)
@@ -382,6 +410,10 @@ func (_c *DecoyDeploymentCreate) defaults() {
 		v := decoydeployment.DefaultResource
 		_c.mutation.SetResource(v)
 	}
+	if _, ok := _c.mutation.RuntimeError(); !ok {
+		v := decoydeployment.DefaultRuntimeError
+		_c.mutation.SetRuntimeError(v)
+	}
 	if _, ok := _c.mutation.RuntimeState(); !ok {
 		v := decoydeployment.DefaultRuntimeState
 		_c.mutation.SetRuntimeState(v)
@@ -443,6 +475,14 @@ func (_c *DecoyDeploymentCreate) check() error {
 	}
 	if _, ok := _c.mutation.Resource(); !ok {
 		return &ValidationError{Name: "resource", err: errors.New(`ent: missing required field "DecoyDeployment.resource"`)}
+	}
+	if v, ok := _c.mutation.RuntimePending(); ok {
+		if err := decoydeployment.RuntimePendingValidator(v); err != nil {
+			return &ValidationError{Name: "runtime_pending", err: fmt.Errorf(`ent: validator failed for field "DecoyDeployment.runtime_pending": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.RuntimeError(); !ok {
+		return &ValidationError{Name: "runtime_error", err: errors.New(`ent: missing required field "DecoyDeployment.runtime_error"`)}
 	}
 	if _, ok := _c.mutation.RuntimeState(); !ok {
 		return &ValidationError{Name: "runtime_state", err: errors.New(`ent: missing required field "DecoyDeployment.runtime_state"`)}
@@ -565,6 +605,14 @@ func (_c *DecoyDeploymentCreate) createSpec() (*DecoyDeployment, *sqlgraph.Creat
 	if value, ok := _c.mutation.RuntimeSeenAt(); ok {
 		_spec.SetField(decoydeployment.FieldRuntimeSeenAt, field.TypeTime, value)
 		_node.RuntimeSeenAt = &value
+	}
+	if value, ok := _c.mutation.RuntimePending(); ok {
+		_spec.SetField(decoydeployment.FieldRuntimePending, field.TypeInt, value)
+		_node.RuntimePending = &value
+	}
+	if value, ok := _c.mutation.RuntimeError(); ok {
+		_spec.SetField(decoydeployment.FieldRuntimeError, field.TypeString, value)
+		_node.RuntimeError = value
 	}
 	if value, ok := _c.mutation.RuntimeState(); ok {
 		_spec.SetField(decoydeployment.FieldRuntimeState, field.TypeEnum, value)

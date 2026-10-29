@@ -8,9 +8,11 @@ import { Ago } from '../components/Ago'
 import { HostLink } from '../components/HostLink'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
-import { DeceptionEngine, DeceptionReleases } from '../components/DeceptionEngine'
+import { DeceptionEngine, DeceptionReleases, DeceptionStatus } from '../components/DeceptionEngine'
 import { errText } from '../components/format'
-import { useI18n } from '../i18n'
+import { useI18n, type MsgKey } from '../i18n'
+
+const runtimeErrors: Record<string, MsgKey> = { delivery_failed: 'deceptionDeliveryFailed', platform_unavailable: 'deceptionPlatformUnavailable', startup_failed: 'deceptionStartupFailed', pending_on_stop: 'deceptionPendingOnStop' }
 
 export function DecoysPage() {
   const { group } = useSession()
@@ -61,7 +63,9 @@ function GroupDecoys({ groupId }: { groupId: string }) {
       {installStatus.isError && <LoadError error={installStatus.error} onRetry={() => installStatus.refetch()} />}
       {canManage && installStatus.data && !installStatus.data.enabled && <Alert type="info" title={t('decoysInstallDisabled')} />}
       {profiles.isError && <LoadError error={profiles.error} onRetry={() => profiles.refetch()} />}
-      {rows.isError ? <LoadError error={rows.error} onRetry={() => rows.refetch()} /> : <Table<DecoyDeployment>
+      <DeceptionStatus />
+      {rows.isError ? <LoadError error={rows.error} onRetry={() => rows.refetch()} /> :
+      <Table<DecoyDeployment>
         rowKey="id" loading={rows.isPending} dataSource={rows.data?.items ?? []} pagination={false} scroll={{ x: 850 }}
         columns={[
           { title: t('thHostname'), dataIndex: 'asset_id', render: id => <HostLink id={id} /> },
@@ -71,7 +75,7 @@ function GroupDecoys({ groupId }: { groupId: string }) {
           { title: t('decoysTemplate'), dataIndex: 'template' },
 { title: t('deceptionEngine'), render: (_, row) => <Tag>{t(row.active_revision_id ? 'deceptionManaged' : 'deceptionLegacy')}</Tag> },
           { title: t('decoysStatus'), dataIndex: 'status', render: status => <Tag color={status === 'registered' ? 'blue' : 'default'}>{t(status === 'registered' ? 'decoysRegistered' : 'decoysRevoked')}</Tag> },
-          { title: t('decoysRuntime'), render: (_, row) => <Space orientation="vertical" size={0}><Tag>{t(({ unreported: 'decoysUnreported', starting: 'decoysStarting', running: 'decoysRunning', stopped: 'decoysStopped', failed: 'decoysFailed', stale: 'decoysStale', stopping: 'decoysStopping' } as const)[row.runtime_status ?? 'unreported'])}</Tag>{row.runtime_seen_at && <Ago iso={row.runtime_seen_at} />}</Space> },
+          { title: t('decoysRuntime'), render: (_, row) => <Space orientation="vertical" size={0}><Tag>{t(({ unreported: 'decoysUnreported', starting: 'decoysStarting', running: 'decoysRunning', stopped: 'decoysStopped', failed: 'decoysFailed', stale: 'decoysStale', stopping: 'decoysStopping' } as const)[row.runtime_status ?? 'unreported'])}</Tag>{row.runtime_seen_at && <Ago iso={row.runtime_seen_at} />}{row.active_revision_id && <><Typography.Text type="secondary">{t('deceptionPending')}: {row.runtime_pending ?? t('deceptionNotReported')}</Typography.Text>{row.runtime_error && <Typography.Text type="danger">{t(runtimeErrors[row.runtime_error] ?? 'deceptionLoadFailed')}</Typography.Text>}<Typography.Text type="secondary">{t('deceptionEntranceUnverified')}</Typography.Text></>}</Space> },
           { title: t('decoysInstallState'), render: (_, row) => <Tag>{t(({ idle: 'decoysInstallIdle', installing: 'decoysInstalling', installed: 'decoysInstalled', unconfirmed: 'decoysInstallUnconfirmed' } as const)[row.install_state ?? 'idle'])}</Tag> },
           { title: t('decoysCreated'), dataIndex: 'created_at', render: at => <Ago iso={at} /> },
           { title: t('decoysOperator'), dataIndex: 'created_by' },

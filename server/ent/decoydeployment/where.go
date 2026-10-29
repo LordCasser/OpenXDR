@@ -130,6 +130,16 @@ func RuntimeSeenAt(v time.Time) predicate.DecoyDeployment {
 	return predicate.DecoyDeployment(sql.FieldEQ(FieldRuntimeSeenAt, v))
 }
 
+// RuntimePending applies equality check predicate on the "runtime_pending" field. It's identical to RuntimePendingEQ.
+func RuntimePending(v int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldRuntimePending, v))
+}
+
+// RuntimeError applies equality check predicate on the "runtime_error" field. It's identical to RuntimeErrorEQ.
+func RuntimeError(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldRuntimeError, v))
+}
+
 // RuntimeGeneration applies equality check predicate on the "runtime_generation" field. It's identical to RuntimeGenerationEQ.
 func RuntimeGeneration(v string) predicate.DecoyDeployment {
 	return predicate.DecoyDeployment(sql.FieldEQ(FieldRuntimeGeneration, v))
@@ -1048,6 +1058,121 @@ func RuntimeSeenAtIsNil() predicate.DecoyDeployment {
 // RuntimeSeenAtNotNil applies the NotNil predicate on the "runtime_seen_at" field.
 func RuntimeSeenAtNotNil() predicate.DecoyDeployment {
 	return predicate.DecoyDeployment(sql.FieldNotNull(FieldRuntimeSeenAt))
+}
+
+// RuntimePendingEQ applies the EQ predicate on the "runtime_pending" field.
+func RuntimePendingEQ(v int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldRuntimePending, v))
+}
+
+// RuntimePendingNEQ applies the NEQ predicate on the "runtime_pending" field.
+func RuntimePendingNEQ(v int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNEQ(FieldRuntimePending, v))
+}
+
+// RuntimePendingIn applies the In predicate on the "runtime_pending" field.
+func RuntimePendingIn(vs ...int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldIn(FieldRuntimePending, vs...))
+}
+
+// RuntimePendingNotIn applies the NotIn predicate on the "runtime_pending" field.
+func RuntimePendingNotIn(vs ...int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNotIn(FieldRuntimePending, vs...))
+}
+
+// RuntimePendingGT applies the GT predicate on the "runtime_pending" field.
+func RuntimePendingGT(v int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldGT(FieldRuntimePending, v))
+}
+
+// RuntimePendingGTE applies the GTE predicate on the "runtime_pending" field.
+func RuntimePendingGTE(v int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldGTE(FieldRuntimePending, v))
+}
+
+// RuntimePendingLT applies the LT predicate on the "runtime_pending" field.
+func RuntimePendingLT(v int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldLT(FieldRuntimePending, v))
+}
+
+// RuntimePendingLTE applies the LTE predicate on the "runtime_pending" field.
+func RuntimePendingLTE(v int) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldLTE(FieldRuntimePending, v))
+}
+
+// RuntimePendingIsNil applies the IsNil predicate on the "runtime_pending" field.
+func RuntimePendingIsNil() predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldIsNull(FieldRuntimePending))
+}
+
+// RuntimePendingNotNil applies the NotNil predicate on the "runtime_pending" field.
+func RuntimePendingNotNil() predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNotNull(FieldRuntimePending))
+}
+
+// RuntimeErrorEQ applies the EQ predicate on the "runtime_error" field.
+func RuntimeErrorEQ(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldRuntimeError, v))
+}
+
+// RuntimeErrorNEQ applies the NEQ predicate on the "runtime_error" field.
+func RuntimeErrorNEQ(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNEQ(FieldRuntimeError, v))
+}
+
+// RuntimeErrorIn applies the In predicate on the "runtime_error" field.
+func RuntimeErrorIn(vs ...string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldIn(FieldRuntimeError, vs...))
+}
+
+// RuntimeErrorNotIn applies the NotIn predicate on the "runtime_error" field.
+func RuntimeErrorNotIn(vs ...string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNotIn(FieldRuntimeError, vs...))
+}
+
+// RuntimeErrorGT applies the GT predicate on the "runtime_error" field.
+func RuntimeErrorGT(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldGT(FieldRuntimeError, v))
+}
+
+// RuntimeErrorGTE applies the GTE predicate on the "runtime_error" field.
+func RuntimeErrorGTE(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldGTE(FieldRuntimeError, v))
+}
+
+// RuntimeErrorLT applies the LT predicate on the "runtime_error" field.
+func RuntimeErrorLT(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldLT(FieldRuntimeError, v))
+}
+
+// RuntimeErrorLTE applies the LTE predicate on the "runtime_error" field.
+func RuntimeErrorLTE(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldLTE(FieldRuntimeError, v))
+}
+
+// RuntimeErrorContains applies the Contains predicate on the "runtime_error" field.
+func RuntimeErrorContains(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldContains(FieldRuntimeError, v))
+}
+
+// RuntimeErrorHasPrefix applies the HasPrefix predicate on the "runtime_error" field.
+func RuntimeErrorHasPrefix(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldHasPrefix(FieldRuntimeError, v))
+}
+
+// RuntimeErrorHasSuffix applies the HasSuffix predicate on the "runtime_error" field.
+func RuntimeErrorHasSuffix(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldHasSuffix(FieldRuntimeError, v))
+}
+
+// RuntimeErrorEqualFold applies the EqualFold predicate on the "runtime_error" field.
+func RuntimeErrorEqualFold(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEqualFold(FieldRuntimeError, v))
+}
+
+// RuntimeErrorContainsFold applies the ContainsFold predicate on the "runtime_error" field.
+func RuntimeErrorContainsFold(v string) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldContainsFold(FieldRuntimeError, v))
 }
 
 // RuntimeStateEQ applies the EQ predicate on the "runtime_state" field.

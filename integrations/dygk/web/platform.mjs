@@ -44,7 +44,7 @@ export class Platform {
     this.revision = config.revision;
     await this.call('handshake', { instance: this.instance, revision: this.revision, release });
   }
-  async lease(state) { await this.call('lease', { instance: this.instance, state }); }
+  async lease(state) { await this.call('lease', { instance: this.instance, state, ...this.health?.() }); }
   async send(items) {
     const result = await this.call('observations', { items });
     if (!Array.isArray(result.accepted) || result.accepted.length !== items.length || new Set(result.accepted).size !== items.length || items.some(item => !result.accepted.includes(item.eventId))) throw new Error('平台确认集合不完整');
