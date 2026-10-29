@@ -1,3 +1,4 @@
+import { TriageHistory } from '../components/TriageHistory'
 import { ArrowLeftOutlined, DownOutlined, DownloadOutlined, EllipsisOutlined, RobotOutlined, UpOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Col, Descriptions, Dropdown, Result, Row, Segmented, Skeleton, Space, Table, Timeline, Tooltip, Typography } from 'antd'
@@ -202,6 +203,7 @@ export function IncidentDetailPage() {
                 )} />
             )}
             <VerdictCard verdict={inc.aiVerdict} />
+            <TriageHistory key={inc.id} id={inc.id} />
             <Card title={t('graphTitle')}><IncidentGraph graph={inc.graph} /></Card>
             <Card title={t('alertsTitle', { n: inc.alerts.length })} styles={{ body: { padding: alertView === 'timeline' ? '20px 24px 4px' : 0 } }}
               extra={<Segmented size="small" value={alertView} onChange={v => setAlertView(v as 'table' | 'timeline')}

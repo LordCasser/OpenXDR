@@ -165,6 +165,7 @@ func mapIncidents(mux *http.ServeMux, db *ent.Client, rules sigma.Catalog) {
 	mux.HandleFunc("GET /api/incidents/groups", listIncidentGroups(db, rules))
 	mux.HandleFunc("POST /api/incidents/batch-status", resolveIncidents(db))
 	mux.HandleFunc("GET /api/incidents/{id}", getIncident(db, rules))
+	mux.HandleFunc("GET /api/incidents/{id}/triage-runs", incidentTriageRuns(db))
 	mux.HandleFunc("POST /api/incidents/{id}/status", setIncidentStatus(db))
 	mux.HandleFunc("GET /api/incidents/{id}/tickets", incidentTickets(db))
 	mux.HandleFunc("DELETE /api/incidents/{id}/closure-proposal", dismissClosureProposal(db))

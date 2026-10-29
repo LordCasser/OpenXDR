@@ -68,6 +68,7 @@ func truncateRaw(ctx context.Context, t *testing.T, db *sql.DB) {
 func truncate(ctx context.Context, t *testing.T, c *ent.Client) {
 	t.Helper()
 	dels := []func(context.Context) (int, error){
+		func(ctx context.Context) (int, error) { return c.TriageRun.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.IntegrationIdempotency.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.ExternalTicket.Delete().Exec(ctx) },
 		func(ctx context.Context) (int, error) { return c.IntegrationAttempt.Delete().Exec(ctx) },

@@ -298,3 +298,15 @@ URL 更改默认保留旧积压目标；movePending=true 显式改投尚未发�
 | `POST .../observations` | 每批 1–100 条白名单事实，按事件 ID 确认持久化；相同 ID 不同内容 409 |
 
 观察字段为 `eventId/streamEpoch/sequence/occurredAt/session/kind/count`；不接受 IP、自由文本、平台身份或原始请求体。新协议每登记滚动 24 小时最多 10000 条；旧接口保持每日 1000 条。旧路径不会接受已启用修订的登记，防止协议降级。
+
+### 研判执行记录
+
+`GET /api/incidents/{id}/triage-runs?page=1`：沿用事件的 viewer/组权限，
+每页 20 条，按开始时间倒序返回 `{items, more}`。记录字段为 snake_case：
+`started_at/ready_at/finished_at`、`trigger`、`status`、`model`、`error_code`、
+`duration_ms/model_ms/tool_ms`、`model_calls/tool_calls/tool_errors`、
+`input_tokens/output_tokens`。`ready_at` 未知时省略；
+`lease_replaced` 表示崩溃后接管，结束时刻为发现中断的时刻，不是真实执行结束时刻。
+不返回模型凭据、提示词或原始工具结果。仅有本版本上线后的记录。
+
+运行中记录的 `heartbeat_valid` 按事件当前执行身份与心跳判断；为 false 时界面显示未确认，不能据旧 running 记录断言任务仍在运行。

@@ -55,6 +55,7 @@ import (
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/ent/triagerun"
 	"openxdr/server/ent/trustedsource"
 	"openxdr/server/ent/user"
 	"openxdr/server/ent/vulnrecord"
@@ -160,6 +161,8 @@ type Client struct {
 	Task *TaskClient
 	// TaskRun is the client for interacting with the TaskRun builders.
 	TaskRun *TaskRunClient
+	// TriageRun is the client for interacting with the TriageRun builders.
+	TriageRun *TriageRunClient
 	// TrustedSource is the client for interacting with the TrustedSource builders.
 	TrustedSource *TrustedSourceClient
 	// User is the client for interacting with the User builders.
@@ -223,6 +226,7 @@ func (c *Client) init() {
 	c.Suppression = NewSuppressionClient(c.config)
 	c.Task = NewTaskClient(c.config)
 	c.TaskRun = NewTaskRunClient(c.config)
+	c.TriageRun = NewTriageRunClient(c.config)
 	c.TrustedSource = NewTrustedSourceClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.VulnRecord = NewVulnRecordClient(c.config)
@@ -363,6 +367,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Suppression:             NewSuppressionClient(cfg),
 		Task:                    NewTaskClient(cfg),
 		TaskRun:                 NewTaskRunClient(cfg),
+		TriageRun:               NewTriageRunClient(cfg),
 		TrustedSource:           NewTrustedSourceClient(cfg),
 		User:                    NewUserClient(cfg),
 		VulnRecord:              NewVulnRecordClient(cfg),
@@ -430,6 +435,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Suppression:             NewSuppressionClient(cfg),
 		Task:                    NewTaskClient(cfg),
 		TaskRun:                 NewTaskRunClient(cfg),
+		TriageRun:               NewTriageRunClient(cfg),
 		TrustedSource:           NewTrustedSourceClient(cfg),
 		User:                    NewUserClient(cfg),
 		VulnRecord:              NewVulnRecordClient(cfg),
@@ -472,7 +478,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IntegrationIdempotency, c.IntegrationSubscription, c.IntegrationToken,
 		c.Intel, c.Memory, c.ProcessBaseline, c.Report, c.ReportRead, c.SSHLogin,
 		c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun,
-		c.TrustedSource, c.User, c.VulnRecord, c.Zone,
+		c.TriageRun, c.TrustedSource, c.User, c.VulnRecord, c.Zone,
 	} {
 		n.Use(hooks...)
 	}
@@ -491,7 +497,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IntegrationIdempotency, c.IntegrationSubscription, c.IntegrationToken,
 		c.Intel, c.Memory, c.ProcessBaseline, c.Report, c.ReportRead, c.SSHLogin,
 		c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun,
-		c.TrustedSource, c.User, c.VulnRecord, c.Zone,
+		c.TriageRun, c.TrustedSource, c.User, c.VulnRecord, c.Zone,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -588,6 +594,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Task.mutate(ctx, m)
 	case *TaskRunMutation:
 		return c.TaskRun.mutate(ctx, m)
+	case *TriageRunMutation:
+		return c.TriageRun.mutate(ctx, m)
 	case *TrustedSourceMutation:
 		return c.TrustedSource.mutate(ctx, m)
 	case *UserMutation:
@@ -6613,6 +6621,139 @@ func (c *TaskRunClient) mutate(ctx context.Context, m *TaskRunMutation) (Value, 
 	}
 }
 
+// TriageRunClient is a client for the TriageRun schema.
+type TriageRunClient struct {
+	config
+}
+
+// NewTriageRunClient returns a client for the TriageRun from the given config.
+func NewTriageRunClient(c config) *TriageRunClient {
+	return &TriageRunClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `triagerun.Hooks(f(g(h())))`.
+func (c *TriageRunClient) Use(hooks ...Hook) {
+	c.hooks.TriageRun = append(c.hooks.TriageRun, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `triagerun.Intercept(f(g(h())))`.
+func (c *TriageRunClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TriageRun = append(c.inters.TriageRun, interceptors...)
+}
+
+// Create returns a builder for creating a TriageRun entity.
+func (c *TriageRunClient) Create() *TriageRunCreate {
+	mutation := newTriageRunMutation(c.config, OpCreate)
+	return &TriageRunCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TriageRun entities.
+func (c *TriageRunClient) CreateBulk(builders ...*TriageRunCreate) *TriageRunCreateBulk {
+	return &TriageRunCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TriageRunClient) MapCreateBulk(slice any, setFunc func(*TriageRunCreate, int)) *TriageRunCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TriageRunCreateBulk{err: fmt.Errorf("calling to TriageRunClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TriageRunCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TriageRunCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TriageRun.
+func (c *TriageRunClient) Update() *TriageRunUpdate {
+	mutation := newTriageRunMutation(c.config, OpUpdate)
+	return &TriageRunUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TriageRunClient) UpdateOne(_m *TriageRun) *TriageRunUpdateOne {
+	mutation := newTriageRunMutation(c.config, OpUpdateOne, withTriageRun(_m))
+	return &TriageRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TriageRunClient) UpdateOneID(id uuid.UUID) *TriageRunUpdateOne {
+	mutation := newTriageRunMutation(c.config, OpUpdateOne, withTriageRunID(id))
+	return &TriageRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TriageRun.
+func (c *TriageRunClient) Delete() *TriageRunDelete {
+	mutation := newTriageRunMutation(c.config, OpDelete)
+	return &TriageRunDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TriageRunClient) DeleteOne(_m *TriageRun) *TriageRunDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TriageRunClient) DeleteOneID(id uuid.UUID) *TriageRunDeleteOne {
+	builder := c.Delete().Where(triagerun.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TriageRunDeleteOne{builder}
+}
+
+// Query returns a query builder for TriageRun.
+func (c *TriageRunClient) Query() *TriageRunQuery {
+	return &TriageRunQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTriageRun},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TriageRun entity by its id.
+func (c *TriageRunClient) Get(ctx context.Context, id uuid.UUID) (*TriageRun, error) {
+	return c.Query().Where(triagerun.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TriageRunClient) GetX(ctx context.Context, id uuid.UUID) *TriageRun {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TriageRunClient) Hooks() []Hook {
+	return c.hooks.TriageRun
+}
+
+// Interceptors returns the client interceptors.
+func (c *TriageRunClient) Interceptors() []Interceptor {
+	return c.inters.TriageRun
+}
+
+func (c *TriageRunClient) mutate(ctx context.Context, m *TriageRunMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TriageRunCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TriageRunUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TriageRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TriageRunDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TriageRun mutation op: %q", m.Op())
+	}
+}
+
 // TrustedSourceClient is a client for the TrustedSource schema.
 type TrustedSourceClient struct {
 	config
@@ -7155,8 +7296,8 @@ type (
 		IntegrationAttempt, IntegrationDelivery, IntegrationEvent, IntegrationGroup,
 		IntegrationIdempotency, IntegrationSubscription, IntegrationToken, Intel,
 		Memory, ProcessBaseline, Report, ReportRead, SSHLogin, Session, SessionMessage,
-		Setting, Suppression, Task, TaskRun, TrustedSource, User, VulnRecord,
-		Zone []ent.Hook
+		Setting, Suppression, Task, TaskRun, TriageRun, TrustedSource, User,
+		VulnRecord, Zone []ent.Hook
 	}
 	inters struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
@@ -7166,7 +7307,7 @@ type (
 		IntegrationAttempt, IntegrationDelivery, IntegrationEvent, IntegrationGroup,
 		IntegrationIdempotency, IntegrationSubscription, IntegrationToken, Intel,
 		Memory, ProcessBaseline, Report, ReportRead, SSHLogin, Session, SessionMessage,
-		Setting, Suppression, Task, TaskRun, TrustedSource, User, VulnRecord,
-		Zone []ent.Interceptor
+		Setting, Suppression, Task, TaskRun, TriageRun, TrustedSource, User,
+		VulnRecord, Zone []ent.Interceptor
 	}
 )

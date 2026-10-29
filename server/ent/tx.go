@@ -100,6 +100,8 @@ type Tx struct {
 	Task *TaskClient
 	// TaskRun is the client for interacting with the TaskRun builders.
 	TaskRun *TaskRunClient
+	// TriageRun is the client for interacting with the TriageRun builders.
+	TriageRun *TriageRunClient
 	// TrustedSource is the client for interacting with the TrustedSource builders.
 	TrustedSource *TrustedSourceClient
 	// User is the client for interacting with the User builders.
@@ -283,6 +285,7 @@ func (tx *Tx) init() {
 	tx.Suppression = NewSuppressionClient(tx.config)
 	tx.Task = NewTaskClient(tx.config)
 	tx.TaskRun = NewTaskRunClient(tx.config)
+	tx.TriageRun = NewTriageRunClient(tx.config)
 	tx.TrustedSource = NewTrustedSourceClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 	tx.VulnRecord = NewVulnRecordClient(tx.config)

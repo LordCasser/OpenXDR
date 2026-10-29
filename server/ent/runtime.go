@@ -48,6 +48,7 @@ import (
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/ent/triagerun"
 	"openxdr/server/ent/trustedsource"
 	"openxdr/server/ent/user"
 	"openxdr/server/ent/vulnrecord"
@@ -861,6 +862,56 @@ func init() {
 	taskrunDescID := taskrunFields[0].Descriptor()
 	// taskrun.DefaultID holds the default value on creation for the id field.
 	taskrun.DefaultID = taskrunDescID.Default.(func() uuid.UUID)
+	triagerunFields := schema.TriageRun{}.Fields()
+	_ = triagerunFields
+	// triagerunDescStartedAt is the schema descriptor for started_at field.
+	triagerunDescStartedAt := triagerunFields[2].Descriptor()
+	// triagerun.DefaultStartedAt holds the default value on creation for the started_at field.
+	triagerun.DefaultStartedAt = triagerunDescStartedAt.Default.(func() time.Time)
+	// triagerunDescModel is the schema descriptor for model field.
+	triagerunDescModel := triagerunFields[7].Descriptor()
+	// triagerun.DefaultModel holds the default value on creation for the model field.
+	triagerun.DefaultModel = triagerunDescModel.Default.(string)
+	// triagerunDescErrorCode is the schema descriptor for error_code field.
+	triagerunDescErrorCode := triagerunFields[8].Descriptor()
+	// triagerun.DefaultErrorCode holds the default value on creation for the error_code field.
+	triagerun.DefaultErrorCode = triagerunDescErrorCode.Default.(string)
+	// triagerunDescDurationMs is the schema descriptor for duration_ms field.
+	triagerunDescDurationMs := triagerunFields[9].Descriptor()
+	// triagerun.DefaultDurationMs holds the default value on creation for the duration_ms field.
+	triagerun.DefaultDurationMs = triagerunDescDurationMs.Default.(int64)
+	// triagerunDescModelMs is the schema descriptor for model_ms field.
+	triagerunDescModelMs := triagerunFields[10].Descriptor()
+	// triagerun.DefaultModelMs holds the default value on creation for the model_ms field.
+	triagerun.DefaultModelMs = triagerunDescModelMs.Default.(int64)
+	// triagerunDescToolMs is the schema descriptor for tool_ms field.
+	triagerunDescToolMs := triagerunFields[11].Descriptor()
+	// triagerun.DefaultToolMs holds the default value on creation for the tool_ms field.
+	triagerun.DefaultToolMs = triagerunDescToolMs.Default.(int64)
+	// triagerunDescModelCalls is the schema descriptor for model_calls field.
+	triagerunDescModelCalls := triagerunFields[12].Descriptor()
+	// triagerun.DefaultModelCalls holds the default value on creation for the model_calls field.
+	triagerun.DefaultModelCalls = triagerunDescModelCalls.Default.(int)
+	// triagerunDescToolCalls is the schema descriptor for tool_calls field.
+	triagerunDescToolCalls := triagerunFields[13].Descriptor()
+	// triagerun.DefaultToolCalls holds the default value on creation for the tool_calls field.
+	triagerun.DefaultToolCalls = triagerunDescToolCalls.Default.(int)
+	// triagerunDescToolErrors is the schema descriptor for tool_errors field.
+	triagerunDescToolErrors := triagerunFields[14].Descriptor()
+	// triagerun.DefaultToolErrors holds the default value on creation for the tool_errors field.
+	triagerun.DefaultToolErrors = triagerunDescToolErrors.Default.(int)
+	// triagerunDescInputTokens is the schema descriptor for input_tokens field.
+	triagerunDescInputTokens := triagerunFields[15].Descriptor()
+	// triagerun.DefaultInputTokens holds the default value on creation for the input_tokens field.
+	triagerun.DefaultInputTokens = triagerunDescInputTokens.Default.(int)
+	// triagerunDescOutputTokens is the schema descriptor for output_tokens field.
+	triagerunDescOutputTokens := triagerunFields[16].Descriptor()
+	// triagerun.DefaultOutputTokens holds the default value on creation for the output_tokens field.
+	triagerun.DefaultOutputTokens = triagerunDescOutputTokens.Default.(int)
+	// triagerunDescID is the schema descriptor for id field.
+	triagerunDescID := triagerunFields[0].Descriptor()
+	// triagerun.DefaultID holds the default value on creation for the id field.
+	triagerun.DefaultID = triagerunDescID.Default.(func() uuid.UUID)
 	trustedsourceFields := schema.TrustedSource{}.Fields()
 	_ = trustedsourceFields
 	// trustedsourceDescCreatedAt is the schema descriptor for created_at field.

@@ -53,6 +53,7 @@ import (
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/ent/triagerun"
 	"openxdr/server/ent/trustedsource"
 	"openxdr/server/ent/user"
 	"openxdr/server/ent/vulnrecord"
@@ -118,6 +119,7 @@ const (
 	TypeSuppression             = "Suppression"
 	TypeTask                    = "Task"
 	TypeTaskRun                 = "TaskRun"
+	TypeTriageRun               = "TriageRun"
 	TypeTrustedSource           = "TrustedSource"
 	TypeUser                    = "User"
 	TypeVulnRecord              = "VulnRecord"
@@ -40515,6 +40517,1456 @@ func (m *TaskRunMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *TaskRunMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown TaskRun edge %s", name)
+}
+
+// TriageRunMutation represents an operation that mutates the TriageRun nodes in the graph.
+type TriageRunMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *uuid.UUID
+	incident_id      *uuid.UUID
+	started_at       *time.Time
+	ready_at         *time.Time
+	finished_at      *time.Time
+	trigger          *string
+	status           *triagerun.Status
+	model            *string
+	error_code       *string
+	duration_ms      *int64
+	addduration_ms   *int64
+	model_ms         *int64
+	addmodel_ms      *int64
+	tool_ms          *int64
+	addtool_ms       *int64
+	model_calls      *int
+	addmodel_calls   *int
+	tool_calls       *int
+	addtool_calls    *int
+	tool_errors      *int
+	addtool_errors   *int
+	input_tokens     *int
+	addinput_tokens  *int
+	output_tokens    *int
+	addoutput_tokens *int
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*TriageRun, error)
+	predicates       []predicate.TriageRun
+}
+
+var _ ent.Mutation = (*TriageRunMutation)(nil)
+
+// triagerunOption allows management of the mutation configuration using functional options.
+type triagerunOption func(*TriageRunMutation)
+
+// newTriageRunMutation creates new mutation for the TriageRun entity.
+func newTriageRunMutation(c config, op Op, opts ...triagerunOption) *TriageRunMutation {
+	m := &TriageRunMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTriageRun,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTriageRunID sets the ID field of the mutation.
+func withTriageRunID(id uuid.UUID) triagerunOption {
+	return func(m *TriageRunMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TriageRun
+		)
+		m.oldValue = func(ctx context.Context) (*TriageRun, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TriageRun.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTriageRun sets the old TriageRun of the mutation.
+func withTriageRun(node *TriageRun) triagerunOption {
+	return func(m *TriageRunMutation) {
+		m.oldValue = func(context.Context) (*TriageRun, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TriageRunMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TriageRunMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of TriageRun entities.
+func (m *TriageRunMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TriageRunMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TriageRunMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TriageRun.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (m *TriageRunMutation) SetIncidentID(u uuid.UUID) {
+	m.incident_id = &u
+}
+
+// IncidentID returns the value of the "incident_id" field in the mutation.
+func (m *TriageRunMutation) IncidentID() (r uuid.UUID, exists bool) {
+	v := m.incident_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIncidentID returns the old "incident_id" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldIncidentID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIncidentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIncidentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIncidentID: %w", err)
+	}
+	return oldValue.IncidentID, nil
+}
+
+// ResetIncidentID resets all changes to the "incident_id" field.
+func (m *TriageRunMutation) ResetIncidentID() {
+	m.incident_id = nil
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *TriageRunMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *TriageRunMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldStartedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *TriageRunMutation) ResetStartedAt() {
+	m.started_at = nil
+}
+
+// SetReadyAt sets the "ready_at" field.
+func (m *TriageRunMutation) SetReadyAt(t time.Time) {
+	m.ready_at = &t
+}
+
+// ReadyAt returns the value of the "ready_at" field in the mutation.
+func (m *TriageRunMutation) ReadyAt() (r time.Time, exists bool) {
+	v := m.ready_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReadyAt returns the old "ready_at" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldReadyAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReadyAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReadyAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReadyAt: %w", err)
+	}
+	return oldValue.ReadyAt, nil
+}
+
+// ClearReadyAt clears the value of the "ready_at" field.
+func (m *TriageRunMutation) ClearReadyAt() {
+	m.ready_at = nil
+	m.clearedFields[triagerun.FieldReadyAt] = struct{}{}
+}
+
+// ReadyAtCleared returns if the "ready_at" field was cleared in this mutation.
+func (m *TriageRunMutation) ReadyAtCleared() bool {
+	_, ok := m.clearedFields[triagerun.FieldReadyAt]
+	return ok
+}
+
+// ResetReadyAt resets all changes to the "ready_at" field.
+func (m *TriageRunMutation) ResetReadyAt() {
+	m.ready_at = nil
+	delete(m.clearedFields, triagerun.FieldReadyAt)
+}
+
+// SetFinishedAt sets the "finished_at" field.
+func (m *TriageRunMutation) SetFinishedAt(t time.Time) {
+	m.finished_at = &t
+}
+
+// FinishedAt returns the value of the "finished_at" field in the mutation.
+func (m *TriageRunMutation) FinishedAt() (r time.Time, exists bool) {
+	v := m.finished_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFinishedAt returns the old "finished_at" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldFinishedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFinishedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFinishedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFinishedAt: %w", err)
+	}
+	return oldValue.FinishedAt, nil
+}
+
+// ClearFinishedAt clears the value of the "finished_at" field.
+func (m *TriageRunMutation) ClearFinishedAt() {
+	m.finished_at = nil
+	m.clearedFields[triagerun.FieldFinishedAt] = struct{}{}
+}
+
+// FinishedAtCleared returns if the "finished_at" field was cleared in this mutation.
+func (m *TriageRunMutation) FinishedAtCleared() bool {
+	_, ok := m.clearedFields[triagerun.FieldFinishedAt]
+	return ok
+}
+
+// ResetFinishedAt resets all changes to the "finished_at" field.
+func (m *TriageRunMutation) ResetFinishedAt() {
+	m.finished_at = nil
+	delete(m.clearedFields, triagerun.FieldFinishedAt)
+}
+
+// SetTrigger sets the "trigger" field.
+func (m *TriageRunMutation) SetTrigger(s string) {
+	m.trigger = &s
+}
+
+// Trigger returns the value of the "trigger" field in the mutation.
+func (m *TriageRunMutation) Trigger() (r string, exists bool) {
+	v := m.trigger
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTrigger returns the old "trigger" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldTrigger(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTrigger is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTrigger requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTrigger: %w", err)
+	}
+	return oldValue.Trigger, nil
+}
+
+// ResetTrigger resets all changes to the "trigger" field.
+func (m *TriageRunMutation) ResetTrigger() {
+	m.trigger = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *TriageRunMutation) SetStatus(t triagerun.Status) {
+	m.status = &t
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *TriageRunMutation) Status() (r triagerun.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldStatus(ctx context.Context) (v triagerun.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *TriageRunMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetModel sets the "model" field.
+func (m *TriageRunMutation) SetModel(s string) {
+	m.model = &s
+}
+
+// Model returns the value of the "model" field in the mutation.
+func (m *TriageRunMutation) Model() (r string, exists bool) {
+	v := m.model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModel returns the old "model" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModel: %w", err)
+	}
+	return oldValue.Model, nil
+}
+
+// ResetModel resets all changes to the "model" field.
+func (m *TriageRunMutation) ResetModel() {
+	m.model = nil
+}
+
+// SetErrorCode sets the "error_code" field.
+func (m *TriageRunMutation) SetErrorCode(s string) {
+	m.error_code = &s
+}
+
+// ErrorCode returns the value of the "error_code" field in the mutation.
+func (m *TriageRunMutation) ErrorCode() (r string, exists bool) {
+	v := m.error_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorCode returns the old "error_code" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldErrorCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorCode: %w", err)
+	}
+	return oldValue.ErrorCode, nil
+}
+
+// ResetErrorCode resets all changes to the "error_code" field.
+func (m *TriageRunMutation) ResetErrorCode() {
+	m.error_code = nil
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (m *TriageRunMutation) SetDurationMs(i int64) {
+	m.duration_ms = &i
+	m.addduration_ms = nil
+}
+
+// DurationMs returns the value of the "duration_ms" field in the mutation.
+func (m *TriageRunMutation) DurationMs() (r int64, exists bool) {
+	v := m.duration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationMs returns the old "duration_ms" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldDurationMs(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationMs: %w", err)
+	}
+	return oldValue.DurationMs, nil
+}
+
+// AddDurationMs adds i to the "duration_ms" field.
+func (m *TriageRunMutation) AddDurationMs(i int64) {
+	if m.addduration_ms != nil {
+		*m.addduration_ms += i
+	} else {
+		m.addduration_ms = &i
+	}
+}
+
+// AddedDurationMs returns the value that was added to the "duration_ms" field in this mutation.
+func (m *TriageRunMutation) AddedDurationMs() (r int64, exists bool) {
+	v := m.addduration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDurationMs resets all changes to the "duration_ms" field.
+func (m *TriageRunMutation) ResetDurationMs() {
+	m.duration_ms = nil
+	m.addduration_ms = nil
+}
+
+// SetModelMs sets the "model_ms" field.
+func (m *TriageRunMutation) SetModelMs(i int64) {
+	m.model_ms = &i
+	m.addmodel_ms = nil
+}
+
+// ModelMs returns the value of the "model_ms" field in the mutation.
+func (m *TriageRunMutation) ModelMs() (r int64, exists bool) {
+	v := m.model_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelMs returns the old "model_ms" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldModelMs(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelMs: %w", err)
+	}
+	return oldValue.ModelMs, nil
+}
+
+// AddModelMs adds i to the "model_ms" field.
+func (m *TriageRunMutation) AddModelMs(i int64) {
+	if m.addmodel_ms != nil {
+		*m.addmodel_ms += i
+	} else {
+		m.addmodel_ms = &i
+	}
+}
+
+// AddedModelMs returns the value that was added to the "model_ms" field in this mutation.
+func (m *TriageRunMutation) AddedModelMs() (r int64, exists bool) {
+	v := m.addmodel_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetModelMs resets all changes to the "model_ms" field.
+func (m *TriageRunMutation) ResetModelMs() {
+	m.model_ms = nil
+	m.addmodel_ms = nil
+}
+
+// SetToolMs sets the "tool_ms" field.
+func (m *TriageRunMutation) SetToolMs(i int64) {
+	m.tool_ms = &i
+	m.addtool_ms = nil
+}
+
+// ToolMs returns the value of the "tool_ms" field in the mutation.
+func (m *TriageRunMutation) ToolMs() (r int64, exists bool) {
+	v := m.tool_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolMs returns the old "tool_ms" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldToolMs(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolMs: %w", err)
+	}
+	return oldValue.ToolMs, nil
+}
+
+// AddToolMs adds i to the "tool_ms" field.
+func (m *TriageRunMutation) AddToolMs(i int64) {
+	if m.addtool_ms != nil {
+		*m.addtool_ms += i
+	} else {
+		m.addtool_ms = &i
+	}
+}
+
+// AddedToolMs returns the value that was added to the "tool_ms" field in this mutation.
+func (m *TriageRunMutation) AddedToolMs() (r int64, exists bool) {
+	v := m.addtool_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetToolMs resets all changes to the "tool_ms" field.
+func (m *TriageRunMutation) ResetToolMs() {
+	m.tool_ms = nil
+	m.addtool_ms = nil
+}
+
+// SetModelCalls sets the "model_calls" field.
+func (m *TriageRunMutation) SetModelCalls(i int) {
+	m.model_calls = &i
+	m.addmodel_calls = nil
+}
+
+// ModelCalls returns the value of the "model_calls" field in the mutation.
+func (m *TriageRunMutation) ModelCalls() (r int, exists bool) {
+	v := m.model_calls
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelCalls returns the old "model_calls" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldModelCalls(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelCalls is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelCalls requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelCalls: %w", err)
+	}
+	return oldValue.ModelCalls, nil
+}
+
+// AddModelCalls adds i to the "model_calls" field.
+func (m *TriageRunMutation) AddModelCalls(i int) {
+	if m.addmodel_calls != nil {
+		*m.addmodel_calls += i
+	} else {
+		m.addmodel_calls = &i
+	}
+}
+
+// AddedModelCalls returns the value that was added to the "model_calls" field in this mutation.
+func (m *TriageRunMutation) AddedModelCalls() (r int, exists bool) {
+	v := m.addmodel_calls
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetModelCalls resets all changes to the "model_calls" field.
+func (m *TriageRunMutation) ResetModelCalls() {
+	m.model_calls = nil
+	m.addmodel_calls = nil
+}
+
+// SetToolCalls sets the "tool_calls" field.
+func (m *TriageRunMutation) SetToolCalls(i int) {
+	m.tool_calls = &i
+	m.addtool_calls = nil
+}
+
+// ToolCalls returns the value of the "tool_calls" field in the mutation.
+func (m *TriageRunMutation) ToolCalls() (r int, exists bool) {
+	v := m.tool_calls
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolCalls returns the old "tool_calls" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldToolCalls(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolCalls is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolCalls requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolCalls: %w", err)
+	}
+	return oldValue.ToolCalls, nil
+}
+
+// AddToolCalls adds i to the "tool_calls" field.
+func (m *TriageRunMutation) AddToolCalls(i int) {
+	if m.addtool_calls != nil {
+		*m.addtool_calls += i
+	} else {
+		m.addtool_calls = &i
+	}
+}
+
+// AddedToolCalls returns the value that was added to the "tool_calls" field in this mutation.
+func (m *TriageRunMutation) AddedToolCalls() (r int, exists bool) {
+	v := m.addtool_calls
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetToolCalls resets all changes to the "tool_calls" field.
+func (m *TriageRunMutation) ResetToolCalls() {
+	m.tool_calls = nil
+	m.addtool_calls = nil
+}
+
+// SetToolErrors sets the "tool_errors" field.
+func (m *TriageRunMutation) SetToolErrors(i int) {
+	m.tool_errors = &i
+	m.addtool_errors = nil
+}
+
+// ToolErrors returns the value of the "tool_errors" field in the mutation.
+func (m *TriageRunMutation) ToolErrors() (r int, exists bool) {
+	v := m.tool_errors
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolErrors returns the old "tool_errors" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldToolErrors(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolErrors is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolErrors requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolErrors: %w", err)
+	}
+	return oldValue.ToolErrors, nil
+}
+
+// AddToolErrors adds i to the "tool_errors" field.
+func (m *TriageRunMutation) AddToolErrors(i int) {
+	if m.addtool_errors != nil {
+		*m.addtool_errors += i
+	} else {
+		m.addtool_errors = &i
+	}
+}
+
+// AddedToolErrors returns the value that was added to the "tool_errors" field in this mutation.
+func (m *TriageRunMutation) AddedToolErrors() (r int, exists bool) {
+	v := m.addtool_errors
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetToolErrors resets all changes to the "tool_errors" field.
+func (m *TriageRunMutation) ResetToolErrors() {
+	m.tool_errors = nil
+	m.addtool_errors = nil
+}
+
+// SetInputTokens sets the "input_tokens" field.
+func (m *TriageRunMutation) SetInputTokens(i int) {
+	m.input_tokens = &i
+	m.addinput_tokens = nil
+}
+
+// InputTokens returns the value of the "input_tokens" field in the mutation.
+func (m *TriageRunMutation) InputTokens() (r int, exists bool) {
+	v := m.input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputTokens returns the old "input_tokens" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldInputTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputTokens: %w", err)
+	}
+	return oldValue.InputTokens, nil
+}
+
+// AddInputTokens adds i to the "input_tokens" field.
+func (m *TriageRunMutation) AddInputTokens(i int) {
+	if m.addinput_tokens != nil {
+		*m.addinput_tokens += i
+	} else {
+		m.addinput_tokens = &i
+	}
+}
+
+// AddedInputTokens returns the value that was added to the "input_tokens" field in this mutation.
+func (m *TriageRunMutation) AddedInputTokens() (r int, exists bool) {
+	v := m.addinput_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetInputTokens resets all changes to the "input_tokens" field.
+func (m *TriageRunMutation) ResetInputTokens() {
+	m.input_tokens = nil
+	m.addinput_tokens = nil
+}
+
+// SetOutputTokens sets the "output_tokens" field.
+func (m *TriageRunMutation) SetOutputTokens(i int) {
+	m.output_tokens = &i
+	m.addoutput_tokens = nil
+}
+
+// OutputTokens returns the value of the "output_tokens" field in the mutation.
+func (m *TriageRunMutation) OutputTokens() (r int, exists bool) {
+	v := m.output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputTokens returns the old "output_tokens" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldOutputTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputTokens: %w", err)
+	}
+	return oldValue.OutputTokens, nil
+}
+
+// AddOutputTokens adds i to the "output_tokens" field.
+func (m *TriageRunMutation) AddOutputTokens(i int) {
+	if m.addoutput_tokens != nil {
+		*m.addoutput_tokens += i
+	} else {
+		m.addoutput_tokens = &i
+	}
+}
+
+// AddedOutputTokens returns the value that was added to the "output_tokens" field in this mutation.
+func (m *TriageRunMutation) AddedOutputTokens() (r int, exists bool) {
+	v := m.addoutput_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOutputTokens resets all changes to the "output_tokens" field.
+func (m *TriageRunMutation) ResetOutputTokens() {
+	m.output_tokens = nil
+	m.addoutput_tokens = nil
+}
+
+// Where appends a list predicates to the TriageRunMutation builder.
+func (m *TriageRunMutation) Where(ps ...predicate.TriageRun) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TriageRunMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TriageRunMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TriageRun, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TriageRunMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TriageRunMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TriageRun).
+func (m *TriageRunMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TriageRunMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.incident_id != nil {
+		fields = append(fields, triagerun.FieldIncidentID)
+	}
+	if m.started_at != nil {
+		fields = append(fields, triagerun.FieldStartedAt)
+	}
+	if m.ready_at != nil {
+		fields = append(fields, triagerun.FieldReadyAt)
+	}
+	if m.finished_at != nil {
+		fields = append(fields, triagerun.FieldFinishedAt)
+	}
+	if m.trigger != nil {
+		fields = append(fields, triagerun.FieldTrigger)
+	}
+	if m.status != nil {
+		fields = append(fields, triagerun.FieldStatus)
+	}
+	if m.model != nil {
+		fields = append(fields, triagerun.FieldModel)
+	}
+	if m.error_code != nil {
+		fields = append(fields, triagerun.FieldErrorCode)
+	}
+	if m.duration_ms != nil {
+		fields = append(fields, triagerun.FieldDurationMs)
+	}
+	if m.model_ms != nil {
+		fields = append(fields, triagerun.FieldModelMs)
+	}
+	if m.tool_ms != nil {
+		fields = append(fields, triagerun.FieldToolMs)
+	}
+	if m.model_calls != nil {
+		fields = append(fields, triagerun.FieldModelCalls)
+	}
+	if m.tool_calls != nil {
+		fields = append(fields, triagerun.FieldToolCalls)
+	}
+	if m.tool_errors != nil {
+		fields = append(fields, triagerun.FieldToolErrors)
+	}
+	if m.input_tokens != nil {
+		fields = append(fields, triagerun.FieldInputTokens)
+	}
+	if m.output_tokens != nil {
+		fields = append(fields, triagerun.FieldOutputTokens)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TriageRunMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case triagerun.FieldIncidentID:
+		return m.IncidentID()
+	case triagerun.FieldStartedAt:
+		return m.StartedAt()
+	case triagerun.FieldReadyAt:
+		return m.ReadyAt()
+	case triagerun.FieldFinishedAt:
+		return m.FinishedAt()
+	case triagerun.FieldTrigger:
+		return m.Trigger()
+	case triagerun.FieldStatus:
+		return m.Status()
+	case triagerun.FieldModel:
+		return m.Model()
+	case triagerun.FieldErrorCode:
+		return m.ErrorCode()
+	case triagerun.FieldDurationMs:
+		return m.DurationMs()
+	case triagerun.FieldModelMs:
+		return m.ModelMs()
+	case triagerun.FieldToolMs:
+		return m.ToolMs()
+	case triagerun.FieldModelCalls:
+		return m.ModelCalls()
+	case triagerun.FieldToolCalls:
+		return m.ToolCalls()
+	case triagerun.FieldToolErrors:
+		return m.ToolErrors()
+	case triagerun.FieldInputTokens:
+		return m.InputTokens()
+	case triagerun.FieldOutputTokens:
+		return m.OutputTokens()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TriageRunMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case triagerun.FieldIncidentID:
+		return m.OldIncidentID(ctx)
+	case triagerun.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case triagerun.FieldReadyAt:
+		return m.OldReadyAt(ctx)
+	case triagerun.FieldFinishedAt:
+		return m.OldFinishedAt(ctx)
+	case triagerun.FieldTrigger:
+		return m.OldTrigger(ctx)
+	case triagerun.FieldStatus:
+		return m.OldStatus(ctx)
+	case triagerun.FieldModel:
+		return m.OldModel(ctx)
+	case triagerun.FieldErrorCode:
+		return m.OldErrorCode(ctx)
+	case triagerun.FieldDurationMs:
+		return m.OldDurationMs(ctx)
+	case triagerun.FieldModelMs:
+		return m.OldModelMs(ctx)
+	case triagerun.FieldToolMs:
+		return m.OldToolMs(ctx)
+	case triagerun.FieldModelCalls:
+		return m.OldModelCalls(ctx)
+	case triagerun.FieldToolCalls:
+		return m.OldToolCalls(ctx)
+	case triagerun.FieldToolErrors:
+		return m.OldToolErrors(ctx)
+	case triagerun.FieldInputTokens:
+		return m.OldInputTokens(ctx)
+	case triagerun.FieldOutputTokens:
+		return m.OldOutputTokens(ctx)
+	}
+	return nil, fmt.Errorf("unknown TriageRun field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TriageRunMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case triagerun.FieldIncidentID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIncidentID(v)
+		return nil
+	case triagerun.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case triagerun.FieldReadyAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReadyAt(v)
+		return nil
+	case triagerun.FieldFinishedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFinishedAt(v)
+		return nil
+	case triagerun.FieldTrigger:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTrigger(v)
+		return nil
+	case triagerun.FieldStatus:
+		v, ok := value.(triagerun.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case triagerun.FieldModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModel(v)
+		return nil
+	case triagerun.FieldErrorCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorCode(v)
+		return nil
+	case triagerun.FieldDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationMs(v)
+		return nil
+	case triagerun.FieldModelMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelMs(v)
+		return nil
+	case triagerun.FieldToolMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolMs(v)
+		return nil
+	case triagerun.FieldModelCalls:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelCalls(v)
+		return nil
+	case triagerun.FieldToolCalls:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolCalls(v)
+		return nil
+	case triagerun.FieldToolErrors:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolErrors(v)
+		return nil
+	case triagerun.FieldInputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputTokens(v)
+		return nil
+	case triagerun.FieldOutputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputTokens(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TriageRun field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TriageRunMutation) AddedFields() []string {
+	var fields []string
+	if m.addduration_ms != nil {
+		fields = append(fields, triagerun.FieldDurationMs)
+	}
+	if m.addmodel_ms != nil {
+		fields = append(fields, triagerun.FieldModelMs)
+	}
+	if m.addtool_ms != nil {
+		fields = append(fields, triagerun.FieldToolMs)
+	}
+	if m.addmodel_calls != nil {
+		fields = append(fields, triagerun.FieldModelCalls)
+	}
+	if m.addtool_calls != nil {
+		fields = append(fields, triagerun.FieldToolCalls)
+	}
+	if m.addtool_errors != nil {
+		fields = append(fields, triagerun.FieldToolErrors)
+	}
+	if m.addinput_tokens != nil {
+		fields = append(fields, triagerun.FieldInputTokens)
+	}
+	if m.addoutput_tokens != nil {
+		fields = append(fields, triagerun.FieldOutputTokens)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TriageRunMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case triagerun.FieldDurationMs:
+		return m.AddedDurationMs()
+	case triagerun.FieldModelMs:
+		return m.AddedModelMs()
+	case triagerun.FieldToolMs:
+		return m.AddedToolMs()
+	case triagerun.FieldModelCalls:
+		return m.AddedModelCalls()
+	case triagerun.FieldToolCalls:
+		return m.AddedToolCalls()
+	case triagerun.FieldToolErrors:
+		return m.AddedToolErrors()
+	case triagerun.FieldInputTokens:
+		return m.AddedInputTokens()
+	case triagerun.FieldOutputTokens:
+		return m.AddedOutputTokens()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TriageRunMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case triagerun.FieldDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDurationMs(v)
+		return nil
+	case triagerun.FieldModelMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddModelMs(v)
+		return nil
+	case triagerun.FieldToolMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddToolMs(v)
+		return nil
+	case triagerun.FieldModelCalls:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddModelCalls(v)
+		return nil
+	case triagerun.FieldToolCalls:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddToolCalls(v)
+		return nil
+	case triagerun.FieldToolErrors:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddToolErrors(v)
+		return nil
+	case triagerun.FieldInputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInputTokens(v)
+		return nil
+	case triagerun.FieldOutputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOutputTokens(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TriageRun numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TriageRunMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(triagerun.FieldReadyAt) {
+		fields = append(fields, triagerun.FieldReadyAt)
+	}
+	if m.FieldCleared(triagerun.FieldFinishedAt) {
+		fields = append(fields, triagerun.FieldFinishedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TriageRunMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TriageRunMutation) ClearField(name string) error {
+	switch name {
+	case triagerun.FieldReadyAt:
+		m.ClearReadyAt()
+		return nil
+	case triagerun.FieldFinishedAt:
+		m.ClearFinishedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown TriageRun nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TriageRunMutation) ResetField(name string) error {
+	switch name {
+	case triagerun.FieldIncidentID:
+		m.ResetIncidentID()
+		return nil
+	case triagerun.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case triagerun.FieldReadyAt:
+		m.ResetReadyAt()
+		return nil
+	case triagerun.FieldFinishedAt:
+		m.ResetFinishedAt()
+		return nil
+	case triagerun.FieldTrigger:
+		m.ResetTrigger()
+		return nil
+	case triagerun.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case triagerun.FieldModel:
+		m.ResetModel()
+		return nil
+	case triagerun.FieldErrorCode:
+		m.ResetErrorCode()
+		return nil
+	case triagerun.FieldDurationMs:
+		m.ResetDurationMs()
+		return nil
+	case triagerun.FieldModelMs:
+		m.ResetModelMs()
+		return nil
+	case triagerun.FieldToolMs:
+		m.ResetToolMs()
+		return nil
+	case triagerun.FieldModelCalls:
+		m.ResetModelCalls()
+		return nil
+	case triagerun.FieldToolCalls:
+		m.ResetToolCalls()
+		return nil
+	case triagerun.FieldToolErrors:
+		m.ResetToolErrors()
+		return nil
+	case triagerun.FieldInputTokens:
+		m.ResetInputTokens()
+		return nil
+	case triagerun.FieldOutputTokens:
+		m.ResetOutputTokens()
+		return nil
+	}
+	return fmt.Errorf("unknown TriageRun field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TriageRunMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TriageRunMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TriageRunMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TriageRunMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TriageRunMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TriageRunMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TriageRunMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown TriageRun unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TriageRunMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown TriageRun edge %s", name)
 }
 
 // TrustedSourceMutation represents an operation that mutates the TrustedSource nodes in the graph.

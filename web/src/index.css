@@ -165,7 +165,7 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4p
 
 /* 研判结论：顶部结论条 + 处置建议编号清单 */
 .verdict-band { padding: 18px 24px; border-left: 4px solid; border-radius: 8px 8px 0 0; }
-.action-list { margin: 0; padding: 0; list-style: none; counter-reset: act; }
+.action-list { margin: 0; padding: 0; list-style: none; counter-reset: act; overflow-wrap: anywhere; }
 .action-list li { counter-increment: act; position: relative; padding: 0 0 12px 34px; line-height: 1.7; }
 .action-list li::before {
   content: counter(act); position: absolute; left: 0; top: 1px; width: 22px; height: 22px; border-radius: 50%;

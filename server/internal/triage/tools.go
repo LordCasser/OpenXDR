@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -39,6 +40,17 @@ var investigationTools = []Tool{
 // execTool 执行一次工具调用。错误以文本返回给模型而不是中断研判——
 // 模型能理解"查询失败"并继续，半途而废的研判什么都留不下。
 func (e *Engine) execTool(ctx context.Context, name, args string) string {
+	started := time.Now()
+	var failed bool
+	defer func() {
+		if run := timingFrom(ctx); run != nil {
+			run.toolCalls++
+			run.toolMS += time.Since(started).Milliseconds()
+			if failed {
+				run.toolErrors++
+			}
+		}
+	}()
 	out, err := func() (any, error) {
 		switch name {
 		case "query_events":
@@ -52,19 +64,21 @@ func (e *Engine) execTool(ctx context.Context, name, args string) string {
 		}
 	}()
 	if err != nil {
-		return fmt.Sprintf(`{"error": %q}`, err.Error())
+		failed = true
+		return fmt.Sprintf(`{"status":"error","coverage":"unknown","error": %q}`, err.Error())
 	}
 	b, _ := json.Marshal(out)
 	return string(b)
 }
 
 type eventBrief struct {
-	Ts      string `json:"ts"`
-	Class   int    `json:"class"`
-	Source  string `json:"source"`
-	AssetID string `json:"asset_id,omitempty"`
-	Host    string `json:"host,omitempty"`
-	Raw     string `json:"raw"`
+	Ts           string `json:"ts"`
+	Class        int    `json:"class"`
+	Source       string `json:"source"`
+	AssetID      string `json:"asset_id,omitempty"`
+	Host         string `json:"host,omitempty"`
+	Raw          string `json:"raw"`
+	RawTruncated bool   `json:"raw_truncated"`
 }
 
 func (e *Engine) toolQueryEvents(ctx context.Context, args string) (any, error) {
@@ -78,23 +92,27 @@ func (e *Engine) toolQueryEvents(ctx context.Context, args string) (any, error) 
 	if in.Hours <= 0 || in.Hours > 168 {
 		in.Hours = 24
 	}
+	until := time.Now().UTC()
+	since := until.Add(-time.Duration(in.Hours) * time.Hour)
 	rows, err := e.DB.Event.Query().
 		Where(
-			entevent.TsGTE(time.Now().Add(-time.Duration(in.Hours)*time.Hour)),
+			entevent.TsGTE(since), entevent.TsLTE(until),
 			eventsearch.Keyword(in.Keyword),
 		).
 		Order(ent.Desc(entevent.FieldTs)).
 		WithAsset().
-		Limit(15).
+		Limit(16).
 		All(ctx)
 	if err != nil {
 		return nil, err
 	}
+	truncated := len(rows) > 15
+	rows = rows[:min(len(rows), 15)]
 	out := make([]eventBrief, len(rows))
 	for i, ev := range rows {
 		out[i] = brief(ev)
 	}
-	return out, nil
+	return map[string]any{"status": "ok", "items": out, "limit": 15, "returned": len(out), "truncated": truncated, "from": since, "to": until, "coverage": "仅覆盖已采集且仍保留的数据；未发现不代表没有发生，截断时不能声称全量检索"}, nil
 }
 
 func (e *Engine) toolProcessLineage(ctx context.Context, args string) (any, error) {
@@ -109,7 +127,8 @@ func (e *Engine) toolProcessLineage(ctx context.Context, args string) (any, erro
 		return nil, fmt.Errorf("process_guid 不是合法 UUID")
 	}
 
-	var ancestors []eventBrief
+	ancestors := []eventBrief{}
+	ancestorTruncated, missingAncestor := false, false
 	cur := guid
 	for depth := 0; depth < 10; depth++ {
 		ev, err := e.DB.Event.Query().
@@ -117,6 +136,10 @@ func (e *Engine) toolProcessLineage(ctx context.Context, args string) (any, erro
 			WithAsset().
 			First(ctx)
 		if err != nil {
+			if !ent.IsNotFound(err) {
+				return nil, err
+			}
+			missingAncestor = true
 			break
 		}
 		ancestors = append(ancestors, brief(ev))
@@ -124,18 +147,24 @@ func (e *Engine) toolProcessLineage(ctx context.Context, args string) (any, erro
 			break
 		}
 		cur = *ev.ParentProcessGUID
+		ancestorTruncated = depth == 9
 	}
 
-	children, _ := e.DB.Event.Query().
+	children, err := e.DB.Event.Query().
 		Where(entevent.ParentProcessGUIDEQ(guid)).
 		WithAsset().
-		Limit(10).
+		Limit(11).
 		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	childTruncated := len(children) > 10
+	children = children[:min(len(children), 10)]
 	childOut := make([]eventBrief, len(children))
 	for i, ev := range children {
 		childOut[i] = brief(ev)
 	}
-	return map[string]any{"self_and_ancestors": ancestors, "children": childOut}, nil
+	return map[string]any{"self_and_ancestors": ancestors, "children": childOut, "status": "ok", "ancestors_truncated": ancestorTruncated, "children_truncated": childTruncated, "missing_ancestor": missingAncestor, "coverage": "仅限已采集并保留的进程记录；血缘缺失不是正常或无父进程的证据"}, nil
 }
 
 func (e *Engine) toolHostAlerts(ctx context.Context, args string) (any, error) {
@@ -153,17 +182,21 @@ func (e *Engine) toolHostAlerts(ctx context.Context, args string) (any, error) {
 	if in.Days <= 0 || in.Days > 90 {
 		in.Days = 7
 	}
+	until := time.Now().UTC()
+	since := until.AddDate(0, 0, -in.Days)
 	rows, err := e.DB.Alert.Query().
 		Where(
 			entalert.AssetIDEQ(assetID),
-			entalert.TsGTE(time.Now().AddDate(0, 0, -in.Days)),
+			entalert.TsGTE(since), entalert.TsLTE(until),
 		).
 		Order(ent.Desc(entalert.FieldTs)).
-		Limit(20).
+		Limit(21).
 		All(ctx)
 	if err != nil {
 		return nil, err
 	}
+	truncated := len(rows) > 20
+	rows = rows[:min(len(rows), 20)]
 	type alertBrief struct {
 		Ts       string `json:"ts"`
 		Rule     string `json:"rule"`
@@ -184,19 +217,25 @@ func (e *Engine) toolHostAlerts(ctx context.Context, args string) (any, error) {
 	if as, err := e.DB.Asset.Get(ctx, assetID); err == nil {
 		host = as.Hostname
 	}
-	return map[string]any{"host": host, "alerts": out}, nil
+	return map[string]any{"host": host, "alerts": out, "status": "ok", "limit": 20, "returned": len(out), "truncated": truncated, "from": since, "to": until, "coverage": "按告警首次出现时间筛选；无告警不代表没有事件或没有攻击"}, nil
 }
 
 func brief(ev *ent.Event) eventBrief {
 	raw := string(ev.Raw)
-	if len(raw) > 300 {
-		raw = raw[:300] + "…"
+	truncated := len(raw) > 300
+	if truncated {
+		end := 300
+		for end > 0 && !utf8.ValidString(raw[:end]) {
+			end--
+		}
+		raw = raw[:end] + "…"
 	}
 	b := eventBrief{
-		Ts:     ev.Ts.Format(time.RFC3339),
-		Class:  ev.ClassUID,
-		Source: ev.Source,
-		Raw:    raw,
+		Ts:           ev.Ts.Format(time.RFC3339),
+		Class:        ev.ClassUID,
+		Source:       ev.Source,
+		Raw:          raw,
+		RawTruncated: truncated,
 	}
 	// 只给 asset ID 模型没法在结论里说出是哪台机器
 	if ev.AssetID != nil {

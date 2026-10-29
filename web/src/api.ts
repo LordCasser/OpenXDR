@@ -1548,3 +1548,24 @@ export interface ExternalTicket { id: string; integrationId: string; incidentId:
 export const fetchIncidentTickets = (id: string) => get<ExternalTicket[]>(`/api/incidents/${id}/tickets`)
 
 export const fetchHostedDeceptionStatus = () => get<{ online: boolean; seenAt: string | null }>('/api/deception/hosted-status')
+
+export interface TriageRun {
+  heartbeat_valid: boolean
+  id: string
+  started_at: string
+  ready_at?: string
+  finished_at?: string
+  trigger: 'initial' | 'reopened' | 'urgent' | 'evidence'
+  status: 'running' | 'succeeded' | 'failed' | 'interrupted'
+  model: string
+  error_code: string
+  duration_ms: number
+  model_ms: number
+  tool_ms: number
+  model_calls: number
+  tool_calls: number
+  tool_errors: number
+  input_tokens: number
+  output_tokens: number
+}
+export const fetchTriageRuns = (id: string, page: number) => get<{ items: TriageRun[]; more: boolean }>(`/api/incidents/${id}/triage-runs?page=${page}`)

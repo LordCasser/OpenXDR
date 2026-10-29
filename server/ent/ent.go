@@ -50,6 +50,7 @@ import (
 	"openxdr/server/ent/suppression"
 	"openxdr/server/ent/task"
 	"openxdr/server/ent/taskrun"
+	"openxdr/server/ent/triagerun"
 	"openxdr/server/ent/trustedsource"
 	"openxdr/server/ent/user"
 	"openxdr/server/ent/vulnrecord"
@@ -164,6 +165,7 @@ func checkColumn(t, c string) error {
 			suppression.Table:             suppression.ValidColumn,
 			task.Table:                    task.ValidColumn,
 			taskrun.Table:                 taskrun.ValidColumn,
+			triagerun.Table:               triagerun.ValidColumn,
 			trustedsource.Table:           trustedsource.ValidColumn,
 			user.Table:                    user.ValidColumn,
 			vulnrecord.Table:              vulnrecord.ValidColumn,

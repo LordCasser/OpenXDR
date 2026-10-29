@@ -1358,6 +1358,44 @@ var (
 			},
 		},
 	}
+	// TriageRunsColumns holds the columns for the "triage_runs" table.
+	TriageRunsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "incident_id", Type: field.TypeUUID},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "ready_at", Type: field.TypeTime, Nullable: true},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "trigger", Type: field.TypeString},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"running", "succeeded", "failed", "interrupted"}, Default: "running"},
+		{Name: "model", Type: field.TypeString, Default: ""},
+		{Name: "error_code", Type: field.TypeString, Default: ""},
+		{Name: "duration_ms", Type: field.TypeInt64, Default: 0},
+		{Name: "model_ms", Type: field.TypeInt64, Default: 0},
+		{Name: "tool_ms", Type: field.TypeInt64, Default: 0},
+		{Name: "model_calls", Type: field.TypeInt, Default: 0},
+		{Name: "tool_calls", Type: field.TypeInt, Default: 0},
+		{Name: "tool_errors", Type: field.TypeInt, Default: 0},
+		{Name: "input_tokens", Type: field.TypeInt, Default: 0},
+		{Name: "output_tokens", Type: field.TypeInt, Default: 0},
+	}
+	// TriageRunsTable holds the schema information for the "triage_runs" table.
+	TriageRunsTable = &schema.Table{
+		Name:       "triage_runs",
+		Columns:    TriageRunsColumns,
+		PrimaryKey: []*schema.Column{TriageRunsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "triagerun_incident_id_started_at",
+				Unique:  false,
+				Columns: []*schema.Column{TriageRunsColumns[1], TriageRunsColumns[2]},
+			},
+			{
+				Name:    "triagerun_status_started_at",
+				Unique:  false,
+				Columns: []*schema.Column{TriageRunsColumns[6], TriageRunsColumns[2]},
+			},
+		},
+	}
 	// TrustedSourcesColumns holds the columns for the "trusted_sources" table.
 	TrustedSourcesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -1514,6 +1552,7 @@ var (
 		SuppressionsTable,
 		TasksTable,
 		TaskRunsTable,
+		TriageRunsTable,
 		TrustedSourcesTable,
 		UsersTable,
 		VulnRecordsTable,
