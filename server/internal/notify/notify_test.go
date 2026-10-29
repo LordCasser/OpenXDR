@@ -85,7 +85,7 @@ func TestText(t *testing.T) {
 		Summary: "存在攻击链", AlertCount: 12, Severity: 4,
 		Link: "http://x/?incident=abc", RuleAuthors: []string{"Florian Roth (Nextron Systems)"},
 	})
-	for _, want := range []string{"可疑进程链", "恶意", "85", "12 条", "高危", "存在攻击链", "http://x/?incident=abc", "规则作者: Florian Roth (Nextron Systems)"} {
+	for _, want := range []string{"可疑进程链", "恶意", "85", "AI 摘要（模型判断）: 存在攻击链", "12 条", "高危", "存在攻击链", "http://x/?incident=abc", "规则作者: Florian Roth (Nextron Systems)"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("正文缺少 %q：\n%s", want, got)
 		}

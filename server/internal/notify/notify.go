@@ -220,6 +220,9 @@ func text(m Message) string {
 	}
 	fmt.Fprintf(&b, "告警 %d 条，最高级别: %s\n", m.AlertCount, sev)
 	if m.Summary != "" {
+		if m.Verdict != "" {
+			b.WriteString("AI 摘要（模型判断）: ")
+		}
 		fmt.Fprintf(&b, "%s\n", m.Summary)
 	}
 	if len(m.RuleAuthors) > 0 {

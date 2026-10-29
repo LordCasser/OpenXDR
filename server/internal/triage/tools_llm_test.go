@@ -125,3 +125,28 @@ func TestLLMChatErrors(t *testing.T) {
 		t.Error("空 choices 应返回错误")
 	}
 }
+
+func TestBriefUsesNormalizedProcessIdentity(t *testing.T) {
+	id, asset, process, parent := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	ev := &ent.Event{ID: id, AssetID: &asset, ProcessGUID: &process, ParentProcessGUID: &parent, Raw: []byte(`{"process_guid":"forged","parent_process_guid":"forged"}`)}
+	b := briefLimit(ev, 4)
+	if b.EventID != id.String() || b.ProcessGUID != process.String() || b.ParentProcessGUID != parent.String() || !b.RawTruncated {
+		t.Fatalf("%+v", b)
+	}
+	ev.ParentProcessGUID = nil
+	b = brief(ev)
+	if b.ParentProcessGUID != "" {
+		t.Fatal("不能从 raw 补写父进程")
+	}
+	raw, err := json.Marshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := fields["parent_process_guid"]; exists {
+		t.Fatal("未知父进程必须保持缺失")
+	}
+}

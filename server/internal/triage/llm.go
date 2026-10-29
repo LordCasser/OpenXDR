@@ -152,7 +152,7 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Message{}, fmt.Errorf("LLM 返回 %s", resp.Status)
+		return Message{}, &LLMHTTPError{StatusCode: resp.StatusCode}
 	}
 
 	var out struct {
@@ -176,4 +176,11 @@ func (l *LLM) Chat(ctx context.Context, msgs []Message, tools []Tool) (Message, 
 	}
 	out.Choices[0].Message.FinishReason = out.Choices[0].FinishReason
 	return out.Choices[0].Message, nil
+}
+
+// LLMHTTPError 保留状态码供诊断，不携带响应正文与请求凭据。
+type LLMHTTPError struct{ StatusCode int }
+
+func (e *LLMHTTPError) Error() string {
+	return fmt.Sprintf("LLM 返回 %d %s", e.StatusCode, http.StatusText(e.StatusCode))
 }

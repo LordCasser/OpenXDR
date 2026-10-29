@@ -1,4 +1,18 @@
+export interface RecordEvidence {
+  id: string
+  facts: { event_id: string; asset_id?: string; ts?: string; process_guid?: string; parent_process_guid?: string }
+}
+
+export interface QueryEvidence {
+  records?: RecordEvidence[]
+  id: string
+  tool: string
+  facts: { status?: string; returned?: number; truncated?: boolean; missing_ancestor?: boolean; raw_truncated_records?: number; dns_omitted_records?: number; baseline_status?: string; baseline_id?: string; baseline_path?: string; exe_path?: string; baseline_first_recorded_at?: string; collection_status?: string; collection_received_at?: string; collection_states?: Record<string, string> }
+}
+
 export interface Verdict {
+  evidence_observations?: { evidence_id: string; field: string; text: string }[]
+  query_evidence?: QueryEvidence[]
   verdict?: 'malicious' | 'suspicious' | 'benign'
   confidence?: number
   summary?: string

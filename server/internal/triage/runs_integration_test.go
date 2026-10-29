@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"openxdr/server/ent"
+	"openxdr/server/ent/alert"
 	"openxdr/server/ent/triagerun"
 	"openxdr/server/internal/testdb"
 )
@@ -21,6 +22,8 @@ func TestRunLedgerFailureRecoveryAndUsage(t *testing.T) {
 	ctx, db := testdb.New(t)
 	f := &retriageFixture{t: t, ctx: ctx, client: db}
 	inc := f.fresh("逐轮记录", time.Now().Add(-time.Minute))
+	host := db.Asset.Create().SetHostname("run-ledger-host").SaveX(ctx)
+	db.Alert.Update().Where(alert.IncidentIDEQ(inc.ID)).SetAssetID(host.ID).ExecX(ctx)
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		call := calls.Add(1)
@@ -29,7 +32,7 @@ func TestRunLedgerFailureRecoveryAndUsage(t *testing.T) {
 			http.Error(w, "unavailable", 503)
 			return
 		}
-		msg := Message{Role: "assistant", Content: `{"verdict":"suspicious","confidence":60,"summary":"证据不足，需核实来源"}`}
+		msg := Message{Role: "assistant", Content: `{"verdict":"suspicious","confidence":60,"action_codes":["monitor"],"summary":"证据不足，需核实来源","evidence_claims":[{"evidence_id":"query-1","field":"returned","value":0}]}`}
 		if call == 2 {
 			msg.Content = ""
 			var tc ToolCall

@@ -18,10 +18,11 @@ import (
 
 func TestInvestigationCoverage(t *testing.T) {
 	ctx, db := testdb.New(t)
-	e := &Engine{DB: db}
+	host := db.Asset.Create().SetHostname("coverage").SaveX(ctx)
+	e := scopedToolEngine(ctx, db, host.ID)
 	now := time.Now()
 	for i := 0; i < 16; i++ {
-		db.Event.Create().SetTs(now.Add(-time.Duration(i) * time.Second)).SetClassUID(4001).SetSource("agent").SetRaw(json.RawMessage(`{"message":"coverage-test"}`)).SaveX(ctx)
+		db.Event.Create().SetAssetID(host.ID).SetTs(now.Add(-time.Duration(i) * time.Second)).SetClassUID(4001).SetSource("agent").SetRaw(json.RawMessage(`{"message":"coverage-test"}`)).SaveX(ctx)
 	}
 	out, err := e.toolQueryEvents(ctx, `{"keyword":"coverage-test","hours":1}`)
 	if err != nil {
@@ -39,7 +40,6 @@ func TestInvestigationCoverage(t *testing.T) {
 	if m["truncated"] != false || m["returned"] != 0 || m["coverage"] == "" {
 		t.Fatal(m)
 	}
-	host := db.Asset.Create().SetHostname("coverage").SaveX(ctx)
 	for i := 0; i < 21; i++ {
 		db.Alert.Create().SetAssetID(host.ID).SetTs(now.Add(-time.Duration(i) * time.Second)).SetRuleID("test").SetSeverity(2).SaveX(ctx)
 	}

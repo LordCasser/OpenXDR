@@ -24,6 +24,9 @@ func timingFrom(ctx context.Context) *runTiming {
 }
 
 func (e *Engine) chat(ctx context.Context, msgs []Message, tools []Tool) (Message, error) {
+	if err := e.checkInvestigationScope(ctx); err != nil {
+		return Message{}, err
+	}
 	start := time.Now()
 	defer func() {
 		if r := timingFrom(ctx); r != nil {
