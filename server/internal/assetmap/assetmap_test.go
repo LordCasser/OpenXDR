@@ -105,6 +105,8 @@ func TestDependencyFiltersNoise(t *testing.T) {
 		{"10.1.1.2", "127.0.0.1", false},
 		{"10.1.1.2", "224.0.0.251", false},
 		{"10.1.1.2", "169.254.169.254", false},
+		{"10.1.1.2", "100.100.100.200", false}, // 阿里云实例元数据
+		{"10.1.1.2", "100.100.100.201", true},  // 同在 CGNAT 段的其他地址照常算
 	}
 	for _, c := range cases {
 		got := dependency(conn{src: netip.MustParseAddr(c.src), dst: netip.MustParseAddr(c.dst), port: 80, proto: "tcp"}, own)

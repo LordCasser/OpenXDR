@@ -214,6 +214,7 @@ func TestEngineUnspecifiedSource(t *testing.T) {
 	mkLink("0.0.0.0", "110.42.47.158", 5)
 	mkLink("::", "2001:db8::9", 1)
 	mkLink("10.1.1.2", "110.42.47.158", 2)
+	mkLink("10.1.1.2", "100.100.100.200", 1) // agent 启动探阿里云实例元数据
 
 	// 新事件：旧 agent 报 0.0.0.0，新 agent 省略源地址
 	for i, src := range []string{`"ip":"0.0.0.0",`, ``} {
@@ -227,7 +228,7 @@ func TestEngineUnspecifiedSource(t *testing.T) {
 	e := &Engine{DB: client, SQL: db, Interval: time.Second}
 	e.cursor = e.loadCursor(ctx)
 	for range 2 { // 幂等：第二次没有脏数据
-		if err := e.dropUnspecified(ctx); err != nil {
+		if err := e.dropNonDependencies(ctx); err != nil {
 			t.Fatal(err)
 		}
 	}
