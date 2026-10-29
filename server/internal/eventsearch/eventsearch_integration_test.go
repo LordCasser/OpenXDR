@@ -124,3 +124,22 @@ func TestSearchTextOptimizationEquivalent(t *testing.T) {
 		t.Fatalf("新旧函数输出不一致：%d 个样本", mismatches)
 	}
 }
+
+// 域名前缀虽为十六进制，仍在值索引中；显式值搜索和完整原文搜索必须有不同且明确的覆盖范围。
+func TestExplicitSearchModes(t *testing.T) {
+	ctx, client, db := open(t)
+	client.Event.Create().SetTs(time.Now()).SetClassUID(4003).SetSource("agent").SetRaw(json.RawMessage(`{"query":{"hostname":"1ecb6066da3755bd9nonce.example.test"},"hash":"43b8d2d049183e9ebc409c86b89150b5a4a68fa19fe1815b16bed5561921a9c3"}`)).SaveX(ctx)
+	Ensure(ctx, db)
+	if n := client.Event.Query().Where(ValuesKeyword("1ecb6066da3755bd9")).CountX(ctx); n != 1 {
+		t.Fatal(n)
+	}
+	if n := client.Event.Query().Where(ValuesKeyword("43b8d2d049183e9e")).CountX(ctx); n != 0 {
+		t.Fatal(n)
+	}
+	if n := client.Event.Query().Where(RawKeyword("43b8d2d049183e9e")).CountX(ctx); n != 1 {
+		t.Fatal(n)
+	}
+	if n := hits(t, ctx, client, "43b8d2d049183e9e"); n != 1 {
+		t.Fatal("原有全局检索丢失哈希")
+	}
+}

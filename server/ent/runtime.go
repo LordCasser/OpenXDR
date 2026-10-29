@@ -901,11 +901,11 @@ func init() {
 	// triagerun.DefaultToolErrors holds the default value on creation for the tool_errors field.
 	triagerun.DefaultToolErrors = triagerunDescToolErrors.Default.(int)
 	// triagerunDescInputTokens is the schema descriptor for input_tokens field.
-	triagerunDescInputTokens := triagerunFields[15].Descriptor()
+	triagerunDescInputTokens := triagerunFields[16].Descriptor()
 	// triagerun.DefaultInputTokens holds the default value on creation for the input_tokens field.
 	triagerun.DefaultInputTokens = triagerunDescInputTokens.Default.(int)
 	// triagerunDescOutputTokens is the schema descriptor for output_tokens field.
-	triagerunDescOutputTokens := triagerunFields[16].Descriptor()
+	triagerunDescOutputTokens := triagerunFields[17].Descriptor()
 	// triagerun.DefaultOutputTokens holds the default value on creation for the output_tokens field.
 	triagerun.DefaultOutputTokens = triagerunDescOutputTokens.Default.(int)
 	// triagerunDescID is the schema descriptor for id field.

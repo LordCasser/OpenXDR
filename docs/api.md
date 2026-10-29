@@ -304,7 +304,7 @@ URL 更改默认保留旧积压目标；movePending=true 显式改投尚未发�
 `GET /api/incidents/{id}/triage-runs?page=1`：沿用事件的 viewer/组权限，
 每页 20 条，按开始时间倒序返回 `{items, more}`。记录字段为 snake_case：
 `started_at/ready_at/finished_at`、`trigger`、`status`、`model`、`error_code`、
-`duration_ms/model_ms/tool_ms`、`model_calls/tool_calls/tool_errors`、
+`duration_ms/model_ms/tool_ms`、`model_calls/tool_calls/tool_errors`、`tool_details`（顺序数组，工具名、duration_ms、failed，可选 returned/truncated；不含查询原文）、
 `input_tokens/output_tokens`。`ready_at` 未知时省略；
 `lease_replaced` 表示崩溃后接管，结束时刻为发现中断的时刻，不是真实执行结束时刻。
 不返回模型凭据、提示词或原始工具结果。仅有本版本上线后的记录。

@@ -57,6 +57,9 @@ func TestRunLedgerFailureRecoveryAndUsage(t *testing.T) {
 	if got.ModelCalls != 2 || got.ToolCalls != 1 || got.InputTokens != 20 || got.OutputTokens != 8 || got.ModelMs < 2 || got.ReadyAt == nil || got.FinishedAt == nil {
 		t.Fatalf("计量错误：%+v", got)
 	}
+	if len(got.ToolDetails) != 1 || got.ToolDetails[0]["tool"] != "query_events" || got.ToolDetails[0]["failed"] != false || got.ToolDetails[0]["returned"] != float64(0) {
+		t.Fatalf("工具明细未保存：%v", got.ToolDetails)
+	}
 	if rows[0].ErrorCode != "model_or_verdict" || rows[0].ModelCalls != 1 {
 		t.Fatal(rows[0])
 	}

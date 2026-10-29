@@ -3,6 +3,7 @@
 package triage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"openxdr/server/ent"
 	"openxdr/server/internal/testdb"
 )
 
@@ -70,5 +72,26 @@ func TestBriefTruncationUTF8(t *testing.T) {
 	b := brief(ev)
 	if !b.RawTruncated || !utf8.ValidString(b.Raw) {
 		t.Fatal(b)
+	}
+}
+
+func TestDNSBriefAndToolFailureDetails(t *testing.T) {
+	raw := json.RawMessage(`{"padding":"` + strings.Repeat("x", 600) + `","query":{"hostname":"nonce.example.test","type":"A"},"requester":{"ip":"10.1.1.144"},"answers":[{"ip":"192.0.2.1"}],"process":{"cmd_line":"` + strings.Repeat("x", 2100) + `"}}`)
+	b := briefLimit(&ent.Event{Raw: raw}, 500)
+	if !b.RawTruncated || !strings.Contains(string(b.DNS["requester"]), "10.1.1.144") || len(b.DNSOmitted) != 1 || b.DNSOmitted[0] != "process" {
+		t.Fatalf("DNS 摘要丢失关键字段：%+v", b)
+	}
+	ctx, db := testdb.New(t)
+	timing := &runTiming{}
+	ctx = context.WithValue(ctx, timingKey{}, timing)
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+	result := (&Engine{DB: db}).execTool(ctx, "query_events", `{"keyword":"test","mode":"raw"}`)
+	if !strings.Contains(result, `"status":"error"`) || timing.toolErrors != 1 || len(timing.tools) != 1 || timing.tools[0]["failed"] != true {
+		t.Fatal(result, timing)
+	}
+	encoded, _ := json.Marshal(timing.tools)
+	if strings.Contains(string(encoded), "keyword") {
+		t.Fatal("不应保存查询原文")
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 type timingKey struct{}
 type runTiming struct {
+	tools                                            []map[string]any
 	modelMS, toolMS                                  int64
 	modelCalls, toolCalls, toolErrors, input, output int
 }
@@ -92,7 +93,7 @@ func (e *Engine) beginRun(ctx context.Context, inc *ent.Incident, started time.T
 func runUpdate(db *ent.Client, row *ent.TriageRun, timing *runTiming, finished time.Time) *ent.TriageRunUpdateOne {
 	return db.TriageRun.UpdateOneID(row.ID).Where(triagerun.StatusEQ(triagerun.StatusRunning)).
 		SetFinishedAt(finished).SetDurationMs(max(0, finished.Sub(row.StartedAt).Milliseconds())).
-		SetModelMs(timing.modelMS).SetToolMs(timing.toolMS).SetModelCalls(timing.modelCalls).
+		SetToolDetails(timing.tools).SetModelMs(timing.modelMS).SetToolMs(timing.toolMS).SetModelCalls(timing.modelCalls).
 		SetToolCalls(timing.toolCalls).SetToolErrors(timing.toolErrors).SetInputTokens(timing.input).SetOutputTokens(timing.output)
 }
 

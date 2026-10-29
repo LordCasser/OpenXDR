@@ -1375,6 +1375,7 @@ var (
 		{Name: "model_calls", Type: field.TypeInt, Default: 0},
 		{Name: "tool_calls", Type: field.TypeInt, Default: 0},
 		{Name: "tool_errors", Type: field.TypeInt, Default: 0},
+		{Name: "tool_details", Type: field.TypeJSON, Nullable: true},
 		{Name: "input_tokens", Type: field.TypeInt, Default: 0},
 		{Name: "output_tokens", Type: field.TypeInt, Default: 0},
 	}

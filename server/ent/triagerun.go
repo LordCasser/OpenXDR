@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"openxdr/server/ent/triagerun"
 	"strings"
@@ -46,6 +47,8 @@ type TriageRun struct {
 	ToolCalls int `json:"tool_calls,omitempty"`
 	// ToolErrors holds the value of the "tool_errors" field.
 	ToolErrors int `json:"tool_errors,omitempty"`
+	// ToolDetails holds the value of the "tool_details" field.
+	ToolDetails []map[string]interface{} `json:"tool_details,omitempty"`
 	// InputTokens holds the value of the "input_tokens" field.
 	InputTokens int `json:"input_tokens,omitempty"`
 	// OutputTokens holds the value of the "output_tokens" field.
@@ -58,6 +61,8 @@ func (*TriageRun) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case triagerun.FieldToolDetails:
+			values[i] = new([]byte)
 		case triagerun.FieldDurationMs, triagerun.FieldModelMs, triagerun.FieldToolMs, triagerun.FieldModelCalls, triagerun.FieldToolCalls, triagerun.FieldToolErrors, triagerun.FieldInputTokens, triagerun.FieldOutputTokens:
 			values[i] = new(sql.NullInt64)
 		case triagerun.FieldTrigger, triagerun.FieldStatus, triagerun.FieldModel, triagerun.FieldErrorCode:
@@ -173,6 +178,14 @@ func (_m *TriageRun) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ToolErrors = int(value.Int64)
 			}
+		case triagerun.FieldToolDetails:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field tool_details", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ToolDetails); err != nil {
+					return fmt.Errorf("unmarshal field tool_details: %w", err)
+				}
+			}
 		case triagerun.FieldInputTokens:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field input_tokens", values[i])
@@ -266,6 +279,9 @@ func (_m *TriageRun) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tool_errors=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ToolErrors))
+	builder.WriteString(", ")
+	builder.WriteString("tool_details=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ToolDetails))
 	builder.WriteString(", ")
 	builder.WriteString("input_tokens=")
 	builder.WriteString(fmt.Sprintf("%v", _m.InputTokens))

@@ -40522,37 +40522,39 @@ func (m *TaskRunMutation) ResetEdge(name string) error {
 // TriageRunMutation represents an operation that mutates the TriageRun nodes in the graph.
 type TriageRunMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *uuid.UUID
-	incident_id      *uuid.UUID
-	started_at       *time.Time
-	ready_at         *time.Time
-	finished_at      *time.Time
-	trigger          *string
-	status           *triagerun.Status
-	model            *string
-	error_code       *string
-	duration_ms      *int64
-	addduration_ms   *int64
-	model_ms         *int64
-	addmodel_ms      *int64
-	tool_ms          *int64
-	addtool_ms       *int64
-	model_calls      *int
-	addmodel_calls   *int
-	tool_calls       *int
-	addtool_calls    *int
-	tool_errors      *int
-	addtool_errors   *int
-	input_tokens     *int
-	addinput_tokens  *int
-	output_tokens    *int
-	addoutput_tokens *int
-	clearedFields    map[string]struct{}
-	done             bool
-	oldValue         func(context.Context) (*TriageRun, error)
-	predicates       []predicate.TriageRun
+	op                 Op
+	typ                string
+	id                 *uuid.UUID
+	incident_id        *uuid.UUID
+	started_at         *time.Time
+	ready_at           *time.Time
+	finished_at        *time.Time
+	trigger            *string
+	status             *triagerun.Status
+	model              *string
+	error_code         *string
+	duration_ms        *int64
+	addduration_ms     *int64
+	model_ms           *int64
+	addmodel_ms        *int64
+	tool_ms            *int64
+	addtool_ms         *int64
+	model_calls        *int
+	addmodel_calls     *int
+	tool_calls         *int
+	addtool_calls      *int
+	tool_errors        *int
+	addtool_errors     *int
+	tool_details       *[]map[string]interface{}
+	appendtool_details []map[string]interface{}
+	input_tokens       *int
+	addinput_tokens    *int
+	output_tokens      *int
+	addoutput_tokens   *int
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*TriageRun, error)
+	predicates         []predicate.TriageRun
 }
 
 var _ ent.Mutation = (*TriageRunMutation)(nil)
@@ -41309,6 +41311,71 @@ func (m *TriageRunMutation) ResetToolErrors() {
 	m.addtool_errors = nil
 }
 
+// SetToolDetails sets the "tool_details" field.
+func (m *TriageRunMutation) SetToolDetails(value []map[string]interface{}) {
+	m.tool_details = &value
+	m.appendtool_details = nil
+}
+
+// ToolDetails returns the value of the "tool_details" field in the mutation.
+func (m *TriageRunMutation) ToolDetails() (r []map[string]interface{}, exists bool) {
+	v := m.tool_details
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolDetails returns the old "tool_details" field's value of the TriageRun entity.
+// If the TriageRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TriageRunMutation) OldToolDetails(ctx context.Context) (v []map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolDetails is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolDetails requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolDetails: %w", err)
+	}
+	return oldValue.ToolDetails, nil
+}
+
+// AppendToolDetails adds value to the "tool_details" field.
+func (m *TriageRunMutation) AppendToolDetails(value []map[string]interface{}) {
+	m.appendtool_details = append(m.appendtool_details, value...)
+}
+
+// AppendedToolDetails returns the list of values that were appended to the "tool_details" field in this mutation.
+func (m *TriageRunMutation) AppendedToolDetails() ([]map[string]interface{}, bool) {
+	if len(m.appendtool_details) == 0 {
+		return nil, false
+	}
+	return m.appendtool_details, true
+}
+
+// ClearToolDetails clears the value of the "tool_details" field.
+func (m *TriageRunMutation) ClearToolDetails() {
+	m.tool_details = nil
+	m.appendtool_details = nil
+	m.clearedFields[triagerun.FieldToolDetails] = struct{}{}
+}
+
+// ToolDetailsCleared returns if the "tool_details" field was cleared in this mutation.
+func (m *TriageRunMutation) ToolDetailsCleared() bool {
+	_, ok := m.clearedFields[triagerun.FieldToolDetails]
+	return ok
+}
+
+// ResetToolDetails resets all changes to the "tool_details" field.
+func (m *TriageRunMutation) ResetToolDetails() {
+	m.tool_details = nil
+	m.appendtool_details = nil
+	delete(m.clearedFields, triagerun.FieldToolDetails)
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (m *TriageRunMutation) SetInputTokens(i int) {
 	m.input_tokens = &i
@@ -41455,7 +41522,7 @@ func (m *TriageRunMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TriageRunMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.incident_id != nil {
 		fields = append(fields, triagerun.FieldIncidentID)
 	}
@@ -41497,6 +41564,9 @@ func (m *TriageRunMutation) Fields() []string {
 	}
 	if m.tool_errors != nil {
 		fields = append(fields, triagerun.FieldToolErrors)
+	}
+	if m.tool_details != nil {
+		fields = append(fields, triagerun.FieldToolDetails)
 	}
 	if m.input_tokens != nil {
 		fields = append(fields, triagerun.FieldInputTokens)
@@ -41540,6 +41610,8 @@ func (m *TriageRunMutation) Field(name string) (ent.Value, bool) {
 		return m.ToolCalls()
 	case triagerun.FieldToolErrors:
 		return m.ToolErrors()
+	case triagerun.FieldToolDetails:
+		return m.ToolDetails()
 	case triagerun.FieldInputTokens:
 		return m.InputTokens()
 	case triagerun.FieldOutputTokens:
@@ -41581,6 +41653,8 @@ func (m *TriageRunMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldToolCalls(ctx)
 	case triagerun.FieldToolErrors:
 		return m.OldToolErrors(ctx)
+	case triagerun.FieldToolDetails:
+		return m.OldToolDetails(ctx)
 	case triagerun.FieldInputTokens:
 		return m.OldInputTokens(ctx)
 	case triagerun.FieldOutputTokens:
@@ -41691,6 +41765,13 @@ func (m *TriageRunMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetToolErrors(v)
+		return nil
+	case triagerun.FieldToolDetails:
+		v, ok := value.([]map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolDetails(v)
 		return nil
 	case triagerun.FieldInputTokens:
 		v, ok := value.(int)
@@ -41841,6 +41922,9 @@ func (m *TriageRunMutation) ClearedFields() []string {
 	if m.FieldCleared(triagerun.FieldFinishedAt) {
 		fields = append(fields, triagerun.FieldFinishedAt)
 	}
+	if m.FieldCleared(triagerun.FieldToolDetails) {
+		fields = append(fields, triagerun.FieldToolDetails)
+	}
 	return fields
 }
 
@@ -41860,6 +41944,9 @@ func (m *TriageRunMutation) ClearField(name string) error {
 		return nil
 	case triagerun.FieldFinishedAt:
 		m.ClearFinishedAt()
+		return nil
+	case triagerun.FieldToolDetails:
+		m.ClearToolDetails()
 		return nil
 	}
 	return fmt.Errorf("unknown TriageRun nullable field %s", name)
@@ -41910,6 +41997,9 @@ func (m *TriageRunMutation) ResetField(name string) error {
 		return nil
 	case triagerun.FieldToolErrors:
 		m.ResetToolErrors()
+		return nil
+	case triagerun.FieldToolDetails:
+		m.ResetToolDetails()
 		return nil
 	case triagerun.FieldInputTokens:
 		m.ResetInputTokens()

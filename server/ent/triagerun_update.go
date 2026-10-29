@@ -12,6 +12,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 )
@@ -279,6 +280,24 @@ func (_u *TriageRunUpdate) AddToolErrors(v int) *TriageRunUpdate {
 	return _u
 }
 
+// SetToolDetails sets the "tool_details" field.
+func (_u *TriageRunUpdate) SetToolDetails(v []map[string]interface{}) *TriageRunUpdate {
+	_u.mutation.SetToolDetails(v)
+	return _u
+}
+
+// AppendToolDetails appends value to the "tool_details" field.
+func (_u *TriageRunUpdate) AppendToolDetails(v []map[string]interface{}) *TriageRunUpdate {
+	_u.mutation.AppendToolDetails(v)
+	return _u
+}
+
+// ClearToolDetails clears the value of the "tool_details" field.
+func (_u *TriageRunUpdate) ClearToolDetails() *TriageRunUpdate {
+	_u.mutation.ClearToolDetails()
+	return _u
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_u *TriageRunUpdate) SetInputTokens(v int) *TriageRunUpdate {
 	_u.mutation.ResetInputTokens()
@@ -440,6 +459,17 @@ func (_u *TriageRunUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedToolErrors(); ok {
 		_spec.AddField(triagerun.FieldToolErrors, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ToolDetails(); ok {
+		_spec.SetField(triagerun.FieldToolDetails, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedToolDetails(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, triagerun.FieldToolDetails, value)
+		})
+	}
+	if _u.mutation.ToolDetailsCleared() {
+		_spec.ClearField(triagerun.FieldToolDetails, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(triagerun.FieldInputTokens, field.TypeInt, value)
@@ -723,6 +753,24 @@ func (_u *TriageRunUpdateOne) AddToolErrors(v int) *TriageRunUpdateOne {
 	return _u
 }
 
+// SetToolDetails sets the "tool_details" field.
+func (_u *TriageRunUpdateOne) SetToolDetails(v []map[string]interface{}) *TriageRunUpdateOne {
+	_u.mutation.SetToolDetails(v)
+	return _u
+}
+
+// AppendToolDetails appends value to the "tool_details" field.
+func (_u *TriageRunUpdateOne) AppendToolDetails(v []map[string]interface{}) *TriageRunUpdateOne {
+	_u.mutation.AppendToolDetails(v)
+	return _u
+}
+
+// ClearToolDetails clears the value of the "tool_details" field.
+func (_u *TriageRunUpdateOne) ClearToolDetails() *TriageRunUpdateOne {
+	_u.mutation.ClearToolDetails()
+	return _u
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_u *TriageRunUpdateOne) SetInputTokens(v int) *TriageRunUpdateOne {
 	_u.mutation.ResetInputTokens()
@@ -914,6 +962,17 @@ func (_u *TriageRunUpdateOne) sqlSave(ctx context.Context) (_node *TriageRun, er
 	}
 	if value, ok := _u.mutation.AddedToolErrors(); ok {
 		_spec.AddField(triagerun.FieldToolErrors, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ToolDetails(); ok {
+		_spec.SetField(triagerun.FieldToolDetails, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedToolDetails(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, triagerun.FieldToolDetails, value)
+		})
+	}
+	if _u.mutation.ToolDetailsCleared() {
+		_spec.ClearField(triagerun.FieldToolDetails, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(triagerun.FieldInputTokens, field.TypeInt, value)

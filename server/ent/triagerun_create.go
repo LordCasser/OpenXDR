@@ -201,6 +201,12 @@ func (_c *TriageRunCreate) SetNillableToolErrors(v *int) *TriageRunCreate {
 	return _c
 }
 
+// SetToolDetails sets the "tool_details" field.
+func (_c *TriageRunCreate) SetToolDetails(v []map[string]interface{}) *TriageRunCreate {
+	_c.mutation.SetToolDetails(v)
+	return _c
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_c *TriageRunCreate) SetInputTokens(v int) *TriageRunCreate {
 	_c.mutation.SetInputTokens(v)
@@ -471,6 +477,10 @@ func (_c *TriageRunCreate) createSpec() (*TriageRun, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ToolErrors(); ok {
 		_spec.SetField(triagerun.FieldToolErrors, field.TypeInt, value)
 		_node.ToolErrors = value
+	}
+	if value, ok := _c.mutation.ToolDetails(); ok {
+		_spec.SetField(triagerun.FieldToolDetails, field.TypeJSON, value)
+		_node.ToolDetails = value
 	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(triagerun.FieldInputTokens, field.TypeInt, value)

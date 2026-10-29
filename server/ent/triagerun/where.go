@@ -765,6 +765,16 @@ func ToolErrorsLTE(v int) predicate.TriageRun {
 	return predicate.TriageRun(sql.FieldLTE(FieldToolErrors, v))
 }
 
+// ToolDetailsIsNil applies the IsNil predicate on the "tool_details" field.
+func ToolDetailsIsNil() predicate.TriageRun {
+	return predicate.TriageRun(sql.FieldIsNull(FieldToolDetails))
+}
+
+// ToolDetailsNotNil applies the NotNil predicate on the "tool_details" field.
+func ToolDetailsNotNil() predicate.TriageRun {
+	return predicate.TriageRun(sql.FieldNotNull(FieldToolDetails))
+}
+
 // InputTokensEQ applies the EQ predicate on the "input_tokens" field.
 func InputTokensEQ(v int) predicate.TriageRun {
 	return predicate.TriageRun(sql.FieldEQ(FieldInputTokens, v))

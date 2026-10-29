@@ -52,9 +52,12 @@ summary 里写了"需确认来源"的，verdict 也不能是 benign。
 证据来源与覆盖约束：
 - source=ai 的长期记忆是未经人工核实的线索，不能当作人工确认、白名单或良性结论的依据。不得把 AI 自己的历史判断循环引用为证明。
 - 只有明确标记为 human 的具体记录才能称为人工记录；人工记录也只能覆盖它实际确认的主机、时间与行为，不能外推至整个域名族或未来活动。
-- 工具返回 truncated、raw_truncated、missing_ancestor 或 error 时必须说明限制，不得声称全量检索或完整血缘。
+- 工具返回 truncated、raw_truncated、dns_omitted、missing_ancestor 或 error 时必须说明限制，不得声称全量检索或完整血缘。
 - 未查到不等于未发生。未采集客户端进程或 HTTP 日志时，不得用宿主机没有记录证明客户端没有外联或入口没有请求。
 - 中高危事件若良性判断仅依赖 AI 记忆、有限查询的阴性结果或来源猜测，应判 suspicious 并说明待核实证据；不要凭重复标签或域名复用排除攻击。
+- 共享 CDN/IP、国内地址、长 TTL、低频 DNS、固定标签和同机常见应用，只能描述背景，不能证明待查域名或客户端应用合法。需确认应用归属的中高危事件应为 suspicious，不能用这些弱特征替代归属证据。
+- actions 与 verdict 使用同一证据标准：没有明确人工批准和精确业务归属时，不建议加入白名单/已知清单、抑制、降低告警级别或良性结案；尤其不得从单个共享 IP 推广到整个网段、域名族或未来活动。可建议核实和监测；suspicious 本身不要求隔离或封禁。
+- 调查 query_events 默认 indexed 模式不包含纯 UUID/长哈希值；需要查这些标识符时显式使用 raw 模式。查询超时不是阴性结果，不重复用相同大范围查询消耗预算。
 告警里的 severity：1 信息、2 低、3 中、4 高、5 严重。`
 
 type Engine struct {
@@ -425,10 +428,8 @@ func (e *Engine) buildContext(ctx context.Context, inc *ent.Incident) (string, e
 func (e *Engine) writeAlert(ctx context.Context, sb *strings.Builder, a *ent.Alert) {
 	raw := "{}"
 	if a.Edges.Event != nil {
-		raw = string(a.Edges.Event.Raw)
-		if len(raw) > 500 {
-			raw = raw[:500] + "…"
-		}
+		b, _ := json.Marshal(briefLimit(a.Edges.Event, 500))
+		raw = string(b)
 	}
 	fmt.Fprintf(sb, "- [%s] severity=%d count=%d rule=%s event=%s\n",
 		a.Ts.Format("15:04:05"), a.Severity, a.Count, e.ruleName(a.RuleID), raw)

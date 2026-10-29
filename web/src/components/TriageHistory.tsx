@@ -27,7 +27,14 @@ export function TriageHistory({ id }: { id: string }) {
         { title: t('triageRunModel'), width: 180, render: (_, row) => `${row.model || '—'} · ${row.model_calls} / ${seconds(row.model_ms)}` },
         { title: t('triageRunTools'), width: 150, render: (_, row) => `${row.tool_calls} / ${seconds(row.tool_ms)} (${row.tool_errors})` },
         { title: 'Token', width: 120, render: (_, row) => row.input_tokens + row.output_tokens },
-      ]} expandable={{ expandedRowRender: row => <Typography.Text>{t('triageRunError')}: {row.error_code || '—'}</Typography.Text> }} />
+      ]} expandable={{ expandedRowRender: row => <Space orientation="vertical" style={{ width: '100%' }}>
+        <Typography.Text>{t('triageRunError')}: {row.error_code || '—'}</Typography.Text>
+        {(row.tool_details ?? []).map((tool, index) => <Typography.Text key={index}>
+          {index + 1}. {tool.tool} · {seconds(tool.duration_ms)} · {t(tool.failed ? 'triageRunFailed' : 'triageRunSucceeded')}
+          {tool.returned != null && ` · ${t('triageToolReturned')}: ${tool.returned}`}
+          {tool.truncated && ` · ${t('triageToolTruncated')}`}
+        </Typography.Text>)}
+      </Space> }} />
       <Space style={{ marginTop: 12 }}>
         <Button disabled={page === 1} onClick={() => setPage(page - 1)}>{t('triageRunPrevious')}</Button>
         <span>{page}</span>

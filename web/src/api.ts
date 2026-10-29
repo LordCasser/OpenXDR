@@ -1565,6 +1565,7 @@ export interface TriageRun {
   model_calls: number
   tool_calls: number
   tool_errors: number
+  tool_details?: { tool: string; duration_ms: number; failed: boolean; returned?: number; truncated?: boolean }[]
   input_tokens: number
   output_tokens: number
 }

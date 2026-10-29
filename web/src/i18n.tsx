@@ -3,6 +3,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 // 全部界面文案。自制轻量字典：英文由 satisfies 约束，缺键编译不过
 const zh = {
   triageRunHistory: "研判执行记录",
+  triageToolReturned: "返回条数",
+  triageToolTruncated: "结果已截断",
   triageRunHint: "仅记录此版本上线后的尝试；排队时间不含证据冷却期和失败重试退避，未知历史不补算。",
   triageRunShow: "展开记录",
   triageRunHide: "收起记录",
@@ -1741,6 +1743,8 @@ export type MsgKey = keyof typeof zh
 
 const en = {
   triageRunHistory: "Triage attempts",
+  triageToolReturned: "Returned",
+  triageToolTruncated: "Results truncated",
   triageRunHint: "Attempts are recorded from this release onward. Queue time excludes evidence cooldown and retry backoff; missing history is not inferred.",
   triageRunShow: "Show attempts",
   triageRunHide: "Hide attempts",

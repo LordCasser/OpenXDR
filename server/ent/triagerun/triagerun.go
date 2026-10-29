@@ -43,6 +43,8 @@ const (
 	FieldToolCalls = "tool_calls"
 	// FieldToolErrors holds the string denoting the tool_errors field in the database.
 	FieldToolErrors = "tool_errors"
+	// FieldToolDetails holds the string denoting the tool_details field in the database.
+	FieldToolDetails = "tool_details"
 	// FieldInputTokens holds the string denoting the input_tokens field in the database.
 	FieldInputTokens = "input_tokens"
 	// FieldOutputTokens holds the string denoting the output_tokens field in the database.
@@ -68,6 +70,7 @@ var Columns = []string{
 	FieldModelCalls,
 	FieldToolCalls,
 	FieldToolErrors,
+	FieldToolDetails,
 	FieldInputTokens,
 	FieldOutputTokens,
 }

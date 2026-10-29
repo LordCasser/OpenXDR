@@ -28,6 +28,7 @@ func (TriageRun) Fields() []ent.Field {
 		field.Int("model_calls").Default(0),
 		field.Int("tool_calls").Default(0),
 		field.Int("tool_errors").Default(0),
+		field.JSON("tool_details", []map[string]any{}).Optional(),
 		field.Int("input_tokens").Default(0),
 		field.Int("output_tokens").Default(0),
 	}
