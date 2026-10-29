@@ -92,6 +92,15 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
   `sched_process_exit`，退出码由 `syscalls:sys_enter_exit_group` 记下（取低 8 位，与 `$?` 一致；
   被信号杀掉的进程不走 exit_group，退出码为空；内核没开 syscall tracepoint 时只降级这一项）。
   退出事件复用启动时的进程 GUID（见上节），并带 `process.created_time` 与 `duration_ms`
+- **平凡退出不上报**（`suppressTrivialExit`，默认开，判断在 `registry.rs` 的 `trivial_exit`）：
+  退出码为 0、注册表里启动时间已知、且存活不到 2 秒的进程，退出事件不再单独上报——一个 exec 从两条降为一条。
+  这类退出只多一个已知为 0 的退出码和一段毫秒级时长，而内置规则没有一条依赖进程退出或 `exit_code`，
+  关联图靠启动事件的 `process_guid` 串血缘。**一定保留**：非零退出码（失败的命令本身是信号）、
+  退出码未知（被信号杀掉、内核拿不到，未知一律按有信号处理）、启动时间读不到（快照里没有）、
+  存活 ≥ 2 秒、注册表里没有这个 pid（既有语义：配不上启动事件的退出不报）。
+  抑制只少发事件、不少登记：pid 的注册表条目照删，pid 复用不会把后来的进程接到旧血缘上；
+  压着的补发事件与周期汇总仍在同一次返回值里发出，不因抑制而延后。
+  轮询路径的退出本来就不带退出码，因此不受影响
 - **进程名**：内核的 comm 最多 15 字节，截断名是可执行文件名前缀时换回完整文件名
   （`ip6tables-resto` → `ip6tables-restore`）
 - **容器归属**（`container.rs`）：按 `/proc/<pid>/cgroup` 认出 docker / podman / containerd / cri-o 容器、
@@ -357,6 +366,7 @@ region（排除 OpenStack 的 EC2 兼容接口），其余厂商各自校验实�
 | `collectNetwork` | true | 控制 DNS 采集；网络连接仅 eBPF 构建有 | 控制 netwatch_win |
 | `collectInventory` | true | 控制 inventory | 控制 inventory_win |
 | `collapsePeriodic` | true | 周期行为折叠（见下） | 同左 |
+| `suppressTrivialExit` | true | 平凡退出抑制（见「进程采集三级降级」） | 同左（ETW Stop 不带退出码，实际不抑制） |
 | `fileWatchDirs` | []（内置清单） | 覆盖 fswatch 默认目录 | 覆盖 fswatch_win 默认目录 |
 | （进程采集） | — | 无开关，按降级链选择 | 无开关，无条件启动 |
 
