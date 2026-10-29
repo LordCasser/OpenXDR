@@ -10,10 +10,13 @@
 //	report -run <uuid>                               归档前后的真实大小与压缩比
 //	locate -id <uuid>                                按事件 ID 找一条冷事件（只读）
 //	materialize -id <uuid> -confirm                  把一条冷事件物化回 events（幂等，不产告警）
+//	plan -run <uuid> -day YYYY-MM-DD                 单日切换计划（只读，用于人工核对）
+//	swap -run <uuid> -day YYYY-MM-DD -confirm        重建该日分区，移出已归档的行（阶段 C）
+//	restore -run <uuid> -day YYYY-MM-DD -confirm     把该日冷事件物化回 events（幂等，用于回滚）
 //
-// shadow / materialize 会写库，不加 -confirm 直接拒绝（没有演练模式）。verify 只改 run 的
-// 状态列；locate 只读。设计与阶段见 docs/event-archive.md；分区侧的工程口径见
-// docs/event-partitioning.md。
+// shadow / materialize / swap / restore 会写库，不加 -confirm 直接拒绝（没有演练模式）。
+// verify 只改 run 的状态列；ensure-schema 只建冷归档两张表；locate / plan 只读。
+// 设计与阶段见 docs/event-archive.md；分区侧的工程口径见 docs/event-partitioning.md。
 package main
 
 import (
@@ -69,7 +72,10 @@ func usage() {
   verify -run <uuid>                                重扫对拍，通过后置 verified
   report -run <uuid>                                归档前后大小、压缩比与含索引对比
   locate -id <uuid>                                 按事件 ID 找一条冷事件（只读）
-  materialize -id <uuid> -confirm                   把一条冷事件物化回 events（幂等，不产告警）`)
+  materialize -id <uuid> -confirm                   把一条冷事件物化回 events（幂等，不产告警）
+  plan -run <uuid> -day YYYY-MM-DD                  单日切换计划：分区总行数 / 将移出 / 钉住保留 / 其它保留（只读）
+  swap -run <uuid> -day YYYY-MM-DD -confirm         重建该日分区，只保留钉住的与非归档类别/来源的行
+  restore -run <uuid> -day YYYY-MM-DD -confirm      把该日冷事件物化回 events（幂等，用于回滚 swap）`)
 	os.Exit(2)
 }
 
@@ -209,6 +215,96 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 		default:
 			fmt.Printf("事件 %s 已在 events 里：未插入（物化幂等，events 里只有这一行）\n", eventID)
 		}
+		return nil
+
+	case "plan":
+		fs := flag.NewFlagSet("plan", flag.ExitOnError)
+		id := fs.String("run", "", "要核对的 run id（uuid）")
+		day := fs.String("day", "", "要切换的 UTC 日（YYYY-MM-DD）")
+		fs.Parse(args)
+		runID, err := parseRun(*id)
+		if err != nil {
+			return err
+		}
+		d, err := parseDay(*day)
+		if err != nil {
+			return fmt.Errorf("-day: %w", err)
+		}
+		p, err := eventarchive.Plan(ctx, db, runID, d)
+		if err != nil {
+			return err
+		}
+		run, err := eventarchive.LoadRun(ctx, db, runID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("run %s 状态 %s；口径 %s..%s（UTC），类别 %v，来源 %v\n",
+			run.ID, run.Status, run.DayFrom.Format(time.DateOnly), run.DayTo.Format(time.DateOnly),
+			run.Classes, run.Sources)
+		fmt.Printf("日 %s 的切换计划（只读，未写任何东西）：\n", p.Day.Format(time.DateOnly))
+		fmt.Printf("  分区行数 %d = 将移出 %d（已归档）+ 钉住保留 %d + 其它类别/来源保留 %d\n",
+			p.Total, p.Archived, p.KeepPinned, p.KeepOther)
+		switch {
+		case run.Status != eventarchive.StatusVerified:
+			fmt.Printf("  swap 会拒绝：run 状态是 %s，不是 verified\n", run.Status)
+		case p.Archived == 0:
+			fmt.Println("  swap 会拒绝：这一天没有被归档的事件（Archived=0）")
+		default:
+			fmt.Printf("  下一步（会删数据，需 -confirm）：eventarchive swap -run %s -day %s -confirm\n",
+				runID, p.Day.Format(time.DateOnly))
+		}
+		return nil
+
+	case "swap":
+		fs := flag.NewFlagSet("swap", flag.ExitOnError)
+		id := fs.String("run", "", "要切换的 run id（uuid）")
+		day := fs.String("day", "", "要切换的 UTC 日（YYYY-MM-DD）")
+		confirm := fs.Bool("confirm", false, "确认执行会写库的步骤")
+		fs.Parse(args)
+		runID, err := parseRun(*id)
+		if err != nil {
+			return err
+		}
+		d, err := parseDay(*day)
+		if err != nil {
+			return fmt.Errorf("-day: %w", err)
+		}
+		if !*confirm {
+			return fmt.Errorf("切换会重建该日分区并移出其中已归档的行，必须显式确认（-confirm）")
+		}
+		p, err := eventarchive.Swap(ctx, db, runID, d)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("已切换 %s 的分区：保留 %d 行（钉住 %d + 其它类别/来源 %d），移出 %d 行\n",
+			p.Day.Format(time.DateOnly), p.Total-p.Archived, p.KeepPinned, p.KeepOther, p.Archived)
+		fmt.Printf("  移出的 %d 行仍在冷块里，可按 ID 定位（locate）或整日还原：eventarchive restore -run %s -day %s -confirm\n",
+			p.Archived, runID, p.Day.Format(time.DateOnly))
+		return nil
+
+	case "restore":
+		fs := flag.NewFlagSet("restore", flag.ExitOnError)
+		id := fs.String("run", "", "要还原的 run id（uuid）")
+		day := fs.String("day", "", "要还原的 UTC 日（YYYY-MM-DD）")
+		confirm := fs.Bool("confirm", false, "确认执行会写库的步骤")
+		fs.Parse(args)
+		runID, err := parseRun(*id)
+		if err != nil {
+			return err
+		}
+		d, err := parseDay(*day)
+		if err != nil {
+			return fmt.Errorf("-day: %w", err)
+		}
+		if !*confirm {
+			return fmt.Errorf("还原会往 events 插入行，必须显式确认（-confirm）")
+		}
+		n, err := eventarchive.Restore(ctx, db, runID, d)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("已把 %s 的冷事件物化回 events：插入 %d 行（已存在的不计，重复执行返回 0）\n",
+			d.Format(time.DateOnly), n)
 		return nil
 	}
 	usage()

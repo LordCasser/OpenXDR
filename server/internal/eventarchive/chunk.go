@@ -1,9 +1,12 @@
 // Package eventarchive 是冷归档：把 events 里过期的候选事件编码成自校验的冷块，
 // 写进新建的 event_archive_chunks / event_archive_runs，再逐事件对拍与度量；
-// 读取侧提供冷块查询（Query）、按事件 ID 定位（Locate / Exists）与证据物化（Materialize）。
+// 读取侧提供冷块查询（Query）、按事件 ID 定位（Locate / Exists）与证据物化（Materialize）；
+// 切换侧提供单日计划（Plan）、重建日分区（Swap）与整日还原（Restore）。
 //
-// 本包不修改、删除或切换 events 的任何既有行，也不 DETACH / ATTACH / DROP 任何分区：
-// 唯一的 events 写入是 Materialize 往 events **插入**缺失的事件（ON CONFLICT DO NOTHING）。
+// 阶段 A/B 不修改、删除或切换 events 的任何既有行，也不 DETACH / ATTACH / DROP 任何分区：
+// 那时唯一的 events 写入是 Materialize 往 events **插入**缺失的事件（ON CONFLICT DO NOTHING）。
+// 阶段 C 的 Swap 会移走已归档的行，但它不自己写分区 DDL：保留口径交给
+// eventpart.RewriteDay，在单个事务里重建日分区，失败整体回滚。
 // 格式、口径与阶段见 docs/event-archive.md。
 package eventarchive
 

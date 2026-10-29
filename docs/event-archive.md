@@ -2,9 +2,11 @@
 
 events 保留期内的数据在日分区里，过期分区由 `eventpart.Retire` 整体退役（见
 `docs/event-partitioning.md`）。退役之外还有一类需求：**把过期但仍有价值的事件压成冷块长期保留**，
-查询时按需解压。本文是冷归档的格式、口径与阶段划分；目前实现的是**阶段 A：影子归档**。
+查询时按需解压。本文是冷归档的格式、口径与阶段划分；阶段 A（影子归档）、B1（冷热读取）、
+B2（定位与物化）与 C（单日切换与恢复）已实现，**其中 C 只在测试库验证过**。
 
-代码：`server/internal/eventarchive`（冷块编解码、影子构建、对拍、度量），
+代码：`server/internal/eventarchive`（冷块编解码、影子构建、对拍、度量、单日切换与还原），
+`server/internal/eventpart`（分区 DDL：预建、退役、单日重写），
 `server/cmd/eventarchive`（命令行）。
 
 ## 1. 阶段划分
@@ -15,7 +17,7 @@ events 保留期内的数据在日分区里，过期分区由 `eventpart.Retire`
 | **B1 冷热读取** | `/api/events` 先查热表，再按同一组参数与同一个组权限查冷块，合流去重；覆盖度用响应头如实标注 | **已实现** |
 | **B2 定位与物化** | 每块带 ID Bloom filter；按事件 ID 定位（`Locate` / `Exists`）、证据物化（`Materialize`） | **已实现** |
 | B2 生命周期 | 按 run 的回收与跨 run 覆盖度统计 | 未实现 |
-| C 切换与释放 | 冷块验证覆盖足够后，才谈退役分区、删行、真正释放空间 | 未实现 |
+| **C 单日切换与恢复** | `plan` → `swap` → `restore`：把已验证 run 覆盖的一天重建成只保留「钉住 + 非归档口径」的行，冷层继续可读、可整日还原 | **已实现（只在测试库验证）** |
 
 阶段 A 的铁律：**不改动、删除或切换 events 的任何一行**。不改 `events` 与其索引，
 不 `DETACH` / `ATTACH` / `DROP` 任何分区，不调用 `eventpart.Retire`，不给 events 加外键或触发器。
@@ -25,6 +27,9 @@ events 保留期内的数据在日分区里，过期分区由 `eventpart.Retire`
 
 阶段 B2 唯一的例外是 `Materialize`：它会往 `events` **插入**一条原本只在冷块里的事件
 （`ON CONFLICT DO NOTHING`），插入缺失的证据是它的本意；仍然不修改、不删除既有行，也不碰分区。
+
+阶段 C 是**唯一会删数据**的环节：它按天重建日分区，把已经进了冷块的行从热表移走。
+第 9 节把它的口径、拒绝条件与事务边界写清楚；任何一条不满足就拒绝执行，不猜。
 
 ## 2. 冷块格式
 
@@ -361,7 +366,115 @@ DATABASE_URL=... eventarchive materialize -id <uuid> -confirm
 `materialize` 会往 events 插入一行，不加 `-confirm` 直接拒绝，打印 inserted 与幂等说明
 （`inserted=false` 时用 `Locate` 分清是「events 里已有」还是「冷层没有」）。
 
-## 9. 命令行
+## 9. 单日切换与恢复（阶段 C）
+
+阶段 A/B 做完之后，同一批事件在 `events` 与冷块里各有一份；阶段 C 才把它们从热表移走，
+于是空间真正释放。这是全项目唯一删数据的环节，所以拆成三步，**先看计划，再动数据**：
+
+```go
+type SwapPlan struct {
+    Day        time.Time // UTC 日
+    Archived   int64     // 该日、本 run 覆盖的类别/来源、且未被 pin 的行数（将被移出热表）
+    KeepPinned int64     // 该日被 pin 保护的行数（无论类别/来源）
+    KeepOther  int64     // 该日其它类别/来源的行数
+    Total      int64     // 该日分区当前总行数
+}
+Plan(ctx, db, runID, day) (SwapPlan, error)        // 只读
+Swap(ctx, db, runID, day) (SwapPlan, error)        // 重建该日分区（会删行）
+Restore(ctx, db, runID, day) (int64, error)        // 把该日冷事件物化回 events（幂等）
+```
+
+分区 DDL 属于 `eventpart`，不在本包：`Swap` 把保留口径交给
+`eventpart.RewriteDay(ctx, db, day, keepSelect) (kept, dropped, err)`，由它在一个事务里重建分区。
+
+### 保留口径与归档口径互补
+
+`Swap` 用的 `keepSelect` 与阶段 A 的归档口径是同一份谓词的互补，**两边共用
+`eventarchive.scopePredicate(run)` 这一份 SQL 字面量**，不各写一遍：
+
+```
+归档（阶段 A 扫的候选，排除 pin）
+  id NOT IN (PinnedIDs) AND (class_uid = ANY(classes) AND source = ANY(sources))
+
+保留（阶段 C 的 keepSelect）
+  SELECT id FROM events_pYYYYMMDD
+   WHERE id IN (PinnedIDs) OR NOT (class_uid = ANY(classes) AND source = ANY(sources))
+```
+
+`PinnedIDs` 就是 `eventpart.PinnedIDs`（`alerts.event_id` ∪ `temporal_evidence.event_id` ∪
+已出告警的 `temporal_detections.anchor_id`），与影子构建、保留期退役、janitor 用的是同一个常量。
+
+三条互斥的判定把分区的每一行**恰好**分进一个桶，所以
+`Archived + KeepPinned + KeepOther == Total` 是构造出来的等式，不是巧合：
+
+| 行 | 条件 | 桶 | 去向 |
+|---|---|---|---|
+| 被 pin | `id IN (PinnedIDs)` | `KeepPinned` | 留在热表 |
+| 口径内未 pin | 非 pin 且 `inScope` | `Archived` | 移出热表（冷块里有副本） |
+| 口径外 | 非 pin 且 `NOT inScope` | `KeepOther` | 留在热表 |
+
+每个桶都是同一张分区表上互斥的 `count(*) FILTER (…)`，`Plan` 还会再断言一次三者之和等于
+`count(*)`。`RewriteDay` 在重建事务里用同一个 `keepSelect` 再数一遍保留集，与暂存表实际行数比对；
+`Swap` 再把这次实际得到的 `kept/dropped` 与计划核对——计划与执行不一致就直接报错，不静默接受。
+
+### 拒绝条件（任一不满足就拒绝，一个字节都不动）
+
+| 条件 | 为什么 |
+|---|---|
+| run 不存在，或 `status != verified` | 没对拍通过的归档不能当删除依据 |
+| `day` 不在 run 的 `day_from..day_to` 内 | 范围外的一天没有「本 run 的归档」可言 |
+| 该日没有独立日分区（行在 `events_default`） | 本流程**不**去默认分区搬行，报错要求先 `EnsureDays` 建好日分区 |
+| `Plan.Archived == 0` | 没有要移出的行，不该为 0 条重建分区 |
+| 该日冷块的 `sum(event_count)` 与 `Archived` 不相等 | 要删的条数必须等于真正落到冷块里的条数 |
+
+最后一条是最关键的安全网：阶段 A 会跳过单条编码后超过 4 MiB 的事件（记在
+`detail.oversized`），这类事件在热表里、却不在冷块里。若按口径直接删，它们就永久丢了。
+同样，对拍之后新写入的迟到事件也会让这个数变大。两种情况下 `Swap` 都拒绝并报出差额。
+
+### 事务边界：为什么中途失败不会留下半个分区
+
+`eventpart.RewriteDay` 照 `retireDay` 的模式，全部动作在一个 `sql.Tx` 里：
+
+1. `SET LOCAL lock_timeout = '3s'`，对日分区 `LOCK TABLE … IN SHARE MODE`
+   （读照常，写入该日的迟到事件等待；等不到锁就放弃）；
+2. `CREATE TABLE events_pYYYYMMDD_rewrite (LIKE events INCLUDING DEFAULTS)`；
+3. `INSERT … SELECT` 复制保留行，再用私有 `cloneIndexes` 建好同构索引
+   （与 `retireDay` 共用同一份实现，不在排他锁窗口里现建索引）；
+4. 独立数一遍 `keepSelect` 的行数，与暂存表实际行数不符即中止；
+5. 按 `derived` 列表清掉被删事件的派生状态（删分区不触发逐行级联触发器，必须显式做，
+   与 `retireDay` 同一清单）；
+6. `DETACH` → `DROP TABLE` → `RENAME` → `ATTACH`，全部在同一事务里。
+
+PostgreSQL 的 DDL 是事务性的：任何一步失败（暂存表名被占、索引建不起来、`DROP` 有依赖、
+`ATTACH` 校验不通过、客户端断开）都会整体回滚，旧分区连同它的索引、触发器、分区边界原样保留，
+中途建出来的暂存表也一并消失。不 `TRUNCATE`、不 `DELETE FROM events`：逐行删除会触发证据保护
+与级联触发器，代价与语义都不是这里要的。ATTACH 之后新分区自动带上父表的两个行级触发器
+（`openxdr_events_release` / `openxdr_events_evidence`）。
+
+### 还原
+
+`Restore` 按 `seq` 遍历该 run 在该日的冷块，逐条解出事件后调用既有的
+`Materialize`（`Locate` + 单事务 `INSERT … ON CONFLICT DO NOTHING`），返回**实际插入**的行数：
+
+- 只碰这个 `run_id` + 这个 `day` 的块，不涉及别的 run、别的日子；
+- 已存在的事件不计，所以重复执行第二次返回 0（幂等），可以安全地重试；
+- 不经过检测器：不产规则命中、不产告警、不改 `temporal_*` / `identity_*`；
+- 冷块保持不可变（不回写、不删块、不改 run），还原只是把冷副本再复制一份到热表。
+
+### 命令行
+
+```
+DATABASE_URL=... eventarchive plan    -run <uuid> -day YYYY-MM-DD
+DATABASE_URL=... eventarchive swap    -run <uuid> -day YYYY-MM-DD -confirm
+DATABASE_URL=... eventarchive restore -run <uuid> -day YYYY-MM-DD -confirm
+```
+
+`plan` 只读并打印四个计数与「swap 会不会拒绝」的原因；`swap` / `restore` 不带 `-confirm`
+直接拒绝并非零退出（没有演练模式）。`swap` 成功后把这次的结果合并进 run 的
+`detail.swapped`（`day`、`archived`、`keep_pinned`、`keep_other`、`total`、`at`），
+**不改 `status`**；结果与计划不符时也会写一条带 `note` 的记录再报错。
+
+## 10. 命令行
 
 ```
 DATABASE_URL=... eventarchive ensure-schema
@@ -370,13 +483,16 @@ DATABASE_URL=... eventarchive verify -run <uuid>
 DATABASE_URL=... eventarchive report -run <uuid>
 DATABASE_URL=... eventarchive locate -id <uuid>
 DATABASE_URL=... eventarchive materialize -id <uuid> -confirm
+DATABASE_URL=... eventarchive plan -run <uuid> -day YYYY-MM-DD
+DATABASE_URL=... eventarchive swap -run <uuid> -day YYYY-MM-DD -confirm
+DATABASE_URL=... eventarchive restore -run <uuid> -day YYYY-MM-DD -confirm
 ```
 
-`shadow` / `materialize` 会写库，不加 `-confirm` 拒绝；`verify` 只改 run 的状态列；`ensure-schema`
-只建表；`locate` 只读。失败一律非零退出码。与其他运维命令（`cmd/eventpartition`、`cmd/backtest`）
-一样，二进制要放进能连到主库的环境里跑。
+`shadow` / `materialize` / `swap` / `restore` 会写库，不加 `-confirm` 拒绝；`verify` 只改 run 的状态列；
+`ensure-schema` 只建表；`locate` / `plan` 只读。失败一律非零退出码。与其他运维命令
+（`cmd/eventpartition`、`cmd/backtest`）一样，二进制要放进能连到主库的环境里跑。
 
-## 10. 已验证的内容
+## 11. 已验证的内容
 
 单元测试（`server/internal/eventarchive/chunk_test.go`，无 DB）：全字段往返（含 NULL 可空列、
 带未转义 Unicode 与转义字符的 raw）、空块拒绝、头部 magic/format/codec/count/plainLen/sha 逐项篡改
@@ -430,10 +546,48 @@ DATABASE_URL=... eventarchive materialize -id <uuid> -confirm
 - 命令行：`locate` 命中/不命中与 `materialize` 的 `-confirm` 拒绝、首次插入、二次幂等
   （在测试库上实跑，输出见本次交付）。
 
-## 11. 已知限制与后续
+切换与恢复（阶段 C，`swap_integration_test.go`，`-tags integration -p 1`）：
+
+- `Plan` 计数自洽：夹具是一天 7 行（4 条归档候选含另一个来源、1 条被 alerts 钉住、1 条类别外、
+  1 条来源外），断言 `Archived=4 / KeepPinned=1 / KeepOther=2 / Total=7`、三桶之和等于分区行数、
+  `Archived` 与解出的冷块内容一致，且 `Plan` 前后 `events` 的全行摘要不变（确实只读）。
+- `Swap` 只动该动的行：切换后分区行数 == `KeepPinned + KeepOther`；4 条被移出的 id 在 `events` 里
+  查不到；钉住 / 类别外 / 来源外的行整行摘要一字不变；另一天的分区不受影响；冷块摘要不变；
+  `detail.swapped` 记下 day 与四个计数，`status` 仍是 `verified`；被移出事件的 `temporal_matches`
+  按 retire 的同一清单清掉。
+- 切换后冷层仍可读：`Locate` 逐条命中且字段与切换前的热表行逐字一致；`Query` 按时间窗返回这 4 条；
+  `/api/events` 返回热表 3 条 + 冷层 4 条，覆盖度头是 `chunks=2;matched=4;truncated=0`。
+- `Restore`：还原 4 条后这一天 7 行的整行摘要与切换前**逐字一致**、冷块摘要不变；
+  第二次 `Restore` 返回 0（幂等）。
+- 拒绝条件四条各一个用例：run 未 `verified`、`day` 超出 run 范围、该日无独立日分区（行在默认分区）、
+  `Archived=0`；每个都断言「报错 + 该日整行摘要不变 + 没有残留暂存表 + 不写 `detail.swapped`」。
+- 计数不符时中止：直接调 `RewriteDay`，`keepSelect` 指向另一天的分区 → 报「保留计数不符」，
+  返回 0/0，原分区完好；非 `SELECT`、带分号、带写语句的 `keepSelect` 一律拒绝；
+  只保留部分行（2 条）是正常路径，`kept=2 / dropped=5`。
+- 故障注入三种：暂存表名被占（`CREATE TABLE` 失败）、视图依赖日分区（`DETACH` 之后 `DROP TABLE` 失败，
+  故障点落在事务最深处）、context 已取消；三种情况都断言原分区整行摘要不变、没有暂存表、
+  能继续读写，并在排除故障后用同一个 run 正常完成切换。
+- `Swap` + `Restore` 前后 `alerts` 与 4 张 `temporal_*` / `identity_observations` 的计数完全不变。
+- 命令行实跑（测试库）：`ensure-schema` → 造 7 行（含 pin 与类别外/来源外）→ `shadow` → `verify` →
+  `plan`（该日还没有日分区时如实拒绝并要求先 `EnsureDays`）→ `EnsureDays` 后 `plan` 报 7 = 4 + 1 + 2 →
+  `swap`（不带 `-confirm` 拒绝，退出码非零）→ `swap -confirm` 移出 4 条 → `locate` 命中 →
+  `Query` 4 条 / `/api/events` 7 条 → `restore -confirm` 还原 4 条 → 再 `restore` 插入 0 条。
+
+## 12. 已知限制与后续
 
 - **事件不删、分区不动**：阶段 A 只证明「能正确编码与对拍」，不释放任何空间。
-- **超大事件（> 4 MiB）不归档**：记在 `detail.oversized` 里，阶段 B 之前要想清楚是拆块还是留在热库。
+- **超大事件（> 4 MiB）不归档**：记在 `detail.oversized` 里。这类事件会让 `Swap` 拒绝执行
+  （冷块条数少于待移出条数），要么先把这一天的超大事件单独处理，要么这一天暂时不切。
+- **阶段 C 只在测试库验证过**：没有在生产规模上跑过；切换是分区 DDL（父表排他锁的窗口在
+  `DETACH`/`ATTACH` 期间），需要低峰窗口、需要先 `verify`，且当天应没有迟到写入。
+- **`Plan` 与 `Swap` 之间仍有毫秒级窗口**：`Swap` 在自己的事务里用同一个 `keepSelect` 重新计数，
+  并把 `kept/dropped` 与计划比对；但如果恰好在这几毫秒里有新事件写进该日分区，计数会不符，
+  `Swap` 会写一条带 `note` 的 `detail.swapped` 并报错——此时分区已按实际口径切换，需要重跑
+  `verify` 核对。要做到零窗口，得把冷热对齐检查搬进 `RewriteDay` 的事务里，本阶段没做。
+- **`Restore` 逐事件调 `Materialize`**：每条都要走一次 `Locate`（扫一遍块元数据），
+  还原一整天的开销与块数 × 事件数相关；只适合回滚一天，不适合天天跑。
+- **`Swap` 不判断该日是否还有写入**：它只按 `verified` + 计数相等把关，没有「这天已经不再被写」
+  的显式检查（例如 `ts` 上界早于某个水位）。`RetireGuard` 那种时序证据保护也没有复用。
 - **同一范围可以重复跑**，每次一个新 `run_id`，冷块会叠加。去重/覆盖不在阶段 A 内，
   由运维按范围管理；阶段 C 之前应能按 run 回收（删 `event_archive_chunks` 里该 run 的行即可）。
 - **对拍要求候选集不变**：构建期间大量写入时对拍会失败，这是设计上的如实报告，
