@@ -182,8 +182,9 @@ var derived = []struct{ table, column string }{
 	{"assetmap_queue", "event_id"},
 }
 
-// pinnedIDs 是不随保留期删除的事件：告警、时序证据与已出告警的时序锚点（与 janitor 逐行清理同一口径）。
-const pinnedIDs = `SELECT event_id FROM alerts WHERE event_id IS NOT NULL
+// PinnedIDs 是不随保留期删除的事件：告警、时序证据与已出告警的时序锚点（与 janitor 逐行清理同一口径）。
+// 导出给冷归档（eventarchive）复用同一口径：被钉住的事件不删，也不进冷块。
+const PinnedIDs = `SELECT event_id FROM alerts WHERE event_id IS NOT NULL
  UNION ALL SELECT event_id FROM temporal_evidence
  UNION ALL SELECT anchor_id FROM temporal_detections WHERE alert_id IS NOT NULL`
 
