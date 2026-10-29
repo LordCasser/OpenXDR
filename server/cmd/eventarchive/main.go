@@ -280,6 +280,10 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 			p.Day.Format(time.DateOnly), p.Total-p.Archived, p.KeepPinned, p.KeepOther, p.Archived)
 		fmt.Printf("  移出的 %d 行仍在冷块里，可按 ID 定位（locate）或整日还原：eventarchive restore -run %s -day %s -confirm\n",
 			p.Archived, runID, p.Day.Format(time.DateOnly))
+		// 切走之后重放判重就落在冷层上，server 那边必须是开着的。CLI 读不到 server 的环境变量，
+		// 所以这里只陈述要求，不去猜配置。
+		fmt.Println("  提醒：此后重放已切走的事件，server 必须设 EVENT_ARCHIVE_DEDUP=1（与 EVENT_ARCHIVE_READ 独立），" +
+			"否则迟到/重传会重新入库并重复告警；各节点还有最多 60 秒的归档边界缓存窗口")
 		return nil
 
 	case "restore":

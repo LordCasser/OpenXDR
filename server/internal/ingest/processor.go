@@ -33,6 +33,9 @@ type Processor struct {
 	Intel       *intel.Store
 	DedupWindow time.Duration
 	Metrics     Metrics
+	// Archive 是冷归档判重（分区被切走后的重放）；nil = 不启用，行为与改动前一致。
+	// 由 main.go 按 EVENT_ARCHIVE_DEDUP 注入，见 archive.go。
+	Archive ArchiveDedup
 }
 
 // EnsureSchema 创建事务处理状态。temporal_matches 是已消费命中的持久记录，
@@ -146,6 +149,29 @@ func (p *Processor) store(ctx context.Context, tx *sql.Tx, e Envelope, snapshot 
 			"auth-sequence|"+e.AssetID.String()+"|"+e.Username); err != nil {
 			return false, 0, nil, err
 		}
+	}
+	// 冷归档判重：分区被 `eventarchive swap` 切走之后，这条事件在 events 里已经没有行了，
+	// 下面的 INSERT ... ON CONFLICT 看不到它，迟到/重传会被当成新事件重新入库、重新检测。
+	//
+	// 为什么是「先查后插」而不是「插入后再删」：插入再删有一段窗口让行重新可见（并可能被
+	// 并发读到），而且检测副作用（告警、时序命中、身份观测）已经发生，删掉事件行并不能回滚
+	// 它们；先查则命中时一次都不落库，幂等是由「不写」实现的，不是由「写完再撤销」实现的。
+	// 查询只在时间闸门命中时才发（见 archivedBefore），代价压在罕见的重传路径上。
+	//
+	// 竞态分析：
+	//   - 并发重传同一条事件仍由下面的 INSERT ... ON CONFLICT 兜底，本检查不承担并发去重。
+	//   - 与 Swap 并发：RewriteDay 在事务里先对该日分区加 SHARE 锁再重建；冷块早在
+	//     shadow + verify 阶段就写好了，与切换本身无关。所以 Archived 读到的是切换前或
+	//     切换后的确定状态，两种落点都不丢事件：
+	//     读到「已归档」→ 本次不入库，而该日分区随后也只会移走这一行（本来就不该留在热表）；
+	//     读到「不在归档」→ 这条事件不在 run 口径内（类别/来源之外，或仍被 pin 在热表里），
+	//     Swap 不会移走它，插入照常成立。只有「口径内、未 pin、闸门通过之后恰好被同一次
+	//     切换带走」这一瞬间的插入会随分区重建消失，它的副本仍在冷块里，下一次重传会被判为
+	//     已归档——数据不丢，也不会有第二种结果。
+	//   - 闸门边界有 60 秒缓存：刚归档/刚切走的时段最多 60 秒内仍可能被判成「不在归档」，
+	//     后果与接线前一样（重复入库 + 告警去重窗口吸收），不会反过来丢事件（见 CachedArchive）。
+	if p.archivedBefore(ctx, e) {
+		return false, 0, nil, nil
 	}
 	// 不写冲突列：分区表主键是 (id, ts)，老表是 id。稳定 ID 由含时间戳的来源字段算出，同一 id 必是同一 ts，两者等价
 	result, err := tx.ExecContext(ctx, `INSERT INTO events

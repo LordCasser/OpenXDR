@@ -17,7 +17,7 @@ B2（定位与物化）与 C（单日切换与恢复）已实现，**其中 C �
 | **B1 冷热读取** | `/api/events` 先查热表，再按同一组参数与同一个组权限查冷块，合流去重；覆盖度用响应头如实标注 | **已实现** |
 | **B2 定位与物化** | 每块带 ID Bloom filter；按事件 ID 定位（`Locate` / `Exists`）、证据物化（`Materialize`） | **已实现** |
 | B2 生命周期 | 按 run 的回收与跨 run 覆盖度统计 | 未实现 |
-| **C 单日切换与恢复** | `plan` → `swap` → `restore`：把已验证 run 覆盖的一天重建成只保留「钉住 + 非归档口径」的行，冷层继续可读、可整日还原 | **已实现（只在测试库验证）** |
+| **C 单日切换与恢复** | `plan` → `swap` → `restore`：把已验证 run 覆盖的一天重建成只保留「钉住 + 非归档口径」的行，冷层继续可读、可整日还原；重传判重接进接入路径（`EVENT_ARCHIVE_DEDUP`，第 9 节） | **已实现（只在测试库验证）** |
 
 阶段 A 的铁律：**不改动、删除或切换 events 的任何一行**。不改 `events` 与其索引，
 不 `DETACH` / `ATTACH` / `DROP` 任何分区，不调用 `eventpart.Retire`，不给 events 加外键或触发器。
@@ -283,8 +283,9 @@ B1 的冷读只能按时间窗、类别、来源收窄：块元数据里没有 I
 找一条冷事件。逐块解压全文扫在生产上不可接受，所以给每块加一个 ID Bloom filter，
 它只负责**排除不可能命中的块**；命中仍必须解压并逐事件精确比对 ID。
 
-本阶段只提供库函数与 CLI，**不接接入检测热路径**（`ingest` / `grpcsvc` / `main.go` 的处理链一概不动），
-接线留给阶段 C。
+本阶段只提供库函数与 CLI：`Locate` / `Exists` / `Materialize` 自己不接接入热路径，
+`grpcsvc` 与 `ingest` 的处理链都不 import 本包。重传判重的接线在第 9 节（阶段 C）：
+接入路径只通过 `main.go` 的适配器调用 `Exists` 与下面这个边界查询。
 
 ### ID Bloom filter
 
@@ -335,6 +336,20 @@ zstd frame 不支持随机访问）。超预算还返回 false，重传判重就
 正好是 Bloom 要防的那类事故。命中优先：命中在预算内直接返回，`ErrChunkBudget` 只在「没命中」时报出。
 
 `Exists` 只是 `Locate` 的包装，错误语义完全相同——重传判重只接受「false 就一定能确定没有」的口径。
+
+### `Boundary`
+
+```go
+Boundary(ctx context.Context, db *sql.DB) (last time.Time, ok bool, err error)
+```
+
+返回冷层最晚的事件时间（`max(last_ts)`）与「是否已经有冷块」。它是接入路径**时间闸门**的唯一依据：
+事件时间晚于这个边界就不可能在冷块里，连 `Exists` 都不用发。
+
+- 只读一条聚合：不解压、不读 `id_bloom`、不缓存（缓存是调用方的事，见第 9 节接线）。
+  一次调用是一次 `max(last_ts)` 聚合（与事件条数无关），导入侧每 60 秒每个节点才查一次；
+- 冷层没有表返回 `ErrNoSchema`（部署状态）；`ok=false` 只表示还没有任何块；
+- 边界只会随新归档向后移动，`swap` / `restore` 都不改变它（它们不动冷块）。
 
 ### `Materialize`
 
@@ -474,6 +489,59 @@ DATABASE_URL=... eventarchive restore -run <uuid> -day YYYY-MM-DD -confirm
 `detail.swapped`（`day`、`archived`、`keep_pinned`、`keep_other`、`total`、`at`），
 **不改 `status`**；结果与计划不符时也会写一条带 `note` 的记录再报错。
 
+### 重传判重接线（`EVENT_ARCHIVE_DEDUP`）
+
+`swap` 把行移出热表之后，`INSERT ... ON CONFLICT DO NOTHING` 再也看不到它们：迟到或重传的
+老事件会被当成新事件重新入库、重新检测。`EVENT_ARCHIVE_DEDUP=1` 才把冷层的存在性判断接进
+接入路径（`ingest.Processor.Archive`，默认 `nil`，不设时接入路径一行都不多跑）。
+
+**依赖方向**：`ingest` 不 import `eventarchive`，只定义最小接口 `ingest.ArchiveDedup`
+（`Archived` + `ArchiveBoundary`），适配器在 `main.go`；`eventarchive` 不知道自己在被谁调用。
+
+**时间闸门 + 60 秒缓存**：`events` 接入峰值约 3000 条/秒，`Exists` 要扫一遍
+`event_archive_chunks` 的元数据，逐条查不可接受。归档只覆盖较老的日子，所以只有
+`envelope.Timestamp <= 归档中最晚的 last_ts` 时才查冷层；边界走 `ingest.CachedArchive`
+的 60 秒 TTL，缓存未命中或过期才查一次 `eventarchive.Boundary`。缓存放 `ingest` 侧而不是
+`eventarchive`：边界是接入热路径的准入判断，而 `eventarchive` 的读函数保持无状态，
+一份会过期的边界不能被冷读、覆盖度统计或证据物化复用。
+
+**插入点：先查后插，紧接在 `INSERT ... ON CONFLICT` 之前**。命中冷层就按重复处理
+（`stored=false`，不入库、不检测、不产告警）。不选「插入后再删」：插入再删有一段窗口让行
+重新可见，而且检测副作用（告警、时序命中、身份观测）已经发生，删掉事件行回滚不了它们。
+
+竞态：`RewriteDay` 在重建事务里先对该日分区加 `SHARE` 锁，冷块在 `shadow` + `verify`
+阶段就已写好、与切换无关，所以判定读到的是切换前或切换后的确定状态。读到「已归档」→ 本次
+不入库，该日分区随后也只会移走这一行；读到「不在归档」→ 这条事件不在 run 口径内（类别/来源
+之外，或仍被 `alerts` 等钉在热表里），`Swap` 不会移走它，插入照常成立。只有「口径内、未 pin、
+闸门通过之后恰好被同一次切换带走」这一瞬间的插入会随分区重建消失——副本仍在冷块里，下一次
+重传会被判为已归档，数据不丢。
+
+**失败策略：fail-open**。`Archived` 返回错误（块损坏、`ErrChunkBudget`、库不可用）或边界读不到时，
+照常入库并继续检测：
+
+- 把「无法确认」当成「已归档」会**永久丢掉一条真实事件**；重复告警最多被告警侧去重窗口吸收，
+  丢事件不可恢复。这个方向不能反。
+- 每次 fail-open 都计入 `openxdr_archive_dedup_failopen_total{stage}`（`boundary` 边界查询、
+  `lookup` 按 ID 定位）；`slog.Warn` 带事件 id 与原因，同一原因每分钟最多一条。
+- 边界查询失败也会被缓存到过期（60 秒），不会因为冷层故障让每条事件都去查库；
+  调用方自己的 ctx 取消不写缓存。
+- 冷归档表不存在（没跑过 `ensure-schema`）同样落在 fail-open：启动日志会说明，指标里
+  `stage=boundary` 会增长；server 不替 CLI 建冷归档表。
+
+**运营不变式**：
+
+1. **一旦开始用 `eventarchive swap` 切走分区，server 的 `EVENT_ARCHIVE_DEDUP` 必须为 `1`。**
+   否则重放会产生重复事件行与重复告警。`cmd/eventarchive swap` 的成功输出会提醒这一点
+   （CLI 读不到 server 的环境变量，只陈述要求）。
+2. 与 `EVENT_ARCHIVE_READ` **相互独立**：一个管 `/api/events` 的冷读，一个管接入判重，各开各的。
+3. 切换后最多 60 秒内，各节点缓存的边界仍是旧值；这段时间里重放刚被切走的事件会像接线前一样
+   重新入库（不会反过来丢事件）。低峰手工切换时，切完等一个缓存周期即可。
+
+**这条判重实际覆盖哪些事件**：被 `alerts` / 时序证据钉住的事件不进冷块、也不被 `swap` 移走，
+它们的重放仍由 `ON CONFLICT` 挡住。真正依赖冷层判重的是「归档时没有告警」的旧事件——重放的
+危害是规则后来上线或收紧后，同一条老事件被重新检测、产出一条本不该有的新告警；同时事件行会
+重新占回热表（并在下次归档时再进一次冷块）。
+
 ## 10. 命令行
 
 ```
@@ -573,6 +641,26 @@ DATABASE_URL=... eventarchive restore -run <uuid> -day YYYY-MM-DD -confirm
   `swap`（不带 `-confirm` 拒绝，退出码非零）→ `swap -confirm` 移出 4 条 → `locate` 命中 →
   `Query` 4 条 / `/api/events` 7 条 → `restore -confirm` 还原 4 条 → 再 `restore` 插入 0 条。
 
+重传判重接线（`archive_test.go` / `archive_integration_test.go`）：
+
+- 单元（无 DB，假实现计数）：近期事件只查一次边界、`Archived` **调用 0 次**；时间恰好等于边界的事件
+  仍在闸门内并查冷层；空归档不发 `Archived`；冷层命中 → `true`、未命中 → `false`；
+  `Archived` 报错与边界读不到都 fail-open（返回 false）并各自计数；`Archive=nil` 完全不查、不计数；
+  边界缓存 60 秒内 60 次调用只查一次库、过期后重查并立即生效；调用方 ctx 取消不写缓存；
+  日志限流同一原因每分钟一条、键数有上限。
+- 集成（真 `eventarchive` + 真 `Processor`）：
+  - 边界：空归档 `ok=false`；`shadow` 后 `ok=true` 且等于归档事件的 `ts`。
+  - **时间闸门**：近期事件入库并照常产 1 条告警，`Archived` 调用次数 **0**，边界只查 1 次。
+  - **切走后重放**（同 `Envelope`、同 ID、同 ts，规则在切换后才上线）：重放 3 次都 `events` 无行、
+    `alerts` 仍 0，指标上判为重复（`duplicate=true`、`alerts=0`，即 `stored=false`）；
+    `Archived` 3 次、边界 1 次（缓存生效）。
+  - **旧事件但冷层没有**（时间在边界内、从未归档）：`Archived` 返回 false → 照常入库并产出 1 条告警。
+  - **反例**：同一重放、`Processor.Archive=nil` → 重新入库且真的新增 1 条告警（证明上一条不是规则没命中）。
+  - `Restore` 之后重放：原有 `ON CONFLICT` 判重与归档闸门两条路径都不重复入库、不产告警（事件仍 1 行）。
+  - `Archived` 报错：fail-open 入库 + 继续检测出 1 条告警，`ArchiveFailOpen("lookup")` 计数 1。
+- 变异检查：临时去掉 `store` 里对 `archivedBefore` 的调用，上面两条关键用例立刻失败
+  （「重放不该重新入库」「边界只查一次」），确认断言能真正失败。
+
 ## 12. 已知限制与后续
 
 - **事件不删、分区不动**：阶段 A 只证明「能正确编码与对拍」，不释放任何空间。
@@ -594,6 +682,23 @@ DATABASE_URL=... eventarchive restore -run <uuid> -day YYYY-MM-DD -confirm
   应在低峰期跑，或用较老的日期区间。
 - **读取默认关闭**：`EVENT_ARCHIVE_READ=1` 才接上，且只是读取层——生产归档仍由 CLI 跑，
   没有评测过线上默认开启的开销。
+- **重传判重默认关闭，且必须手工与 `swap` 对齐**：`EVENT_ARCHIVE_DEDUP=1` 才接上；用了 `swap`
+  却没开它，重放会重新入库并重复告警（CLI 会提醒，但读不到 server 环境变量）。
+- **判重 fail-open**：冷层故障（块损坏、`ErrChunkBudget`、库不可用）时照常入库并继续检测——
+  宁可多一条可能重复的告警，也不把「无法确认」当成「已归档」永久丢事件。
+  `openxdr_archive_dedup_failopen_total{stage}` 大于 0 就说明这段时间的判重不可靠，得先修冷层。
+- **边界缓存 60 秒**：各节点独立缓存；切换/新归档后最多 60 秒内，这段时间的重放仍可能被判成新事件。
+  另外边界变化依赖 `event_archive_chunks` 的写入，按 run 删块（回收旧归档）会让边界回退，
+  这也落在缓存滞后的窗口里。
+- **判重只覆盖「时间不晚于边界」的事件**：边界取自 `max(last_ts)`，事件时间晚于它时不查冷层。
+  冷块里的事件时间都不会晚于边界，所以这是精确的前置条件，不是近似。
+- **判重与检测的顺序**：判定发生在 `store` 里、这条事件的 `INSERT` 之前——此刻事务还没有为
+  这条事件写过任何东西，命中冷层就直接返回（不产告警、不写时序命中、不写身份观测），
+  没有需要回滚的副作用。
+  冷层查询走连接池（`eventarchive` 的只读函数），不借用事务连接，所以一次慢查询不会把事务
+  变成「持锁等待」；代价是这些罕见事件会短时多占一个连接。
+- **没有跨节点的边界一致性**：每个 server 节点各自缓存，`swap` 之后各节点的窗口彼此独立；
+  多节点部署时按最慢的缓存周期理解这段滞后。
 - **关键词不进冷层**：冷块没有关键词索引，带 `q` 的查询只查热表，用 `X-Archive-Coverage: skipped=keyword` 说明。
 - **冷查询有时间边界差**：热表含 `ts <= to`，冷块是 `[from, to)`；接口给冷查询补了 1ns，直接调
   `eventarchive.Query` 的调用方要自己处理这个边界。
@@ -608,7 +713,9 @@ DATABASE_URL=... eventarchive restore -run <uuid> -day YYYY-MM-DD -confirm
   调高/更换预算口径），本阶段不擅自放宽上限。
 - **物化还没有审计、权限与 API**：`Materialize` 是库函数加 CLI，直接连库执行，没有审计事件、
   没有 RBAC 判断；接进 API 时必须补审计（谁在什么时候把哪条冷事件物化成了证据）与组权限。
-- **重传判重尚未接线**：`Locate` / `Exists` 只提供能力，`ingest` 的处理链一行没动，接入是阶段 C 的事。
+- **重传判重已接线但默认关闭**：见第 9 节「重传判重接线」；`EVENT_ARCHIVE_DEDUP=1` 才生效，
+  且每次判重要扫一遍块元数据（见上一条），所以只对「时间不晚于边界」的罕见重传开放。
+  接入面目前只用到 `Exists` 与 `Boundary`，`Locate` / `Materialize` 仍是库函数 + CLI。
 - **同一条事件被多轮 run 归档时**，`Locate` 返回最新一块里的副本，不比较副本之间的差异；
   每个 run 的副本一致性由该 run 的对拍（`verify`）负责。
 - **`report` 要解码全部冷块**：为了按 id 回查 events 的整行字节，它逐块解码取 id（顺带又校验了一遍

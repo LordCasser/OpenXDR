@@ -118,7 +118,7 @@ func main() {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		telemetry.NewCollectorHealth(db), telemetry.NewIntegrationQueue(db), integration.RateLimitedRequests)
-	events, router := startEventBus(db, rules, temporalRules, suppressions, intelStore, dedupWindow, hub, registry)
+	events, router := startEventBus(ctx, db, rules, temporalRules, suppressions, intelStore, dedupWindow, hub, registry)
 	if router != nil {
 		defer router.Close()
 	}
@@ -448,11 +448,32 @@ func startAutomation(ctx context.Context, db *sql.DB, client *ent.Client, webhoo
 
 // startEventBus 事件处理管道：配了 NATS_URL 走 JetStream 持久队列并挂上跨节点指令路由，
 // 否则单机直连，返回的 router 为 nil。
-func startEventBus(db *sql.DB, rules sigma.Catalog, temporalRules *temporal.Store, suppressions *suppress.Store, intelStore *intel.Store, dedupWindow time.Duration, hub *response.Hub, registry *prometheus.Registry) (eventbus.Bus, *response.NATSRouter) {
+func startEventBus(ctx context.Context, db *sql.DB, rules sigma.Catalog, temporalRules *temporal.Store, suppressions *suppress.Store, intelStore *intel.Store, dedupWindow time.Duration, hub *response.Hub, registry *prometheus.Registry) (eventbus.Bus, *response.NATSRouter) {
 	metrics := telemetry.New(registry)
 	processor := &ingest.Processor{
 		DB: db, Rules: rules, Temporal: temporalRules, Suppress: suppressions, Intel: intelStore,
 		DedupWindow: dedupWindow, Metrics: metrics,
+	}
+	// 冷归档重传判重默认关闭：EVENT_ARCHIVE_DEDUP=1 才接上，不设时 Processor.Archive 为 nil，
+	// 接入路径一行代码都不多跑。与 EVENT_ARCHIVE_READ 相互独立（一个管读接口、一个管接入），
+	// 但只要用 eventarchive swap 切走过分区，这里就必须为 1，否则重放的老事件会重新入库、
+	// 重复告警——见 docs/event-archive.md。
+	if getenv("EVENT_ARCHIVE_DEDUP", "") == "1" {
+		archive := ingest.NewCachedArchive(archiveDedup{db: db})
+		processor.Archive = archive
+		// ingest 用可选接口探测计数器，漏实现不会报错、只会静默失效，所以在接线的位置钉死它。
+		var _ interface{ ArchiveFailOpen(string) } = (*telemetry.Metrics)(nil)
+		// 启动时探一次边界：把边界写进启动日志，也让第一个事件就吃到缓存。
+		// 冷层不可用不影响 server 起来，按 fail-open（没有归档）运行并如实告警。
+		last, ok, err := archive.ArchiveBoundary(ctx)
+		switch {
+		case err != nil:
+			slog.Warn("冷归档重传判重已启用，但读不到归档边界，本次按没有归档运行（fail-open）", "err", err)
+		case ok:
+			slog.Info("冷归档重传判重已启用", "boundary", last, "cache_ttl", ingest.DefaultArchiveBoundaryTTL)
+		default:
+			slog.Info("冷归档重传判重已启用，当前冷归档为空")
+		}
 	}
 	var events eventbus.Bus = eventbus.NewDirect(processor, metrics)
 	hostname, _ := os.Hostname()
@@ -660,6 +681,20 @@ func archiveConn(ctx context.Context, db *sql.DB) *sql.DB {
 		return nil
 	}
 	return db
+}
+
+// archiveDedup 把冷归档的两个只读函数接到接入路径的最小接口（ingest.ArchiveDedup）上：
+// 依赖方向仍是 main → 两个包，ingest 不 import eventarchive，eventarchive 也不知道自己在被谁调用。
+type archiveDedup struct{ db *sql.DB }
+
+// Archived 只在事件时间不晚于归档边界时被调用（罕见的重传路径）。
+func (a archiveDedup) Archived(ctx context.Context, id uuid.UUID) (bool, error) {
+	return eventarchive.Exists(ctx, a.db, id)
+}
+
+// ArchiveBoundary 由 ingest 侧的 CachedArchive 缓存 60 秒，不会逐条事件查库。
+func (a archiveDedup) ArchiveBoundary(ctx context.Context) (time.Time, bool, error) {
+	return eventarchive.Boundary(ctx, a.db)
 }
 
 // registerSQLRoutes 直接查库的接口：时序缺口、指令核验与身份观测。
