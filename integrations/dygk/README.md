@@ -156,3 +156,5 @@ npm --prefix integrations/dygk run test:upstream
 Node 需要 24；上游测试还使用 Python 3 和 POSIX shell。Linux CI 验证原生行为、上游行为、实际 Node 到 PostgreSQL 复核闭环，以及托管引擎通过平台配置自动启动。Windows 上游测试存在清理仍打开的 SQLite 文件的权限限制，不能据此跳过 Linux CI。
 
 独立发布工作流为 `.github/workflows/deception-engine.yml`，由手动运行或 `dygk-v*` 标签触发。DYGK 当前为 `UNLICENSED`，公开镜像发布仅在确认授权并配置仓库变量 `DYGK_DISTRIBUTION_AUTHORIZED=true` 后开启。当前改动未发布、未部署；本机环境没有 Docker，镜像构建仍需 Linux CI 验收。
+
+构建机无法访问默认 Go 模块代理时，可给 Docker 构建传入 `--build-arg GOPROXY=https://goproxy.cn,direct`；这只影响原生引擎构建，不改变运行配置。

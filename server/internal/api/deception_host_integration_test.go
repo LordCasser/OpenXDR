@@ -5,6 +5,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -57,7 +58,19 @@ func TestDeceptionHostedAssignmentsAndGroupBoundary(t *testing.T) {
 	var deployment ent.DecoyDeployment
 	request(admin, "/api/decoys", map[string]any{"assetId": host.ID, "kind": "http", "profile": "decoy", "port": 18080}, &deployment, 201)
 	cfg := contract.DefaultConfig()
+	// 非托管登记不能挤占当前引擎的托管容量。
+	for i := 0; i < 100; i++ {
+		var remote ent.DecoyDeployment
+		request(admin, "/api/decoys", map[string]any{"assetId": host.ID, "kind": "http", "profile": "decoy", "port": 20000 + i}, &remote, 201)
+		request(admin, fmt.Sprintf("/api/decoys/%s/revisions", remote.ID), map[string]any{"releaseId": admitted.ID, "config": cfg}, nil, 201)
+	}
 	cfg.Hosted = true
+	otherRelease := db.DecoyEngineRelease.Create().SetEngine("dygk").SetVersion("hosted-other").SetDigest("sha256:" + strings.Repeat("f", 64)).SetProtocol(1).SetStateSchema("dygk-sqlite-v1").SetCreatedBy("admin").SaveX(ctx)
+	for i := 0; i < 100; i++ {
+		var remote ent.DecoyDeployment
+		request(admin, "/api/decoys", map[string]any{"assetId": host.ID, "kind": "http", "profile": "decoy", "port": 21000 + i}, &remote, 201)
+		request(admin, fmt.Sprintf("/api/decoys/%s/revisions", remote.ID), map[string]any{"releaseId": otherRelease.ID, "config": cfg}, nil, 201)
+	}
 	request(admin, "/api/decoys/"+deployment.ID.String()+"/revisions", map[string]any{"releaseId": admitted.ID, "config": cfg}, nil, 201)
 	request(broker, "/engine/poll", map[string]any{"release": release, "instances": []any{}}, &result, 200)
 	if len(result.Jobs) != 1 || len(result.Jobs[0].Token) != 64 {
@@ -88,4 +101,12 @@ func TestDeceptionHostedAssignmentsAndGroupBoundary(t *testing.T) {
 	}
 	db.DecoyEngineRelease.UpdateOne(admitted).SetEnabled(false).SaveX(ctx)
 	request(broker, "/engine/poll", map[string]any{"release": release, "instances": instances}, nil, 403)
+	// 当前版本确实超过 100 个托管登记时仍须拒绝，不能截断任务导致误停实例。
+	db.DecoyEngineRelease.UpdateOne(admitted).SetEnabled(true).SaveX(ctx)
+	for i := 0; i < 100; i++ {
+		var extra ent.DecoyDeployment
+		request(admin, "/api/decoys", map[string]any{"assetId": host.ID, "kind": "http", "profile": "decoy", "port": 22000 + i}, &extra, 201)
+		request(admin, fmt.Sprintf("/api/decoys/%s/revisions", extra.ID), map[string]any{"releaseId": admitted.ID, "config": cfg}, nil, 201)
+	}
+	request(broker, "/engine/poll", map[string]any{"release": release, "instances": instances}, nil, 422)
 }

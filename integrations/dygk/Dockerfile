@@ -2,6 +2,8 @@
 # 构建上下文为仓库根目录，镜像内不引用构建机路径。
 FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine3.24 AS native
 ARG TARGETOS TARGETARCH
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 WORKDIR /src
 COPY server/go.mod server/go.sum ./
 RUN go mod download

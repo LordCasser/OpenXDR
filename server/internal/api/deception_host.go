@@ -13,12 +13,14 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/google/uuid"
 	"openxdr/server/deception/contract"
 	"openxdr/server/ent"
 	"openxdr/server/ent/asset"
 	"openxdr/server/ent/decoydeployment"
 	"openxdr/server/ent/decoyenginerelease"
+	"openxdr/server/ent/decoyrevision"
 	"openxdr/server/internal/audit"
 )
 
@@ -220,7 +222,13 @@ func HostedDeception(db *ent.Client) http.Handler {
 			http.Error(w, "保存引擎状态失败", 503)
 			return
 		}
-		rows, err := db.DecoyDeployment.Query().Where(decoydeployment.StatusEQ(decoydeployment.StatusRegistered), decoydeployment.ActiveRevisionIDNotNil()).Limit(101).All(r.Context())
+		rows, err := db.DecoyDeployment.Query().Where(decoydeployment.StatusEQ(decoydeployment.StatusRegistered), func(s *sql.Selector) {
+			revs := sql.Table(decoyrevision.Table)
+			s.Where(sql.In(s.C(decoydeployment.FieldActiveRevisionID), sql.Select(revs.C(decoyrevision.FieldID)).From(revs).Where(sql.And(
+				sql.EQ(revs.C(decoyrevision.FieldReleaseID), rel.ID),
+				sqljson.ValueEQ(revs.C(decoyrevision.FieldSpec), true, sqljson.Path("hosted")),
+			))))
+		}).Order(ent.Asc(decoydeployment.FieldID)).Limit(101).All(r.Context())
 		if err != nil {
 			http.Error(w, "读取托管登记失败", 503)
 			return
