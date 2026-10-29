@@ -36,8 +36,12 @@ type Tx struct {
 	CommandPolicy *CommandPolicyClient
 	// DecoyDeployment is the client for interacting with the DecoyDeployment builders.
 	DecoyDeployment *DecoyDeploymentClient
+	// DecoyEngineRelease is the client for interacting with the DecoyEngineRelease builders.
+	DecoyEngineRelease *DecoyEngineReleaseClient
 	// DecoyObservation is the client for interacting with the DecoyObservation builders.
 	DecoyObservation *DecoyObservationClient
+	// DecoyRevision is the client for interacting with the DecoyRevision builders.
+	DecoyRevision *DecoyRevisionClient
 	// EnrollToken is the client for interacting with the EnrollToken builders.
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
@@ -247,7 +251,9 @@ func (tx *Tx) init() {
 	tx.Command = NewCommandClient(tx.config)
 	tx.CommandPolicy = NewCommandPolicyClient(tx.config)
 	tx.DecoyDeployment = NewDecoyDeploymentClient(tx.config)
+	tx.DecoyEngineRelease = NewDecoyEngineReleaseClient(tx.config)
 	tx.DecoyObservation = NewDecoyObservationClient(tx.config)
+	tx.DecoyRevision = NewDecoyRevisionClient(tx.config)
 	tx.EnrollToken = NewEnrollTokenClient(tx.config)
 	tx.Event = NewEventClient(tx.config)
 	tx.ExternalTicket = NewExternalTicketClient(tx.config)

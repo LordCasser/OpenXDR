@@ -276,3 +276,24 @@ URL 更改默认保留旧积压目标；movePending=true 显式改投尚未发�
 `X-OpenXDR-Signature`。使用 base64 解码后的秘密，对 UTF-8
 `timestamp + "." + eventId + "." + rawBody` 计算 HMAC-SHA256，签名为小写十六进制。
 接收方须校验时间窗口（建议 5 分钟）、签名并持久去重。事件可能重复及乱序，使用 revision 防止旧状态覆盖新状态。
+
+
+## 独立欺骗引擎
+
+引擎使用独立运行协议，管理接口仍走 cookie 和组权限。契约类型定义在 `server/deception/contract/engine.go`，实施说明见 [运行包说明](../integrations/dygk/README.md)。
+
+| 方法和路径 | 权限与用途 |
+| --- | --- |
+| `GET /api/deception/releases` | 登录后读取最近 200 个已登记版本 |
+| `GET /api/deception/hosted-release` | 当前托管引擎回报的可用版本，未在线时返回 null |
+| `POST /api/deception/releases` | 全局 admin 准入版本，字段 `engine/version/digest/protocol/stateSchema` |
+| `POST /api/deception/releases/{id}/disable` | 全局 admin 停用版本，后续运行认证拒绝 |
+| `GET /api/decoys/{id}/revisions` | 当前资产组 viewer，最多 100 条并返回 `more` |
+| `POST /api/decoys/{id}/revisions` | 组管理员且全局至少 analyst；传 `releaseId/config/expectedRevision`，`config.hosted=true` 由平台统一启动；确认旧实例已停止后创建不可变修订 |
+| `POST /api/decoys/{id}/stop` | 同上；只请求停止，202 不代表实例已退出 |
+| `GET /api/deception-runtime/v1/deployments/{id}/config` | 单登记 Bearer 令牌，绑定资产当前组和修订 |
+| `POST .../handshake` | 实例、修订和精确产物握手并领取 starting 租约 |
+| `POST .../lease` | 单实例状态转换，需 `X-Decoy-Instance` 和 `X-Decoy-Revision` |
+| `POST .../observations` | 每批 1–100 条白名单事实，按事件 ID 确认持久化；相同 ID 不同内容 409 |
+
+观察字段为 `eventId/streamEpoch/sequence/occurredAt/session/kind/count`；不接受 IP、自由文本、平台身份或原始请求体。新协议每登记滚动 24 小时最多 10000 条；旧接口保持每日 1000 条。旧路径不会接受已启用修订的登记，防止协议降级。

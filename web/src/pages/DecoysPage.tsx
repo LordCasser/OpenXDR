@@ -8,6 +8,7 @@ import { Ago } from '../components/Ago'
 import { HostLink } from '../components/HostLink'
 import { LoadError } from '../components/LoadError'
 import { Page } from '../components/Page'
+import { DeceptionEngine, DeceptionReleases } from '../components/DeceptionEngine'
 import { errText } from '../components/format'
 import { useI18n } from '../i18n'
 
@@ -48,13 +49,13 @@ function GroupDecoys({ groupId }: { groupId: string }) {
   const refresh = () => client.invalidateQueries({ queryKey: ['ssh-decoys', groupId] })
   const onError = (e: Error) => message.error(errText(e, t))
   const review = useMutation({ mutationFn: (observation: string) => reviewDecoyObservation(observing!, observation), onError, onSuccess: () => { void client.invalidateQueries({ queryKey: ['decoy-observations'] }); void client.invalidateQueries({ queryKey: ['incidents'] }); void client.invalidateQueries({ queryKey: ['stats'] }) } })
-  const reviewable = new Set(['marker_used', 'ssh_marker_followed', 'http_page', 'file_opened', 'shell_started', 'shell_action', 'ssh_authentication_attempt', 'ssh_marker_rejected'])
+  const reviewable = new Set(['dygk_triggered', 'marker_used', 'ssh_marker_followed', 'http_page', 'file_opened', 'shell_started', 'shell_action', 'ssh_authentication_attempt', 'ssh_marker_rejected'])
   const create = useMutation({ mutationFn: registerDecoy, onError, onSuccess: () => { setOpen(false); form.resetFields(); setOffset(0); void refresh() } })
   const revoke = useMutation({ mutationFn: revokeDecoy, onError, onSuccess: () => { void refresh() } })
   const install = useMutation({ mutationFn: (values: { fingerprint: string; arch: string; listenHost: string; fileRoot?: string }) => installDecoy(installTarget!.id, values), onError, onSuccess: () => { message.success(t('decoysInstallCompleted')); setInstallTarget(null) }, onSettled: () => { void refresh() } })
   const installCredential = credentials.data?.find(c => c.assetId === installTarget?.asset_id)
   const profile = profiles.data?.find(p => p.id === selected && p.kind === kind)
-  return <Page title={t('navDecoys')} subtitle={t('decoysSubtitle')} extra={canManage && <Button type="primary" onClick={() => setOpen(true)}>{t('decoysRegister')}</Button>}>
+  return <Page title={t('navDecoys')} subtitle={t('decoysSubtitle')} extra={<Space><DeceptionReleases isAdmin={isAdmin} />{canManage && <Button type="primary" onClick={() => setOpen(true)}>{t('decoysRegister')}</Button>}</Space>}>
     <Space orientation="vertical" style={{ width: '100%' }} size="middle">
       <Alert type="info" showIcon title={t('decoysBoundary')} />
       {installStatus.isError && <LoadError error={installStatus.error} onRetry={() => installStatus.refetch()} />}
@@ -68,6 +69,7 @@ function GroupDecoys({ groupId }: { groupId: string }) {
           { title: t('decoysResource'), dataIndex: 'resource', render: (v, row) => v || row.port },
           { title: t('decoysProfile'), dataIndex: 'profile', render: id => t(id === 'decoy' ? 'decoysIdentify' : id === 'pause' ? 'decoysPause' : 'decoysPadding') },
           { title: t('decoysTemplate'), dataIndex: 'template' },
+{ title: t('deceptionEngine'), render: (_, row) => <Tag>{t(row.active_revision_id ? 'deceptionManaged' : 'deceptionLegacy')}</Tag> },
           { title: t('decoysStatus'), dataIndex: 'status', render: status => <Tag color={status === 'registered' ? 'blue' : 'default'}>{t(status === 'registered' ? 'decoysRegistered' : 'decoysRevoked')}</Tag> },
           { title: t('decoysRuntime'), render: (_, row) => <Space orientation="vertical" size={0}><Tag>{t(({ unreported: 'decoysUnreported', starting: 'decoysStarting', running: 'decoysRunning', stopped: 'decoysStopped', failed: 'decoysFailed', stale: 'decoysStale', stopping: 'decoysStopping' } as const)[row.runtime_status ?? 'unreported'])}</Tag>{row.runtime_seen_at && <Ago iso={row.runtime_seen_at} />}</Space> },
           { title: t('decoysInstallState'), render: (_, row) => <Tag>{t(({ idle: 'decoysInstallIdle', installing: 'decoysInstalling', installed: 'decoysInstalled', unconfirmed: 'decoysInstallUnconfirmed' } as const)[row.install_state ?? 'idle'])}</Tag> },
@@ -76,8 +78,9 @@ function GroupDecoys({ groupId }: { groupId: string }) {
           { title: t('actions'), render: (_, row) => <Space wrap>
             <Button size="small" onClick={() => setObserving(row.id)}>{t('decoysEvents')}</Button>
             {canManage && row.status === 'registered' && <>
-              {row.kind !== 'shell' && <Button size="small" disabled={!installStatus.data?.enabled || !row.remote_installable} onClick={() => { installForm.resetFields(); setInstallTarget(row) }}>{t('decoysInstall')}</Button>}
-              <Popconfirm title={t('decoysTokenConfirm')} onConfirm={() => issue(row.id)}><Button size="small" disabled={issuing || row.install_state === 'installing'}>{t('decoysToken')}</Button></Popconfirm>
+              <DeceptionEngine row={row} refresh={refresh} />
+{row.kind !== 'shell' && <Button size="small" disabled={!installStatus.data?.enabled || !row.remote_installable} onClick={() => { installForm.resetFields(); setInstallTarget(row) }}>{t('decoysInstall')}</Button>}
+              {!row.hosted && <Popconfirm title={t('decoysTokenConfirm')} onConfirm={() => issue(row.id)}><Button size="small" disabled={issuing || row.install_state === 'installing'}>{t('decoysToken')}</Button></Popconfirm>}
               <Popconfirm title={t('decoysRevokeHint')} onConfirm={() => revoke.mutateAsync(row.id)}><Button danger size="small" loading={revoke.isPending && revoke.variables === row.id} disabled={revoke.isPending}>{t('decoysRevoke')}</Button></Popconfirm>
             </>}
           </Space> },
@@ -94,7 +97,7 @@ function GroupDecoys({ groupId }: { groupId: string }) {
       {assets.isError && <LoadError error={assets.error} onRetry={() => assets.refetch()} />}
       <Form form={form} layout="vertical" initialValues={{ kind: 'ssh', profile: 'decoy', port: 2222 }} onFinish={v => { if (!create.isPending) create.mutate({ ...v, port: v.kind === 'file' || v.kind === 'shell' ? 0 : v.port, resource: v.kind === 'file' ? v.resource : v.kind === 'shell' ? 'simulated-shell' : '' }) }} disabled={create.isPending}>
         <Form.Item name="assetId" label={t('thHostname')} rules={[{ required: true }]}><Select showSearch optionFilterProp="label" loading={assets.isFetching} options={(assets.data ?? []).filter(a => a.groupId === groupId).map(a => ({ value: a.id, label: a.hostname }))} /></Form.Item>
-        <Form.Item name="kind" label={t('decoysKind')} rules={[{ required: true }]}><Select onChange={value => form.setFieldsValue({ port: value === 'http' ? 8088 : 2222, resource: 'README.md' })} options={['ssh', 'http', 'file', 'shell'].map(value => ({ value, label: value === 'http' ? 'HTTP / HTML' : value.toUpperCase() }))} /></Form.Item>
+        <Form.Item name="kind" label={t('decoysKind')} rules={[{ required: true }]}><Select onChange={value => form.setFieldsValue({ port: value === 'http' ? 18080 : 2222, resource: 'README.md' })} options={['ssh', 'http', 'file', 'shell'].map(value => ({ value, label: value === 'http' ? 'HTTP / HTML' : value.toUpperCase() }))} /></Form.Item>
         <Form.Item name="profile" label={t('decoysProfile')} rules={[{ required: true }]}><Select options={(profiles.data ?? []).filter(p => p.kind === kind).map(p => ({ value: p.id, label: t(p.id === 'decoy' ? 'decoysIdentify' : p.id === 'pause' ? 'decoysPause' : 'decoysPadding') }))} /></Form.Item>
         {profile && <Typography.Paragraph type="secondary">{profile.template} · {t(kind !== 'ssh' ? 'decoysUntested' : profile.id === 'decoy' ? 'decoysIdentifyHint' : profile.id === 'pause' ? 'decoysPauseHint' : 'decoysPaddingHint')}</Typography.Paragraph>}
         {(kind === 'ssh' || kind === 'http') && <Form.Item name="port" label={t('decoysPort')} rules={[{ required: true }, { type: 'integer', min: 1, max: 65535 }]}><InputNumber min={1} max={65535} precision={0} /></Form.Item>}
@@ -107,13 +110,14 @@ function GroupDecoys({ groupId }: { groupId: string }) {
         <Alert type="warning" title={t('decoysTokenHint')} />
         <Typography.Text copyable>{token.token}</Typography.Text>
         <Typography.Text>{token.expiresAt}</Typography.Text>
-        <Typography.Text code copyable>{`decoyhost -platform ${window.location.origin} -deployment ${token.id}`}</Typography.Text>
+        <Typography.Text code copyable>{`decoyhost -platform ${window.location.origin} -deployment ${token.id}${rows.data?.items.find(r => r.id === token.id)?.active_revision_id ? ' -managed' : ''}`}</Typography.Text>
+<Typography.Paragraph type="secondary">{t('deceptionRuntimeHint')}</Typography.Paragraph>
       </Space>}
     </Modal>
     <Modal open={!!observing} title={t('decoysEvents')} footer={null} onCancel={() => setObserving(null)} destroyOnHidden>
       <Alert type="info" title={t('decoysEventsHint')} />
       {observations.isError ? <LoadError error={observations.error} onRetry={() => observations.refetch()} /> : <>
-        <Table rowKey="id" loading={observations.isPending} dataSource={observations.data?.items ?? []} pagination={{ pageSize: 10 }} columns={[{ title: t('decoysStatus'), dataIndex: 'kind' }, { title: t('decoysReceived'), dataIndex: 'received_at', render: at => <Ago iso={at} /> }, { title: t('actions'), render: (_, row) => row.incident_id ? <Link to={`/incidents/${row.incident_id}`}>{t('decoysOpenReview')}</Link> : canReview && reviewable.has(row.kind) && <Popconfirm title={t('decoysReviewConfirm')} onConfirm={() => review.mutateAsync(row.id)}><Button size="small" disabled={review.isPending} loading={review.isPending && review.variables === row.id}>{t('decoysReview')}</Button></Popconfirm> }]} />
+        <Table rowKey="id" loading={observations.isPending} dataSource={observations.data?.items ?? []} pagination={{ pageSize: 10 }} columns={[{ title: t('decoysStatus'), dataIndex: 'kind' }, { title: t('decoysReceived'), dataIndex: 'received_at', render: at => <Ago iso={at} /> }, { title: t('deceptionSession'), dataIndex: 'session_id', render: (value: string) => value?.slice(0, 12) || '—' }, { title: t('actions'), render: (_, row) => row.incident_id ? <Link to={`/incidents/${row.incident_id}`}>{t('decoysOpenReview')}</Link> : canReview && reviewable.has(row.kind) && <Popconfirm title={t('decoysReviewConfirm')} onConfirm={() => review.mutateAsync(row.id)}><Button size="small" disabled={review.isPending} loading={review.isPending && review.variables === row.id}>{t('decoysReview')}</Button></Popconfirm> }]} />
         {observations.data?.more && <Typography.Text>{t('decoysEventsTruncated')}</Typography.Text>}
         <Button onClick={() => observations.refetch()} loading={observations.isFetching}>{t('decoysRefresh')}</Button>
       </>}

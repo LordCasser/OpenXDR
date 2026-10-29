@@ -57,6 +57,12 @@ const (
 	FieldInstallState = "install_state"
 	// FieldInstallStartedAt holds the string denoting the install_started_at field in the database.
 	FieldInstallStartedAt = "install_started_at"
+	// FieldActiveRevisionID holds the string denoting the active_revision_id field in the database.
+	FieldActiveRevisionID = "active_revision_id"
+	// FieldTokenRevisionID holds the string denoting the token_revision_id field in the database.
+	FieldTokenRevisionID = "token_revision_id"
+	// FieldStopRequested holds the string denoting the stop_requested field in the database.
+	FieldStopRequested = "stop_requested"
 	// Table holds the table name of the decoydeployment in the database.
 	Table = "decoy_deployments"
 )
@@ -85,6 +91,9 @@ var Columns = []string{
 	FieldRuntimeGeneration,
 	FieldInstallState,
 	FieldInstallStartedAt,
+	FieldActiveRevisionID,
+	FieldTokenRevisionID,
+	FieldStopRequested,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -104,6 +113,8 @@ var (
 	DefaultCreatedAt func() time.Time
 	// DefaultResource holds the default value on creation for the "resource" field.
 	DefaultResource string
+	// DefaultStopRequested holds the default value on creation for the "stop_requested" field.
+	DefaultStopRequested bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -330,4 +341,19 @@ func ByInstallState(opts ...sql.OrderTermOption) OrderOption {
 // ByInstallStartedAt orders the results by the install_started_at field.
 func ByInstallStartedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInstallStartedAt, opts...).ToFunc()
+}
+
+// ByActiveRevisionID orders the results by the active_revision_id field.
+func ByActiveRevisionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActiveRevisionID, opts...).ToFunc()
+}
+
+// ByTokenRevisionID orders the results by the token_revision_id field.
+func ByTokenRevisionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTokenRevisionID, opts...).ToFunc()
+}
+
+// ByStopRequested orders the results by the stop_requested field.
+func ByStopRequested(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStopRequested, opts...).ToFunc()
 }

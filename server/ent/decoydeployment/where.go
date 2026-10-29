@@ -140,6 +140,21 @@ func InstallStartedAt(v time.Time) predicate.DecoyDeployment {
 	return predicate.DecoyDeployment(sql.FieldEQ(FieldInstallStartedAt, v))
 }
 
+// ActiveRevisionID applies equality check predicate on the "active_revision_id" field. It's identical to ActiveRevisionIDEQ.
+func ActiveRevisionID(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldActiveRevisionID, v))
+}
+
+// TokenRevisionID applies equality check predicate on the "token_revision_id" field. It's identical to TokenRevisionIDEQ.
+func TokenRevisionID(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldTokenRevisionID, v))
+}
+
+// StopRequested applies equality check predicate on the "stop_requested" field. It's identical to StopRequestedEQ.
+func StopRequested(v bool) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldStopRequested, v))
+}
+
 // AssetIDEQ applies the EQ predicate on the "asset_id" field.
 func AssetIDEQ(v uuid.UUID) predicate.DecoyDeployment {
 	return predicate.DecoyDeployment(sql.FieldEQ(FieldAssetID, v))
@@ -1198,6 +1213,116 @@ func InstallStartedAtIsNil() predicate.DecoyDeployment {
 // InstallStartedAtNotNil applies the NotNil predicate on the "install_started_at" field.
 func InstallStartedAtNotNil() predicate.DecoyDeployment {
 	return predicate.DecoyDeployment(sql.FieldNotNull(FieldInstallStartedAt))
+}
+
+// ActiveRevisionIDEQ applies the EQ predicate on the "active_revision_id" field.
+func ActiveRevisionIDEQ(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldActiveRevisionID, v))
+}
+
+// ActiveRevisionIDNEQ applies the NEQ predicate on the "active_revision_id" field.
+func ActiveRevisionIDNEQ(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNEQ(FieldActiveRevisionID, v))
+}
+
+// ActiveRevisionIDIn applies the In predicate on the "active_revision_id" field.
+func ActiveRevisionIDIn(vs ...uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldIn(FieldActiveRevisionID, vs...))
+}
+
+// ActiveRevisionIDNotIn applies the NotIn predicate on the "active_revision_id" field.
+func ActiveRevisionIDNotIn(vs ...uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNotIn(FieldActiveRevisionID, vs...))
+}
+
+// ActiveRevisionIDGT applies the GT predicate on the "active_revision_id" field.
+func ActiveRevisionIDGT(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldGT(FieldActiveRevisionID, v))
+}
+
+// ActiveRevisionIDGTE applies the GTE predicate on the "active_revision_id" field.
+func ActiveRevisionIDGTE(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldGTE(FieldActiveRevisionID, v))
+}
+
+// ActiveRevisionIDLT applies the LT predicate on the "active_revision_id" field.
+func ActiveRevisionIDLT(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldLT(FieldActiveRevisionID, v))
+}
+
+// ActiveRevisionIDLTE applies the LTE predicate on the "active_revision_id" field.
+func ActiveRevisionIDLTE(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldLTE(FieldActiveRevisionID, v))
+}
+
+// ActiveRevisionIDIsNil applies the IsNil predicate on the "active_revision_id" field.
+func ActiveRevisionIDIsNil() predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldIsNull(FieldActiveRevisionID))
+}
+
+// ActiveRevisionIDNotNil applies the NotNil predicate on the "active_revision_id" field.
+func ActiveRevisionIDNotNil() predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNotNull(FieldActiveRevisionID))
+}
+
+// TokenRevisionIDEQ applies the EQ predicate on the "token_revision_id" field.
+func TokenRevisionIDEQ(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldTokenRevisionID, v))
+}
+
+// TokenRevisionIDNEQ applies the NEQ predicate on the "token_revision_id" field.
+func TokenRevisionIDNEQ(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNEQ(FieldTokenRevisionID, v))
+}
+
+// TokenRevisionIDIn applies the In predicate on the "token_revision_id" field.
+func TokenRevisionIDIn(vs ...uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldIn(FieldTokenRevisionID, vs...))
+}
+
+// TokenRevisionIDNotIn applies the NotIn predicate on the "token_revision_id" field.
+func TokenRevisionIDNotIn(vs ...uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNotIn(FieldTokenRevisionID, vs...))
+}
+
+// TokenRevisionIDGT applies the GT predicate on the "token_revision_id" field.
+func TokenRevisionIDGT(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldGT(FieldTokenRevisionID, v))
+}
+
+// TokenRevisionIDGTE applies the GTE predicate on the "token_revision_id" field.
+func TokenRevisionIDGTE(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldGTE(FieldTokenRevisionID, v))
+}
+
+// TokenRevisionIDLT applies the LT predicate on the "token_revision_id" field.
+func TokenRevisionIDLT(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldLT(FieldTokenRevisionID, v))
+}
+
+// TokenRevisionIDLTE applies the LTE predicate on the "token_revision_id" field.
+func TokenRevisionIDLTE(v uuid.UUID) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldLTE(FieldTokenRevisionID, v))
+}
+
+// TokenRevisionIDIsNil applies the IsNil predicate on the "token_revision_id" field.
+func TokenRevisionIDIsNil() predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldIsNull(FieldTokenRevisionID))
+}
+
+// TokenRevisionIDNotNil applies the NotNil predicate on the "token_revision_id" field.
+func TokenRevisionIDNotNil() predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNotNull(FieldTokenRevisionID))
+}
+
+// StopRequestedEQ applies the EQ predicate on the "stop_requested" field.
+func StopRequestedEQ(v bool) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldEQ(FieldStopRequested, v))
+}
+
+// StopRequestedNEQ applies the NEQ predicate on the "stop_requested" field.
+func StopRequestedNEQ(v bool) predicate.DecoyDeployment {
+	return predicate.DecoyDeployment(sql.FieldNEQ(FieldStopRequested, v))
 }
 
 // And groups predicates with the AND operator between them.

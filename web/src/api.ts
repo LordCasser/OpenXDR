@@ -1431,6 +1431,9 @@ export interface DecoyProfile {
 export const fetchDecoyInstallStatus = () => get<{ enabled: boolean }>('/api/decoy-install/status')
 export const installDecoy = (id: string, body: { fingerprint: string; arch: string; listenHost: string; fileRoot?: string }) => send('POST', `/api/decoy-install/${encodeURIComponent(id)}`, body)
 export interface DecoyDeployment {
+  hosted?: boolean
+  active_revision_id?: string | null
+  stop_requested?: boolean
   remote_installable: boolean
   install_state: 'idle' | 'installing' | 'installed' | 'unconfirmed'
   install_started_at?: string
@@ -1457,12 +1460,24 @@ export const revokeDecoy = (id: string) => send('POST', `/api/decoys/${encodeURI
 export async function issueDecoyToken(id: string): Promise<{ token: string; expiresAt: string }> {
   return (await send('POST', `/api/decoys/${encodeURIComponent(id)}/token`)).json()
 }
-export interface DecoyObservation { id: string; kind: string; received_at: string; incident_id?: string | null }
+export interface DecoyObservation { id: string; kind: string; received_at: string; occurred_at?: string | null; session_id?: string; revision_id?: string | null; incident_id?: string | null }
 export const fetchDecoyObservations = (id: string) => get<{ items: DecoyObservation[]; more: boolean }>(`/api/decoys/${encodeURIComponent(id)}/observations`)
 
 export async function reviewDecoyObservation(id: string, observation: string): Promise<{ incidentId: string }> {
   return (await send('POST', `/api/decoys/${encodeURIComponent(id)}/observations/${encodeURIComponent(observation)}/review`)).json()
 }
+
+export interface DeceptionReleaseInput { engine: 'native' | 'dygk'; version: string; digest: string; protocol: number; stateSchema: string }
+export interface DeceptionRelease { id: string; engine: 'native' | 'dygk'; version: string; digest: string; protocol: number; state_schema: string; enabled: boolean }
+export interface DeceptionConfig { hosted?: boolean; attachment: 'standalone' | 'gateway'; mode: 'observe' | 'block' | 'quarantine'; origin: string; upstream?: string; prefix: string; trustedProxies?: string[]; entries: number; branches: number; depth: number; maxNodes: number; requestLimit: number }
+export interface DeceptionRevision { id: string; number: number; release_id: string; spec: DeceptionConfig; created_at: string }
+export const fetchDeceptionReleases = () => get<DeceptionRelease[]>('/api/deception/releases')
+export const fetchHostedDeceptionRelease = () => get<DeceptionRelease | null>('/api/deception/hosted-release')
+export const admitDeceptionRelease = (body: DeceptionReleaseInput) => send('POST', '/api/deception/releases', body)
+export const disableDeceptionRelease = (id: string) => send('POST', `/api/deception/releases/${encodeURIComponent(id)}/disable`)
+export const fetchDeceptionRevisions = (id: string) => get<{ items: DeceptionRevision[]; more: boolean }>(`/api/decoys/${encodeURIComponent(id)}/revisions`)
+export const selectDeceptionRevision = (id: string, body: { releaseId: string; config: DeceptionConfig; expectedRevision?: string | null }) => send('POST', `/api/decoys/${encodeURIComponent(id)}/revisions`, body)
+export const stopDeceptionRuntime = (id: string) => send('POST', `/api/decoys/${encodeURIComponent(id)}/stop`)
 
 export async function downloadAssets(format: 'csv' | 'json', selection: { mode: 'filter'; q: string; groupId: string } | { mode: 'ids'; ids: string[] }): Promise<void> {
   const r = await fetch('/api/assets/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format, selection }) })

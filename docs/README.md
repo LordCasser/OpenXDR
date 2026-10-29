@@ -31,6 +31,8 @@
 | [ai-native.md](ai-native.md) | AI 原生架构设计稿（M1 已实现，当前接口以 pi-backend.md 为准）：agent 执行器、平台托管 Pi、定时巡检、对话页、组与审批 | 参与 AI 原生改造之前 |
 | [ssh-decoy.md](ssh-decoy.md) | 独立 SSH 诱饵靶场原型：固定 Banner、标记核实、事件与验证边界 | 进行授权诱骗实验；不用于生产部署 |
 | [multi-carrier-decoys.md](multi-carrier-decoys.md) | 多载体登记、HTTP/HTML、文件打开监视、模拟 Shell 与认证事件回传 | 布放与验收通用诱饵 |
+| [../integrations/dygk/README.md](../integrations/dygk/README.md) | 独立欺骗引擎：统一启动、源码缓存与 Git 管理、镜像范围、上游更新和回退 | 部署或更新 DYGK 与原生诱饵运行包 |
+| [deception-engine-design.md](deception-engine-design.md) | OpenXDR 与 DYGK 独立引擎接入设计：运行逻辑抽离、版本化协议、迁移清单与升级验收 | 实施欺骗引擎抽离或接入 DYGK 前 |
 | [decoy-defense.md](decoy-defense.md) | 诱饵、暂停注入、输出填充的运行策略、事件契约和平台接入边界 | 开发和验收三层诱饵防御 |
 | [event-partitioning.md](event-partitioning.md) | events 按天分区：主键与引用处理、ent 共存、预建与退役、老库在线迁移与回滚 | 改 events 表结构或保留期；执行分区迁移 |
 | [cluster.md](cluster.md) | JetStream 队列、server 集群、幂等语义、故障恢复与 Prometheus/Grafana | 部署多节点；排查积压、重投与节点故障 |

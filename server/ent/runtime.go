@@ -15,7 +15,9 @@ import (
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/ent/decoyenginerelease"
 	"openxdr/server/ent/decoyobservation"
+	"openxdr/server/ent/decoyrevision"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/externalticket"
@@ -241,10 +243,28 @@ func init() {
 	decoydeploymentDescResource := decoydeploymentFields[11].Descriptor()
 	// decoydeployment.DefaultResource holds the default value on creation for the resource field.
 	decoydeployment.DefaultResource = decoydeploymentDescResource.Default.(string)
+	// decoydeploymentDescStopRequested is the schema descriptor for stop_requested field.
+	decoydeploymentDescStopRequested := decoydeploymentFields[24].Descriptor()
+	// decoydeployment.DefaultStopRequested holds the default value on creation for the stop_requested field.
+	decoydeployment.DefaultStopRequested = decoydeploymentDescStopRequested.Default.(bool)
 	// decoydeploymentDescID is the schema descriptor for id field.
 	decoydeploymentDescID := decoydeploymentFields[0].Descriptor()
 	// decoydeployment.DefaultID holds the default value on creation for the id field.
 	decoydeployment.DefaultID = decoydeploymentDescID.Default.(func() uuid.UUID)
+	decoyenginereleaseFields := schema.DecoyEngineRelease{}.Fields()
+	_ = decoyenginereleaseFields
+	// decoyenginereleaseDescEnabled is the schema descriptor for enabled field.
+	decoyenginereleaseDescEnabled := decoyenginereleaseFields[6].Descriptor()
+	// decoyenginerelease.DefaultEnabled holds the default value on creation for the enabled field.
+	decoyenginerelease.DefaultEnabled = decoyenginereleaseDescEnabled.Default.(bool)
+	// decoyenginereleaseDescCreatedAt is the schema descriptor for created_at field.
+	decoyenginereleaseDescCreatedAt := decoyenginereleaseFields[7].Descriptor()
+	// decoyenginerelease.DefaultCreatedAt holds the default value on creation for the created_at field.
+	decoyenginerelease.DefaultCreatedAt = decoyenginereleaseDescCreatedAt.Default.(func() time.Time)
+	// decoyenginereleaseDescID is the schema descriptor for id field.
+	decoyenginereleaseDescID := decoyenginereleaseFields[0].Descriptor()
+	// decoyenginerelease.DefaultID holds the default value on creation for the id field.
+	decoyenginerelease.DefaultID = decoyenginereleaseDescID.Default.(func() uuid.UUID)
 	decoyobservationFields := schema.DecoyObservation{}.Fields()
 	_ = decoyobservationFields
 	// decoyobservationDescGeneration is the schema descriptor for generation field.
@@ -255,6 +275,32 @@ func init() {
 	decoyobservationDescReceivedAt := decoyobservationFields[5].Descriptor()
 	// decoyobservation.DefaultReceivedAt holds the default value on creation for the received_at field.
 	decoyobservation.DefaultReceivedAt = decoyobservationDescReceivedAt.Default.(func() time.Time)
+	// decoyobservationDescSessionID is the schema descriptor for session_id field.
+	decoyobservationDescSessionID := decoyobservationFields[7].Descriptor()
+	// decoyobservation.DefaultSessionID holds the default value on creation for the session_id field.
+	decoyobservation.DefaultSessionID = decoyobservationDescSessionID.Default.(string)
+	// decoyobservationDescTriggerKey is the schema descriptor for trigger_key field.
+	decoyobservationDescTriggerKey := decoyobservationFields[8].Descriptor()
+	// decoyobservation.DefaultTriggerKey holds the default value on creation for the trigger_key field.
+	decoyobservation.DefaultTriggerKey = decoyobservationDescTriggerKey.Default.(string)
+	// decoyobservationDescPayloadHash is the schema descriptor for payload_hash field.
+	decoyobservationDescPayloadHash := decoyobservationFields[9].Descriptor()
+	// decoyobservation.DefaultPayloadHash holds the default value on creation for the payload_hash field.
+	decoyobservation.DefaultPayloadHash = decoyobservationDescPayloadHash.Default.(string)
+	decoyrevisionFields := schema.DecoyRevision{}.Fields()
+	_ = decoyrevisionFields
+	// decoyrevisionDescNumber is the schema descriptor for number field.
+	decoyrevisionDescNumber := decoyrevisionFields[2].Descriptor()
+	// decoyrevision.NumberValidator is a validator for the "number" field. It is called by the builders before save.
+	decoyrevision.NumberValidator = decoyrevisionDescNumber.Validators[0].(func(int) error)
+	// decoyrevisionDescCreatedAt is the schema descriptor for created_at field.
+	decoyrevisionDescCreatedAt := decoyrevisionFields[5].Descriptor()
+	// decoyrevision.DefaultCreatedAt holds the default value on creation for the created_at field.
+	decoyrevision.DefaultCreatedAt = decoyrevisionDescCreatedAt.Default.(func() time.Time)
+	// decoyrevisionDescID is the schema descriptor for id field.
+	decoyrevisionDescID := decoyrevisionFields[0].Descriptor()
+	// decoyrevision.DefaultID holds the default value on creation for the id field.
+	decoyrevision.DefaultID = decoyrevisionDescID.Default.(func() uuid.UUID)
 	enrolltokenFields := schema.EnrollToken{}.Fields()
 	_ = enrolltokenFields
 	// enrolltokenDescCreatedAt is the schema descriptor for created_at field.

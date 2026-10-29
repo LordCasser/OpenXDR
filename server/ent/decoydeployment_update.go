@@ -271,6 +271,60 @@ func (_u *DecoyDeploymentUpdate) ClearInstallStartedAt() *DecoyDeploymentUpdate 
 	return _u
 }
 
+// SetActiveRevisionID sets the "active_revision_id" field.
+func (_u *DecoyDeploymentUpdate) SetActiveRevisionID(v uuid.UUID) *DecoyDeploymentUpdate {
+	_u.mutation.SetActiveRevisionID(v)
+	return _u
+}
+
+// SetNillableActiveRevisionID sets the "active_revision_id" field if the given value is not nil.
+func (_u *DecoyDeploymentUpdate) SetNillableActiveRevisionID(v *uuid.UUID) *DecoyDeploymentUpdate {
+	if v != nil {
+		_u.SetActiveRevisionID(*v)
+	}
+	return _u
+}
+
+// ClearActiveRevisionID clears the value of the "active_revision_id" field.
+func (_u *DecoyDeploymentUpdate) ClearActiveRevisionID() *DecoyDeploymentUpdate {
+	_u.mutation.ClearActiveRevisionID()
+	return _u
+}
+
+// SetTokenRevisionID sets the "token_revision_id" field.
+func (_u *DecoyDeploymentUpdate) SetTokenRevisionID(v uuid.UUID) *DecoyDeploymentUpdate {
+	_u.mutation.SetTokenRevisionID(v)
+	return _u
+}
+
+// SetNillableTokenRevisionID sets the "token_revision_id" field if the given value is not nil.
+func (_u *DecoyDeploymentUpdate) SetNillableTokenRevisionID(v *uuid.UUID) *DecoyDeploymentUpdate {
+	if v != nil {
+		_u.SetTokenRevisionID(*v)
+	}
+	return _u
+}
+
+// ClearTokenRevisionID clears the value of the "token_revision_id" field.
+func (_u *DecoyDeploymentUpdate) ClearTokenRevisionID() *DecoyDeploymentUpdate {
+	_u.mutation.ClearTokenRevisionID()
+	return _u
+}
+
+// SetStopRequested sets the "stop_requested" field.
+func (_u *DecoyDeploymentUpdate) SetStopRequested(v bool) *DecoyDeploymentUpdate {
+	_u.mutation.SetStopRequested(v)
+	return _u
+}
+
+// SetNillableStopRequested sets the "stop_requested" field if the given value is not nil.
+func (_u *DecoyDeploymentUpdate) SetNillableStopRequested(v *bool) *DecoyDeploymentUpdate {
+	if v != nil {
+		_u.SetStopRequested(*v)
+	}
+	return _u
+}
+
 // Mutation returns the DecoyDeploymentMutation object of the builder.
 func (_u *DecoyDeploymentUpdate) Mutation() *DecoyDeploymentMutation {
 	return _u.mutation
@@ -403,6 +457,21 @@ func (_u *DecoyDeploymentUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if _u.mutation.InstallStartedAtCleared() {
 		_spec.ClearField(decoydeployment.FieldInstallStartedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ActiveRevisionID(); ok {
+		_spec.SetField(decoydeployment.FieldActiveRevisionID, field.TypeUUID, value)
+	}
+	if _u.mutation.ActiveRevisionIDCleared() {
+		_spec.ClearField(decoydeployment.FieldActiveRevisionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.TokenRevisionID(); ok {
+		_spec.SetField(decoydeployment.FieldTokenRevisionID, field.TypeUUID, value)
+	}
+	if _u.mutation.TokenRevisionIDCleared() {
+		_spec.ClearField(decoydeployment.FieldTokenRevisionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.StopRequested(); ok {
+		_spec.SetField(decoydeployment.FieldStopRequested, field.TypeBool, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -666,6 +735,60 @@ func (_u *DecoyDeploymentUpdateOne) ClearInstallStartedAt() *DecoyDeploymentUpda
 	return _u
 }
 
+// SetActiveRevisionID sets the "active_revision_id" field.
+func (_u *DecoyDeploymentUpdateOne) SetActiveRevisionID(v uuid.UUID) *DecoyDeploymentUpdateOne {
+	_u.mutation.SetActiveRevisionID(v)
+	return _u
+}
+
+// SetNillableActiveRevisionID sets the "active_revision_id" field if the given value is not nil.
+func (_u *DecoyDeploymentUpdateOne) SetNillableActiveRevisionID(v *uuid.UUID) *DecoyDeploymentUpdateOne {
+	if v != nil {
+		_u.SetActiveRevisionID(*v)
+	}
+	return _u
+}
+
+// ClearActiveRevisionID clears the value of the "active_revision_id" field.
+func (_u *DecoyDeploymentUpdateOne) ClearActiveRevisionID() *DecoyDeploymentUpdateOne {
+	_u.mutation.ClearActiveRevisionID()
+	return _u
+}
+
+// SetTokenRevisionID sets the "token_revision_id" field.
+func (_u *DecoyDeploymentUpdateOne) SetTokenRevisionID(v uuid.UUID) *DecoyDeploymentUpdateOne {
+	_u.mutation.SetTokenRevisionID(v)
+	return _u
+}
+
+// SetNillableTokenRevisionID sets the "token_revision_id" field if the given value is not nil.
+func (_u *DecoyDeploymentUpdateOne) SetNillableTokenRevisionID(v *uuid.UUID) *DecoyDeploymentUpdateOne {
+	if v != nil {
+		_u.SetTokenRevisionID(*v)
+	}
+	return _u
+}
+
+// ClearTokenRevisionID clears the value of the "token_revision_id" field.
+func (_u *DecoyDeploymentUpdateOne) ClearTokenRevisionID() *DecoyDeploymentUpdateOne {
+	_u.mutation.ClearTokenRevisionID()
+	return _u
+}
+
+// SetStopRequested sets the "stop_requested" field.
+func (_u *DecoyDeploymentUpdateOne) SetStopRequested(v bool) *DecoyDeploymentUpdateOne {
+	_u.mutation.SetStopRequested(v)
+	return _u
+}
+
+// SetNillableStopRequested sets the "stop_requested" field if the given value is not nil.
+func (_u *DecoyDeploymentUpdateOne) SetNillableStopRequested(v *bool) *DecoyDeploymentUpdateOne {
+	if v != nil {
+		_u.SetStopRequested(*v)
+	}
+	return _u
+}
+
 // Mutation returns the DecoyDeploymentMutation object of the builder.
 func (_u *DecoyDeploymentUpdateOne) Mutation() *DecoyDeploymentMutation {
 	return _u.mutation
@@ -828,6 +951,21 @@ func (_u *DecoyDeploymentUpdateOne) sqlSave(ctx context.Context) (_node *DecoyDe
 	}
 	if _u.mutation.InstallStartedAtCleared() {
 		_spec.ClearField(decoydeployment.FieldInstallStartedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ActiveRevisionID(); ok {
+		_spec.SetField(decoydeployment.FieldActiveRevisionID, field.TypeUUID, value)
+	}
+	if _u.mutation.ActiveRevisionIDCleared() {
+		_spec.ClearField(decoydeployment.FieldActiveRevisionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.TokenRevisionID(); ok {
+		_spec.SetField(decoydeployment.FieldTokenRevisionID, field.TypeUUID, value)
+	}
+	if _u.mutation.TokenRevisionIDCleared() {
+		_spec.ClearField(decoydeployment.FieldTokenRevisionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.StopRequested(); ok {
+		_spec.SetField(decoydeployment.FieldStopRequested, field.TypeBool, value)
 	}
 	_node = &DecoyDeployment{config: _u.config}
 	_spec.Assign = _node.assignValues

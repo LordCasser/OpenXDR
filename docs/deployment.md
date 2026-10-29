@@ -446,3 +446,22 @@ DNS 校验与实际拨号使用同一地址，TLS 证书必须有效。
 `openxdr_integration_oldest_pending_seconds`、`openxdr_integration_attempts_retained`
 以及集成 API 的 429 计数。队列指标是数据库全局快照，跨节点采集应取 max 而不是求和；
 尝试数量是保留期内的 gauge，不是永久累计 counter。
+
+
+## 独立欺骗引擎统一启动
+
+在原安装目录的 `.env` 中追加 `COMPOSE_PROFILES=dygk`，继续使用主 `docker compose up -d`。原有 profile 以逗号保留。引擎版本和运行身份由平台与受限控制通道自动登记、签发；控制台选择平台托管后无需再配置独立启动参数。
+
+| 配置 | 默认 | 用途 |
+| --- | --- | --- |
+| `COMPOSE_PROFILES` | 未启用 DYGK | 包含 `dygk` 时随主编排启用引擎 |
+| `DYGK_VERSION` | 安装编排 `latest`，源码编排 `local` | 独立引擎镜像标签，生产宜锁定 |
+| `DYGK_BIND_IP` | `127.0.0.1` | 主编排预留端口的宿主绑定地址 |
+| `DYGK_PORT_RANGE` | `18080-18179` | 站点端口范围；登记应选择对应端口 |
+| `DYGK_SOURCE` | `local` | 构建源码来源，`local` 使用提供的源码，`remote` 才从锁定的远端版本拉取 |
+| `DYGK_LOCAL_SOURCE` | `local-source` | 相对 `integrations/dygk/` 的源码目录；云端构建需在自己的模块构建上下文内提供 |
+| `DYGK_UPSTREAM_TOKEN` | 空 | 仅远端私有源码需要的读取令牌，经 BuildKit secret 提供；本地模式和预构建镜像运行时无需设置 |
+
+控制 socket 和持久目录由主编排注入命名卷，不是开发机路径；不要将引擎控制卷挂给其他服务。独立镜像的发布授权、云端接入与回退步骤见 [运行包说明](../integrations/dygk/README.md)。
+
+源码来源在同一 `.env` 配置，默认本地模式，不调用 Git 或自动回退远端。默认 `local-source/` 是被 Git 忽略的私有构建输入，Docker 构建会使用它；`.downloads/` 和 `.upstream/` 缓存则同时被 Docker 排除。云端本地模式需提供源码到自身构建上下文，远端模式需具备上游读取权限，两者都核验文件摘要。预构建镜像已包含运行核心，启动时无需源码来源参数或读取令牌。具体配置、目录与打包范围见 [源码来源配置](../integrations/dygk/README.md#源码来源配置)。

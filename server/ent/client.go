@@ -23,7 +23,9 @@ import (
 	"openxdr/server/ent/command"
 	"openxdr/server/ent/commandpolicy"
 	"openxdr/server/ent/decoydeployment"
+	"openxdr/server/ent/decoyenginerelease"
 	"openxdr/server/ent/decoyobservation"
+	"openxdr/server/ent/decoyrevision"
 	"openxdr/server/ent/enrolltoken"
 	"openxdr/server/ent/event"
 	"openxdr/server/ent/externalticket"
@@ -94,8 +96,12 @@ type Client struct {
 	CommandPolicy *CommandPolicyClient
 	// DecoyDeployment is the client for interacting with the DecoyDeployment builders.
 	DecoyDeployment *DecoyDeploymentClient
+	// DecoyEngineRelease is the client for interacting with the DecoyEngineRelease builders.
+	DecoyEngineRelease *DecoyEngineReleaseClient
 	// DecoyObservation is the client for interacting with the DecoyObservation builders.
 	DecoyObservation *DecoyObservationClient
+	// DecoyRevision is the client for interacting with the DecoyRevision builders.
+	DecoyRevision *DecoyRevisionClient
 	// EnrollToken is the client for interacting with the EnrollToken builders.
 	EnrollToken *EnrollTokenClient
 	// Event is the client for interacting with the Event builders.
@@ -185,7 +191,9 @@ func (c *Client) init() {
 	c.Command = NewCommandClient(c.config)
 	c.CommandPolicy = NewCommandPolicyClient(c.config)
 	c.DecoyDeployment = NewDecoyDeploymentClient(c.config)
+	c.DecoyEngineRelease = NewDecoyEngineReleaseClient(c.config)
 	c.DecoyObservation = NewDecoyObservationClient(c.config)
+	c.DecoyRevision = NewDecoyRevisionClient(c.config)
 	c.EnrollToken = NewEnrollTokenClient(c.config)
 	c.Event = NewEventClient(c.config)
 	c.ExternalTicket = NewExternalTicketClient(c.config)
@@ -323,7 +331,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Command:                 NewCommandClient(cfg),
 		CommandPolicy:           NewCommandPolicyClient(cfg),
 		DecoyDeployment:         NewDecoyDeploymentClient(cfg),
+		DecoyEngineRelease:      NewDecoyEngineReleaseClient(cfg),
 		DecoyObservation:        NewDecoyObservationClient(cfg),
+		DecoyRevision:           NewDecoyRevisionClient(cfg),
 		EnrollToken:             NewEnrollTokenClient(cfg),
 		Event:                   NewEventClient(cfg),
 		ExternalTicket:          NewExternalTicketClient(cfg),
@@ -388,7 +398,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Command:                 NewCommandClient(cfg),
 		CommandPolicy:           NewCommandPolicyClient(cfg),
 		DecoyDeployment:         NewDecoyDeploymentClient(cfg),
+		DecoyEngineRelease:      NewDecoyEngineReleaseClient(cfg),
 		DecoyObservation:        NewDecoyObservationClient(cfg),
+		DecoyRevision:           NewDecoyRevisionClient(cfg),
 		EnrollToken:             NewEnrollTokenClient(cfg),
 		Event:                   NewEventClient(cfg),
 		ExternalTicket:          NewExternalTicketClient(cfg),
@@ -453,14 +465,14 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AIJob, c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
 		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.DecoyDeployment,
-		c.DecoyObservation, c.EnrollToken, c.Event, c.ExternalTicket, c.Finding,
-		c.Group, c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Integration,
-		c.IntegrationAttempt, c.IntegrationDelivery, c.IntegrationEvent,
-		c.IntegrationGroup, c.IntegrationIdempotency, c.IntegrationSubscription,
-		c.IntegrationToken, c.Intel, c.Memory, c.ProcessBaseline, c.Report,
-		c.ReportRead, c.SSHLogin, c.Session, c.SessionMessage, c.Setting,
-		c.Suppression, c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord,
-		c.Zone,
+		c.DecoyEngineRelease, c.DecoyObservation, c.DecoyRevision, c.EnrollToken,
+		c.Event, c.ExternalTicket, c.Finding, c.Group, c.GroupMember, c.HostCredential,
+		c.IPInfo, c.Incident, c.Integration, c.IntegrationAttempt,
+		c.IntegrationDelivery, c.IntegrationEvent, c.IntegrationGroup,
+		c.IntegrationIdempotency, c.IntegrationSubscription, c.IntegrationToken,
+		c.Intel, c.Memory, c.ProcessBaseline, c.Report, c.ReportRead, c.SSHLogin,
+		c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun,
+		c.TrustedSource, c.User, c.VulnRecord, c.Zone,
 	} {
 		n.Use(hooks...)
 	}
@@ -472,14 +484,14 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AIJob, c.AIUsage, c.AgentSession, c.Alert, c.Approval, c.Asset, c.AssetLink,
 		c.AuditLog, c.BeaconBaseline, c.Command, c.CommandPolicy, c.DecoyDeployment,
-		c.DecoyObservation, c.EnrollToken, c.Event, c.ExternalTicket, c.Finding,
-		c.Group, c.GroupMember, c.HostCredential, c.IPInfo, c.Incident, c.Integration,
-		c.IntegrationAttempt, c.IntegrationDelivery, c.IntegrationEvent,
-		c.IntegrationGroup, c.IntegrationIdempotency, c.IntegrationSubscription,
-		c.IntegrationToken, c.Intel, c.Memory, c.ProcessBaseline, c.Report,
-		c.ReportRead, c.SSHLogin, c.Session, c.SessionMessage, c.Setting,
-		c.Suppression, c.Task, c.TaskRun, c.TrustedSource, c.User, c.VulnRecord,
-		c.Zone,
+		c.DecoyEngineRelease, c.DecoyObservation, c.DecoyRevision, c.EnrollToken,
+		c.Event, c.ExternalTicket, c.Finding, c.Group, c.GroupMember, c.HostCredential,
+		c.IPInfo, c.Incident, c.Integration, c.IntegrationAttempt,
+		c.IntegrationDelivery, c.IntegrationEvent, c.IntegrationGroup,
+		c.IntegrationIdempotency, c.IntegrationSubscription, c.IntegrationToken,
+		c.Intel, c.Memory, c.ProcessBaseline, c.Report, c.ReportRead, c.SSHLogin,
+		c.Session, c.SessionMessage, c.Setting, c.Suppression, c.Task, c.TaskRun,
+		c.TrustedSource, c.User, c.VulnRecord, c.Zone,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -512,8 +524,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CommandPolicy.mutate(ctx, m)
 	case *DecoyDeploymentMutation:
 		return c.DecoyDeployment.mutate(ctx, m)
+	case *DecoyEngineReleaseMutation:
+		return c.DecoyEngineRelease.mutate(ctx, m)
 	case *DecoyObservationMutation:
 		return c.DecoyObservation.mutate(ctx, m)
+	case *DecoyRevisionMutation:
+		return c.DecoyRevision.mutate(ctx, m)
 	case *EnrollTokenMutation:
 		return c.EnrollToken.mutate(ctx, m)
 	case *EventMutation:
@@ -2293,6 +2309,139 @@ func (c *DecoyDeploymentClient) mutate(ctx context.Context, m *DecoyDeploymentMu
 	}
 }
 
+// DecoyEngineReleaseClient is a client for the DecoyEngineRelease schema.
+type DecoyEngineReleaseClient struct {
+	config
+}
+
+// NewDecoyEngineReleaseClient returns a client for the DecoyEngineRelease from the given config.
+func NewDecoyEngineReleaseClient(c config) *DecoyEngineReleaseClient {
+	return &DecoyEngineReleaseClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `decoyenginerelease.Hooks(f(g(h())))`.
+func (c *DecoyEngineReleaseClient) Use(hooks ...Hook) {
+	c.hooks.DecoyEngineRelease = append(c.hooks.DecoyEngineRelease, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `decoyenginerelease.Intercept(f(g(h())))`.
+func (c *DecoyEngineReleaseClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DecoyEngineRelease = append(c.inters.DecoyEngineRelease, interceptors...)
+}
+
+// Create returns a builder for creating a DecoyEngineRelease entity.
+func (c *DecoyEngineReleaseClient) Create() *DecoyEngineReleaseCreate {
+	mutation := newDecoyEngineReleaseMutation(c.config, OpCreate)
+	return &DecoyEngineReleaseCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DecoyEngineRelease entities.
+func (c *DecoyEngineReleaseClient) CreateBulk(builders ...*DecoyEngineReleaseCreate) *DecoyEngineReleaseCreateBulk {
+	return &DecoyEngineReleaseCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DecoyEngineReleaseClient) MapCreateBulk(slice any, setFunc func(*DecoyEngineReleaseCreate, int)) *DecoyEngineReleaseCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DecoyEngineReleaseCreateBulk{err: fmt.Errorf("calling to DecoyEngineReleaseClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DecoyEngineReleaseCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DecoyEngineReleaseCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DecoyEngineRelease.
+func (c *DecoyEngineReleaseClient) Update() *DecoyEngineReleaseUpdate {
+	mutation := newDecoyEngineReleaseMutation(c.config, OpUpdate)
+	return &DecoyEngineReleaseUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DecoyEngineReleaseClient) UpdateOne(_m *DecoyEngineRelease) *DecoyEngineReleaseUpdateOne {
+	mutation := newDecoyEngineReleaseMutation(c.config, OpUpdateOne, withDecoyEngineRelease(_m))
+	return &DecoyEngineReleaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DecoyEngineReleaseClient) UpdateOneID(id uuid.UUID) *DecoyEngineReleaseUpdateOne {
+	mutation := newDecoyEngineReleaseMutation(c.config, OpUpdateOne, withDecoyEngineReleaseID(id))
+	return &DecoyEngineReleaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DecoyEngineRelease.
+func (c *DecoyEngineReleaseClient) Delete() *DecoyEngineReleaseDelete {
+	mutation := newDecoyEngineReleaseMutation(c.config, OpDelete)
+	return &DecoyEngineReleaseDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DecoyEngineReleaseClient) DeleteOne(_m *DecoyEngineRelease) *DecoyEngineReleaseDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DecoyEngineReleaseClient) DeleteOneID(id uuid.UUID) *DecoyEngineReleaseDeleteOne {
+	builder := c.Delete().Where(decoyenginerelease.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DecoyEngineReleaseDeleteOne{builder}
+}
+
+// Query returns a query builder for DecoyEngineRelease.
+func (c *DecoyEngineReleaseClient) Query() *DecoyEngineReleaseQuery {
+	return &DecoyEngineReleaseQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDecoyEngineRelease},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DecoyEngineRelease entity by its id.
+func (c *DecoyEngineReleaseClient) Get(ctx context.Context, id uuid.UUID) (*DecoyEngineRelease, error) {
+	return c.Query().Where(decoyenginerelease.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DecoyEngineReleaseClient) GetX(ctx context.Context, id uuid.UUID) *DecoyEngineRelease {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DecoyEngineReleaseClient) Hooks() []Hook {
+	return c.hooks.DecoyEngineRelease
+}
+
+// Interceptors returns the client interceptors.
+func (c *DecoyEngineReleaseClient) Interceptors() []Interceptor {
+	return c.inters.DecoyEngineRelease
+}
+
+func (c *DecoyEngineReleaseClient) mutate(ctx context.Context, m *DecoyEngineReleaseMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DecoyEngineReleaseCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DecoyEngineReleaseUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DecoyEngineReleaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DecoyEngineReleaseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DecoyEngineRelease mutation op: %q", m.Op())
+	}
+}
+
 // DecoyObservationClient is a client for the DecoyObservation schema.
 type DecoyObservationClient struct {
 	config
@@ -2423,6 +2572,139 @@ func (c *DecoyObservationClient) mutate(ctx context.Context, m *DecoyObservation
 		return (&DecoyObservationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown DecoyObservation mutation op: %q", m.Op())
+	}
+}
+
+// DecoyRevisionClient is a client for the DecoyRevision schema.
+type DecoyRevisionClient struct {
+	config
+}
+
+// NewDecoyRevisionClient returns a client for the DecoyRevision from the given config.
+func NewDecoyRevisionClient(c config) *DecoyRevisionClient {
+	return &DecoyRevisionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `decoyrevision.Hooks(f(g(h())))`.
+func (c *DecoyRevisionClient) Use(hooks ...Hook) {
+	c.hooks.DecoyRevision = append(c.hooks.DecoyRevision, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `decoyrevision.Intercept(f(g(h())))`.
+func (c *DecoyRevisionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DecoyRevision = append(c.inters.DecoyRevision, interceptors...)
+}
+
+// Create returns a builder for creating a DecoyRevision entity.
+func (c *DecoyRevisionClient) Create() *DecoyRevisionCreate {
+	mutation := newDecoyRevisionMutation(c.config, OpCreate)
+	return &DecoyRevisionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DecoyRevision entities.
+func (c *DecoyRevisionClient) CreateBulk(builders ...*DecoyRevisionCreate) *DecoyRevisionCreateBulk {
+	return &DecoyRevisionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DecoyRevisionClient) MapCreateBulk(slice any, setFunc func(*DecoyRevisionCreate, int)) *DecoyRevisionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DecoyRevisionCreateBulk{err: fmt.Errorf("calling to DecoyRevisionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DecoyRevisionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DecoyRevisionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DecoyRevision.
+func (c *DecoyRevisionClient) Update() *DecoyRevisionUpdate {
+	mutation := newDecoyRevisionMutation(c.config, OpUpdate)
+	return &DecoyRevisionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DecoyRevisionClient) UpdateOne(_m *DecoyRevision) *DecoyRevisionUpdateOne {
+	mutation := newDecoyRevisionMutation(c.config, OpUpdateOne, withDecoyRevision(_m))
+	return &DecoyRevisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DecoyRevisionClient) UpdateOneID(id uuid.UUID) *DecoyRevisionUpdateOne {
+	mutation := newDecoyRevisionMutation(c.config, OpUpdateOne, withDecoyRevisionID(id))
+	return &DecoyRevisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DecoyRevision.
+func (c *DecoyRevisionClient) Delete() *DecoyRevisionDelete {
+	mutation := newDecoyRevisionMutation(c.config, OpDelete)
+	return &DecoyRevisionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DecoyRevisionClient) DeleteOne(_m *DecoyRevision) *DecoyRevisionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DecoyRevisionClient) DeleteOneID(id uuid.UUID) *DecoyRevisionDeleteOne {
+	builder := c.Delete().Where(decoyrevision.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DecoyRevisionDeleteOne{builder}
+}
+
+// Query returns a query builder for DecoyRevision.
+func (c *DecoyRevisionClient) Query() *DecoyRevisionQuery {
+	return &DecoyRevisionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDecoyRevision},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DecoyRevision entity by its id.
+func (c *DecoyRevisionClient) Get(ctx context.Context, id uuid.UUID) (*DecoyRevision, error) {
+	return c.Query().Where(decoyrevision.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DecoyRevisionClient) GetX(ctx context.Context, id uuid.UUID) *DecoyRevision {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DecoyRevisionClient) Hooks() []Hook {
+	return c.hooks.DecoyRevision
+}
+
+// Interceptors returns the client interceptors.
+func (c *DecoyRevisionClient) Interceptors() []Interceptor {
+	return c.inters.DecoyRevision
+}
+
+func (c *DecoyRevisionClient) mutate(ctx context.Context, m *DecoyRevisionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DecoyRevisionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DecoyRevisionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DecoyRevisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DecoyRevisionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DecoyRevision mutation op: %q", m.Op())
 	}
 }
 
@@ -6867,10 +7149,10 @@ func (c *ZoneClient) mutate(ctx context.Context, m *ZoneMutation) (Value, error)
 type (
 	hooks struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
-		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
-		EnrollToken, Event, ExternalTicket, Finding, Group, GroupMember,
-		HostCredential, IPInfo, Incident, Integration, IntegrationAttempt,
-		IntegrationDelivery, IntegrationEvent, IntegrationGroup,
+		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyEngineRelease,
+		DecoyObservation, DecoyRevision, EnrollToken, Event, ExternalTicket, Finding,
+		Group, GroupMember, HostCredential, IPInfo, Incident, Integration,
+		IntegrationAttempt, IntegrationDelivery, IntegrationEvent, IntegrationGroup,
 		IntegrationIdempotency, IntegrationSubscription, IntegrationToken, Intel,
 		Memory, ProcessBaseline, Report, ReportRead, SSHLogin, Session, SessionMessage,
 		Setting, Suppression, Task, TaskRun, TrustedSource, User, VulnRecord,
@@ -6878,10 +7160,10 @@ type (
 	}
 	inters struct {
 		AIJob, AIUsage, AgentSession, Alert, Approval, Asset, AssetLink, AuditLog,
-		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyObservation,
-		EnrollToken, Event, ExternalTicket, Finding, Group, GroupMember,
-		HostCredential, IPInfo, Incident, Integration, IntegrationAttempt,
-		IntegrationDelivery, IntegrationEvent, IntegrationGroup,
+		BeaconBaseline, Command, CommandPolicy, DecoyDeployment, DecoyEngineRelease,
+		DecoyObservation, DecoyRevision, EnrollToken, Event, ExternalTicket, Finding,
+		Group, GroupMember, HostCredential, IPInfo, Incident, Integration,
+		IntegrationAttempt, IntegrationDelivery, IntegrationEvent, IntegrationGroup,
 		IntegrationIdempotency, IntegrationSubscription, IntegrationToken, Intel,
 		Memory, ProcessBaseline, Report, ReportRead, SSHLogin, Session, SessionMessage,
 		Setting, Suppression, Task, TaskRun, TrustedSource, User, VulnRecord,
