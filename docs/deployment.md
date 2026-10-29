@@ -205,13 +205,21 @@ echo '*.* @<server>:514' >> /etc/rsyslog.conf && systemctl restart rsyslog
 域名情报按后缀匹配，`evil.com` 能撞上 `c2.evil.com` 的 DNS 查询、TLS SNI 与 HTTP Host。
 哈希情报撞的是 agent 随进程事件上报的 exe SHA-256（同一二进制只算一次，缓存按 mtime 失效）。
 
-**情报订阅**开箱即用：内置 abuse.ch Feodo Tracker（僵尸网络 C2 IP）、ThreatFox
+**情报订阅**：内置 abuse.ch Feodo Tracker（僵尸网络 C2 IP）、ThreatFox
 （近期恶意软件 IP / 域名 / 哈希）、URLhaus（恶意软件分发域名）与 Emerging Threats
 （失陷主机 IP）四个公开源，默认全部开启，server 单活每 `INTEL_FEED_INTERVAL_HOURS`
 （默认 6）小时拉取一次。内网与保留地址不入库；ThreatFox 的 URL 只收主机是 IP 的，
 挂在 GitHub 之类公共平台上的恶意 URL 若按主机名入库会误伤正常访问。手工录入的同值情报
 优先；源里撤下的条目约两天后到期失效，关掉的源立即清空。在「威胁情报」页可逐个开关、
 立即同步，并直接看到哪些订阅情报命中过。server 需要能访问这些源（可经 `HTTPS_PROXY`）。
+
+ThreatFox 与 URLhaus 需要 abuse.ch Auth-Key。在「系统设置 → 外部情报查询」保存密钥，
+或设置 `ABUSE_CH_AUTH_KEY`；控制台保存的值优先，清空后不再回退环境变量，点击恢复默认才重新使用环境变量。
+密钥通过 `HOST_CREDENTIAL_KEY` 加密入库，接口只显示是否配置及末四位；认证下载地址不回显、不写入日志，且不跟随重定向。
+未配置时明确提示配置密钥，不再请求已停用的匿名地址。Feodo 与 Emerging Threats 不需要这项密钥。
+配置后在威胁情报页执行「立即同步」确认实际可用性；测试通过不代表账号具有源的下载权限。
+官方说明：[ThreatFox 导出](https://threatfox.abuse.ch/export/) 与 [URLhaus API](https://urlhaus.abuse.ch/api/)。
+
 
 界面上（威胁情报入口）还可直接粘贴清单批量导入：一行一条，类型自动识别，
 重复条目跳过。每条情报持续累计命中次数——长期零命中的陈年 IOC 应当清理，
@@ -373,6 +381,7 @@ server 全部通过环境变量配置，均有默认值：
 | `AGENT_DIST_DIR` | 空 | agent 与 sensor 安装包目录，供安装脚本下载，也是在线 agent / sensor 自动升级的目标版本 |
 | `AGENT_AUTO_UPGRADE` | `true` | 在线 agent / sensor 与安装包哈希不同时自动升级，`false` 同时关闭两者 |
 | `TRUSTED_PROXIES` | 空 | 可信反向代理的地址或网段（逗号分隔）。只有来自这些地址的请求才采信 `X-Forwarded-For`，从右往左取第一个不可信地址作为客户端，登录退避与审计按它记来源；留空不还原 |
+| `ABUSE_CH_AUTH_KEY` | 空 | ThreatFox / URLhaus 认证导出密钥，可在「系统设置 → 外部情报查询」加密保存 |
 | `INTEL_FEED_INTERVAL_HOURS` | `6` | 情报订阅同步周期（小时），订阅条目有效期为它的 8 倍 |
 | `RESPONSE_ENABLED` | `false` | 是否允许下发响应指令；开启后人工处置、Pi 命令、定时任务与自动响应下发的指令都会真执行 |
 | `ISOLATION_ALLOW` | 空 | 隔离主机时放行的地址，必须包含 server 的 gRPC 端点 |

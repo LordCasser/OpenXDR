@@ -39,6 +39,7 @@ import (
 	"openxdr/server/internal/enroll"
 	"openxdr/server/internal/eventbus"
 	"openxdr/server/internal/eventpart"
+	"openxdr/server/internal/eventsearch"
 	"openxdr/server/internal/fpstats"
 	"openxdr/server/internal/grpcsvc"
 	"openxdr/server/internal/hostimport"
@@ -81,7 +82,10 @@ func main() {
 
 	suppressions := suppress.New(client, time.Duration(getenvInt("SUPPRESSION_RELOAD_SECONDS", 30))*time.Second)
 	go suppressions.Run(ctx)
-	intelStore, intelFeeds := startIntel(ctx, db, client)
+	credentialVault := loadCredentialVault()
+	aiConf := newAIConf(client, credentialVault)
+	conf := func() aiconf.Config { return aiConf.Get(ctx) }
+	intelStore, intelFeeds := startIntel(ctx, db, client, func(ctx context.Context) string { return aiConf.Get(ctx).AbuseCHKey })
 
 	rulesPath := getenv("RULES_PATH", "../rules")
 	rules, temporalRules, err := loadDetectionRules(ctx, rulesPath, os.Getenv("TEMPORAL_RULES_PATH"), time.Duration(getenvInt("RULES_RELOAD_SECONDS", 30))*time.Second)
@@ -97,9 +101,6 @@ func main() {
 	}
 	startAnalytics(ctx, db, client, rules, suppressions)
 
-	credentialVault := loadCredentialVault()
-	aiConf := newAIConf(client, credentialVault)
-	conf := func() aiconf.Config { return aiConf.Get(ctx) }
 	// 研判与资产标注共用一个端点与模型，每次调用按当时的配置，用量按用途分开记
 	llmFor := func(feature string) *triage.LLM { return newLLM(client, conf, feature) }
 	assetEngine := startAssetMap(ctx, db, client, llmFor, conf)
@@ -181,7 +182,7 @@ func migrateSchema(ctx context.Context, db *sql.DB, client *ent.Client) error {
 	if err := eventpart.Migrate(ctx, client, db); err != nil {
 		return err
 	}
-	ensureSearchIndex(ctx, db)
+	eventsearch.Ensure(ctx, db)
 	// 旧版 AI 免审批名单换成高风险名单；放在 schema 锁里，多节点同时启动只迁一次
 	if err := commandgate.MigrateAllowToDeny(ctx, client); err != nil {
 		return err
@@ -227,11 +228,11 @@ func startDirectorySync(ctx context.Context, db *sql.DB) {
 }
 
 // startIntel 情报库定时重载与情报订阅。
-func startIntel(ctx context.Context, db *sql.DB, client *ent.Client) (*intel.Store, *intel.Feeds) {
+func startIntel(ctx context.Context, db *sql.DB, client *ent.Client, authKey func(context.Context) string) (*intel.Store, *intel.Feeds) {
 	intelStore := intel.New(client, time.Duration(getenvInt("INTEL_RELOAD_SECONDS", 30))*time.Second)
 	go intelStore.Run(ctx)
 	// 情报订阅：内置公开源，控制台开关，单活定时拉取；落库后由 intelStore 下个重载周期生效
-	intelFeeds := &intel.Feeds{DB: db, Client: client, HTTP: &http.Client{},
+	intelFeeds := &intel.Feeds{DB: db, Client: client, HTTP: &http.Client{}, AuthKey: authKey,
 		Interval: time.Duration(getenvInt("INTEL_FEED_INTERVAL_HOURS", 6)) * time.Hour}
 	go cluster.RunLeader(ctx, db, "intel-feeds", intelFeeds.Run)
 	return intelStore, intelFeeds
@@ -318,7 +319,8 @@ func newAIConf(client *ent.Client, credentialVault *hostimport.Vault) *aiconf.St
 	return &aiconf.Store{DB: client, Vault: credentialVault, Default: aiconf.Config{
 		BaseURL: getenv("AI_BASE_URL", "http://localhost:11434/v1"), APIKey: os.Getenv("AI_API_KEY"),
 		Model: os.Getenv("AI_MODEL"), PiModel: os.Getenv("PI_MODEL"),
-		PTR: getenv("IPINFO_PTR", "true") == "true", VTKey: os.Getenv("VT_API_KEY"), VTAlertMin: getenvInt("VT_ALERT_MIN_ENGINES", 3),
+		AbuseCHKey: os.Getenv("ABUSE_CH_AUTH_KEY"),
+		PTR:        getenv("IPINFO_PTR", "true") == "true", VTKey: os.Getenv("VT_API_KEY"), VTAlertMin: getenvInt("VT_ALERT_MIN_ENGINES", 3),
 	}}
 }
 
@@ -794,22 +796,6 @@ func configureLogging() {
 		return
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, opts)))
-}
-
-// ensureSearchIndex 事件全文检索的 trgm 索引。没有它，关键词检索在大表上
-// 是全表扫。CREATE EXTENSION 需要数据库权限，失败只降级警告——检索仍然可用，
-// 只是慢，比起启动失败这是正确的取舍。
-func ensureSearchIndex(ctx context.Context, db *sql.DB) {
-	stmts := []string{
-		"CREATE EXTENSION IF NOT EXISTS pg_trgm",
-		"CREATE INDEX IF NOT EXISTS events_raw_trgm ON events USING gin ((raw::text) gin_trgm_ops)",
-	}
-	for _, stmt := range stmts {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			slog.Warn("检索索引未启用，大数据量下关键词搜索会退化为全表扫描", "err", err)
-			return
-		}
-	}
 }
 
 // isolationAllowlist 隔离主机时必须放行的地址。默认放行 server 的 gRPC 端点，

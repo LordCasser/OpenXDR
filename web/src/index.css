@@ -128,7 +128,13 @@ code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--
 
 /* 对话页顶部：本会话处理的事件与待办 */
 .subjects-bar { border-bottom: 1px solid var(--ant-color-border-secondary); border-radius: 0 !important; background: var(--ant-color-fill-quaternary); }
-.subject-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; min-width: 0; }
+.subject-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; min-width: 0; }
+
+.subject-title { flex: 1 1 180px; min-width: 0; }
+.subject-row > .ant-typography { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .subject-title .ant-typography { white-space: normal; overflow-wrap: anywhere; }
+}
 
 /* 会话列表：日期分组标题与置顶按钮（悬停才出现，已置顶常亮） */
 .chat-session-bucket { font-size: 12px; color: var(--ant-color-text-tertiary); padding: 10px 16px 4px; }

@@ -4,6 +4,7 @@ package api
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"testing"
 )
@@ -28,6 +29,18 @@ func TestAPIEventSearch(t *testing.T) {
 
 	if got := fetch(""); len(got) != 1 {
 		t.Fatalf("无条件应返回 24h 内全部事件，实际 %d", len(got))
+	}
+	for _, value := range []string{"not-a-uuid", " ", "0190d7b0-0000-7000-8000-00000000000z"} {
+		resp, body := get(t, ts, "/api/events?assetId="+url.QueryEscape(value))
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("非法 assetId %q 应返回 400，实际 %d: %s", value, resp.StatusCode, body)
+		}
+	}
+	if got := fetch("assetId="); len(got) != 1 {
+		t.Errorf("空筛选应保持未筛选行为，实际 %d", len(got))
+	}
+	if got := fetch("assetId=0190d7b0-0000-7000-8000-000000000000"); len(got) != 0 {
+		t.Errorf("合法但不存在的资产不应返回其他事件，实际 %d", len(got))
 	}
 	// 取满 limit 才提示截断
 	if resp, _ := get(t, ts, "/api/events?limit=1"); resp.Header.Get("X-Truncated") != "1" {

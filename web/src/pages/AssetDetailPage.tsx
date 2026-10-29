@@ -6,9 +6,9 @@ import {
   theme,
 } from 'antd'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import {
-  createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchFindings, fetchIncidents, saveAgentConfig, searchEvents,
+  createAgentSession, fetchAgentConfig, fetchAssets, fetchCommands, fetchFindingsPage, fetchIncidents, saveAgentConfig, searchEvents,
   type AgentConfig, type CommandRow, type FindingRow, type IncidentSummary,
 } from '../api'
 import { useRemember } from '../app/recent'
@@ -107,6 +107,11 @@ function ConfigTab({ assetId, canEdit }: { assetId: string; canEdit: boolean }) 
 }
 
 export function AssetDetailPage() {
+  const { id } = useParams()
+  return <AssetDetail key={id} />
+}
+
+function AssetDetail() {
   const { t } = useI18n()
   const { token } = theme.useToken()
   const { id } = useParams()
@@ -116,7 +121,14 @@ export function AssetDetailPage() {
   const { groups, isAdmin } = useSession()
   const [starting, setStarting] = useState(false)
   // 从攻击面等处带 ?tab= 进来时直接打开对应标签
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') ?? 'incidents')
+  const [params, setParams] = useSearchParams()
+  const requestedTab = params.get('tab') ?? 'incidents'
+  const tab = ['incidents', 'findings', 'events', 'commands', 'detectionGaps', 'localAccounts', 'identity', 'vulns', 'config'].includes(requestedTab) ? requestedTab : 'incidents'
+  const setTab = (key: string) => setParams(prev => {
+    const next = new URLSearchParams(prev)
+    next.set('tab', key)
+    return next
+  })
   const detailsRef = useRef<HTMLDivElement>(null)
   const openTab = (key: string) => {
     setTab(key)
@@ -127,6 +139,7 @@ export function AssetDetailPage() {
   }
   const [verifying, setVerifying] = useState<CommandRow | null>(null)
   const [incPage, setIncPage] = useState(1)
+  const [findingPage, setFindingPage] = useState(1)
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 15000 })
   const asset = assets.data?.find(a => a.id === id)
   const canAct = useCanActIn(asset?.groupId)
@@ -136,9 +149,20 @@ export function AssetDetailPage() {
     enabled: !!asset,
   })
   const unresolved = useQuery({ queryKey: ['incidents', 'asset', id, 'unresolved'], queryFn: () => fetchIncidents({ assetId: id, status: 'unresolved', limit: 1 }), enabled: !!asset })
-  const findings = useQuery({ queryKey: ['findings', 'all'], queryFn: () => fetchFindings(), enabled: !!asset, select: fs => fs.filter(f => f.assetId === id) })
+  const findings = useQuery({ queryKey: ['findings', 'asset', id, findingPage], queryFn: () => fetchFindingsPage({ assetId: id, limit: 10, offset: (findingPage - 1) * 10 }), enabled: !!asset })
+  const findingCount = useQuery({ queryKey: ['findings', 'asset', id, 'open-count'], queryFn: () => fetchFindingsPage({ assetId: id, status: 'open', limit: 1 }), enabled: !!asset })
   const events = useQuery({ queryKey: ['events', 'asset', id], queryFn: () => searchEvents({ assetId: id, hours: 168 }), enabled: !!asset })
   const commands = useQuery({ queryKey: ['commands', 'asset', id], queryFn: () => fetchCommands({ assetId: id! }), enabled: !!asset })
+  useEffect(() => {
+    if (!incidents.isSuccess || incidents.isFetching || incidents.data.total === undefined) return
+    const lastPage = Math.max(1, Math.ceil(incidents.data.total / INCIDENT_PAGE))
+    if (incPage > lastPage) setIncPage(lastPage)
+  }, [incidents.data?.total, incidents.isSuccess, incidents.isFetching, incPage])
+  useEffect(() => {
+    if (!findings.isSuccess || findings.isFetching || findings.data.total === undefined) return
+    const lastPage = Math.max(1, Math.ceil(findings.data.total / 10))
+    if (findingPage > lastPage) setFindingPage(lastPage)
+  }, [findings.data?.total, findings.isSuccess, findings.isFetching, findingPage])
 
   // 手机上标题换行完整显示，不截断成看不出是什么的半句
   const wideTable = useWideTable()
@@ -153,8 +177,10 @@ export function AssetDetailPage() {
   const group = groups.find(g => g.id === asset.groupId)
   // 对话只看组内角色（后端同口径），全局只读的组内分析师也能发起排查
   const canChat = group?.role === 'admin' || group?.role === 'analyst'
-  const openFindings = (findings.data ?? []).filter(f => f.status === 'open')
-  const eventCount = events.data ? `${events.data.items.length}${events.data.truncated ? '+' : ''}` : '-'
+  const unresolvedCount = unresolved.isError ? undefined : unresolved.data?.total
+  const openFindingCount = findingCount.isError ? undefined : findingCount.data?.total
+  const incidentCount = incidents.isError ? undefined : incidents.data?.total
+  const eventCount = !events.isError && events.data ? `${events.data.items.length}${events.data.truncated ? '+' : ''}` : '-'
 
   // 一键排查：在主机所在组新建对话，把主机名预填进提问
   const investigate = async () => {
@@ -181,10 +207,10 @@ export function AssetDetailPage() {
       {verifying?.assetId === asset.id && <CommandVerificationDrawer key={`${verifying.id}:${asset.groupId}`} command={verifying} canEdit={canAct} onClose={() => setVerifying(null)} />}
       <Row gutter={[16, 16]}>
         <Col xs={12} xl={6}>
-          <Stat label={t('unresolvedIncidents')} value={unresolved.data?.total ?? '-'} tone={unresolved.data?.total ? token.colorError : undefined} onClick={() => openTab('incidents')} />
+          <Stat label={t('unresolvedIncidents')} value={unresolvedCount ?? '-'} tone={unresolvedCount ? token.colorError : undefined} onClick={() => openTab('incidents')} />
         </Col>
         <Col xs={12} xl={6}>
-          <Stat label={t('navFindings')} value={findings.data ? openFindings.length : '-'} tone={openFindings.length ? token.colorWarning : undefined} onClick={() => openTab('findings')} />
+          <Stat label={t('navFindings')} value={openFindingCount ?? '-'} tone={openFindingCount ? token.colorWarning : undefined} onClick={() => openTab('findings')} />
         </Col>
         <Col xs={12} xl={6}>
           <Stat label={t('tabEvents')} value={eventCount} onClick={() => openTab('events')} />
@@ -203,10 +229,10 @@ export function AssetDetailPage() {
               items={[
                 {
                   key: 'incidents',
-                  label: t('tabIncidents', { n: incidents.data?.total ?? 0 }),
-                  children: incidents.isError ? <LoadError error={incidents.error} onRetry={() => incidents.refetch()} /> : (
+                  label: t('tabIncidents', { n: incidentCount ?? '-' }),
+                  children: incidents.isError ? <LoadError error={incidents.error} onRetry={() => { incidents.refetch(); unresolved.refetch() }} /> : (
                     <Table<IncidentSummary> size="small" rowKey="id" rowClassName="row-link" onRow={rowLink} loading={incidents.isPending} dataSource={incidents.data?.items ?? []}
-                      pagination={{ current: incPage, pageSize: INCIDENT_PAGE, total: incidents.data?.total, hideOnSinglePage: true, onChange: setIncPage }}
+                      pagination={{ current: incPage, pageSize: INCIDENT_PAGE, total: incidents.data?.total, showSizeChanger: false, hideOnSinglePage: true, onChange: setIncPage }}
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noIncidents')} /> }}
                       columns={[
                         { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={v} /> },
@@ -218,14 +244,14 @@ export function AssetDetailPage() {
                 },
                 {
                   key: 'findings',
-                  label: t('tabFindings', { n: openFindings.length }),
-                  children: (
-                    <Table size="small" rowKey="id" loading={findings.isPending} dataSource={findings.data ?? []} pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                  label: t('tabFindings', { n: openFindingCount ?? '-' }),
+                  children: findings.isError ? <LoadError error={findings.error} onRetry={() => { findings.refetch(); findingCount.refetch() }} /> : (
+                    <Table size="small" rowKey="id" scroll={{ x: 700 }} loading={findings.isPending} dataSource={findings.data?.items ?? []} pagination={{ current: findingPage, pageSize: 10, total: findings.data?.total, showSizeChanger: false, hideOnSinglePage: true, onChange: setFindingPage }}
                       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noFindings')} /> }}
                       expandable={{ expandedRowRender: f => <pre className="tooltip-pre">{f.detail || '-'}</pre> }}
                       columns={[
                         { title: t('thSeverity'), dataIndex: 'severity', width: 90, render: v => <SeverityTag value={FINDING_SEVERITY[v as FindingRow['severity']]} /> },
-                        { title: t('thTitle'), dataIndex: 'title', ellipsis: true },
+                        { title: t('thTitle'), dataIndex: 'title', ellipsis: wideTable, render: v => <span style={{ overflowWrap: 'anywhere' }}>{v}</span> },
                         { title: t('thStatus'), dataIndex: 'status', width: 100, render: v => <Tag>{t(FINDING_STATUS_KEY[v as FindingRow['status']])}</Tag> },
                         { title: t('thLastConfirmed'), dataIndex: 'lastSeen', width: 170, render: fmtTime },
                       ]} />
@@ -237,7 +263,7 @@ export function AssetDetailPage() {
                   children: events.isError ? <LoadError error={events.error} onRetry={() => events.refetch()} /> : (
                     <>
                       {events.data?.truncated && <Alert type="info" showIcon title={t('listTruncated', { n: events.data.items.length })} style={{ marginBottom: 12 }} />}
-                      <Table size="small" rowKey="id" loading={events.isPending} dataSource={events.data?.items ?? []} pagination={{ pageSize: 20, hideOnSinglePage: true }}
+                      <Table size="small" rowKey="id" scroll={{ x: 700 }} loading={events.isPending} dataSource={events.data?.items ?? []} pagination={{ pageSize: 20, hideOnSinglePage: true }}
                         expandable={{ expandedRowRender: r => <pre className="json-block">{JSON.stringify(r.raw, null, 2)}</pre> }}
                         columns={[
                           { title: t('thTime'), dataIndex: 'ts', render: fmtTime, width: 170 },

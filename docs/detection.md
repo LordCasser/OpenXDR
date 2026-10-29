@@ -88,6 +88,8 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 - **OS 过滤**：`product` 与资产 OS 不一致则跳过（Windows 规则不在 Linux
   资产上求值）；资产 OS 未知（空串）时不过滤（`engine.go:466-486`）
 - **规则索引**：按 class_uid 分桶 + anyClass 桶（`engine.go:325-337`）
+- **字段缓存**：同一事件跨规则复用字段解析与小写结果；求值缓冲按规则快照复用，
+  并发调用各自独占，结束后清除原始事件、字段值与全文缓存，不跨事件沿用证据。
 - **热重载**：周期扫描（`RULES_RELOAD_SECONDS` 默认 30s，0 关闭），指纹=
   全部 yml 文件的路径+内容 SHA-256，变化则整体重载、`atomic.Pointer` 原子
   切换；编译失败的规则只跳过该条，不影响旧规则集（`engine.go:399-439`）
@@ -143,16 +145,43 @@ sensor 与 syslog 路径结构相同，仅去重指纹与资产归属不同
 - **导入**：`detectKind` 自动识别——IP 字面量→ip；32/40/64 位十六进制
   →hash；其余→domain；重复条目跳过（`api/intel.go:205-214`）
 - **订阅**（`intel/feeds.go`）：内置 `Catalog` 四个公开源（Feodo / ThreatFox /
-  URLhaus / ET compromised），开关存 `settings.intel_feeds`（从未保存过时全开），
-  同步结果存 `settings.intel_feed_status`。`RunLeader("intel-feeds")` 启动即同步、之后
+  URLhaus / ET compromised）；ThreatFox 与 URLhaus 使用认证导出，前者读取单 CSV 的 ZIP，
+  压缩包与解压内容各限 50 MiB，拒绝多文件或损坏包。密钥来自外部情报配置或 `ABUSE_CH_AUTH_KEY`。开关存 `settings.intel_feeds`（从未保存过时全开），
+  同步结果存 `settings.intel_feed_status`。仅配置记录不存在时采用默认值；读取失败、`null`、缺少 `enabled` 数组、字段类型损坏或存在未知源 ID 时终止同步，
+  不请求外部源、不删除旧情报，列表接口明确返回错误。`RunLeader("intel-feeds")` 启动即同步、之后
   每 `INTEL_FEED_INTERVAL_HOURS`（默认 6）小时一次；控制台改开关或「立即同步」走同一
   `Sync`，以 `WithLock("intel-feeds-sync")` 串行。条目以 `source=feed:<id>` 一条
   `INSERT … ON CONFLICT (kind,value) DO UPDATE … WHERE source LIKE 'feed:%'` 批量写入，
   手工情报不被覆盖；有效期为周期的 8 倍，源里撤下的条目到期失效、拉取暂时失败不断情报；
   关掉的源立即删除，过期订阅条目每次同步清理。外部数据不可信：内网/保留地址剔除，域名与
-  哈希逐条校验，源内去重，单源 50 MiB / 10 万条封顶；源返回零条视为异常而非全部撤销。
+  哈希逐条校验，解析时按类型和值去重并保留首次备注，唯一 IOC 达到 10 万条后只接受重复项，新增唯一项立即拒绝；
+  纯文本源在超限时停止读取，CSV 仍先做最多 50 MiB 的文本预处理。单源下载与解压大小各限 50 MiB；断流、解析失败或超限均拒绝本次更新，不续期旧条目；
+  源返回零条视为异常而非全部撤销。
+  离线测试覆盖认证请求构造、ZIP/CSV 解析与失败保留，不代表已接通外部源。实际导出路径、账户权限及数据量是否落在上限内，
+  仍需有效 Auth-Key 验收；URLhaus 的完整 hostfile 下载说明仅登录后可见（[官方文档](https://urlhaus.abuse.ch/api/)）。
   ThreatFox 的 `url` 只取主机为 IP 的，避免公共平台主机名误伤。情报列表接口默认不含
-  订阅条目，订阅状态与命中过的订阅情报走 `/api/intel/feeds`
+  订阅条目，订阅状态与命中过的订阅情报走 `/api/intel/feeds`；`syncedAt` 仅记录最近成功，
+  `attemptedAt` 记录最近尝试，失败不会刷新成功时间。旧版失败记录的成功时间无法还原时留空。
+
+### 情报订阅离线验证
+
+以下命令在仓库根目录执行，使用本地样例与临时 HTTP 服务，不需要 Auth-Key。
+模糊测试验证文本与 ZIP 输入不能导致崩溃、重复 IOC、越过条目上限或在失败时返回部分情报。
+
+```bash
+go -C server test -race ./internal/intel
+go -C server test ./internal/intel -run '^$' -fuzz '^FuzzFeedText$' -fuzztime=30s -parallel=2
+go -C server test ./internal/intel -run '^$' -fuzz '^FuzzThreatFoxZIP$' -fuzztime=30s -parallel=2
+```
+
+配置 `INTEGRATION_DATABASE_URL` 指向专用测试库后，可运行订阅配置损坏、失败保留与 API 回归。
+测试会清理数据库，不能指向业务库：
+
+```bash
+go -C server test -tags integration -p 1 ./internal/intel ./internal/api -run 'TestFeeds|TestFeedStatus|TestIntelFeedsAPI'
+```
+
+控制台的密钥输入、清空、恢复默认值及同步失败显示由[离线浏览器回归](../validation/web/README.md)覆盖。
 
 ## 持久去重（`server/internal/ingest`）
 
@@ -413,7 +442,7 @@ C2 心跳的样子是同一进程隔着差不多的时间反复连同一个公�
 - **主动调查式**：模型可调用三个有边界的调查工具（`tools.go:21-39`）：
   | 工具 | 参数边界 |
   |---|---|
-  | `query_events(keyword, hours)` | raw 全文 ILIKE，关键词转义 `% _ \`；hours 默认 24、超界回落；返回最近 15 条 |
+  | `query_events(keyword, hours)` | 事件字段值 ILIKE（与控制台检索同口径，`eventsearch.Keyword`），关键词转义 `% _ \`；hours 默认 24、超界回落；返回最近 15 条 |
   | `process_lineage(process_guid)` | GUID 必须合法 UUID；祖先上溯 10 层、子进程最多 10 条 |
   | `host_alerts(asset_id, days)` | UUID 校验；days 默认 7、>90 回落；最多 20 条 |
 - 事件 raw 截断 300 字符；工具错误以 JSON 回给模型不中断

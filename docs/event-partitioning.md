@@ -39,7 +39,7 @@ events (PARTITION BY RANGE (ts))
 - 入库 `INSERT ... ON CONFLICT DO NOTHING` 不写冲突列（`ingest/processor.go`），
   老表（主键 id）与分区表（主键 id, ts）都适用，迁移前后同一份代码。
 - 二级索引与 ent 定义同名同列：`event_ts`、`event_asset_id_ts`、`event_process_guid`、
-  `event_process_guid_ts`、`event_parent_process_guid`、`event_conn_tuple_ts`，外加 server 启动时建的 `events_raw_trgm`（pg_trgm GIN）。
+  `event_process_guid_ts`、`event_parent_process_guid`、`event_conn_tuple_ts`，外加 server 启动时建的关键词检索索引 `events_search_trgm`（pg_trgm GIN，见下文；老库可能还是旧的 `events_raw_trgm`）。
   在父表上建的是分区索引，新分区自动带上。
 - `events_assets_events` 外键（asset_id → assets，ON DELETE SET NULL）保留：分区表**引用**别的表没有限制。
 
@@ -71,6 +71,31 @@ ON events (process_guid, ts) WHERE process_guid IS NOT NULL;
 也可能等待表锁，并使后续写入排在锁队列中。应先完成索引校验，再滚动发布应用。
 已有分区表不能直接在父表上使用 `CONCURRENTLY`：需在各子表并发建立同构索引，再挂到父索引；
 新建库会直接带上该索引。不要为了补索引重新执行事件数据迁移。
+
+### 关键词检索索引
+
+控制台事件检索与研判工具 `query_events` 的关键词走 `events_search_trgm`：
+`gin (openxdr_event_search_text(raw) gin_trgm_ops)`。函数把事件里的标量值拼成一串，去掉 UUID 与
+32 位以上的十六进制串（进程 uid、文件哈希）。旧索引 `events_raw_trgm` 对整个 `raw::text` 切三元组，
+字段名、JSON 标点与高熵哈希都进了索引；生产抽样每行三元组从 253 个降到 79 个，约少七成。
+口径变化：字段名与 JSON 结构不再能搜到；关键词只由十六进制字符与连字符组成且含字母或连字符时
+（UUID、哈希片段）回退 `raw::text` 匹配，结果不漏，只是不走索引、按时间范围扫；
+纯数字关键词按值匹配，不再命中 UUID 与哈希内部的数字片段。
+
+新库启动即建。已有 `events_raw_trgm` 的库启动时**不现建**（大表上要几小时且挡住写入），
+server 仍按旧口径用旧索引，直到新索引建好且有效。先升级 server（启动时建出 `openxdr_event_search_text` 函数），再在主库事务外：
+
+```sql
+SET lock_timeout = '5s';
+CREATE INDEX CONCURRENTLY events_search_trgm
+ON events USING gin (openxdr_event_search_text(raw) gin_trgm_ops);
+```
+
+分区表不能在父表上 `CONCURRENTLY`：先 `CREATE INDEX events_search_trgm ON ONLY events USING gin (...)`，
+再对每个子表 `CREATE INDEX CONCURRENTLY` 同构索引并 `ALTER INDEX events_search_trgm ATTACH PARTITION <子表索引>`，
+全部挂上后父索引才有效。确认 `pg_index.indisvalid` 后滚动重启 server，日志出现
+「events_search_trgm 已可用，可以删除旧检索索引」即已切换；再删旧索引（普通表用 `DROP INDEX CONCURRENTLY events_raw_trgm`，
+分区表直接 `DROP INDEX`，带 `lock_timeout`）。别在新索引建好之前删旧索引：两个都没有时启动会在前台现建新索引。
 
 ## 3. 指向 events 的引用，逐个处理
 
@@ -222,7 +247,7 @@ verify 的逐日摘要必然发现，repair 修掉。
    此后入库每条事件多一次写入，直到 finish。
 4. `copy -confirm`，IO 紧张时加 `-pause 200ms`。按经验速率（30–80 MB/s，含同步复制）78 GB 约 0.5–1.5 小时，
    运行中每 10 秒打印游标、速率与预计剩余。期间关注复制延迟与 `pg_wal` 占用。可随时 Ctrl-C，重跑续传。
-5. `index -confirm`：4 个 btree 各扫一遍新表，约 10–30 分钟/个；trgm GIN 最慢，约 2–5 小时。
+5. `index -confirm`：4 个 btree 各扫一遍新表，约 10–30 分钟/个；trgm GIN 最慢，约 2–5 小时（换成 `events_search_trgm` 后会快不少）。
 6. 低峰期 `verify`：两表各全扫一遍，约 20–60 分钟，期间持有一个长快照（会推迟 VACUUM 回收）。
    有不一致就 `repair -confirm`，再 `verify`。
 7. 低峰期 `switch -confirm`。拿不到锁（有长查询或长事务）会整体放弃，换个时间重跑即可。

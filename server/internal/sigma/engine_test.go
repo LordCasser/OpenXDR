@@ -2,6 +2,7 @@ package sigma
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,6 +146,57 @@ func TestFieldTestMatches(t *testing.T) {
 	nullBad := fieldTest{path: []string{"process", "cmd_line"}, expectNull: true}
 	if nullBad.matches(raw) {
 		t.Error("expectNull 且字段存在应为 false")
+	}
+}
+
+func TestEvaluateFieldCacheIsPerEvent(t *testing.T) {
+	first, err := Compile([]byte(reloadRuleA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Compile([]byte(reloadRuleB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyword, err := Compile([]byte("id: keyword\ntitle: keyword\nlogsource: {category: process_creation}\ndetection:\n  selection: [marker]\n  condition: selection\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := &engineState{rules: []*Rule{first, second, keyword}, byID: map[string]*Rule{first.ID: first, second.ID: second, keyword.ID: keyword}}
+	state.index()
+	engine := &Engine{}
+	engine.state.Store(state)
+	raw := map[string]any{"process": map[string]any{"cmd_line": "run aaa now"}}
+	if hits := engine.Evaluate(1007, "", raw); len(hits) != 1 || hits[0].ID != first.ID {
+		t.Fatalf("aaa 应只命中第一条规则: %v", ruleIDs(hits))
+	}
+	raw["process"].(map[string]any)["cmd_line"] = "run bbb now"
+	if hits := engine.Evaluate(1007, "", raw); len(hits) != 1 || hits[0].ID != second.ID {
+		t.Fatalf("更新事件字段后 bbb 应只命中第二条规则: %v", ruleIDs(hits))
+	}
+	if hits := engine.Evaluate(1007, "", map[string]any{}); len(hits) != 0 {
+		t.Fatalf("缺失字段不应沿用上一条事件的缓存: %v", ruleIDs(hits))
+	}
+	if hits := engine.Evaluate(1007, "", map[string]any{"message": "MARKER"}); len(hits) != 1 || hits[0].ID != keyword.ID {
+		t.Fatalf("全文缓存应使用当前事件: %v", ruleIDs(hits))
+	}
+	if hits := engine.Evaluate(1007, "", map[string]any{}); len(hits) != 0 {
+		t.Fatalf("全文缓存不应保留上一条事件: %v", ruleIDs(hits))
+	}
+	for i := range 8 {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			t.Parallel()
+			text, want := "AAA", first.ID
+			if i%2 != 0 {
+				text, want = "BBB", second.ID
+			}
+			input := map[string]any{"process": map[string]any{"cmd_line": text}}
+			for range 100 {
+				if hits := engine.Evaluate(1007, "", input); len(hits) != 1 || hits[0].ID != want {
+					t.Fatalf("并发事件不应共享字段缓存: %v", ruleIDs(hits))
+				}
+			}
+		})
 	}
 }
 

@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Card, Col, Empty, Flex, Row, Segmented, Space, Table, Typography, theme } from 'antd'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { fetchAgentReports, fetchApprovals, fetchAssets, fetchFindings, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks, type IncidentSummary } from '../api'
+import { fetchAgentReports, fetchApprovals, fetchAssets, fetchFindingsPage, fetchIncidents, fetchStats, fetchTaskRuns, fetchTasks, type IncidentSummary } from '../api'
 import { useSession } from '../app/session'
 import { useTheme } from '../app/theme'
 import { Ago } from '../components/Ago'
@@ -56,21 +56,20 @@ function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: n
 }
 
 // 需要人处理的事：每项一个入口，全部清零时给一句定心话
-function ActionCenter({ items }: { items: { icon: ReactNode; label: string; count: number; to: string; color: string }[] }) {
+function ActionCenter({ items }: { items: { icon: ReactNode; label: string; count: number | undefined; to: string; color: string }[] }) {
   const { t } = useI18n()
   const { token } = theme.useToken()
-  const pending = items.filter(i => i.count > 0)
   return (
     <Card title={t('actionCenter')} style={{ height: '100%' }} styles={{ body: { padding: '8px 12px' } }}>
       {items.map(i => (
         <Link key={i.to} to={i.to} className="action-row">
           <span className="action-icon" style={{ color: i.count ? i.color : token.colorTextQuaternary, background: i.count ? `${i.color}1a` : token.colorFillQuaternary }}>{i.icon}</span>
           <Typography.Text style={{ flex: 1 }}>{i.label}</Typography.Text>
-          <span className="action-count" style={{ color: i.count ? token.colorText : token.colorTextQuaternary }}>{i.count}</span>
+          <span className="action-count" style={{ color: i.count ? token.colorText : token.colorTextQuaternary }}>{i.count ?? '-'}</span>
           <RightOutlined style={{ color: token.colorTextQuaternary, fontSize: 12 }} />
         </Link>
       ))}
-      {pending.length === 0 && (
+      {items.every(i => i.count === 0) && (
         <Flex align="center" gap={6} style={{ padding: '10px 8px 4px', color: token.colorSuccess }}>
           <CheckCircleOutlined />{t('allClear')}
         </Flex>
@@ -133,7 +132,7 @@ export function OverviewPage() {
   const [trendView, setTrendView] = useState<'chart' | 'table'>('chart')
   const stats = useQuery({ queryKey: ['stats'], queryFn: fetchStats, refetchInterval: 30_000, placeholderData: keepPreviousData })
   const incidents = useQuery({ queryKey: ['incidents', 'review', 'overview'], queryFn: () => fetchIncidents({ status: 'review', limit: 6 }), refetchInterval: 30_000 })
-  const findings = useQuery({ queryKey: ['findings', 'open'], queryFn: () => fetchFindings('open'), refetchInterval: 60_000 })
+  const findings = useQuery({ queryKey: ['findings', 'count', 'open'], queryFn: () => fetchFindingsPage({ status: 'open', limit: 1 }), refetchInterval: 60_000 })
   const assets = useQuery({ queryKey: ['assets'], queryFn: fetchAssets, refetchInterval: 30_000 })
   // 手机上标题换行完整显示，不截断成看不出是什么的半句
   const wideTable = useWideTable()
@@ -169,10 +168,10 @@ export function OverviewPage() {
         </Col>
         <Col xs={24} xl={8}>
           <ActionCenter items={[
-            { icon: <AlertOutlined />, label: t('reviewIncidents'), count: s?.reviewIncidents ?? 0, to: '/incidents', color: token.colorError },
-            { icon: <ToolOutlined />, label: t('navFindings'), count: findings.data?.length ?? 0, to: '/findings', color: token.colorWarning },
-            ...(isGroupAdmin ? [{ icon: <CheckCircleOutlined />, label: t('navApprovals'), count: approvals.data?.filter(a => a.status === 'pending').length ?? 0, to: '/approvals', color: token.colorPrimary }] : []),
-            { icon: <CloudServerOutlined />, label: t('offlineHosts'), count: offline.length, to: '/assets', color: token.colorError },
+            { icon: <AlertOutlined />, label: t('reviewIncidents'), count: stats.isError ? undefined : s?.reviewIncidents, to: '/incidents', color: token.colorError },
+            { icon: <ToolOutlined />, label: t('navFindings'), count: findings.isError ? undefined : findings.data?.total, to: '/findings', color: token.colorWarning },
+            ...(isGroupAdmin ? [{ icon: <CheckCircleOutlined />, label: t('navApprovals'), count: approvals.isError ? undefined : approvals.data?.filter(a => a.status === 'pending').length, to: '/approvals', color: token.colorPrimary }] : []),
+            { icon: <CloudServerOutlined />, label: t('offlineHosts'), count: assets.isError || !assets.data ? undefined : offline.length, to: '/assets', color: token.colorError },
           ]} />
         </Col>
 

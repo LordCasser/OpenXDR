@@ -5,6 +5,26 @@
 
 ## [未发布]
 
+### 存储
+
+- 关键词检索索引收窄：新索引 `events_search_trgm` 只索引事件里的字段值，去掉 UUID 与 32 位以上的十六进制串（进程 uid、文件哈希），
+  生产抽样每行三元组从 253 个降到 79 个；旧的 `events_raw_trgm`（整个 `raw::text`）在生产上有 29 GB。控制台检索与研判工具
+  `query_events` 共用同一口径：不再匹配字段名与 JSON 结构，UUID、哈希类关键词回退原文匹配不漏结果，纯数字关键词不再命中 UUID 与哈希内部的片段。
+  新库启动即建；**已有库启动时不现建**，按旧索引照常检索，在线建好新索引并重启后切换，步骤见
+  [事件表分区](docs/event-partitioning.md#关键词检索索引)。
+
+## [0.3.0] - 2026-10-28
+
+### 升级须知
+
+- 数据库结构有变化（`incidents`、`trusted_sources`、`alerts`、`suppressions` 加列，新增 `ssh_logins` 与系统集成的几张表），
+  启动时自动建；研判状态语义有变，见「研判」。
+- events 新增两个部分索引 `event_process_guid_ts`、`event_conn_tuple_ts`，**已有库不会在启动时补建**：
+  大库升级前先按 [事件表分区](docs/event-partitioning.md) 在主库 `CREATE INDEX CONCURRENTLY` 建好并核对 `indisvalid`，
+  再滚动发布。不建也能运行，只是日志关联按进程、按连接回溯时可能扫大量历史事件。
+- 手工开通 Pi 查询身份的，重跑 `deploy/pi-query/group-views.sql`。
+- 已装的 Windows 主机重新执行一次安装命令，计划任务检查间隔才改成每分钟（见「修复」）。
+
 ### 研判
 
 - 重研判限流：已研判的事件并入新证据后不再立即重开重判，记为「待重研判」，距上次研判满 `AI_RETRIAGE_COOLDOWN_MINUTES`
@@ -21,10 +41,30 @@
 - 数据库：`incidents` 新增 `triaged_at`、`triage_count`、`evidence_at`、`urgent_at`、`triage_failures`、`triage_retry_at`
   列（启动时自动建）。状态语义变化：关联引擎不再把已研判的事件改回 `open`，`open` 只表示还没有可用结论。
   升级前已研判、之后又并入证据的旧事件没有 `triaged_at`，按待重研判处理。
+- 结论校验：verdict、0–100 的 confidence 与非空 summary 缺一不可；JSON 无效、字段不合规或输出被截断时，复用已有调查上下文、
+  撤掉工具只做一次格式修正，仍失败按研判失败退避，不计研判次数、不覆盖上一份有效结论、不触发处置钩子。
+  此前解析失败的结论会被当成研判完成。
+- 正在研判：执行时写 `triage_started_at`，每 15 秒续 `triage_heartbeat_at`，心跳 1 分钟内有效才算在跑；
+  事件列表与详情标「正在研判」和本轮开始时间，重研判期间保留上轮结论，排队、冷却与退避不显示为执行中。
+  数据库：`incidents` 新增这两列（启动时自动建）。
+- 模型适配：DeepSeek flash / pro 与 GLM 一样在后台研判时关闭思考，避免短输出预算被思考耗尽。
 
-### 可信自动化来源
+### 系统集成
 
-
+- 资产导出：资产页按筛选或勾选导出 CSV / JSON，落审计。
+- 外部系统只读 API：全局管理员在「系统集成」建集成、配负责人、授权组与 scopes，签发 Bearer Token（只存摘要，可到期、吊销）；
+  资产、事件只读接口带签名分页游标，契约见 [OpenAPI](docs/openapi/integration-v1.yaml)。
+  游标密钥由 `HOST_CREDENTIAL_KEY` 按用途派生，不需要额外环境变量；没有主密钥时集成 API 返回 503。
+- 事件订阅推送：事件状态变更经发件箱签名推送到 Webhook，带重试、租约与发送前权限复核；暂停订阅不阻塞其他订阅，停用集成取消积压。
+  默认只放行公网 HTTPS，内网目标在控制台「内网推送放行」填精确域名或 CIDR（`INTEGRATION_WEBHOOK_ALLOW` 设置时作为锁定值）；
+  环回、链路本地与元数据地址始终拒绝，不跟随重定向、不走代理。
+- 外部工单：关联外部工单，受控结案回写（幂等键、`expectedRevision`）；外部结案不计入误报统计与 AI 准确度。
+- Suricata EVE 告警接入：`POST /api/integration/v1/suricata/events`，Token 须带 `suricata:write` 且恰好一个授权组；
+  只收 `alert`，重传幂等，按地址对去重，按组内资产 IP 归属，东西向两端各出告警并横向关联，未知归属仅全局管理员可见。
+  另附一次性导入工具 `cmd/suricata-import`。详见 [Suricata 接入](docs/suricata.md)。
+- 数据库：新增 `integrations`、`integration_tokens`、`integration_groups`、`integration_subscriptions`、`integration_events`、
+  `integration_deliveries`、`integration_attempts`、`integration_idempotencies`、`external_tickets` 表，`incidents` 新增
+  `integration_revision` 列（启动时自动建）。
 
 ### 已知自动化（原「可信自动化来源」）
 
@@ -84,6 +124,8 @@
     事件上仍是 681，按旧值还原出新版 agent 的事件再求值为 7（5 次新建 + Defender 更新挪了 2 个服务的路径）；两条 high 均 0 次。
     回放里的 `sc.exe create`、`schtasks /create`、直接写 `Tasks\atomic` 仍命中。
   - detectcheck 用例可写 `level`：命中规则的最高级别必须正好是它，守住「维护是 low、劫持是 high」。
+- Sigma 求值提速：同一事件跨规则复用字段解析与小写结果，求值缓冲按规则快照复用；真实规则集上单事件求值耗时降 30%–60%，
+  分配几乎归零（#3，感谢 @chAng-L19）。
 
 ### 资产图谱
 
@@ -166,6 +208,11 @@
   按规则归并视图在窄屏被撑出页面（规则名被挤成一列一个字），窄屏把级别、主机与事件数收到规则名下面；英文下「事件数」表头与时间折行；
   规则名被截断时悬停只看得到规则 ID，改为显示完整规则名；结案弹窗的长事件标题压在关闭按钮下、「理由选填」说明与字数统计重叠；
   抑制页要横向拖动才看得到批准 / 拒绝，宽屏把操作列钉在右侧（钉住列的表头不再透出底下的文字）。
+- 通知回执：飞书、钉钉、企业微信除 HTTP 状态外还检查回执里的业务状态码，非零、缺失或坏回执都算失败，incident 通知不标已投递、
+  下周期重试；此前机器人拒收（如关键词不符）也被当成发送成功。generic 仍只看 HTTP 2xx。
+- 关联引擎并入新证据时清掉 AI 结案建议，免得按旧证据的建议结案；同实体同规则的重复告警不清。
+- 控制台：各列表页表格卡片统一留白与布局；态势总览没有告警时规则排行返回空数组而不是 null，页面不再报错；
+  资产详情的统计卡片可用键盘打开，点击后跳到对应标签并聚焦；态势总览「最近任务运行」英文界面显示任务英文名，研判次数英文为 `rounds: N`。
 
 ### 关联
 
@@ -191,6 +238,8 @@
 
 - events 按 UTC 日分区：新库直接建分区表，保留期改为整分区退役（被引用的证据并入月归档分区）；指向 events 的外键改由触发器维护。
   老库照旧运行，用 `cmd/eventpartition` 在线迁移（镜像触发器同步、分批回填可续跑、逐日核对、短锁切换、可回滚），步骤见 [事件表分区](docs/event-partitioning.md)。
+- events 新增部分索引 `event_process_guid_ts`、`event_conn_tuple_ts`，日志关联按进程、父进程与连接取最早事件时走索引，
+  不再按时间扫整个历史库。新库与新分区自动带上，已有库需手工在线建，见「升级须知」。
 
 ### AI 会话
 
@@ -207,6 +256,8 @@
   会话终态写不进去、只能等执行期限清理成「结果未知」；现在到期立即返回。
 - `xdr` 参数不够时只打印该子命令的用法并指出缺的参数；`forget` 的 ID 不完整时按前缀提示完整 ID；
   沙箱里的 jq 遇到 SQL 写法 `->` 报语法错时补一句提示。
+- 事件交接：每轮补充最新研判 / 证据时间、结案建议与结果、最近 10 条指令的状态与回执时间；告警只列最重要的 10 条并给出总数与截断标记；
+  资产转组后重新检查交接对象的组权限。会话只交接事件、且目标主机只对应其中一个事件时，`exec` 记录自动挂到该事件上。
 
 ### 定时任务
 
@@ -218,6 +269,13 @@
   起因：两个组的每日巡检同时开跑，共用端点的每轮推理从 5–17 秒涨到平均 98 秒，两轮都超时失败。
   原先单节点最多并行 4 个组任务的限制由此取代；端点能并行推理的部署按需调大。
 - 立即运行不错峰、受上限但排最前。
+
+### 运维
+
+- HA 节点外备份与隔离恢复验收：`deploy/ha/backup.py` 从主库导出一致性逻辑快照，`verify-backup.py` 在无网络临时容器里完整恢复并核对
+  行数、事件时间范围与无效索引，结束后清理；步骤、容量处理顺序与 83.7 GiB 生产库的实测见 [备份与恢复](deploy/ha/backup-recovery.md)。
+- Windows 处置后状态复核：`deploy/pilot/verify-response.py` 对已成功的处置指令经平台正常 exec 权限链发起只读探测，
+  输出当前状态与是否符合预期，不重放处置、不自动下结论，见 [处置复核](deploy/pilot/response-verification.md)。
 
 ## [0.2.1] - 2026-10-20
 
@@ -360,6 +418,7 @@
 - 跨宿主机高可用部署（Patroni + 三节点 JetStream + Keepalived VIP）与滚动发布脚本。
 - Web 控制台：中英双语，AI 助手为主入口，命令面板。
 
+[0.3.0]: https://github.com/yaklang/OpenXDR/releases/tag/v0.3.0
 [0.2.1]: https://github.com/yaklang/OpenXDR/releases/tag/v0.2.1
 [0.2.0]: https://github.com/yaklang/OpenXDR/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yaklang/OpenXDR/releases/tag/v0.1.0

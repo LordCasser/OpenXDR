@@ -117,8 +117,15 @@ sensor 安装包同样内置在 server 镜像里，升级 OpenXDR 后在线探�
 ### 队列持久确认
 
 安装脚本同时下载该 Release 的 `nats.conf`，编排将其只读挂载给 NATS。配置包含 4 MiB 消息上限与 `sync_interval: 1s`（每秒落盘，断电最多丢 1 秒已确认事件，理由与实测见 cluster.md）；手动安装也需下载同版本配置，不能退回只带 `--jetstream` 的默认启动方式。
-# 独立欺骗引擎
+
+### 独立欺骗引擎
 
 DYGK 使用同一份 `.env` 和主启动命令：设置 `COMPOSE_PROFILES=dygk`，继续 `docker compose up -d`。平台自动识别版本、下发配置并签发运行身份；无需逐个填写连接器参数。引擎可通过同一配置里的 `DYGK_VERSION` 独立升级，状态和控制通道使用命名卷，无开发机路径依赖。使用与回退见 [独立欺骗引擎运行包](../integrations/dygk/README.md)。
 
 自行构建引擎镜像时，源码来源同样在 `.env` 选择：默认 `DYGK_SOURCE=local` 使用模块内提供的私有源码，显式设置 `remote` 才拉取远端；缺失源码不会自动回退。预构建镜像运行时无需这些构建选项。详见 [源码来源配置](../integrations/dygk/README.md#源码来源配置)。
+
+### 情报订阅认证
+
+ThreatFox 与 URLhaus 需要 abuse.ch Auth-Key。可在「系统设置 → 外部情报查询」保存（需要
+`HOST_CREDENTIAL_KEY`），或在部署 `.env` 中设置 `ABUSE_CH_AUTH_KEY` 后重建 server 容器。
+不要把密钥或包含密钥的下载链接提交到仓库。配置后在「威胁情报」点击「立即同步」，以最近成功时间和同步结果验收。

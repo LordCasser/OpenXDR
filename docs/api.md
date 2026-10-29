@@ -21,7 +21,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | POST | `/api/incidents/{id}/status` | `{"status":"open\|closed\|false_positive","note":"…"}`；closed 为属实已处置、false_positive 为误报或良性，两者必须写 `note`（1–2000 字），记录结案人与时间并作为案例喂回研判；改回 open 清掉结案信息 |
 | GET | `/api/incidents/groups?status=review\|unresolved` | 按规则归并（只是视图，不改 incident）：未结案事件按「主告警的规则 + 主机」分组，主告警取事件里级别最高的告警（同级取最早）；情报命中的规则 ID 形如 `intel:ip:1.2.3.4`，同一目标自然归一组。每组含 `ruleId`、`ruleTitle`、`assetId`、`hostname`、`count`、`severity`、`firstAt` / `lastAt`（事件创建时间）、`verdicts`（`benign` / `suspicious` / `malicious` / `none` 各几个）与组内事件 `incidents`（同列表项）；按事件数、最近时间倒序。`status` 默认 `review`，只接受 `review` / `unresolved`；最多扫最近 2000 个事件，超出时 `X-Truncated: 1`，`X-Total-Count` 为匹配总数 |
 | POST | `/api/incidents/batch-status` | 批量结案 `{"ids":[…],"status":"closed\|false_positive","note":"…","confirmMalicious":false}`：一次 1–200 个，口径与单个结案一致（理由规则、结案人与时间、作为人工案例回喂研判），一个事务内全部成功或全部不动，逐条写 `incident_status` 审计。任一事件不存在（404）、不在调用者有 analyst 权限的组内（403）、已被结案（409）或需写理由却没写（400）都整批拒绝；含 AI 判恶意的事件按 `false_positive` 结案必须 `confirmMalicious: true`，否则 409。说明原样等于这批里某个事件的 AI 结案建议时，整批记为 `resolution_source=ai_proposal`。返回 `{"resolved":n}` |
-| GET | `/api/findings?status=` | 运维待办（巡检 AI 登记，按组裁剪，最近 500 条），含主机名、首次与最近发现时间 |
+| GET | `/api/findings?status=&assetId=&ids=&limit=&offset=` | 运维待办（巡检 AI 登记，按组裁剪，可按资产筛选），含主机名、首次与最近发现时间；`limit` 默认 500、范围 1–500，`offset` 默认 0；`X-Total-Count` 返回筛选后总数，仍有后续页时带 `X-Truncated: 1`；可用逗号分隔的 `ids` 精确查询最多 10 条会话引用；无效 `assetId`、空或无效 `ids` 返回 400 |
 | POST | `/api/findings/{id}/status` | `{"status":"open\|resolved\|ignored","note":"…"}`，需组内 analyst；resolved / ignored 必须写原因，忽略原因会交给巡检 AI，之后不再登记，写审计 `finding_status`；组管理员发起的 Pi 对话里 AI 可按用户明确要求代为忽略，口径相同（见 `docs/pi-backend.md`「运维待办」） |
 | GET | `/api/incidents/{id}/report` | 事件报告（Markdown 附件下载）：判定、攻击链、涉及实体、告警时间线、处置记录、处置建议 |
 | GET | `/api/events` | 原始事件检索，参数见下 |
@@ -38,7 +38,7 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 `GET /api/events` 参数：`from`/`to`（RFC3339，默认近 24h）、`assetId`、
 `classUid`（1001 文件 / 1007 进程 / 3002 认证 / 4001 网络 / 4003 DNS /
 201002 注册表 / 100001 日志）、
-`source`（agent/sensor/syslog）、`q`（对事件体子串匹配，通配符按字面量处理）、
+`source`（agent/sensor/syslog）、`q`（对事件里的字段值做不区分大小写的子串匹配，通配符按字面量处理；不匹配字段名，口径见 [事件表分区](event-partitioning.md#关键词检索索引)）、
 `limit`（≤200，默认 100）。返回条数等于 `limit` 时带响应头 `X-Truncated: 1`，
 提示可能还有更多、应收窄条件。各类事件的字段 schema 见
 [events.md](events.md)。
@@ -51,8 +51,8 @@ Base: `http://<server>:8080`。除 `POST /api/login` 外全部需要会话 cooki
 | POST | `/api/intel` | 单条：`{"kind":"ip\|domain\|hash","value","source","severity","note","expiresInDays"}`，kind 缺省自动识别 |
 | POST | `/api/intel/import` | 批量：`{"text":"一行一条","source","severity","expiresInDays"}`，类型自动识别，重复跳过，`#` 行忽略 |
 | DELETE | `/api/intel/{id}` | 删除 |
-| GET | `/api/intel/feeds` | 情报订阅：`{feeds:[{id,name,url,severity,enabled,count,hits,syncedAt,error}], hits:[命中过的订阅情报], intervalHours}`。`/api/intel` 列表不含订阅条目 |
-| PUT | `/api/intel/feeds` | `{"enabled":["feodo",...]}` 保存开关并立即同步（admin） |
+| GET | `/api/intel/feeds` | 情报订阅：`{feeds:[{id,name,url,severity,enabled,count,hits,syncedAt,attemptedAt,error}], hits:[命中过的订阅情报], intervalHours}`。`syncedAt` 为最近成功、`attemptedAt` 为最近尝试；配置读取失败返回 500。`/api/intel` 列表不含订阅条目 |
+| PUT | `/api/intel/feeds` | `{"enabled":["feodo",...]}` 保存开关并立即同步（admin）；必须提供数组，全部关闭用 `{"enabled":[]}`，缺失或 null 返回 400，不修改配置 |
 | POST | `/api/intel/feeds/sync` | 立即同步（admin） |
 
 ## 误报抑制
