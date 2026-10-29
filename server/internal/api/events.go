@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"time"
 
-	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
 	entevent "openxdr/server/ent/event"
 	"openxdr/server/ent/predicate"
+	"openxdr/server/internal/eventsearch"
 )
 
 const maxEventRows = 200
@@ -61,12 +61,7 @@ func mapEvents(api *http.ServeMux, db *ent.Client) {
 			preds = append(preds, entevent.SourceEQ(source))
 		}
 		if kw := p.Get("q"); kw != "" {
-			pattern := "%" + escapeLike(kw) + "%"
-			preds = append(preds, predicate.Event(func(s *sql.Selector) {
-				s.Where(sql.P(func(b *sql.Builder) {
-					b.WriteString(s.C(entevent.FieldRaw)).WriteString("::text ILIKE ").Arg(pattern)
-				}))
-			}))
+			preds = append(preds, eventsearch.Keyword(kw))
 		}
 
 		limit := 100
@@ -104,16 +99,4 @@ func mapEvents(api *http.ServeMux, db *ent.Client) {
 		}
 		writeJSON(w, out)
 	})
-}
-
-// escapeLike 关键词是字面量，% _ \ 要转义，不能让用户输入变成通配符。
-func escapeLike(s string) string {
-	out := make([]byte, 0, len(s))
-	for i := 0; i < len(s); i++ {
-		if c := s[i]; c == '%' || c == '_' || c == '\\' {
-			out = append(out, '\\')
-		}
-		out = append(out, s[i])
-	}
-	return string(out)
 }

@@ -4,23 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
-	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 
 	"openxdr/server/ent"
 	entalert "openxdr/server/ent/alert"
 	entevent "openxdr/server/ent/event"
-	"openxdr/server/ent/predicate"
+	"openxdr/server/internal/eventsearch"
 )
 
 // 调查工具集：模型像分析师一样主动查证，而不是只看摘要。
 // 三个就够——检索、血缘、前科，对应人工研判的三个基本动作。
 var investigationTools = []Tool{
 	makeTool("query_events",
-		"按关键词检索原始事件（对整个事件体做子串匹配）。可用于追查某个 IP、域名、命令行、文件路径出现在哪些事件里。",
+		"按关键词检索原始事件（对事件里的字段值做子串匹配）。可用于追查某个 IP、域名、命令行、文件路径出现在哪些事件里。",
 		`{"type":"object","properties":{
 			"keyword":{"type":"string","description":"要搜索的子串，如 IP、域名、命令片段"},
 			"hours":{"type":"integer","description":"回溯小时数，默认 24，最大 168"}
@@ -80,15 +78,10 @@ func (e *Engine) toolQueryEvents(ctx context.Context, args string) (any, error) 
 	if in.Hours <= 0 || in.Hours > 168 {
 		in.Hours = 24
 	}
-	pattern := "%" + escapeLike(in.Keyword) + "%"
 	rows, err := e.DB.Event.Query().
 		Where(
 			entevent.TsGTE(time.Now().Add(-time.Duration(in.Hours)*time.Hour)),
-			predicate.Event(func(s *sql.Selector) {
-				s.Where(sql.P(func(b *sql.Builder) {
-					b.WriteString(s.C(entevent.FieldRaw)).WriteString("::text ILIKE ").Arg(pattern)
-				}))
-			}),
+			eventsearch.Keyword(in.Keyword),
 		).
 		Order(ent.Desc(entevent.FieldTs)).
 		WithAsset().
@@ -213,10 +206,4 @@ func brief(ev *ent.Event) eventBrief {
 		b.Host = ev.Edges.Asset.Hostname
 	}
 	return b
-}
-
-// escapeLike 关键词是字面量，% _ \ 要转义，不能让模型输出变成通配符。
-func escapeLike(s string) string {
-	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-	return r.Replace(s)
 }
