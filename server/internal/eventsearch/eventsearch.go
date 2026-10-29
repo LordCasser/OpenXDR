@@ -20,12 +20,15 @@ import (
 	"openxdr/server/ent/predicate"
 )
 
-// searchText 索引表达式用的函数。函数体变了索引不会跟着重建，改口径必须换函数名与索引名。
+// searchText 索引表达式用的函数。函数体变了索引不会跟着重建，改口径（输出）必须换函数名与索引名；
+// 只许做输出逐字不变的提速。trgm 是有损索引，命中的每一行都要重算一遍这个函数，它的开销直接决定检索耗时：
+// 被排除的串都不短于 32 个字符，先比长度再跑正则，大多数值不进正则。
 const searchText = `CREATE OR REPLACE FUNCTION openxdr_event_search_text(raw jsonb) RETURNS text
 LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
   SELECT string_agg(v #>> '{}', ' ') FROM jsonb_path_query(raw, 'strict $.**') v
   WHERE jsonb_typeof(v) IN ('string', 'number', 'boolean')
-    AND v #>> '{}' !~* '^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32,})$'
+    AND NOT (length(v #>> '{}') >= 32
+      AND v #>> '{}' ~ '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-fA-F]{32,})$')
 $$`
 
 const (

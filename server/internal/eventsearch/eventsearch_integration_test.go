@@ -91,3 +91,36 @@ func TestEnsureKeepsOldIndex(t *testing.T) {
 		t.Fatalf("新索引建好后应切到按值匹配: byValue=%v", byValue.Load())
 	}
 }
+
+// 提速不能改变已建索引的表达式结果，覆盖长度边界、大小写、嵌套值和随机样本。
+func TestSearchTextOptimizationEquivalent(t *testing.T) {
+	ctx, _, db := open(t)
+	if _, err := db.ExecContext(ctx, searchText); err != nil {
+		t.Fatal(err)
+	}
+	const baseline = `CREATE OR REPLACE FUNCTION openxdr_event_search_text_baseline(raw jsonb) RETURNS text
+ LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
+ SELECT string_agg(v #>> '{}', ' ') FROM jsonb_path_query(raw, 'strict $.**') v
+ WHERE jsonb_typeof(v) IN ('string', 'number', 'boolean')
+ AND v #>> '{}' !~* '^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32,})$'
+ $$`
+	if _, err := db.ExecContext(ctx, baseline); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.ExecContext(ctx, "DROP FUNCTION IF EXISTS openxdr_event_search_text_baseline(jsonb)") })
+	var mismatches int
+	err := db.QueryRowContext(ctx, `WITH samples AS (
+ SELECT jsonb_build_object('short', left(md5(i::text), i % 33),
+ 'long', repeat(upper(md5(i::text)), 1 + i % 3),
+ 'mixed', md5(i::text) || 'G', 'nested', jsonb_build_array(null, true, i, jsonb_build_object('path', '/usr/bin/curl')),
+ 'uuid', '5000508E-C623-4EA9-B9D2-4BBB2DCC5EEE', 'unicode', '中文 ÄÉＦ') AS raw
+ FROM generate_series(1, 10000) i
+ UNION ALL SELECT v FROM (VALUES ('null'::jsonb), ('{}'::jsonb), ('[]'::jsonb), ('""'::jsonb), ('123'::jsonb)) x(v)
+ ) SELECT count(*) FROM samples WHERE openxdr_event_search_text(raw) IS DISTINCT FROM openxdr_event_search_text_baseline(raw)`).Scan(&mismatches)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mismatches != 0 {
+		t.Fatalf("新旧函数输出不一致：%d 个样本", mismatches)
+	}
+}
