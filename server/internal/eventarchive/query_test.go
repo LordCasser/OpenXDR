@@ -243,12 +243,16 @@ func TestQueryLimit(t *testing.T) {
 	if !cov.Truncated || cov.Matched != 5 {
 		t.Errorf("截断时应报 Truncated 且命中 5 条: %+v", cov)
 	}
+	// Limit 截断不是扫描缺口：块都扫完了，只是结果条数到了上限
+	if cov.ScanIncomplete {
+		t.Errorf("Limit 截断不该报 ScanIncomplete: %+v", cov)
+	}
 
 	got, cov, err = query(context.Background(), src, Filter{Limit: 5})
 	if err != nil {
 		t.Fatalf("查询失败: %v", err)
 	}
-	if len(got) != 5 || cov.Truncated || cov.Matched != 5 {
+	if len(got) != 5 || cov.Truncated || cov.Matched != 5 || cov.ScanIncomplete {
 		t.Errorf("恰好取满且没有丢弃时不应报截断: %d 条 %+v", len(got), cov)
 	}
 }
@@ -298,6 +302,9 @@ func TestQueryChunkBudget(t *testing.T) {
 	}
 	if !cov.Truncated {
 		t.Error("有候选块没扫时必须报 Truncated")
+	}
+	if !cov.ScanIncomplete {
+		t.Error("预算耗尽必须报 ScanIncomplete：这是「没扫完」，与 Limit 截断不同")
 	}
 	if len(events) != maxScannedChunks || cov.Matched != maxScannedChunks {
 		t.Errorf("结果与命中都应是 %d 条，实际 %d 条、命中 %d", maxScannedChunks, len(events), cov.Matched)

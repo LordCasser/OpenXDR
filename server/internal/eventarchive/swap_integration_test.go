@@ -940,9 +940,14 @@ func queryEventAPI(t *testing.T, srv *httptest.Server, day time.Time, extra stri
 	defer resp.Body.Close()
 	var rows []apiEventRow
 	if resp.StatusCode == http.StatusOK {
-		if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		// /api/events 是对象契约 {items, truncated, coverage}（P5）：事件行在 items 里
+		var out struct {
+			Items []apiEventRow `json:"items"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 			t.Fatalf("解析 /api/events 响应: %v", err)
 		}
+		rows = out.Items
 	}
 	return rows, resp
 }

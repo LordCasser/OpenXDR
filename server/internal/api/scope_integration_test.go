@@ -56,7 +56,14 @@ func TestAPIGroupScope(t *testing.T) {
 		}
 		var list []json.RawMessage
 		if err := json.Unmarshal(body, &list); err != nil {
-			t.Fatal(err)
+			// /api/events 已是对象契约 {items,...}：数 items 长度
+			var obj struct {
+				Items []json.RawMessage `json:"items"`
+			}
+			if json.Unmarshal(body, &obj) != nil {
+				t.Fatal(err)
+			}
+			list = obj.Items
 		}
 		return len(list)
 	}

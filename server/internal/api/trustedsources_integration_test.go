@@ -139,12 +139,15 @@ func TestTrustedSourcesAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer eresp.Body.Close()
-	var events []eventRow
+	// /api/events 是对象契约 {items, truncated, coverage}：取 items 再断言标注
+	var events struct {
+		Items []eventRow `json:"items"`
+	}
 	if err := json.NewDecoder(eresp.Body).Decode(&events); err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 1 || events[0].Automation == nil || events[0].Automation.Name != "Termix" {
-		t.Fatalf("事件应标注可信来源: %+v", events)
+	if len(events.Items) != 1 || events.Items[0].Automation == nil || events.Items[0].Automation.Name != "Termix" {
+		t.Fatalf("事件应标注可信来源: %+v", events.Items)
 	}
 
 	revoke := "/api/trusted-sources/" + created.ID.String() + "/revoke"

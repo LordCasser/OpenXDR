@@ -141,14 +141,15 @@ func main() {
 	registerSQLRoutes(routes, db)
 	registerHostRoutes(ctx, routes, db, client, rules, credentialVault, enrollSvc, conf)
 	registerSettingsRoutes(routes, db, client, credentialVault, notifySettings, webhook, aiConf, intelFeeds, enrollSvc, dists)
-	registerAIRoutes(routes, client, llmFor, assetEngine)
+	// 冷归档读取默认关闭：EVENT_ARCHIVE_READ=1 才把连接交给 /api/events 与问 AI 入口，关着时行为与改动前一致
+	archiveRead := archiveConn(ctx, db)
+	registerAIRoutes(routes, client, archiveRead, llmFor, assetEngine)
 	outboundAllow := &integration.OutboundAllow{DB: client, Locked: os.Getenv("INTEGRATION_WEBHOOK_ALLOW")}
 	integrations := api.Integrations(client, credentialVault, outboundAllow)
 	routes.Handle("/api/system-integrations", integrations)
 	routes.Handle("/api/system-integrations/", integrations)
 	startIntegrationDelivery(ctx, client, credentialVault, outboundAllow)
-	// 冷归档读取默认关闭：EVENT_ARCHIVE_READ=1 才把连接交给 /api/events，关着时行为与改动前一致
-	routes.Handle("/", api.Handler(client, archiveConn(ctx, db), rules, hub, suppressions, intelStore, allowlist, chat))
+	routes.Handle("/", api.Handler(client, archiveRead, rules, hub, suppressions, intelStore, allowlist, chat))
 	mux := publicMux(auth.Middleware(client, routes), db, client, registry, enrollSvc, dists, events)
 	// 经反向代理时还原客户端地址，登录退避与审计才按真人计
 	trustedProxies, err := realip.Parse(os.Getenv("TRUSTED_PROXIES"))
@@ -750,12 +751,14 @@ func registerSettingsRoutes(routes *http.ServeMux, db *sql.DB, client *ent.Clien
 	routes.Handle("/api/enroll-tokens/", enrollTokens)
 }
 
-// registerAIRoutes 日志检索「问 AI」与资产图谱接口。
-func registerAIRoutes(routes *http.ServeMux, client *ent.Client, llmFor func(string) *triage.LLM, assetEngine *assetmap.Engine) {
+// registerAIRoutes 日志检索「问 AI」与资产图谱接口。conn 是冷归档读取连接（受
+// EVENT_ARCHIVE_READ 闸门控制，由调用方传入）：热表查不到的日志按 id 定位冷事件，
+// 与 /api/events 共用同一个受控连接。
+func registerAIRoutes(routes *http.ServeMux, client *ent.Client, conn *sql.DB, llmFor func(string) *triage.LLM, assetEngine *assetmap.Engine) {
 	// 日志检索里的「问 AI」：交互式调用，同样关掉隐式思考、限住输出，等得起
 	explainLLM := llmFor("explain")
 	explainLLM.NoThinking, explainLLM.MaxTokens = true, 1500
-	eventAI := api.EventAI(client, explainLLM)
+	eventAI := api.EventAI(client, conn, explainLLM)
 	for _, path := range api.EventAIPaths {
 		routes.Handle(path, eventAI)
 	}

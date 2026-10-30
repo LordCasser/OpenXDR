@@ -754,23 +754,47 @@ export interface EventRow {
   automation?: AutomationRef
 }
 
+// /api/events 的响应契约：items 是事件行，truncated 表示返回条数达到 limit（可能还有更早的），
+// coverage 说明冷热两层的覆盖缺口（reason 非空 = 有缺口，与 scan_complete=false 同义）
+export interface EventCoverage {
+  hot_searched: boolean
+  cold_searched: boolean
+  scan_complete: boolean
+  reason: '' | 'keyword_not_searched' | 'archive_read_disabled' | 'no_archive_schema' | 'scan_incomplete' | 'before_archive'
+}
+
+export interface EventsResult {
+  items: EventRow[]
+  truncated: boolean
+  coverage: EventCoverage
+}
+
+// 问 AI 的冷层边界：目标事件来自冷层时，关联候选与解读输入只查了热表
+export interface EventAIArchive {
+  target_from_archive: boolean
+  candidates_hot_only: boolean
+}
+
 // 问 AI：related 是查库得出的确定关联（父进程链、同一进程、子进程、同一连接、同一远端、前后同主机）；
 // explain 是模型读这条日志与候选后的解读，挑出的相关日志只会来自候选
 export type Relation = 'ancestor' | 'process' | 'child' | 'connection' | 'peer' | 'nearby'
 export interface RelatedGroup { relation: Relation; events: EventRow[] }
+export interface RelatedEvents { groups: RelatedGroup[]; archive?: EventAIArchive }
 export interface EventExplanation {
   verdict: 'benign' | 'suspicious' | 'malicious' | 'unknown'
   title: string; summary: string; points: string[]; next: string[]
   related: { id: string; why: string }[]
+  // 目标事件来自冷层时的边界说明（candidates_hot_only=true 表示候选未覆盖冷层）
+  archive?: EventAIArchive
 }
-export const fetchRelatedEvents = (id: string) => get<RelatedGroup[]>(`/api/events/${id}/related`)
+export const fetchRelatedEvents = (id: string) => get<RelatedEvents>(`/api/events/${id}/related`)
 // 后台 AI 任务：发起后立即返回，结果在服务端，前端轮询；换页、刷新都能接着看
 export interface AIJob<T> { id?: string; status: 'none' | 'running' | 'done' | 'failed'; result?: T; error?: string; createdAt?: string; finishedAt?: string }
 export const fetchExplain = (id: string, lang: string) => get<AIJob<EventExplanation>>(`/api/events/${id}/explain?lang=${lang}`)
 export const startExplain = async (id: string, lang: string, refresh = false): Promise<AIJob<EventExplanation>> =>
   (await send('POST', `/api/events/${id}/explain?lang=${lang}${refresh ? '&refresh=1' : ''}`)).json()
 
-export const searchEvents = (params: {
+export const searchEvents = async (params: {
   assetId?: string
   q?: string
   source?: string
@@ -780,6 +804,8 @@ export const searchEvents = (params: {
   from?: string
   to?: string
 }) => {
+  // /api/events 是对象契约 {items, truncated, coverage}：条数截断与覆盖缺口都在响应体里，
+  // X-Truncated / X-Archive-Coverage 头只是调试摘要，前端不读
   const qs = new URLSearchParams()
   if (params.q) qs.set('q', params.q)
   if (params.assetId) qs.set('assetId', params.assetId)
@@ -791,7 +817,10 @@ export const searchEvents = (params: {
   } else if (params.hours)
     qs.set('from', new Date(Date.now() - params.hours * 3_600_000).toISOString())
   qs.set('limit', '200')
-  return list<EventRow>(`/api/events?${qs}`)
+  const r = await fetch(`/api/events?${qs}`)
+  check(r)
+  if (!r.ok) await fail(r)
+  return r.json() as Promise<EventsResult>
 }
 
 export interface AttackCoverage {

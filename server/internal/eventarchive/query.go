@@ -48,6 +48,10 @@ type Coverage struct {
 	Matched int
 	// Truncated 为真表示结果被截断：命中数超过 Limit，或有候选块因预算（maxScannedChunks）没扫。
 	Truncated bool
+	// ScanIncomplete 为真表示**扫描**本身没有完成：还有候选块因预算（maxScannedChunks）没解压，
+	// 与「命中太多被 Limit 挤掉」的 Truncated 是两回事。查询覆盖度要把这两种缺口分开表达——
+	// 前者是「该范围没扫完」，后者只是「结果条数到了上限」。
+	ScanIncomplete bool
 	// ChunkErrors 保留给「部分块被跳过」的诊断场景。当前实现里块解码失败一律整体报错，
 	// 不会降级成部分结果，所以正常路径上它始终为空。
 	ChunkErrors []string
@@ -177,10 +181,12 @@ func query(ctx context.Context, src chunkSource, f Filter) ([]Event, Coverage, e
 	}
 	if more {
 		cov.Truncated = true
+		cov.ScanIncomplete = true
 	}
 	for _, cand := range cands {
 		if cov.ScannedChunks >= maxScannedChunks {
 			cov.Truncated = true
+			cov.ScanIncomplete = true
 			break
 		}
 		// 数据库已经按块元数据筛过一遍，这里再判一次：任何来源都绕不过时间窗与类别、来源条件

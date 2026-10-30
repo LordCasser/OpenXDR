@@ -85,7 +85,8 @@ func coldEvent(ts time.Time, asset *uuid.UUID, raw string) eventarchive.Event {
 	}
 }
 
-// eventQuery 用一组参数请求 /api/events，返回状态、解码后的行与响应头。
+// eventQuery 用一组参数请求 /api/events，返回状态、解码后的行与原始响应体。
+// P5 起响应是对象契约 {items, truncated, coverage}，这里取 items。
 func queryEvents(t *testing.T, ts *httptest.Server, base time.Time, extra string) (*http.Response, []eventRow, []byte) {
 	t.Helper()
 	q := url.Values{}
@@ -96,13 +97,13 @@ func queryEvents(t *testing.T, ts *httptest.Server, base time.Time, extra string
 		path += "&" + extra
 	}
 	resp, body := get(t, ts, path)
-	var rows []eventRow
+	var out eventsResponse
 	if resp.StatusCode == http.StatusOK {
-		if err := json.Unmarshal(body, &rows); err != nil {
+		if err := json.Unmarshal(body, &out); err != nil {
 			t.Fatalf("解析响应: %v（%s）", err, body)
 		}
 	}
-	return resp, rows, body
+	return resp, out.Items, body
 }
 
 // 8. 热冷合流：热表有的事件、只存在于冷块的事件都返回；冷块里重复归档的热表事件只出现一次。
@@ -338,10 +339,13 @@ func TestEventSearchCorruptChunkFails(t *testing.T) {
 	}
 }
 
-// 12. 冷层不可用时响应不变：
-//   - 冷读开关关闭（conn 为 nil）：JSON、状态码、响应头都与改动前逐字节一致，不写覆盖度头；
-//   - 开关开了但库里没有冷归档表：不 500，按「没有冷数据」处理，头写 skipped=no-schema；
-//   - 表在但一条冷块都没有：同样不写覆盖度头，与开关关闭时逐字节一致。
+// 12. 冷层不可用时的对象契约（P5）：
+//   - 冷读开关关闭（conn 为 nil）：items 与改动前同样的合流结果（只有热表行）、
+//     不写覆盖度头；coverage 如实标注 archive_read_disabled——冷层有没有数据无从知晓；
+//   - 开关开了但库里没有冷归档表：不 500，items 与开关关闭时逐字节一致，
+//     头写 skipped=no-schema，coverage.reason=no_archive_schema；
+//   - 表在但一条冷块都没有：items 一致、头不写，coverage 无缺口
+//     （冷层确实没有数据，谈不上缺口）。
 func TestEventSearchWithoutArchiveUnchanged(t *testing.T) {
 	ctx, client := testdb.New(t)
 	db := archiveDB(t, ctx)
@@ -358,6 +362,18 @@ func TestEventSearchWithoutArchiveUnchanged(t *testing.T) {
 		suppress.New(client, time.Hour), intel.New(client, time.Hour), nil)))
 	t.Cleanup(on.Close)
 
+	// itemsOf 解出 items 的原始 JSON，用来逐字节比较「合流结果」本身
+	itemsOf := func(t *testing.T, body []byte) []byte {
+		t.Helper()
+		var raw struct {
+			Items json.RawMessage `json:"items"`
+		}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			t.Fatalf("解析响应: %v（%s）", err, body)
+		}
+		return raw.Items
+	}
+
 	offResp, offRows, offBody := queryEvents(t, off, base, "")
 	if offResp.StatusCode != http.StatusOK || len(offRows) != 1 {
 		t.Fatalf("开关关闭时应正常返回 1 条，得到 %d: %s", len(offRows), offBody)
@@ -365,10 +381,10 @@ func TestEventSearchWithoutArchiveUnchanged(t *testing.T) {
 	if cov := offResp.Header.Get("X-Archive-Coverage"); cov != "" {
 		t.Errorf("冷读关闭时不该写覆盖度头，实际 %q", cov)
 	}
-	// 响应体形状与改动前一致：还是那 8 个字段，没有多出任何冷归档痕迹
+	// 响应体形状：items 里还是那 8 个字段，没有多出任何冷归档痕迹
 	var shape []map[string]json.RawMessage
-	if err := json.Unmarshal(offBody, &shape); err != nil || len(shape) != 1 {
-		t.Fatalf("响应体解析失败或条数不对: %v %s", err, offBody)
+	if err := json.Unmarshal(itemsOf(t, offBody), &shape); err != nil || len(shape) != 1 {
+		t.Fatalf("items 解析失败或条数不对: %v %s", err, offBody)
 	}
 	fields := []string{"id", "ts", "classUid", "source", "assetId", "username", "connTuple", "raw"}
 	for k := range shape[0] {
@@ -379,8 +395,17 @@ func TestEventSearchWithoutArchiveUnchanged(t *testing.T) {
 	if len(shape[0]) != len(fields) {
 		t.Errorf("响应字段数 %d，期望 %d: %s", len(shape[0]), len(fields), offBody)
 	}
+	// 冷读关闭是如实标注的缺口：冷层是否有数据未知
+	var offOut eventsResponse
+	if err := json.Unmarshal(offBody, &offOut); err != nil {
+		t.Fatal(err)
+	}
+	wantOff := eventsCoverage{HotSearched: true, ColdSearched: false, ScanComplete: false, Reason: "archive_read_disabled"}
+	if offOut.Coverage != wantOff {
+		t.Errorf("冷读关闭的 coverage = %+v，期望 %+v", offOut.Coverage, wantOff)
+	}
 
-	// 表不存在：200，JSON 与开关关闭时一致，头如实写 skipped=no-schema
+	// 表不存在：200，items 与开关关闭时逐字节一致，头如实写 skipped=no-schema
 	noSchemaResp, noSchemaRows, noSchemaBody := queryEvents(t, on, base, "")
 	if noSchemaResp.StatusCode != http.StatusOK || len(noSchemaRows) != 1 {
 		t.Fatalf("没有冷归档表也不能失败，得到 %d 条: %s", len(noSchemaRows), noSchemaBody)
@@ -388,14 +413,21 @@ func TestEventSearchWithoutArchiveUnchanged(t *testing.T) {
 	if cov := noSchemaResp.Header.Get("X-Archive-Coverage"); cov != "skipped=no-schema" {
 		t.Errorf("没有冷归档表时覆盖度头 = %q，期望 skipped=no-schema", cov)
 	}
-	if string(noSchemaBody) != string(offBody) {
-		t.Errorf("表不存在时的 JSON 应与开关关闭时逐字节一致:\n%s\n%s", noSchemaBody, offBody)
+	if string(itemsOf(t, noSchemaBody)) != string(itemsOf(t, offBody)) {
+		t.Errorf("表不存在时的 items 应与开关关闭时逐字节一致:\n%s\n%s", itemsOf(t, noSchemaBody), itemsOf(t, offBody))
 	}
-	if diff := headerDiffExcept(offResp.Header, noSchemaResp.Header, "X-Archive-Coverage"); diff != "" {
-		t.Errorf("除覆盖度头外，响应头应与开关关闭时一致，差异: %s", diff)
+	var noSchemaOut eventsResponse
+	if err := json.Unmarshal(noSchemaBody, &noSchemaOut); err != nil {
+		t.Fatal(err)
+	}
+	if noSchemaOut.Coverage.Reason != "no_archive_schema" || noSchemaOut.Coverage.ScanComplete || noSchemaOut.Coverage.ColdSearched {
+		t.Errorf("没有冷归档表的 coverage = %+v", noSchemaOut.Coverage)
+	}
+	if noSchemaOut.Truncated {
+		t.Error("1 条结果不该报 truncated")
 	}
 
-	// 表在、但没有冷块：不写覆盖度头，与开关关闭时逐字节一致
+	// 表在、但没有冷块：头不写；coverage 无缺口——冷层确实没有数据
 	if err := eventarchive.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
@@ -406,18 +438,25 @@ func TestEventSearchWithoutArchiveUnchanged(t *testing.T) {
 	if cov := emptyResp.Header.Get("X-Archive-Coverage"); cov != "" {
 		t.Errorf("空归档时不该写覆盖度头，实际 %q", cov)
 	}
-	if string(emptyBody) != string(offBody) {
-		t.Errorf("空归档时的 JSON 应与开关关闭时逐字节一致:\n%s\n%s", emptyBody, offBody)
+	if string(itemsOf(t, emptyBody)) != string(itemsOf(t, offBody)) {
+		t.Errorf("空归档时的 items 应与开关关闭时逐字节一致:\n%s\n%s", itemsOf(t, emptyBody), itemsOf(t, offBody))
 	}
-	if diff := headerDiff(offResp.Header, emptyResp.Header); diff != "" {
+	// 头语义一致：都不带归档头。Content-Length 会随 coverage.reason 的文字差不同，跳过
+	if diff := headerDiffExcept(offResp.Header, emptyResp.Header, "Content-Length"); diff != "" {
 		t.Errorf("空归档时的响应头应与开关关闭时一致，差异: %s", diff)
+	}
+	var emptyOut eventsResponse
+	if err := json.Unmarshal(emptyBody, &emptyOut); err != nil {
+		t.Fatal(err)
+	}
+	wantEmpty := eventsCoverage{HotSearched: true, ColdSearched: false, ScanComplete: true, Reason: ""}
+	if emptyOut.Coverage != wantEmpty {
+		t.Errorf("空归档的 coverage = %+v，期望 %+v（无缺口）", emptyOut.Coverage, wantEmpty)
 	}
 }
 
-// headerDiff 比较两个响应头（跳过随请求时间变化的 Date），返回差异描述。
-func headerDiff(a, b http.Header) string { return headerDiffExcept(a, b, "") }
-
-// headerDiffExcept 同上，额外跳过 skip 指定的头。
+// headerDiffExcept 比较两个响应头（跳过随请求时间变化的 Date 与 skip 指定的头），
+// 返回差异描述。
 func headerDiffExcept(a, b http.Header, skip string) string {
 	var diffs []string
 	keys := map[string]bool{}

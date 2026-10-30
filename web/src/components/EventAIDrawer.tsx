@@ -102,8 +102,10 @@ export function EventAIDrawer({ event, onClose, onAsk }: { event: EventRow | nul
   const handoff = useHandoff()
   if (!event) return <Drawer open={false} />
 
-  const groups = related.data ?? []
+  const groups = related.data?.groups ?? []
   const all = groups.flatMap(g => g.events)
+  // 冷层边界说明：目标事件来自冷层时，related 与解读结果都会带上；两边都拿到时只显示一次
+  const archive = related.data?.archive ?? x?.archive
   const why = new Map((x?.related ?? []).map(p => [p.id, p.why]))
   const picked = (x?.related ?? []).map(p => all.find(e => e.id === p.id)).filter((e): e is EventRow => !!e)
   const groupId = assets.data?.find(a => a.id === event.assetId)?.groupId
@@ -125,6 +127,9 @@ export function EventAIDrawer({ event, onClose, onAsk }: { event: EventRow | nul
         </Flex>
       )}>
       <Flex vertical gap={20}>
+        {/* 冷层边界：目标日志来自冷归档，但关联候选只查了热表——「没有关联」可能是「没搜到」 */}
+        {archive?.target_from_archive && <Alert type="info" showIcon title={t('eventFromArchive')} />}
+
         {/* 问的是哪条 */}
         <div className="ask-target">
           <Space size={8} wrap>

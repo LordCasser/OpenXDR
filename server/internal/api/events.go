@@ -24,6 +24,47 @@ import (
 
 const maxEventRows = 200
 
+// eventsCoverage 是 /api/events 响应体里的查询覆盖度说明，真源在这里；
+// X-Archive-Coverage 响应头只是调试用的摘要，见 mapEvents。
+//
+// 字段语义：
+//   - hot_searched / cold_searched：本次各自数据源是否真的参与了查询。热表恒为 true
+//     （该入口必查热表）；cold_searched=false 表示冷层没查——原因看 reason。
+//   - scan_complete：本次请求声明的范围（热 + 冷，按时间窗与过滤条件）是否扫完。
+//     与 reason 互为表里：reason 非空（任何缺口）时必为 false；预算耗尽（scan_incomplete）、
+//     关键词跳过冷层（keyword_not_searched）、冷读关闭（archive_read_disabled）都算没扫完。
+//   - reason：空串 = 无缺口。非空取值：
+//     keyword_not_searched（关键词查询不搜冷块，冷块无关键词索引）；
+//     archive_read_disabled（冷读开关关闭，冷层是否有数据未知）；
+//     no_archive_schema（冷读开着但冷归档表未初始化）；
+//     scan_incomplete（扫描预算耗尽，还有候选块没解压）；
+//     before_archive（查询窗口整体早于最早的冷块，该窗口不在冷层覆盖内）。
+//     块损坏等读取错误不走 reason——那直接 500，不能用「缺口说明」掩盖错误。
+type eventsCoverage struct {
+	HotSearched  bool   `json:"hot_searched"`
+	ColdSearched bool   `json:"cold_searched"`
+	ScanComplete bool   `json:"scan_complete"`
+	Reason       string `json:"reason"`
+}
+
+// eventsResponse 是 /api/events 的响应契约：items 是事件行，truncated 表示返回条数达到
+// limit（可能还有更早的，与扫描是否完整无关），coverage 说明冷热两层的覆盖情况。
+type eventsResponse struct {
+	Items     []eventRow     `json:"items"`
+	Truncated bool           `json:"truncated"`
+	Coverage  eventsCoverage `json:"coverage"`
+}
+
+// coverage 缺口原因，与 eventsCoverage.Reason 的取值一一对应。
+const (
+	reasonKeyword            = "keyword_not_searched"
+	reasonHotKeywordDegraded = "hot_keyword_degraded"
+	reasonReadOff            = "archive_read_disabled"
+	reasonNoSchema           = "no_archive_schema"
+	reasonScanBudget         = "scan_incomplete"
+	reasonBeforeCold         = "before_archive"
+)
+
 type eventRow struct {
 	ID        uuid.UUID       `json:"id"`
 	Ts        time.Time       `json:"ts"`
@@ -42,7 +83,11 @@ type eventRow struct {
 // 一个文件名，不该要求他先知道字段路径。
 //
 // 热表（events）与冷块（event_archive_chunks）合流：热表先查，冷块按同一组参数补上，
-// 结果按 (ts, id) 去重倒序。冷块里没有数据时不会走到冷查询，响应与改动前逐字节一致。
+// 结果按 (ts, id) 去重倒序。冷块里没有数据时不会走到冷查询。
+//
+// 响应是对象契约 {items, truncated, coverage}：truncated 表示返回条数达到 limit，
+// coverage 说明冷热两层的覆盖缺口（关键词跳过冷层、冷读关闭、预算耗尽等）。
+// X-Archive-Coverage / X-Truncated 响应头保留为调试摘要，真源是响应体。
 //
 // conn 是冷归档读取用的原始连接（与 ent 共用同一个池）。为 nil 时冷层整体不参与：
 // 拿不到冷库连接时既不能假装查过，也不该因此影响热表查询。
@@ -103,22 +148,19 @@ func mapEvents(api *http.ServeMux, db *ent.Client, conn *sql.DB) {
 			return
 		}
 
-<<<<<<< HEAD
-		// 取满上限或关键词全量查询超时都说明可能还有更早的，提示前端收窄条件
-		if len(rows) == limit || !complete {
-=======
 		// 冷块按同一组参数补数据。块损坏等错误如实返回 500：不能降级成只返回热表，
 		// 那会让调用方以为「查到的就是全部」。
-		cold, coverage, err := archiveEvents(r.Context(), conn, s, eventFilter{
+		cold, cov, header, err := archiveEvents(r.Context(), conn, s, eventFilter{
 			from: from, to: to, assetID: assetID, classUID: classUID,
-			source: p.Get("source"), keyword: p.Get("q"), limit: limit,
+			source: p.Get("source"), keyword: p.Get("q"), limit: limit, hotComplete: complete,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if coverage != "" {
-			w.Header().Set("X-Archive-Coverage", coverage)
+		// 调试头保留一段时间，真源是响应体里的 coverage
+		if header != "" {
+			w.Header().Set("X-Archive-Coverage", header)
 		}
 
 		out := make([]eventRow, len(rows))
@@ -126,9 +168,10 @@ func mapEvents(api *http.ServeMux, db *ent.Client, conn *sql.DB) {
 			out[i] = toEventRow(e)
 		}
 		out = mergeRows(out, coldRows(cold), limit)
-		// 取满上限说明可能还有更早的，提示前端收窄条件
-		if len(out) == limit {
->>>>>>> 2442d06 (feat(archive): 冷热统一读取与组权限过滤（阶段 B1）)
+		// 取满上限说明可能还有更早的，提示前端收窄条件；这只说明条数到限，
+		// 与 coverage.scan_complete（是否扫完，含关键词检索降级）是两回事，可以同时为真
+		truncated := len(out) == limit
+		if truncated {
 			w.Header().Set("X-Truncated", "1")
 		}
 		ids := make([]uuid.UUID, len(out))
@@ -143,7 +186,7 @@ func mapEvents(api *http.ServeMux, db *ent.Client, conn *sql.DB) {
 		for i := range out {
 			out[i].Automation = sources[out[i].ID]
 		}
-		writeJSON(w, out)
+		writeJSON(w, eventsResponse{Items: out, Truncated: truncated, Coverage: cov})
 	})
 }
 
@@ -155,43 +198,62 @@ type eventFilter struct {
 	source   string
 	keyword  string
 	limit    int
+	// hotComplete 是热表检索是否完整（关键词检索超时降级为不完整时为 false）；
+	// 冷层照常跳过（无关键词索引），但覆盖度要如实反映热侧缺口
+	hotComplete bool
 }
 
-// archiveEvents 查冷块，返回合流用的事件与写进响应头的覆盖度。
+// archiveEvents 查冷块，返回合流用的事件、写进响应体的覆盖度与调试用摘要头。
 //
-// 覆盖度必须如实：真查了就报 chunks/matched/truncated，没查就写清原因。
-// 三种「没查」的情形：
-//   - skipped=no-schema：冷读开关开了，但库里还没有冷归档表（没跑过 ensure-schema）。这是部署状态，
-//     按「没有冷数据」处理，不能让事件页整页 500。
-//   - skipped=keyword：关键词查询，冷块没有索引。
-//   - skipped=before_archive：查询窗口整体早于最早一块冷数据。
+// 覆盖度必须如实：真查了就报 chunks/matched/truncated（头）与 cold_searched=true（体），
+// 没查就写清原因。四种「没查」的情形：
+//   - conn 为 nil（archive_read_disabled）：冷读开关没开，冷层是否有数据无从知晓，
+//     保守地按缺口报告；items 仍只是热表合流结果，与开关关闭时一致。
+//   - skipped=no-schema（no_archive_schema）：冷读开关开了，但库里还没有冷归档表
+//     （没跑过 ensure-schema）。这是部署状态，按「没有冷数据」处理，不能让事件页整页 500。
+//   - skipped=keyword（keyword_not_searched）：关键词查询，冷块没有索引。
+//   - skipped=before_archive（before_archive）：查询窗口整体早于最早一块冷数据。
 //
-// 归档表在、但一条冷块都没有时两者都不写：此时冷层不可能吞掉任何事件，
-// 响应保持与改动前逐字节一致。真正的块损坏仍然是 500，不降级成部分结果。
-func archiveEvents(ctx context.Context, conn *sql.DB, s scope, q eventFilter) ([]eventarchive.Event, string, error) {
+// 归档表在、但一条冷块都没有时不报缺口：此时冷层不可能吞掉任何事件。
+// 扫描预算耗尽时 cold_searched=true 但 scan_complete=false（reason=scan_incomplete）——
+// 查了，没查完。真正的块损坏仍然是 500，不降级成部分结果。
+func archiveEvents(ctx context.Context, conn *sql.DB, s scope, q eventFilter) ([]eventarchive.Event, eventsCoverage, string, error) {
+	// 热表这个入口必查；默认无缺口，下面按实际情形收紧
+	cov := eventsCoverage{HotSearched: true, ScanComplete: true}
 	if conn == nil {
-		return nil, "", nil
+		cov.Reason, cov.ScanComplete = reasonReadOff, false
+		return nil, cov, "", nil
 	}
 	ext, err := eventarchive.ArchiveExtent(ctx, conn)
 	if err != nil {
 		if errors.Is(err, eventarchive.ErrNoSchema) {
-			return nil, "skipped=no-schema", nil
+			cov.Reason, cov.ScanComplete = reasonNoSchema, false
+			return nil, cov, "skipped=no-schema", nil
 		}
-		return nil, "", err
+		return nil, cov, "", err
 	}
 	if !ext.Schema {
-		return nil, "skipped=no-schema", nil
+		cov.Reason, cov.ScanComplete = reasonNoSchema, false
+		return nil, cov, "skipped=no-schema", nil
 	}
 	if !ext.Has {
-		return nil, "", nil
+		// 冷层确实没有数据：谈不上缺口
+		return nil, cov, "", nil
 	}
 	// 冷块没有关键词索引，逐块解压全文扫的代价不可控，明确跳过并告诉调用方
 	if q.keyword != "" {
-		return nil, "skipped=keyword", nil
+		if !q.hotComplete {
+			// 热侧关键词检索已超时降级为不完整：如实报热侧缺口，不再额外声明冷层缺口
+			cov.Reason, cov.ScanComplete = reasonHotKeywordDegraded, false
+			return nil, cov, "hot_keyword_degraded", nil
+		}
+		cov.Reason, cov.ScanComplete = reasonKeyword, false
+		return nil, cov, "skipped=keyword", nil
 	}
-	// 窗口整个早于最早一块冷数据：冷层对这个窗口一无所知
+	// 窗口整个早于最早一块冷数据：该窗口不在冷层覆盖内
 	if q.to.Before(ext.First) {
-		return nil, "skipped=before_archive", nil
+		cov.Reason, cov.ScanComplete = reasonBeforeCold, false
+		return nil, cov, "skipped=before_archive", nil
 	}
 	f := eventarchive.Filter{
 		From:     q.from,
@@ -205,15 +267,21 @@ func archiveEvents(ctx context.Context, conn *sql.DB, s scope, q eventFilter) ([
 	if q.source != "" {
 		f.Sources = []string{q.source}
 	}
-	events, cov, err := eventarchive.Query(ctx, conn, f)
+	events, ccov, err := eventarchive.Query(ctx, conn, f)
 	if err != nil {
 		if errors.Is(err, eventarchive.ErrNoSchema) {
-			return nil, "skipped=no-schema", nil
+			cov.Reason, cov.ScanComplete = reasonNoSchema, false
+			return nil, cov, "skipped=no-schema", nil
 		}
-		return nil, "", err
+		return nil, cov, "", err
 	}
-	coverage := fmt.Sprintf("chunks=%d;matched=%d;truncated=%d", cov.ScannedChunks, cov.Matched, boolInt(cov.Truncated))
-	return events, coverage, nil
+	cov.ColdSearched = true
+	if ccov.ScanIncomplete {
+		// 预算耗尽：查了但没扫完候选块，结果只是该范围的最新一段
+		cov.Reason, cov.ScanComplete = reasonScanBudget, false
+	}
+	header := fmt.Sprintf("chunks=%d;matched=%d;truncated=%d", ccov.ScannedChunks, ccov.Matched, boolInt(ccov.Truncated))
+	return events, cov, header, nil
 }
 
 // visibleAssets 是冷查询能看到的资产集合：nil 表示不限（全局 admin），
