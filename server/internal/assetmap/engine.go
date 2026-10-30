@@ -247,10 +247,6 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 	for i, ev := range events {
 		ids[i] = ev.ID.String()
 	}
-	tx, err = e.SQL.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, err
-	}
 	for k, a := range links {
 		if _, err := tx.ExecContext(ctx, upsertLink,
 			uuid.Must(uuid.NewV7()), k.srcIP, a.srcAsset, k.dstIP, k.port, k.proto, k.process, a.count, a.first, a.last); err != nil {
