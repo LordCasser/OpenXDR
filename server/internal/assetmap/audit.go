@@ -73,57 +73,35 @@ func AuditGraph(ctx context.Context, db *sql.DB, since, until time.Time, maxEven
 		}
 	}
 	observed := map[linkKey]int64{}
-	// 保持同一个 MVCC 快照；按小时限制稀疏事件区间的扫描量。
-	for windowStart := since; windowStart.Before(until); windowStart = windowStart.Add(time.Hour) {
-		windowEnd := windowStart.Add(time.Hour)
-		if until.Before(windowEnd) {
-			windowEnd = until
+	report.Events, err = scanGraphEvents(ctx, tx, since, until, maxEvents, func(events []*ent.Event) error {
+		pending, err := auditPending(ctx, tx, events)
+		if err != nil {
+			return err
 		}
-		if _, err = tx.ExecContext(ctx, `DECLARE graph_audit NO SCROLL CURSOR FOR
-SELECT id,ts,class_uid,source,asset_id,process_guid,conn_tuple,raw FROM events
-WHERE class_uid=4001 AND ts >= $1 AND ts < $2`, windowStart, windowEnd); err != nil {
-			return report, err
+		eligible := events[:0]
+		for _, ev := range events {
+			if pending[ev.ID] {
+				report.Pending++
+				continue
+			}
+			eligible = append(eligible, ev)
 		}
-		for {
-			events, err := auditBatch(ctx, tx)
-			if err != nil {
-				return report, fmt.Errorf("扫描网络事件 %s 至 %s：%w", windowStart.Format(time.RFC3339), windowEnd.Format(time.RFC3339), err)
-			}
-			if len(events) == 0 {
-				break
-			}
-			report.Events += len(events)
-			if report.Events > maxEvents {
-				return report, fmt.Errorf("图谱核对超过 %d 条事件上限，未完成核对", maxEvents)
-			}
-			pending, err := auditPending(ctx, tx, events)
-			if err != nil {
-				return report, err
-			}
-			eligible := events[:0]
-			for _, ev := range events {
-				if pending[ev.ID] {
-					report.Pending++
-					continue
-				}
-				eligible = append(eligible, ev)
-			}
-			names, err := processNamesFrom(ctx, tx, eligible)
-			if err != nil {
-				return report, fmt.Errorf("回查进程名称：%w", err)
-			}
-			for _, ev := range eligible {
-				key, _, ok := eventLink(ev, own, names, managed)
-				if !ok {
-					continue
-				}
-				observed[key]++
-				report.Contributing++
-			}
+		names, err := processNamesFrom(ctx, tx, eligible)
+		if err != nil {
+			return fmt.Errorf("回查进程名称：%w", err)
 		}
-		if _, err = tx.ExecContext(ctx, `CLOSE graph_audit`); err != nil {
-			return report, err
+		for _, ev := range eligible {
+			key, _, ok := eventLink(ev, own, names, managed)
+			if !ok {
+				continue
+			}
+			observed[key]++
+			report.Contributing++
 		}
+		return nil
+	})
+	if err != nil {
+		return report, err
 	}
 
 	report.ObservedLinks = len(observed)
@@ -244,4 +222,41 @@ func auditPending(ctx context.Context, tx *sql.Tx, events []*ent.Event) (map[uui
 		pending[id] = true
 	}
 	return pending, rows.Err()
+}
+
+func scanGraphEvents(ctx context.Context, tx *sql.Tx, since, until time.Time, maxEvents int, visit func([]*ent.Event) error) (int, error) {
+	count := 0
+	// 保持同一个 MVCC 快照；按小时限制稀疏事件区间的扫描量。
+	for windowStart := since; windowStart.Before(until); windowStart = windowStart.Add(time.Hour) {
+		windowEnd := windowStart.Add(time.Hour)
+		if until.Before(windowEnd) {
+			windowEnd = until
+		}
+		if _, err := tx.ExecContext(ctx, `DECLARE graph_audit NO SCROLL CURSOR FOR
+SELECT id,ts,class_uid,source,asset_id,process_guid,conn_tuple,raw FROM events
+WHERE class_uid=4001 AND ts >= $1 AND ts < $2`, windowStart, windowEnd); err != nil {
+			return count, err
+		}
+		for {
+			events, err := auditBatch(ctx, tx)
+			if err != nil {
+				return count, fmt.Errorf("扫描网络事件 %s 至 %s：%w", windowStart.Format(time.RFC3339), windowEnd.Format(time.RFC3339), err)
+			}
+			if len(events) == 0 {
+				break
+			}
+			count += len(events)
+			if count > maxEvents {
+				return count, fmt.Errorf("图谱核对超过 %d 条事件上限，未完成核对", maxEvents)
+			}
+			if err := visit(events); err != nil {
+				return count, err
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `CLOSE graph_audit`); err != nil {
+			return count, err
+		}
+	}
+
+	return count, nil
 }

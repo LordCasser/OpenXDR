@@ -65,7 +65,7 @@ func (e *Engine) Run(ctx context.Context) {
 		}
 		if time.Since(e.lastPrune) > time.Hour {
 			e.lastPrune = time.Now()
-			if _, err := e.SQL.ExecContext(ctx, `DELETE FROM asset_links WHERE last_seen < $1`, time.Now().Add(-linkTTL)); err != nil {
+			if _, err := e.deleteLinks(ctx, `DELETE FROM asset_links WHERE last_seen < $1`, time.Now().Add(-linkTTL)); err != nil {
 				slog.Error("清理过期依赖边失败", "err", err)
 			}
 		}
@@ -133,6 +133,10 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
+	locked, err := lockGraphBatch(ctx, tx)
+	if err != nil || !locked {
+		return 0, err
+	}
 	var events []*ent.Event
 	if mode == graphqueue.Queued {
 		events, err = queuedEvents(ctx, tx)
@@ -319,11 +323,11 @@ FROM events WHERE process_guid = ANY($1::uuid[]) AND class_uid = 1007`, "{"+stri
 // src_asset_id 是最后写入者，计数与归属都混了，改记就是把别人的连接安到这台机器头上。直接删，活跃的连接下一批事件就按资产自己的地址重新长出来。
 // 二是连实例元数据服务的边（见 instanceMetadata）：早先没剔，agent 启动识别云环境的那一次连接在图谱和 AI 眼里成了一条来历不明的外联。
 func (e *Engine) dropNonDependencies(ctx context.Context) error {
-	res, err := e.SQL.ExecContext(ctx, `DELETE FROM asset_links WHERE src_ip IN ('0.0.0.0', '::') OR dst_ip IN ('100.100.100.200', 'fd00:ec2::254')`)
+	n, err := e.deleteLinks(ctx, `DELETE FROM asset_links WHERE src_ip IN ('0.0.0.0', '::') OR dst_ip IN ('100.100.100.200', 'fd00:ec2::254')`)
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n > 0 {
+	if n > 0 {
 		slog.Info("已清理不属于依赖的边", "rows", n)
 	}
 	return nil
