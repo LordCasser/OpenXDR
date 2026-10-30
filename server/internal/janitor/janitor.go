@@ -109,6 +109,7 @@ func (j *Janitor) sweep(ctx context.Context) (int, error) {
 	for {
 		ids, err := j.DB.Event.Query().
 			Where(event.TsLT(cutoff), event.Not(event.HasAlerts()), withoutTemporalEvidence).
+			Order(ent.Asc(event.FieldTs)).
 			Limit(batchSize).
 			IDs(ctx)
 		if err != nil || len(ids) == 0 {
