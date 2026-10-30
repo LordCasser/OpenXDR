@@ -160,6 +160,7 @@ BEGIN
  IF to_regclass('temporal_evaluation_gaps') IS NOT NULL THEN DELETE FROM temporal_evaluation_gaps WHERE event_id = OLD.id; END IF;
  IF to_regclass('temporal_detections') IS NOT NULL THEN DELETE FROM temporal_detections WHERE anchor_id = OLD.id; END IF;
  IF to_regclass('identity_observations') IS NOT NULL THEN DELETE FROM identity_observations WHERE event_id = OLD.id; END IF;
+ IF OLD.class_uid IN (4001,5001,5020) AND to_regclass('assetmap_queue') IS NOT NULL THEN DELETE FROM assetmap_queue WHERE event_id = OLD.id; END IF;
  IF to_regclass('identity_local_snapshots') IS NOT NULL THEN DELETE FROM identity_local_snapshots WHERE event_id = OLD.id; END IF;
  RETURN NULL;
 END $$;
@@ -179,6 +180,7 @@ var derived = []struct{ table, column string }{
 	{"temporal_detections", "anchor_id"},
 	{"identity_observations", "event_id"},
 	{"identity_local_snapshots", "event_id"},
+	{"assetmap_queue", "event_id"},
 }
 
 // pinnedIDs 是不随保留期删除的事件：告警、时序证据与已出告警的时序锚点（与 janitor 逐行清理同一口径）。

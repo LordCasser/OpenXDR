@@ -166,6 +166,12 @@ func TestRetireKeepsEvidenceAndDropsTheRest(t *testing.T) {
 	if partitionOf(t, db, stray.ID) != eventpart.DefaultName {
 		t.Fatal("没有日分区的历史事件应在默认分区")
 	}
+	for _, ev := range []*ent.Event{plain, alerted} {
+		client.Event.UpdateOneID(ev.ID).SetClassUID(4001).SaveX(ctx)
+		if _, err := db.ExecContext(ctx, `INSERT INTO assetmap_queue(event_id,event_ts) VALUES($1,$2)`, ev.ID, ev.Ts); err != nil {
+			t.Fatal(err)
+		}
+	}
 	alert := client.Alert.Create().SetTs(alerted.Ts).SetRuleID("r").SetSeverity(3).SetEventID(alerted.ID).SaveX(ctx)
 	group := uuid.New()
 	for _, stmt := range []struct {
@@ -200,6 +206,9 @@ func TestRetireKeepsEvidenceAndDropsTheRest(t *testing.T) {
 	}
 	if got := partitionOf(t, db, kept.ID); got != eventpart.DailyName(d10.AddDate(0, 0, 2)) {
 		t.Fatalf("未到期分区不应退役: %q", got)
+	}
+	if exists(t, db, `SELECT 1 FROM assetmap_queue WHERE event_id=$1`, plain.ID) || !exists(t, db, `SELECT 1 FROM assetmap_queue WHERE event_id=$1`, alerted.ID) {
+		t.Fatal("退役应清理被删除事件的图谱待办，并保留归档事件待办")
 	}
 	if exists(t, db, `SELECT 1 FROM temporal_matches WHERE event_id = $1`, plain.ID) || !exists(t, db, `SELECT 1 FROM temporal_matches WHERE event_id = $1`, alerted.ID) {
 		t.Fatal("派生状态应只随被删事件清理")

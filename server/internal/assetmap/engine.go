@@ -14,6 +14,7 @@ import (
 
 	"openxdr/server/ent"
 	"openxdr/server/ent/event"
+	"openxdr/server/internal/graphqueue"
 	"openxdr/server/internal/triage"
 )
 
@@ -114,11 +115,33 @@ type linkAgg struct {
 }
 
 func (e *Engine) batch(ctx context.Context) (int, error) {
-	events, err := e.DB.Event.Query().
-		Where(event.ClassUIDIn(classNetwork, ClassInventory, ClassSoftware), event.TsGT(e.cursor)).
-		Order(ent.Asc(event.FieldTs)).
-		Limit(batchLimit).
-		All(ctx)
+	mode, err := graphqueue.Mode(ctx, e.SQL)
+	if err != nil {
+		return 0, err
+	}
+	if mode == graphqueue.Requested {
+		if e.cursor.IsZero() {
+			e.cursor = e.loadCursor(ctx)
+		}
+		if err := graphqueue.Activate(ctx, e.SQL, e.cursor); err != nil {
+			return 0, err
+		}
+		mode = graphqueue.Queued
+		slog.Info("资产图谱已切换为持久待办消费")
+	}
+	tx, err := e.SQL.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var events []*ent.Event
+	if mode == graphqueue.Queued {
+		events, err = queuedEvents(ctx, tx)
+	} else {
+		events, err = e.DB.Event.Query().
+			Where(event.ClassUIDIn(classNetwork, ClassInventory, ClassSoftware), event.TsGT(e.cursor)).
+			Order(ent.Asc(event.FieldTs)).Limit(batchLimit).All(ctx)
+	}
 	if err != nil || len(events) == 0 {
 		return 0, err
 	}
@@ -153,14 +176,18 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 	for _, ev := range events {
 		if ev.ClassUID == ClassSoftware {
 			if sw, ok := software(ev.Raw); ok && ev.AssetID != nil {
-				softwares[*ev.AssetID] = softwareSnap{ev.Ts, sw}
+				if previous, ok := softwares[*ev.AssetID]; !ok || ev.Ts.After(previous.ts) {
+					softwares[*ev.AssetID] = softwareSnap{ev.Ts, sw}
+				}
 			}
 			continue
 		}
 		if ev.ClassUID == ClassInventory {
 			if ev.AssetID != nil {
 				l, c, os := inventory(ev.Raw)
-				inventories[*ev.AssetID] = snapshot{ev.Ts, l, c, os}
+				if previous, ok := inventories[*ev.AssetID]; !ok || ev.Ts.After(previous.ts) {
+					inventories[*ev.AssetID] = snapshot{ev.Ts, l, c, os}
+				}
 			}
 			continue
 		}
@@ -205,15 +232,22 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 			links[k] = agg
 		}
 		agg.count++
-		agg.last = ev.Ts
+		if ev.Ts.Before(agg.first) {
+			agg.first = ev.Ts
+		}
+		if ev.Ts.After(agg.last) {
+			agg.last = ev.Ts
+		}
 	}
 
-	cursor := events[len(events)-1].Ts
-	tx, err := e.SQL.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, err
+	cursor := e.cursor
+	ids := make([]string, len(events))
+	for i, ev := range events {
+		ids[i] = ev.ID.String()
+		if ev.Ts.After(cursor) {
+			cursor = ev.Ts
+		}
 	}
-	defer func() { _ = tx.Rollback() }()
 	for k, a := range links {
 		if _, err := tx.ExecContext(ctx, upsertLink,
 			uuid.Must(uuid.NewV7()), k.srcIP, a.srcAsset, k.dstIP, k.port, k.proto, k.process, a.count, a.first, a.last); err != nil {
@@ -245,6 +279,9 @@ WHERE id=$1 AND (inventory_at IS NULL OR inventory_at < $4)`, id, string(listeni
 	value, _ := json.Marshal(cursor)
 	if _, err := tx.ExecContext(ctx, `INSERT INTO settings (id, value, updated_at) VALUES ($1, $2::jsonb, now())
 ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, cursorKey, string(value)); err != nil {
+		return 0, err
+	}
+	if err := graphqueue.Ack(ctx, tx, ids); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(); err != nil {

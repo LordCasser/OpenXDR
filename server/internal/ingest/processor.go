@@ -12,6 +12,7 @@ import (
 
 	"openxdr/server/internal/automation"
 	"openxdr/server/internal/cmdorigin"
+	"openxdr/server/internal/graphqueue"
 	"openxdr/server/internal/identity"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/sigma"
@@ -58,7 +59,10 @@ CREATE INDEX IF NOT EXISTS temporal_matches_event ON temporal_matches(event_id);
 	if err := temporal.EnsureSchema(ctx, db); err != nil {
 		return err
 	}
-	return identity.EnsureSchema(ctx, db)
+	if err := identity.EnsureSchema(ctx, db); err != nil {
+		return err
+	}
+	return graphqueue.EnsureSchema(ctx, db)
 }
 
 func (p *Processor) Process(ctx context.Context, e Envelope) error {
@@ -87,7 +91,7 @@ func (p *Processor) ProcessBatch(ctx context.Context, events []Envelope) (err er
 			return fmt.Errorf("时序规则已配置但没有有效快照")
 		}
 	}
-	tx, err := p.DB.BeginTx(ctx, nil)
+	tx, err := p.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return err
 	}
@@ -155,6 +159,9 @@ ON CONFLICT DO NOTHING`, e.ID, e.Timestamp, e.ClassUID, e.Source,
 	}
 	if inserted, _ := result.RowsAffected(); inserted == 0 {
 		return false, 0, nil, nil
+	}
+	if err := graphqueue.Capture(ctx, tx, e.ID, e.Timestamp, e.ClassUID); err != nil {
+		return false, 0, nil, err
 	}
 
 	if e.Source == "agent" && e.ClassUID == 3002 && e.AssetID != nil {
