@@ -477,7 +477,7 @@ swap 与 retire 的口径**不同**，逐表决策（V09）：
 |---|---|---|
 | `temporal_matches` | 清 | 默认口径 4001/4003 不产生行（no-op）；扩到 3002 前重新评审 |
 | `temporal_candidates` | 清 | Guard 的 temporal 项保证被删候选已超出所有在线版本的求值范围（安全条件是「已失效」，不依赖异步 Prune 已执行） |
-| `temporal_evaluation_gaps` | **不清** | 诊断记录，有真实读者（`GET /api/temporal-gaps`）；swap 顺带删会让缺口清单在保留期前静默缩水。清理责任留给既有策略：该日最终由 janitor 退役时按同一清单删（retire 不跳过本表）。**按年龄清理 gaps 的独立策略留作后续**（见第 13 节） |
+| `temporal_evaluation_gaps` | **不清** | 诊断记录，有真实读者（`GET /api/temporal-gaps`）；swap 顺带删会让缺口清单在保留期前静默缩水。清理链路（R6）：retire 的「日分区 − 暂存」差集清理与逐行删除触发器都看不到已被 swap 移出热表的事件的 gap，这类 gap 由 janitor 按 gap 自身 `created_at` 的诊断保留期（`TEMPORAL_GAP_RETENTION_DAYS`，默认 30 天，0 关闭）清理，不 JOIN events；仍留在日分区里的事件的 gap 照旧随 retire 差集清理 |
 | `temporal_detections` | 清 | 已出告警的检测锚点在 PinnedIDs 里被保留；能删到的只有被抑制的检测，与 retire 同口径 |
 | `identity_observations` / `identity_local_snapshots` | 清 | 默认口径下 no-op；扩口径前重新评审（读者 JOIN events） |
 
@@ -690,8 +690,10 @@ DATABASE_URL=... eventarchive <子命令>
 - **外部 SQL 直查组视图只覆盖热表**：Pi 的 query 与 queryrole 组视图都不含冷数据（每次结果带
   静态声明）；关键词检索同样不进冷层（`reason=keyword_not_searched`）。扩大覆盖需独立设计
   （冷层关键词索引 / 组视图扩展），当前如实声明缺口。
-- **`temporal_evaluation_gaps` 的按年龄清理留后续**：swap 不清（诊断记录有读者），只有该日被
-  janitor 退役时才随分区清理；janitor 不做单独的 gaps 年龄清理。
+- **`temporal_evaluation_gaps` 按 `TEMPORAL_GAP_RETENTION_DAYS` 清理（R6）**：swap 不清（诊断记录
+  有读者）；retire 只能清仍留在日分区里的事件的 gap，swap 已移出热表的事件的 gap 由 janitor 按
+  gap 自身 `created_at` 的诊断保留期清理（默认 30 天，0 关闭）——依据诊断时间而非事件时间
+  （旧事件迟到新产生的 gap 不因事件过期），不 JOIN events。
 - **阶段 C 只在测试库验证过**：切换是分区 DDL（父表排他锁的窗口在 `DETACH`/`ATTACH` 期间），
   需要低峰窗口、需要先 `verify`、需要消费者追平；生产试点前按 `COLD_ARCHIVE` 方案的部署顺序执行。
 - **同一条事件多轮 run 归档时**，`Locate` 返回先解到的那份副本，不比较副本差异；每个 run 的副本

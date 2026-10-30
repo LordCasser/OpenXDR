@@ -769,7 +769,8 @@ export interface EventsResult {
   coverage: EventCoverage
 }
 
-// 问 AI 的冷层边界：目标事件来自冷层时，关联候选与解读输入只查了热表
+// 问 AI 的数据来源边界：candidates_hot_only 恒为 true（关联候选只查热表，热目标的历史
+// 关联也可能已归档）；target_from_archive 表示目标事件本身来自冷层（热表已无此行）
 export interface EventAIArchive {
   target_from_archive: boolean
   candidates_hot_only: boolean
@@ -784,7 +785,7 @@ export interface EventExplanation {
   verdict: 'benign' | 'suspicious' | 'malicious' | 'unknown'
   title: string; summary: string; points: string[]; next: string[]
   related: { id: string; why: string }[]
-  // 目标事件来自冷层时的边界说明（candidates_hot_only=true 表示候选未覆盖冷层）
+  // 候选边界说明（candidates_hot_only=true 表示候选未覆盖冷层，热目标也会带）
   archive?: EventAIArchive
 }
 export const fetchRelatedEvents = (id: string) => get<RelatedEvents>(`/api/events/${id}/related`)

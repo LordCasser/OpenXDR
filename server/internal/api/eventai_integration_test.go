@@ -76,9 +76,9 @@ func TestEventAI(t *testing.T) {
 	var related relatedResponse
 	_ = json.NewDecoder(resp.Body).Decode(&related)
 	resp.Body.Close()
-	// 热表目标不带冷层边界说明
-	if related.Archive != nil {
-		t.Errorf("热表日志不该带归档边界说明: %+v", related.Archive)
+	// 热表目标也要带候选边界（R5）：候选恒只查热表，热目标的历史关联可能已归档
+	if related.Archive == nil || related.Archive.TargetFromArchive || !related.Archive.CandidatesHotOnly {
+		t.Errorf("热表日志应带候选边界说明（目标不在冷层）: %+v", related.Archive)
 	}
 	got := map[string][]uuid.UUID{}
 	for _, g := range related.Groups {

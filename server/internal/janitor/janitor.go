@@ -30,10 +30,16 @@ import (
 const batchSize = 10000
 
 type Janitor struct {
-	DB        *ent.Client
-	SQL       *stdsql.DB
+	DB  *ent.Client
+	SQL *stdsql.DB
+	// Retention 原始事件保留期（RETENTION_DAYS，0 关闭清理）
 	Retention time.Duration
-	Interval  time.Duration
+	// Interval 清理循环周期（RETENTION_INTERVAL_MINUTES）
+	Interval time.Duration
+	// GapRetention 时序求值缺口（temporal_evaluation_gaps，诊断记录）按自身 created_at
+	// 的保留期（TEMPORAL_GAP_RETENTION_DAYS，默认 30 天，0 关闭）。与 Retention 相互独立：
+	// swap 移出热表的事件的 gap 不随事件退役 / 删除走，只能按诊断时间清（R6）。
+	GapRetention time.Duration
 }
 
 func (j *Janitor) Run(ctx context.Context) {
@@ -68,6 +74,13 @@ func (j *Janitor) Run(ctx context.Context) {
 				} else if n > 0 {
 					slog.Info("清理无引用时序归档", "deleted", n)
 				}
+			}
+			// 时序诊断缺口按自身的诊断保留期清理（R6），与 RETENTION_DAYS 无关：
+			// swap 移出热表的事件的 gap 不随事件退役 / 删除走
+			if n, err := j.sweepTemporalGaps(ctx); err != nil {
+				slog.Error("清理过期时序诊断缺口失败", "err", err)
+			} else if n > 0 {
+				slog.Info("清理过期时序诊断缺口", "deleted", n)
 			}
 			if j.Retention > 0 {
 				if n, err := j.sweepDecoys(ctx); err != nil {
@@ -333,6 +346,18 @@ func withoutTemporalEvidence(selector *sql.Selector) {
 	evidence := sql.Table("temporal_evidence")
 	selector.Where(sql.NotExists(sql.Select(evidence.C("event_id")).From(evidence).
 		Where(sql.ColumnsEQ(evidence.C("event_id"), selector.C(event.FieldID)))))
+}
+
+// sweepTemporalGaps 清理过期的时序求值缺口（temporal_evaluation_gaps，R6）。
+// gap 是诊断记录，按自身 created_at 的保留期（GapRetention）清理，不 JOIN events：
+// 冷归档 swap 把事件移出热表后，retire 的「日分区 − 暂存」差集清理与逐行删除触发器
+// （只在热行 DELETE 时触发）都看不到这些事件的 gap，清理责任在这里按诊断时间独立执行。
+// GapRetention ≤ 0（TEMPORAL_GAP_RETENTION_DAYS=0）关闭。
+func (j *Janitor) sweepTemporalGaps(ctx context.Context) (int64, error) {
+	if j.GapRetention <= 0 || j.SQL == nil {
+		return 0, nil
+	}
+	return temporal.PruneGaps(ctx, j.SQL, j.GapRetention)
 }
 
 // 至少保留 48 小时，覆盖 24 小时运行令牌、去重和事件配额窗口；复核证据不清理。

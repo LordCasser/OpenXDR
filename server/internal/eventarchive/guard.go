@@ -442,7 +442,7 @@ func topTermSource(terms []GuardTerm, effective time.Duration) string {
 //	-----------------------------|------------|----------------------------------------------------------------------|----
 //	temporal_matches             | 清（现行为）| 认证序列的已消费命中记录，只由 3002 告警回查写入；**默认口径 4001/4003 不产生行（no-op）**。若口径扩到 3002：事件本身已移出热表，authSequence 的回查读 events 找不到它，清 matches 与事件离开一致；restore 后重放可能重复出告警，属「扩类别时重新评审」项 | ingest/auth_sequence.go 的 NOT EXISTS 回查
 //	temporal_candidates          | 清（现行为）| 求值只按 (revision, 实体, ts ≥ now−窗口) 读；Guard 的 temporal 项保证待切日结束 ≤ now−(max(窗口,24h)+LateGrace+pruneSlack)，即 PruneCandidates 当前与其他版本的清理阈值都已覆盖，被删候选不可能再被在线求值读到。Prune 停摆也不阻塞：安全条件是「已失效」，不是「已被物理删除」 | temporal/postgres.go observeScope 的窗口回查
-//	temporal_evaluation_gaps     | **不清**    | 诊断记录，有真实读者：GET /api/temporal-gaps 按资产+时间窗列出缺口，只 JOIN assets（event_id 无外键），事件移出热表后 gap 行仍完整可读。swap 顺带删会让分析侧的缺口清单在保留期之前静默缩水。清理责任留给既有策略：该日最终由 janitor 退役时按同一清单删（retire 不跳过本表） | api/temporal_gaps.go
+//	temporal_evaluation_gaps     | **不清**    | 诊断记录，有真实读者：GET /api/temporal-gaps 按资产+时间窗列出缺口，只 JOIN assets（event_id 无外键），事件移出热表后 gap 行仍完整可读。swap 顺带删会让分析侧的缺口清单在保留期之前静默缩水。清理链路（R6）：swap 跳过本表后，retire 的「日分区 − 暂存」差集清理与逐行删除触发器（openxdr_events_release，只在热行 DELETE 时触发，搬运被 skipWhenMoving 抑制）都看不到已被移出热表的事件的 gap——这类 gap 由 janitor 按 gap 自身 created_at 的诊断保留期（TEMPORAL_GAP_RETENTION_DAYS，默认 30 天）清理，不 JOIN events；仍留在日分区里的事件的 gap 照旧随 retire 的差集清理 | api/temporal_gaps.go、janitor sweepTemporalGaps
 //	temporal_detections          | 清（现行为）| 按锚点删。已出告警的检测锚点在 PinnedIDs 里（WHERE alert_id IS NOT NULL），事件被 pin 保留、检测行不会被删；能被删到的只有被抑制（alert_id NULL）的检测，与 retire 同口径 | api/temporal_rules.go、ingest 告警关联
 //	identity_observations        | 清（现行为）| 只由 agent+3002+Windows 登录写入（identity/postgres.go ObserveWindows），**默认口径 4001/4003 不产生行（no-op）**。注意它的读者 JOIN events（api/identity.go 等），事件移出热表后行会从联查结果里消失——扩口径到 3002 前必须重新评审 | api/identity*.go（多数 JOIN events）
 //	identity_local_snapshots     | 清（现行为）| 只由 agent+5001+Linux 清单写入（identity/linux_accounts_postgres.go），**默认口径 4001/4003 不产生行（no-op）**；读者同样 JOIN events，扩口径到 5001 前重新评审 | api/local_accounts.go、identity/graph.go
@@ -452,7 +452,9 @@ func topTermSource(terms []GuardTerm, effective time.Duration) string {
 
 // swapDerivedSkip 是 swap 注入 eventpart.RewriteHooks.DerivedSkip 的口径：
 // 只跳过 temporal_evaluation_gaps（诊断记录，见上表），其余按 derived 清单照旧清理。
-// retire 不走这里——保留期退役时 gaps 随日分区一起清，是上表指定的既有清理责任。
+// retire 不走这里，但 retire 的差集清理同样只覆盖仍留在日分区里的事件——已被 swap
+// 移出热表的事件的 gap 两条路径（retire 差集、逐行删除触发器）都看不到，由 janitor
+// 按 created_at 诊断保留期清理（R6）。
 func swapDerivedSkip(table string) bool {
 	return table == "temporal_evaluation_gaps"
 }

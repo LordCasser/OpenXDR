@@ -127,8 +127,11 @@ export function EventAIDrawer({ event, onClose, onAsk }: { event: EventRow | nul
         </Flex>
       )}>
       <Flex vertical gap={20}>
-        {/* 冷层边界：目标日志来自冷归档，但关联候选只查了热表——「没有关联」可能是「没搜到」 */}
-        {archive?.target_from_archive && <Alert type="info" showIcon title={t('eventFromArchive')} />}
+        {/* 候选边界：关联候选与解读输入恒只查热表（无论目标冷热）——「没有关联」可能是「没搜到」；
+            目标本身来自冷归档时用更完整的说明（目标也不在热表） */}
+        {archive?.candidates_hot_only && (
+          <Alert type="info" showIcon title={archive.target_from_archive ? t('eventFromArchive') : t('eventCandidatesHotOnly')} />
+        )}
 
         {/* 问的是哪条 */}
         <div className="ask-target">

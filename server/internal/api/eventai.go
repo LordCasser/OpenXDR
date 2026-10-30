@@ -24,23 +24,31 @@ type relatedGroup struct {
 	Events   []eventRow `json:"events"`
 }
 
-// archiveScope 说明本次调查入口的数据来源边界：目标事件来自冷层（已归档）时，
-// 关联候选与解读输入仍然只查热表——冷层没有关键词与关联索引，候选未覆盖冷层，
-// 响应体必须说清，不能让「没有关联」被读成「没有相关事件」。
+// archiveScope 说明本次调查入口的数据来源边界，两个事实分开表达：
+//   - CandidatesHotOnly 关联候选恒只查热表（eventai.HotOnlyCoverage）：冷层没有关联索引，
+//     已归档的同进程 / 父子 / 同连接事件不在候选中。这对热目标同样成立——它的历史关联
+//     事件可能已归档，无论目标冷热都要说明，不能让「没有关联」被读成「没有相关事件」；
+//   - TargetFromArchive 目标事件本身来自冷块（热表里已经没有这行），按实际。
 type archiveScope struct {
-	// TargetFromArchive 目标事件本身来自冷块（热表里已经没有这行）
 	TargetFromArchive bool `json:"target_from_archive"`
-	// CandidatesHotOnly 关联候选只查了热表
 	CandidatesHotOnly bool `json:"candidates_hot_only"`
 }
 
-// relatedResponse related 的响应契约：groups 是关联候选，archive 非空表示有冷层边界要说明。
+// archiveScopeOf 汇出本次调查的数据来源边界：候选覆盖取自 eventai.HotOnlyCoverage
+// （单一来源——related 响应、explain 结果与发给模型的覆盖说明共用同一份事实），
+// 目标是否来自冷层按实际。
+func archiveScopeOf(fromArchive bool) *archiveScope {
+	return &archiveScope{TargetFromArchive: fromArchive, CandidatesHotOnly: eventai.HotOnlyCoverage.CandidatesHotOnly}
+}
+
+// relatedResponse related 的响应契约：groups 是关联候选，archive 恒非空——
+// 候选边界（恒只查热表）与目标来源（是否冷层）都如实说明。
 type relatedResponse struct {
 	Groups  []relatedGroup `json:"groups"`
 	Archive *archiveScope  `json:"archive,omitempty"`
 }
 
-// explainResult explain 的结果：模型解读（平铺字段）加上平台侧的冷层边界说明。
+// explainResult explain 的结果：模型解读（平铺字段）加上平台侧的候选边界说明。
 type explainResult struct {
 	eventai.Explanation
 	Archive *archiveScope `json:"archive,omitempty"`
@@ -91,20 +99,21 @@ func EventAI(db *ent.Client, conn *sql.DB, llm *triage.LLM) http.Handler {
 				out[i].Events[j] = toEventRow(e)
 			}
 		}
-		resp := relatedResponse{Groups: out}
-		if fromArchive {
-			// 候选只来自热表：目标已归档，它的同进程/父子/同连接事件若也已归档，不在候选里
-			resp.Archive = &archiveScope{TargetFromArchive: true, CandidatesHotOnly: true}
-		}
-		writeJSON(w, resp)
+		// 候选边界恒说明（热目标的关联事件同样可能已归档），目标来源按实际
+		writeJSON(w, relatedResponse{Groups: out, Archive: archiveScopeOf(fromArchive)})
 	})
 
 	// 解读在后台跑：POST 发起（已有在跑的或已有结果就直接返回它，refresh=1 才重来），GET 读当前这次。
 	// 结果按发起人存：候选是按调用者能看的范围捞的，别人的解读可能提到他看不到的主机
 	// 每个节点同时最多几次后台解读：调用不再挂在请求上，没有名额就能被连点拉起任意多次
 	slots := make(chan struct{}, 4)
+	// explainCoverageRev 是解读结果的覆盖契约版本（R5），并进缓存键的 variant：
+	// 旧结果生成时模型输入里没有候选来源说明、响应也不带热目标的候选边界，不能当作按
+	// 新契约生成的结果复用——版本号让旧结果自然查不到、按需重新生成，不长期兼容两套语义。
+	const explainCoverageRev = "cov1"
+	explainVariant := func(lang string) string { return lang + "/" + explainCoverageRev }
 	key := func(r *http.Request) aijob.Key {
-		return aijob.Key{Kind: "explain", Subject: r.PathValue("id"), Variant: r.URL.Query().Get("lang"), Owner: auth.From(r.Context()).ID.String()}
+		return aijob.Key{Kind: "explain", Subject: r.PathValue("id"), Variant: explainVariant(r.URL.Query().Get("lang")), Owner: auth.From(r.Context()).ID.String()}
 	}
 	mux.HandleFunc("GET /api/events/{id}/explain", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireScope(w, r, db, "viewer"); !ok {
@@ -148,11 +157,10 @@ func EventAI(db *ent.Client, conn *sql.DB, llm *triage.LLM) http.Handler {
 			http.Error(w, "解读繁忙，请稍后重试", http.StatusTooManyRequests)
 			return
 		}
-		var archive *archiveScope
-		if fromArchive {
-			archive = &archiveScope{TargetFromArchive: true, CandidatesHotOnly: true}
-		}
-		system, user := eventai.Messages(e, host, groups, k.Variant)
+		// 结果与模型输入共用同一份覆盖事实（单一来源）；lang 是原始查询值，
+		// variant 里并进的覆盖契约版本不参与 Messages 的语言判断
+		archive := archiveScopeOf(fromArchive)
+		system, user := eventai.Messages(e, host, groups, r.URL.Query().Get("lang"), eventai.HotOnlyCoverage)
 		// 已有一次在跑（别的标签页或节点刚发起）时 Start 返回那一次，照样轮询它
 		j, _, err := aijob.Start(r.Context(), db, k, func(ctx context.Context) (any, error) {
 			reply, err := llm.Chat(ctx, []triage.Message{{Role: "system", Content: system}, {Role: "user", Content: user}}, nil)
@@ -163,7 +171,7 @@ func EventAI(db *ent.Client, conn *sql.DB, llm *triage.LLM) http.Handler {
 			if err != nil {
 				return nil, err
 			}
-			// 模型解读 + 平台侧的冷层边界说明一起进结果：读结果的人（前端、模型重放）都看得到
+			// 模型解读 + 平台侧的候选边界说明一起进结果：读结果的人（前端、模型重放）都看得到
 			return explainResult{Explanation: parsed, Archive: archive}, nil
 		}, func() { <-slots })
 		if err != nil {

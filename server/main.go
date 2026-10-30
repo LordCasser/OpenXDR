@@ -276,10 +276,11 @@ func startAnalytics(ctx context.Context, db *sql.DB, client *ent.Client, rules s
 	}
 
 	janitorEngine := &janitor.Janitor{
-		SQL:       db,
-		DB:        client,
-		Retention: time.Duration(getenvInt("RETENTION_DAYS", 30)) * 24 * time.Hour,
-		Interval:  time.Duration(getenvInt("RETENTION_INTERVAL_MINUTES", 60)) * time.Minute,
+		SQL:          db,
+		DB:           client,
+		Retention:    time.Duration(getenvInt("RETENTION_DAYS", 30)) * 24 * time.Hour,
+		Interval:     time.Duration(getenvInt("RETENTION_INTERVAL_MINUTES", 60)) * time.Minute,
+		GapRetention: time.Duration(getenvInt("TEMPORAL_GAP_RETENTION_DAYS", 30)) * 24 * time.Hour,
 	}
 	go cluster.RunLeader(ctx, db, "janitor", janitorEngine.Run)
 	// 事件日分区预建与保留期退役无关：RETENTION_DAYS=0 也要按天建分区

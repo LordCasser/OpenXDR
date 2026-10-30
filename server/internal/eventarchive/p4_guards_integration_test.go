@@ -702,11 +702,12 @@ func TestP4T18GapsAndIdentityPerDecisionTable(t *testing.T) {
 			t.Fatalf("%s（被切走事件）按决策表应清理: %d", table, n)
 		}
 	}
-	// 清理责任留给 janitor 既有策略的证明：该日退役（retire 不跳过任何表）时，
-	// 还在分区里且未被钉住的事件（C）的 gap 随退役清理；被钉住的 B 跟着证据保留期走；
-	// A 的 gap 因事件已先行被 swap 移出分区，退役的「分区−暂存」清理看不到它
-	//（已知局限：swap 后的 gaps 没有年龄清理策略，需 janitor 侧补，超出 P4 边界，
-	// 见 guard.go 决策表 temporal_evaluation_gaps 行）。
+	// 清理责任的真实链路（R6 后的契约）：该日退役（retire 不跳过任何表）时，
+	// 还在分区里且未被钉住的事件（C）的 gap 随退役差集清理；被钉住的 B 跟着证据保留期走；
+	// A 的 gap 因事件已先行被 swap 移出分区，retire 的「分区−暂存」差集与逐行删除触发器
+	// 都看不到它——由 janitor 按 gap 自身 created_at 的诊断保留期清理
+	//（TEMPORAL_GAP_RETENTION_DAYS，见 r56_coverage_gap_integration_test.go 与
+	// guard.go 决策表 temporal_evaluation_gaps 行）。
 	//
 	// Retire 会把该月钉住的行并进月归档分区（events_aYYYYMM），它跨整月、会挡住
 	// 后续在共享测试库里重建该月的日分区：用例结束把它拆掉，别污染后面的用例与重跑。

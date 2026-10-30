@@ -838,7 +838,8 @@ const zh = {
   eventsCoverageScanBudget: '归档扫描达到预算上限，未扫完全部冷块；收窄时间范围可减少扫描量',
   eventsCoverageBeforeArchive: '查询窗口早于最早的归档数据，该时间段不在冷归档覆盖内',
   eventsCoverageUnknown: '本次查询存在未覆盖的数据范围',
-  // 问 AI 的冷层边界（目标日志来自冷归档时显示）
+  // 问 AI 的候选边界：候选恒只查热表；目标来自冷归档时用 eventFromArchive 的完整说明
+  eventCandidatesHotOnly: '关联候选与 AI 解读只检索了热表；同进程 / 同连接等历史关联若已归档则不在候选中',
   eventFromArchive: '该日志来自冷归档（热表中已不存在）；关联候选与 AI 解读只检索了热表，同进程 / 同连接等关联若也已归档则不在候选中',
   // 资产
   assetsSummary: '共 {total} 台，在线 {online} 台',
@@ -2605,6 +2606,7 @@ const en = {
   eventsCoverageScanBudget: 'Archive scan hit the budget: not all cold chunks were scanned; narrow the time range to scan less',
   eventsCoverageBeforeArchive: 'The query window predates the earliest archived data; that period is not covered by the cold archive',
   eventsCoverageUnknown: 'This query has data ranges it did not cover',
+  eventCandidatesHotOnly: 'Candidates and the AI reading searched the hot table only; related events that were archived are not among the candidates',
   eventFromArchive: 'This log comes from the cold archive (no longer in the hot table); candidates and the AI reading searched the hot table only — related events that were also archived are not among the candidates',
   assetsSummary: '{total} hosts, {online} online',
   assetSearchHint: 'Hostname or IP',

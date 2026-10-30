@@ -326,6 +326,20 @@ func PruneCandidates(ctx context.Context, db *sql.DB, revision string, window ti
 	return result.RowsAffected()
 }
 
+// PruneGaps 按诊断保留期清理时序求值缺口（R6）：只看 gap 自身的 created_at（诊断时间），
+// 绝不 JOIN events——冷归档 swap 把事件移出热表后，retire 的差集清理与逐行删除触发器
+// 都看不到这些事件的 gap，没有这步它们会永久残留。旧事件迟到新产生的 gap（事件 ts 很老、
+// created_at 新）不因事件时间过期。用数据库 now() 判过期，与 created_at 的 DEFAULT now() 同钟。
+func PruneGaps(ctx context.Context, db *sql.DB, retention time.Duration) (int64, error) {
+	result, err := db.ExecContext(ctx,
+		`DELETE FROM temporal_evaluation_gaps WHERE created_at < now() - make_interval(secs => $1)`,
+		retention.Seconds())
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // lockDaysFor 收集时序引用涉及的 UTC 日：候选窗口里每个事件的归属日（锚点与证据都在
 // 候选集合里），加上当前事件自身。
 func lockDaysFor(candidates []Event, now time.Time) []time.Time {
