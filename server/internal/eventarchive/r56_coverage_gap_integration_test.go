@@ -76,11 +76,12 @@ func TestR6GapSurvivesSwapAndRetireUntilDiagnosticExpiry(t *testing.T) {
 	if _, _, err := eventpart.Retire(ctx, db, old.AddDate(0, 0, 2)); err != nil {
 		t.Fatalf("Retire: %v", err)
 	}
-	// B 仍在分区里且未被钉住：gap 随 retire 差集清理（既有清理责任，现行为保持）
-	if n := count(`SELECT count(*) FROM temporal_evaluation_gaps WHERE event_id = $1`, idB); n != 0 {
-		t.Fatalf("retire 应清理未钉住事件 B 的 gap: %d", n)
+	// B 仍在分区里且未被钉住：gaps 已移出派生清理清单（R6 补全），retire 差集不再
+	// 连带删除——诊断记录按自身 created_at 的保留期由 PruneGaps 独立清理，与事件生命周期脱钩
+	if n := count(`SELECT count(*) FROM temporal_evaluation_gaps WHERE event_id = $1`, idB); n != 1 {
+		t.Fatalf("retire 后未钉住事件 B 的 gap 必须保留（按诊断期独立清理）: %d", n)
+		// A 已被 swap 移出分区：retire 差集与逐行删除触发器都看不到它的 gap——
 	}
-	// A 已被 swap 移出分区：retire 差集与逐行删除触发器都看不到它的 gap——
 	// 这正是 R6 要接住的断链（无第三条提前删除路径，也不会被提前删）
 	if n := count(`SELECT count(*) FROM temporal_evaluation_gaps WHERE event_id = $1`, idA); n != 1 {
 		t.Fatalf("已被 swap 移出分区的事件 A 的 gap 在退役后必须仍在: %d", n)

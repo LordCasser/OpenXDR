@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS temporal_evaluation_gaps (
  PRIMARY KEY(revision,event_id));
 CREATE INDEX IF NOT EXISTS temporal_evaluation_gaps_scope ON temporal_evaluation_gaps(group_id,asset_id,created_at);
 CREATE INDEX IF NOT EXISTS temporal_evaluation_gaps_asset ON temporal_evaluation_gaps(asset_id,created_at DESC,revision DESC,event_id DESC);
+CREATE INDEX IF NOT EXISTS temporal_evaluation_gaps_created ON temporal_evaluation_gaps(created_at);
 CREATE TABLE IF NOT EXISTS temporal_detections (
  revision text NOT NULL, rule_id text NOT NULL,
  anchor_id uuid NOT NULL,

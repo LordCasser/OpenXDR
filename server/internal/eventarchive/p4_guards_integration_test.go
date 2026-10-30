@@ -722,8 +722,8 @@ func TestP4T18GapsAndIdentityPerDecisionTable(t *testing.T) {
 	if n := count(`SELECT count(*) FROM events WHERE id = $1`, idC); n != 0 {
 		t.Fatalf("口径外的未钉住事件 C 应随退役消失: %d", n)
 	}
-	if n := count(`SELECT count(*) FROM temporal_evaluation_gaps WHERE event_id = $1`, idC); n != 0 {
-		t.Fatalf("retire 应清理未钉住事件 C 的 gap: %d", n)
+	if n := count(`SELECT count(*) FROM temporal_evaluation_gaps WHERE event_id = $1`, idC); n != 1 {
+		t.Fatalf("retire 后未钉住事件 C 的 gap 必须保留（R6 补全：按诊断期独立清理）: %d", n)
 	}
 	if n := count(`SELECT count(*) FROM temporal_evaluation_gaps WHERE event_id = $1`, idB); n != 1 {
 		t.Fatalf("被钉住的 B 的 gap 跟证据保留期走，retire 不清: %d", n)
