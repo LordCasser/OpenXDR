@@ -86,6 +86,10 @@ func planDay(ctx context.Context, db *sql.DB, run Run, day time.Time) (SwapPlan,
 	return p, nil
 }
 
+// swapTestHook 只用于测试：非 nil 时在「预检已完成、重写事务未开始」的确切位置回调，
+// 让测试能在检查与加锁之间确定性插入并发写入。生产恒为 nil，零行为差异。
+var swapTestHook func(stage string) // stage == "prechecks_done"
+
 // Swap 在计划核对通过后重建该日分区，只保留「被 pin 的 + 非归档类别/来源」的行。
 //
 // 前置条件（任一不满足即拒绝，且此时**一个字节都没动**）：
@@ -125,6 +129,9 @@ func Swap(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (Swap
 	keep, err := keepSelect(p.Day, run)
 	if err != nil {
 		return p, err
+	}
+	if swapTestHook != nil {
+		swapTestHook("prechecks_done")
 	}
 	kept, dropped, err := eventpart.RewriteDay(ctx, db, p.Day, keep)
 	if err != nil {
