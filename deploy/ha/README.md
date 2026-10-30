@@ -93,3 +93,31 @@ Patroni 探测使用 `HEAD /primary`，保留主库 200、从库 503 判定，�
 
 这套架构容忍一个 PVE 故障，不容忍 PVE 与独立 witness 同时故障。Witness 不保存
 PostgreSQL 业务数据，但第三个 JetStream replica 会保存加密传输后的事件队列副本。
+
+
+### 事件队列 Leader 回迁
+
+独立 witness 也是 JetStream 的数据副本，可能当选事件流或消费者 Leader。
+如果它位于异地，每条同步发布、逐条消费确认都可能叠加 WAN 往返延迟。
+不要为提高吞吐减少副本、清空持久队列，或直接提高 `MaxAckPending` 破坏同资产处理顺序。
+
+从两个本地节点都恢复健康的状态开始，用 `server/cmd/queueleader` 预览回迁。
+在仓库的 `server/` 下构建，然后把二进制放到能通过本机客户端端口连接 NATS 的节点：
+
+```sh
+go build -o openxdr-queueleader ./cmd/queueleader
+# 在 NATS 节点上执行；默认不做变更
+./openxdr-queueleader -from openxdr-witness -to openxdr-node2
+# 复核计划后执行
+./openxdr-queueleader -from openxdr-witness -to openxdr-node2 -apply
+```
+
+工具只迁移指定来源持有的事件流和 ingest 消费者 Leader，先校验全部目标副本
+已同步且在线，再逐个迁移、确认新的 Leader；请求超时不自动重发。
+这不会改变副本数量、消息、消费者游标或保留策略，也不会禁止故障后的重新选举。
+目标节点故障后应先恢复多数派，再决定是否回迁；不要把本工具做成无条件重选循环。
+
+验收同时检查：真实 Leader、Agent 本地缓存、服务端 pending、消费速率、最新入库事件时间、
+采集丢弃计数。迁移后端侧集中补传可能暂时抬高服务端 pending，不能只据这一项判定回退。
+HTTP `/jsz` 的本地副本视图可能不同于 Leader 状态，排障需结合 JetStream API 与实际 Leader
+的监控输出，不能直接用某个从节点的本地视图判定整个集群失去同步。
