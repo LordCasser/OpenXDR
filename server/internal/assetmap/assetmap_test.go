@@ -1,6 +1,7 @@
 package assetmap
 
 import (
+	"context"
 	"encoding/json"
 	"net/netip"
 	"strings"
@@ -327,5 +328,20 @@ func TestServicePort(t *testing.T) {
 		if got := servicePort(in); got != want {
 			t.Errorf("%q → %q, want %q", in, got, want)
 		}
+	}
+}
+
+// 已携带名字的新版事件、入站事件和无效连接不应访问历史事件表。
+func TestProcessNamesAvoidsUnneededDatabaseLookup(t *testing.T) {
+	guid := uuid.New()
+	events := []*ent.Event{
+		{ClassUID: classNetwork, ProcessGUID: &guid, Raw: json.RawMessage(`{"dst_endpoint":{"ip":"8.8.8.8","port":443},"process":{"name":"curl"}}`)},
+		{ClassUID: classNetwork, ProcessGUID: &guid, Raw: json.RawMessage(`{"dst_endpoint":{"ip":"10.0.0.1","port":443},"connection_info":{"direction":"inbound"}}`)},
+		{ClassUID: classNetwork, ProcessGUID: &guid, Raw: json.RawMessage(`{"dst_endpoint":{"ip":"invalid","port":443}}`)},
+	}
+	e := &Engine{}
+	names, err := e.processNames(context.Background(), events)
+	if err != nil || len(names) != 0 {
+		t.Fatalf("无需回查却返回结果: %v %v", names, err)
 	}
 }

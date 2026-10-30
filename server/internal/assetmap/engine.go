@@ -267,15 +267,20 @@ func (e *Engine) assetIPs(ctx context.Context) (map[uuid.UUID][]netip.Addr, erro
 	return out, nil
 }
 
-// processNames 网络事件只带进程 GUID，名字从同一进程的启动事件里取
+// processNames 只为缺少进程名的出站连接回查进程事件。
 func (e *Engine) processNames(ctx context.Context, events []*ent.Event) (map[uuid.UUID]string, error) {
 	seen := map[uuid.UUID]bool{}
 	var ids []string
 	for _, ev := range events {
-		if ev.ClassUID == classNetwork && ev.ProcessGUID != nil && !seen[*ev.ProcessGUID] {
-			seen[*ev.ProcessGUID] = true
-			ids = append(ids, ev.ProcessGUID.String())
+		if ev.ClassUID != classNetwork || ev.ProcessGUID == nil || seen[*ev.ProcessGUID] {
+			continue
 		}
+		c, ok := connOf(ev.Raw, "")
+		if !ok || c.inbound || c.process != "" {
+			continue
+		}
+		seen[*ev.ProcessGUID] = true
+		ids = append(ids, ev.ProcessGUID.String())
 	}
 	out := map[uuid.UUID]string{}
 	if len(ids) == 0 {
