@@ -7,6 +7,7 @@
 //	shadow -from 2026-09-01 -to 2026-09-14 [-classes 4001,4003] [-sources agent,sensor]
 //	       [-chunk-events 2048] [-chunk-bytes 1048576] -confirm
 //	verify -run <uuid>                               按 run 口径重扫对拍，通过才置 verified
+//	status -run <uuid>                               三类状态分层汇总：对拍资格 / 当前自校验 / 逐日操作记录（只读）
 //	backfill-locator -confirm                        给缺索引的旧块一次性补 locator 行（幂等）
 //	report -run <uuid>                               归档前后的真实大小与压缩比
 //	locate -id <uuid>                                按事件 ID 找一条冷事件（只读）
@@ -17,7 +18,7 @@
 //
 // shadow / materialize / swap / restore / backfill-locator 会写库，不加 -confirm 直接拒绝
 // （没有演练模式）。verify 只改 run 的状态列；ensure-schema 只建冷归档表；
-// locate / plan 只读。设计与阶段见 docs/event-archive.md；分区侧的工程口径见
+// locate / plan / status 只读。设计与阶段见 docs/event-archive.md；分区侧的工程口径见
 // docs/event-partitioning.md。
 package main
 
@@ -72,6 +73,7 @@ func usage() {
        -chunk-events 2048     单块事件条数上限
        -chunk-bytes 1048576   单块未压缩明文字节上限
   verify -run <uuid>                                重扫对拍，通过后置 verified
+  status -run <uuid>                                三类状态分层：对拍资格 / 当前自校验 / 逐日记录（只读，自校验要解压全部块）
   backfill-locator -confirm                         给缺索引的旧冷块补 locator 行（一次性迁移，幂等）
   report -run <uuid>                                归档前后大小、压缩比与含索引对比
   locate -id <uuid>                                 按事件 ID 找一条冷事件（只读）
@@ -146,6 +148,23 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 			return err
 		}
 		fmt.Printf("run %s 对拍通过：逐事件全字段一致，已置 verified\n", runID)
+		return nil
+
+	case "status":
+		fs := flag.NewFlagSet("status", flag.ExitOnError)
+		id := fs.String("run", "", "要查看的 run id（uuid）")
+		fs.Parse(args)
+		runID, err := parseRun(*id)
+		if err != nil {
+			return err
+		}
+		r, err := eventarchive.RunState(ctx, db, runID)
+		if err != nil {
+			return err
+		}
+		fmt.Print(r.String())
+		fmt.Println("说明：verified 是对拍那一刻的粘性资格，不自证此后冷块未被改坏；")
+		fmt.Println("      自校验失败时先按块 id 定位（eventarchive locate -id 逐条核对），修复原因后再评估是否重新 verify。")
 		return nil
 
 	case "backfill-locator":
