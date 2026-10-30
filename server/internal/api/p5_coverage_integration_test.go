@@ -110,7 +110,8 @@ func TestP5CoverageKeywordAcrossArchiveDays(t *testing.T) {
 }
 
 // T19-2 冷读关闭：库里明明有冷块，但连接没接（EVENT_ARCHIVE_READ 关）——
-// 冷层不参与合流，也不假装查过；coverage 如实报 archive_read_disabled。
+// 冷层不参与合流、不假装查过（cold_searched=false），coverage 与改动前一致不报缺口：
+// 这是部署配置错误，由 main 在启动日志里告警，不让每次检索都弹提示。
 func TestP5CoverageArchiveReadDisabled(t *testing.T) {
 	ctx, client := testdb.New(t)
 	db := archiveDB(t, ctx)
@@ -133,7 +134,7 @@ func TestP5CoverageArchiveReadDisabled(t *testing.T) {
 		t.Fatalf("冷读关闭应只返回热表 1 条，得到 %d: %s", len(rows), body)
 	}
 	cov := coverageOf(t, body)
-	want := eventsCoverage{HotSearched: true, ColdSearched: false, ScanComplete: false, Reason: "archive_read_disabled"}
+	want := eventsCoverage{HotSearched: true, ColdSearched: false, ScanComplete: true}
 	if cov != want {
 		t.Errorf("冷读关闭的 coverage = %+v，期望 %+v", cov, want)
 	}

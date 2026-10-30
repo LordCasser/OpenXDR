@@ -197,8 +197,9 @@ DATABASE_URL=... eventarchive report -run <uuid>
 
 **开关**：`EVENT_ARCHIVE_READ=1` 才把 `*sql.DB` 交给 `/api/events` 与 related/explain 调查入口，
 默认关闭。开启时启动阶段先跑一次 `EnsureSchema`；建表失败只记警告并降级为「没有冷层」。
-开关关着（连接为 nil）时，`/api/events` 的响应里 `coverage.reason=archive_read_disabled`，
-其余行为与未接冷层时一致。
+开关关着（连接为 nil）时 `/api/events` 与未接冷层时一致，不报冷层缺口：默认部署每次检索都提示
+「冷层未搜索」只会是噪音。库里已有冷块却没开读属于部署配置错误，server 启动时在日志里告警；
+**swap 之前必须在全部节点开启 `EVENT_ARCHIVE_READ=1`**（与 `EVENT_ARCHIVE_DEDUP=1` 同理）。
 
 ### 7.1 `eventarchive.Query`
 
@@ -246,8 +247,8 @@ Query(ctx context.Context, db *sql.DB, f Filter) ([]Event, Coverage, error)
 
 | 取值 | 含义 |
 |---|---|
+| `hot_keyword_degraded` | 热表关键词检索超出时限（见 [事件表分区](event-partitioning.md#关键词检索索引)），只覆盖了最近的数据；优先于其他原因 |
 | `keyword_not_searched` | 关键词查询不搜冷块（冷块无关键词索引，逐块解压全文扫代价不可控） |
-| `archive_read_disabled` | 冷读开关关闭，冷层是否有数据未知 |
 | `no_archive_schema` | 冷读开着但冷归档表未初始化（没跑过 ensure-schema） |
 | `scan_incomplete` | 扫描预算（200 块）耗尽，还有候选块没解压；此时 `cold_searched=true`（查了，没查完） |
 | `before_archive` | 查询窗口整体早于最早的冷块，该窗口不在冷层覆盖内 |

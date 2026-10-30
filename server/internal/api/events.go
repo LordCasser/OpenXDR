@@ -32,10 +32,10 @@ const maxEventRows = 200
 //     （该入口必查热表）；cold_searched=false 表示冷层没查——原因看 reason。
 //   - scan_complete：本次请求声明的范围（热 + 冷，按时间窗与过滤条件）是否扫完。
 //     与 reason 互为表里：reason 非空（任何缺口）时必为 false；预算耗尽（scan_incomplete）、
-//     关键词跳过冷层（keyword_not_searched）、冷读关闭（archive_read_disabled）都算没扫完。
+//     关键词跳过冷层（keyword_not_searched）、热表关键词检索超时（hot_keyword_degraded）都算没扫完。
 //   - reason：空串 = 无缺口。非空取值：
+//     hot_keyword_degraded（热表关键词检索超出时限，只覆盖了最近的数据，优先于其他原因）；
 //     keyword_not_searched（关键词查询不搜冷块，冷块无关键词索引）；
-//     archive_read_disabled（冷读开关关闭，冷层是否有数据未知）；
 //     no_archive_schema（冷读开着但冷归档表未初始化）；
 //     scan_incomplete（扫描预算耗尽，还有候选块没解压）；
 //     before_archive（查询窗口整体早于最早的冷块，该窗口不在冷层覆盖内）。
@@ -59,7 +59,6 @@ type eventsResponse struct {
 const (
 	reasonKeyword            = "keyword_not_searched"
 	reasonHotKeywordDegraded = "hot_keyword_degraded"
-	reasonReadOff            = "archive_read_disabled"
 	reasonNoSchema           = "no_archive_schema"
 	reasonScanBudget         = "scan_incomplete"
 	reasonBeforeCold         = "before_archive"
@@ -206,9 +205,12 @@ type eventFilter struct {
 // archiveEvents 查冷块，返回合流用的事件、写进响应体的覆盖度与调试用摘要头。
 //
 // 覆盖度必须如实：真查了就报 chunks/matched/truncated（头）与 cold_searched=true（体），
-// 没查就写清原因。四种「没查」的情形：
-//   - conn 为 nil（archive_read_disabled）：冷读开关没开，冷层是否有数据无从知晓，
-//     保守地按缺口报告；items 仍只是热表合流结果，与开关关闭时一致。
+// 没查就写清原因。热表关键词检索超时（hot_keyword_degraded）最先判断：结果里缺的是热表本身的数据，
+// 比冷层缺口要紧，不能被下面任何一种情形盖掉。
+//
+// conn 为 nil（冷读开关没开）时与改动前一致，不报缺口：默认部署每次检索都弹「冷层未搜索」只会是噪音。
+// 库里已有冷块却没开读属于部署配置错误，由 main 在启动日志里告警（见 archiveConn）。
+// 冷读开着时三种「没查」的情形：
 //   - skipped=no-schema（no_archive_schema）：冷读开关开了，但库里还没有冷归档表
 //     （没跑过 ensure-schema）。这是部署状态，按「没有冷数据」处理，不能让事件页整页 500。
 //   - skipped=keyword（keyword_not_searched）：关键词查询，冷块没有索引。
@@ -220,8 +222,11 @@ type eventFilter struct {
 func archiveEvents(ctx context.Context, conn *sql.DB, s scope, q eventFilter) ([]eventarchive.Event, eventsCoverage, string, error) {
 	// 热表这个入口必查；默认无缺口，下面按实际情形收紧
 	cov := eventsCoverage{HotSearched: true, ScanComplete: true}
+	if q.keyword != "" && !q.hotComplete {
+		cov.Reason, cov.ScanComplete = reasonHotKeywordDegraded, false
+		return nil, cov, "hot_keyword_degraded", nil
+	}
 	if conn == nil {
-		cov.Reason, cov.ScanComplete = reasonReadOff, false
 		return nil, cov, "", nil
 	}
 	ext, err := eventarchive.ArchiveExtent(ctx, conn)
@@ -242,11 +247,6 @@ func archiveEvents(ctx context.Context, conn *sql.DB, s scope, q eventFilter) ([
 	}
 	// 冷块没有关键词索引，逐块解压全文扫的代价不可控，明确跳过并告诉调用方
 	if q.keyword != "" {
-		if !q.hotComplete {
-			// 热侧关键词检索已超时降级为不完整：如实报热侧缺口，不再额外声明冷层缺口
-			cov.Reason, cov.ScanComplete = reasonHotKeywordDegraded, false
-			return nil, cov, "hot_keyword_degraded", nil
-		}
 		cov.Reason, cov.ScanComplete = reasonKeyword, false
 		return nil, cov, "skipped=keyword", nil
 	}

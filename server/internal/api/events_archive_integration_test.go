@@ -341,7 +341,7 @@ func TestEventSearchCorruptChunkFails(t *testing.T) {
 
 // 12. 冷层不可用时的对象契约（P5）：
 //   - 冷读开关关闭（conn 为 nil）：items 与改动前同样的合流结果（只有热表行）、
-//     不写覆盖度头；coverage 如实标注 archive_read_disabled——冷层有没有数据无从知晓；
+//     不写覆盖度头；coverage 无缺口（与改动前一致，配置错误由启动日志告警）；
 //   - 开关开了但库里没有冷归档表：不 500，items 与开关关闭时逐字节一致，
 //     头写 skipped=no-schema，coverage.reason=no_archive_schema；
 //   - 表在但一条冷块都没有：items 一致、头不写，coverage 无缺口
@@ -395,12 +395,12 @@ func TestEventSearchWithoutArchiveUnchanged(t *testing.T) {
 	if len(shape[0]) != len(fields) {
 		t.Errorf("响应字段数 %d，期望 %d: %s", len(shape[0]), len(fields), offBody)
 	}
-	// 冷读关闭是如实标注的缺口：冷层是否有数据未知
+	// 冷读关闭与改动前一致：不报冷层缺口
 	var offOut eventsResponse
 	if err := json.Unmarshal(offBody, &offOut); err != nil {
 		t.Fatal(err)
 	}
-	wantOff := eventsCoverage{HotSearched: true, ColdSearched: false, ScanComplete: false, Reason: "archive_read_disabled"}
+	wantOff := eventsCoverage{HotSearched: true, ColdSearched: false, ScanComplete: true}
 	if offOut.Coverage != wantOff {
 		t.Errorf("冷读关闭的 coverage = %+v，期望 %+v", offOut.Coverage, wantOff)
 	}

@@ -19,8 +19,8 @@ import { useI18n, type MsgKey } from '../i18n'
 // 覆盖缺口的人话说明：reason 是后端 eventsCoverage.Reason 的取值
 function coverageMessage(reason: string, t: (k: MsgKey) => string): string {
   const key: MsgKey = ({
+    hot_keyword_degraded: 'eventsCoverageHotKeyword',
     keyword_not_searched: 'eventsCoverageKeyword',
-    archive_read_disabled: 'eventsCoverageReadOff',
     no_archive_schema: 'eventsCoverageNoSchema',
     scan_incomplete: 'eventsCoverageScanBudget',
     before_archive: 'eventsCoverageBeforeArchive',

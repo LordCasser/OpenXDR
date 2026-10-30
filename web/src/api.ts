@@ -760,7 +760,7 @@ export interface EventCoverage {
   hot_searched: boolean
   cold_searched: boolean
   scan_complete: boolean
-  reason: '' | 'keyword_not_searched' | 'archive_read_disabled' | 'no_archive_schema' | 'scan_incomplete' | 'before_archive'
+  reason: '' | 'hot_keyword_degraded' | 'keyword_not_searched' | 'no_archive_schema' | 'scan_incomplete' | 'before_archive'
 }
 
 export interface EventsResult {

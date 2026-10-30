@@ -101,6 +101,9 @@ func (p *Processor) ProcessBatch(ctx context.Context, events []Envelope) (err er
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := p.lockReferenceDays(ctx, tx, events, snapshot); err != nil {
+		return err
+	}
 	type result struct {
 		started   time.Time
 		duplicate bool
@@ -175,14 +178,7 @@ func (p *Processor) store(ctx context.Context, tx *sql.Tx, e Envelope, snapshot 
 	if p.archivedBefore(ctx, e) {
 		return false, 0, nil, nil
 	}
-	// R1 引用生命周期锁：本事务随后写进的全部事件引用（alerts / temporal_evidence /
-	// 已出告警的时序锚点）涉及的 UTC 日，在写任何东西之前一次取齐共享锁。锁内插入事件
-	// 与引用，与同日 swap / retire / 到期清理的排他锁互斥：要么引用先落定（swap 的锁内
-	// 重读把目标行判为 pin 留热），要么破坏性操作先做完（本事务等它提交后按
-	// 「热行缺失 → 冷层物化补链」继续，见 upsertAlert / temporal / EnsureHotEvents）。
-	if err := p.lockReferenceDays(ctx, tx, e, snapshot); err != nil {
-		return false, 0, nil, err
-	}
+	// R1 引用生命周期锁已由 ProcessBatch 在事务开头按整批取齐（见 lockReferenceDays）。
 	// 不写冲突列：分区表主键是 (id, ts)，老表是 id。稳定 ID 由含时间戳的来源字段算出，同一 id 必是同一 ts，两者等价
 	result, err := tx.ExecContext(ctx, `INSERT INTO events
   (id, ts, class_uid, source, asset_id, process_guid, parent_process_guid, username, conn_tuple, raw)
@@ -289,25 +285,29 @@ type origin struct {
 	watch      bool
 }
 
-// lockReferenceDays 取本接入事务要写的全部事件引用所涉 UTC 日的共享生命周期锁（R1）。
+// lockReferenceDays 在整批事务开头一次取齐本事务要写的全部事件引用（alerts / temporal_evidence /
+// 已出告警的时序锚点）所涉 UTC 日的共享生命周期锁（R1）。锁内插入事件与引用，与同日 swap / retire /
+// 到期清理的排他锁互斥：要么引用先落定（swap 的锁内重读把目标行判为 pin 留热），要么破坏性操作先做完
+// （本事务等它提交后按「热行缺失 → 冷层物化补链」继续，见 upsertAlert / temporal / EnsureHotEvents）。
 //
-// 日集合在这里一次算齐、按 UTC 日升序一条语句取完（升序是全局锁序，与按日升序取排他
-// 锁的 swap / retire / 到期清理互相不成环）：
-//   - 无时序规则：引用只有本事件自身（sigma / 情报 / 时序告警的 event_id 都是刚插入的
-//     这条），锁事件所在日即可；
-//   - 有时序规则：时序候选与锚点可能落在 e.Timestamp ± MaxWindow 内的任何一天
-//     （Observe 的候选窗口就是这个区间），一次把整段锁齐。归档只覆盖 min-age 之外的
-//     老日子，常规流量锁的是新日子，与 swap 天然错开；只有迟到事件会在老日子上排队，
-//     这正是要保护的对象。
+// 整批一条语句、按 UTC 日升序取（升序是全局锁序，与按日升序取排他锁的一方互相不成环）：
+// 逐条事件各取一次既多一次往返，批内日期乱序时取锁顺序也不再升序。
+//   - 无时序规则：引用只有事件自身（sigma / 情报 / 时序告警的 event_id 都是刚插入的这条），锁事件所在日；
+//   - 有时序规则：时序候选与锚点可能落在 e.Timestamp ± MaxWindow 内的任何一天（窗口不超过 24 小时，
+//     两端加中点就覆盖了区间内每一天），一次把整段锁齐。归档只覆盖 min-age 之外的老日子，
+//     常规流量锁的是新日子，与 swap 天然错开；只有迟到事件会在老日子上排队，这正是要保护的对象。
 //
-// 共享/共享并存：并发接入事务互不阻塞，代价是每事务一条锁语句（多数情况 1 日）。
-// 同事务在 upsertAlert 等写入点的重复取锁是幂等的（lock manager 认出已持有，立即成功）。
-func (p *Processor) lockReferenceDays(ctx context.Context, tx *sql.Tx, e Envelope, snapshot *temporal.Snapshot) error {
-	if snapshot == nil {
-		return eventpart.LifecycleLockShared(ctx, tx, e.Timestamp)
+// Suricata 派生的信封与原事件同一时间戳，按外层事件算即可。之后各写入点再取同日锁是幂等的。
+func (p *Processor) lockReferenceDays(ctx context.Context, tx *sql.Tx, events []Envelope, snapshot *temporal.Snapshot) error {
+	var window time.Duration
+	if snapshot != nil {
+		window = snapshot.MaxWindow()
 	}
-	window := snapshot.MaxWindow()
-	return eventpart.LifecycleLockShared(ctx, tx, e.Timestamp.Add(-window), e.Timestamp, e.Timestamp.Add(window))
+	ts := make([]time.Time, 0, 3*len(events))
+	for _, e := range events {
+		ts = append(ts, e.Timestamp.Add(-window), e.Timestamp, e.Timestamp.Add(window))
+	}
+	return eventpart.LifecycleLockShared(ctx, tx, ts...)
 }
 
 func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit intel.Hit, from origin) (bool, error) {

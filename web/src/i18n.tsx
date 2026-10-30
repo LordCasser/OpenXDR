@@ -833,7 +833,7 @@ const zh = {
   // 检索覆盖缺口：后端 /api/events 响应体 coverage.reason 的对应说明
   eventsCoverageKeyword: '关键词只搜索了热表：已归档的历史（移出热表的数据）未搜索',
   eventsCoverageRestoreHint: '没有结果不等于没有发生：这段历史保存在冷归档里，需要时可由管理员按日期恢复（restore）后重新搜索',
-  eventsCoverageReadOff: '冷归档读取未启用：若存在已归档数据，本次未搜索',
+  eventsCoverageHotKeyword: '关键词检索超出时限，只覆盖了最近的数据：更早的匹配可能没有列出，指定主机或缩短时间范围可查全',
   eventsCoverageNoSchema: '冷归档表尚未初始化：本次按无冷数据处理',
   eventsCoverageScanBudget: '归档扫描达到预算上限，未扫完全部冷块；收窄时间范围可减少扫描量',
   eventsCoverageBeforeArchive: '查询窗口早于最早的归档数据，该时间段不在冷归档覆盖内',
@@ -2601,7 +2601,7 @@ const en = {
   eventCount: '{n} events',
   eventsCoverageKeyword: 'Keyword searched the hot table only: archived history (data moved out of the hot table) was not searched',
   eventsCoverageRestoreHint: 'No results does not mean nothing happened: this history lives in the cold archive and can be searched again after an administrator restores it by day',
-  eventsCoverageReadOff: 'Cold-archive reads are disabled: archived data, if any, was not searched',
+  eventsCoverageHotKeyword: 'Keyword search hit its time limit and only covered recent data: older matches may be missing; pick a host or shorten the time range to search it all',
   eventsCoverageNoSchema: 'Cold-archive tables are not initialized: treated as no cold data',
   eventsCoverageScanBudget: 'Archive scan hit the budget: not all cold chunks were scanned; narrow the time range to scan less',
   eventsCoverageBeforeArchive: 'The query window predates the earliest archived data; that period is not covered by the cold archive',

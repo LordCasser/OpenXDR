@@ -676,6 +676,12 @@ func newImportLLM(conf func() aiconf.Config, model string) *triage.LLM {
 // 冷归档起不来就整页报错，server 更不该因此起不来。阶段 B1 只读，归档写入仍然走 CLI。
 func archiveConn(ctx context.Context, db *sql.DB) *sql.DB {
 	if getenv("EVENT_ARCHIVE_READ", "") != "1" {
+		// 关着时检索与改动前一致、不报冷层缺口；库里已经有冷块却没开读，是部署配置错了，
+		// 在启动日志里如实告警，而不是让每次检索都弹提示
+		if ext, err := eventarchive.ArchiveExtent(ctx, db); err == nil && ext.Has {
+			slog.Warn("库里有冷归档数据，但 EVENT_ARCHIVE_READ 未开启：事件检索与调查不会覆盖已归档的历史",
+				"first", ext.First, "last", ext.Last)
+		}
 		return nil
 	}
 	if err := eventarchive.EnsureSchema(ctx, db); err != nil {
