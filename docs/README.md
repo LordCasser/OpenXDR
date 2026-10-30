@@ -22,6 +22,7 @@
 | [api.md](api.md) | REST API 参考：端点、参数、权限约定、对接示例 | 对接外部系统；改 `server/internal/api` |
 | [open-integrations-design.md](open-integrations-design.md) | 资产导出与系统联动详细设计（待实施）：集成身份、API、事件订阅、工单回写及验收 | 实施导出、CMDB 对接或工单联动前 |
 | [roadmap.md](roadmap.md) | 路线图：2026-10-30 运行修复与各方向实现/部署/验收状态、当前 P0/P1/P2 与完成条件、历史记录 | 决定"接下来做什么"之前 |
+| [ingestion-capacity.md](ingestion-capacity.md) | 入库容量验证：有界 mTLS 合成流量、逐轮停止阈值与实际落库对账 | 扩大纳管或验证吞吐前 |
 | [pi-backend.md](pi-backend.md) | AI 助手后端：会话与后台运行、命令名单与审批、只读查询、运维待办、预设任务 | 配置 AI 助手与巡检；改 `agentchat`、`commandgate` |
 | [vulns.md](vulns.md) | 软件漏洞：dpkg / RPM 软件清单、OSV 漏洞库同步、版本比较与暴露服务标注、已知限制 | 看主机漏洞；改 `vuln` 或 agent 软件清单 |
 | [temporal-detection.md](temporal-detection.md) | 时序检测（开发中）：计数与序列规则格式、加载约束、求值与存储 | 写时序规则；改 `temporal` |
