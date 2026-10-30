@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/netip"
-	"slices"
 	"strings"
 	"time"
 
@@ -191,41 +190,10 @@ func (e *Engine) batch(ctx context.Context) (int, error) {
 			}
 			continue
 		}
-		tuple := ""
-		if ev.ConnTuple != nil {
-			tuple = *ev.ConnTuple
-		}
-		c, ok := connOf(ev.Raw, tuple)
+		k, srcAsset, ok := eventLink(ev, own, names, managed)
 		if !ok {
 			continue
 		}
-		srcAsset, process := ev.AssetID, c.process
-		var ownIPs []netip.Addr
-		if ev.AssetID != nil {
-			ownIPs = own[*ev.AssetID]
-		}
-		// sensor 会话源地址不是纳管资产时归到目的端（公网打进网关的），发起方不是这台资产，按入站记
-		if ev.Source == "sensor" && ev.AssetID != nil && !slices.Contains(ownIPs, c.src) {
-			c.inbound = true
-		}
-		if c.inbound {
-			// 入站只补发起方未纳管的那部分：发起方纳管时它自己的出站已经记过这条依赖。
-			// 只认连到宿主机自己地址上的：宿主机上容器的服务（docker 网桥、LXC）不是这台资产的服务。
-			// 发起方由地址解析，进程是本机服务端，不是发起方，不记
-			if managed[c.src] || !slices.Contains(ownIPs, c.dst) || !dependency(c, nil) {
-				continue
-			}
-			srcAsset, process = nil, ""
-		} else {
-			if c.src, ok = sourceOf(c.src, c.dst, ownIPs); !ok || !dependency(c, ownIPs) {
-				continue
-			}
-			// 新版 agent 随连接带进程名；旧版只有 GUID，回查同一进程的启动事件
-			if process == "" && ev.ProcessGUID != nil {
-				process = names[*ev.ProcessGUID]
-			}
-		}
-		k := linkKey{c.src.String(), c.dst.String(), c.port, c.proto, process}
 		agg := links[k]
 		if agg == nil {
 			agg = &linkAgg{srcAsset: srcAsset, first: ev.Ts}
@@ -306,6 +274,10 @@ func (e *Engine) assetIPs(ctx context.Context) (map[uuid.UUID][]netip.Addr, erro
 
 // processNames 只为缺少进程名的出站连接回查进程事件。
 func (e *Engine) processNames(ctx context.Context, events []*ent.Event) (map[uuid.UUID]string, error) {
+	return processNamesFrom(ctx, e.SQL, events)
+}
+
+func processNamesFrom(ctx context.Context, db graphReader, events []*ent.Event) (map[uuid.UUID]string, error) {
 	seen := map[uuid.UUID]bool{}
 	var ids []string
 	for _, ev := range events {
@@ -323,7 +295,7 @@ func (e *Engine) processNames(ctx context.Context, events []*ent.Event) (map[uui
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := e.SQL.QueryContext(ctx, `SELECT DISTINCT ON (process_guid) process_guid, coalesce(raw->'process'->>'name', '')
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT ON (process_guid) process_guid, coalesce(raw->'process'->>'name', '')
 FROM events WHERE process_guid = ANY($1::uuid[]) AND class_uid = 1007`, "{"+strings.Join(ids, ",")+"}")
 	if err != nil {
 		return nil, err
