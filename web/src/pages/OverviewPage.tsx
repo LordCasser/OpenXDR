@@ -18,7 +18,7 @@ import { BarList, ColumnChart, SEVERITY_COLOR, compact, useSeriesColor } from '.
 import { HostStateBadge, IncidentStatusTag, SessionStatusTag, SeverityTag, fmtTime, hostState } from '../components/format'
 import { useI18n } from '../i18n'
 
-// 降噪漏斗：产品的核心叙事"一万条进，三个出"。三级同为 24 小时口径，箭头上标每一级压掉的比例
+// 采集量按 24 小时统计，待复核是全部未结案存量；不同口径不计算降噪百分比。
 function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: number; incidents: number; foot: ReactNode }) {
   const { t } = useI18n()
   const { token } = theme.useToken()
@@ -26,9 +26,8 @@ function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: n
   const stages = [
     { label: t('funnelEvents'), value: events, to: '/events' },
     { label: t('funnelAlerts'), value: alerts },
-    { label: t('reviewIncidents'), value: incidents, to: '/incidents' },
+    { label: t('funnelReview'), value: incidents, to: '/incidents' },
   ]
-  const squeeze = (from: number, to: number) => (from ? ((1 - to / from) * 100).toFixed(from > 1000 ? 2 : 1) : '-')
   return (
     <Card title={t('funnelTitle')} style={{ height: '100%' }}>
       <div className="funnel">
@@ -36,7 +35,6 @@ function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: n
           ...(i > 0 ? [
             <div key={`a${i}`} className="funnel-arrow" style={{ color: token.colorTextTertiary }}>
               <RightOutlined />
-              <span>{t('funnelSqueeze', { p: squeeze(stages[i - 1].value, s.value) })}</span>
             </div>,
           ] : []),
           // 最后一级是结论：浅主色底加一圈细边。暗色算法里主色边框与底色同值、主色文字偏暗，换亮一档才压得住底色
@@ -50,6 +48,7 @@ function Funnel({ events, alerts, incidents, foot }: { events: number; alerts: n
           </div>,
         ])}
       </div>
+      <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>{t('funnelScopeHint')}</Typography.Paragraph>
       <div className="funnel-foot">{foot}</div>
     </Card>
   )

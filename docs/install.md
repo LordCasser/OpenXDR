@@ -60,6 +60,14 @@ curl -fsS https://<地址>/ -o /dev/null -w '%{http_code}\n'   # 自建 CA 时�
 
 自部署 vLLM 若使用 `/model` 等路径型模型名，且测试连接返回空内容或资产标注被思考耗尽预算，可在 `.env` 设置 `AI_TEMPLATE_NO_THINKING=true`，执行 `docker compose up -d server` 重建服务端容器。此项不由控制台覆盖，只对请求关闭思考的调用生效；已识别模型沿用原协议。
 
+### 旧 Linux 内核的采集检查
+
+Linux Agent 的 systemd 安装单元设置 `LimitMEMLOCK=134217728`（128 MiB 上限，不是预分配内存）。
+旧内核的 eBPF map 受锁定内存限制，默认 64 KiB 可能导致 map 创建失败并退回 netlink。
+已有安装不会因二进制升级自动重写 service：可在 `systemctl edit openxdr-agent` 的 `[Service]` 中设置同一值，
+执行 `systemctl daemon-reload` 和 `systemctl restart openxdr-agent`，再核对控制台采集能力、事件与缓存回执。
+不要仅凭服务 running 判断 eBPF 已启用。旧内核缺少 fanotify 名字报告时仍降级为 inotify，这个限制不能靠提高 memlock 消除。
+
 ### 放一台流量探针（可选）
 
 在公网入口（反代网关）上或交换机镜像口旁放一台 sensor，就能看到「只握手不发请求」的扫描、TLS 指纹（JA3 / JA3S）、
