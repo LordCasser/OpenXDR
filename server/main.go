@@ -463,7 +463,7 @@ func startEventBus(db *sql.DB, rules sigma.Catalog, temporalRules *temporal.Stor
 	queued, err := eventbus.NewJetStream(natsURL,
 		instance, getenvInt("QUEUE_SHARDS", 32), getenvInt("QUEUE_REPLICAS", 1),
 		int64(getenvInt("QUEUE_MAX_BYTES_GB", 20))*1024*1024*1024,
-		time.Duration(getenvInt("QUEUE_MAX_AGE_HOURS", 0))*time.Hour, processor, metrics)
+		time.Duration(getenvInt("QUEUE_MAX_AGE_HOURS", 0))*time.Hour, processor, metrics, getenvInt("QUEUE_BATCH_SIZE", 1))
 	if err != nil {
 		slog.Error("JetStream 初始化失败", "err", err)
 		os.Exit(1)
@@ -474,7 +474,7 @@ func startEventBus(db *sql.DB, rules sigma.Catalog, temporalRules *temporal.Stor
 		os.Exit(1)
 	}
 	hub.Router = router
-	slog.Info("事件队列已启用", "url", natsURL, "shards", getenvInt("QUEUE_SHARDS", 32))
+	slog.Info("事件队列已启用", "url", natsURL, "shards", getenvInt("QUEUE_SHARDS", 32), "batch_size", queued.BatchSize())
 	return queued, router
 }
 

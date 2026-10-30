@@ -61,29 +61,25 @@ CREATE INDEX IF NOT EXISTS temporal_matches_event ON temporal_matches(event_id);
 	return identity.EnsureSchema(ctx, db)
 }
 
-func (p *Processor) Process(ctx context.Context, e Envelope) (err error) {
-	started := time.Now()
-	alerts := 0
-	duplicate := false
-	var temporalSkipped []string
+func (p *Processor) Process(ctx context.Context, e Envelope) error {
+	return p.ProcessBatch(ctx, []Envelope{e})
+}
+
+// ProcessBatch 按接收顺序处理整批，在同一事务内提交事件及所有派生状态。
+func (p *Processor) ProcessBatch(ctx context.Context, events []Envelope) (err error) {
+	if len(events) == 0 {
+		return nil
+	}
 	defer func() {
-		if p.Metrics != nil {
-			if err != nil {
-				p.Metrics.Failed("process")
-			} else {
-				p.Metrics.Processed(e.Source, duplicate, alerts, time.Since(started))
-				if metrics, ok := p.Metrics.(interface{ TemporalSkipped(string) }); ok {
-					for _, reason := range temporalSkipped {
-						metrics.TemporalSkipped(reason)
-					}
-				}
-			}
+		if err != nil && p.Metrics != nil {
+			p.Metrics.Failed("process")
 		}
 	}()
-	if err = e.Validate(); err != nil {
-		return err
+	for _, e := range events {
+		if err := e.Validate(); err != nil {
+			return err
+		}
 	}
-
 	var snapshot *temporal.Snapshot
 	if p.Temporal != nil {
 		snapshot = p.Temporal.Current()
@@ -96,22 +92,46 @@ func (p *Processor) Process(ctx context.Context, e Envelope) (err error) {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	envelopes, external, err := suricataHit(ctx, tx, e)
-	if err != nil {
-		return err
+	type result struct {
+		started   time.Time
+		duplicate bool
+		alerts    int
+		skipped   []string
 	}
-	// 东西向 Suricata 告警两端各有一台资产时各落一份证据，如同两端 agent 各自看到这条连接
-	duplicate = true
-	for _, item := range envelopes {
-		stored, n, skipped, err := p.store(ctx, tx, item, snapshot, external)
+	results := make([]result, len(events))
+	for i, e := range events {
+		results[i].started = time.Now()
+		envelopes, external, err := suricataHit(ctx, tx, e)
 		if err != nil {
 			return err
 		}
-		duplicate = duplicate && !stored
-		alerts += n
-		temporalSkipped = append(temporalSkipped, skipped...)
+		results[i].duplicate = true
+		for _, item := range envelopes {
+			stored, n, skipped, err := p.store(ctx, tx, item, snapshot, external)
+			if err != nil {
+				return err
+			}
+			results[i].duplicate = results[i].duplicate && !stored
+			results[i].alerts += n
+			results[i].skipped = append(results[i].skipped, skipped...)
+		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// 仅提交成功才计入成功数；耗时包含该事件开始处理至整批提交的真实等待。
+	if p.Metrics != nil {
+		for i, e := range events {
+			r := results[i]
+			p.Metrics.Processed(e.Source, r.duplicate, r.alerts, time.Since(r.started))
+			if metrics, ok := p.Metrics.(interface{ TemporalSkipped(string) }); ok {
+				for _, reason := range r.skipped {
+					metrics.TemporalSkipped(reason)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // store 在调用方事务内落一条事件并产出告警；事件已存在（重传）时返回 stored=false。

@@ -341,6 +341,7 @@ server 全部通过环境变量配置，均有默认值：
 | `DATABASE_URL` | `postgres://openxdr:openxdr@localhost:5432/openxdr?sslmode=disable` | 数据库连接串 |
 | `NATS_URL` | 空（单机直连） | NATS 地址；配置后启用 JetStream 持久队列，多个地址用逗号分隔 |
 | `QUEUE_SHARDS` | `32` | 事件一致性分片数；同一资产保持有序 |
+| `QUEUE_BATCH_SIZE` | `1` | 同资产批消息最大事件数（1..64）；全部服务端升级到支持批消息的版本后可设为 64。仍保持每分片一条在途消息，整批原子提交；单个批消息不超过 256 KiB，超大单事件保持原格式。 |
 | `QUEUE_REPLICAS` | `1` | JetStream stream 副本数；三节点生产集群设为 3 |
 | `QUEUE_MAX_BYTES_GB` | `20` | 事件 stream 最大磁盘占用 |
 | `QUEUE_MAX_AGE_HOURS` | `0` | 必须为 0；未处理消息不自动过期，容量满则拒收新消息 |

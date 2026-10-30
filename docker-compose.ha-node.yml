@@ -61,6 +61,7 @@ services:
       GRPC_ADDR: :18081
       SYSLOG_ADDR: :5514
       QUEUE_SHARDS: ${QUEUE_SHARDS:-32}
+      QUEUE_BATCH_SIZE: ${QUEUE_BATCH_SIZE:-1}
       QUEUE_REPLICAS: 3
       LOG_FORMAT: json
       RULES_PATH: /rules

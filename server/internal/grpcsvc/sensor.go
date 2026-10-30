@@ -88,6 +88,8 @@ func (s *SensorServer) enqueue(ctx context.Context, batch *pb.FlowBatch) error {
 	if err != nil {
 		return err
 	}
+	var pending []ingest.Envelope
+	bytes := 0
 	for _, f := range batch.Flows {
 		classUID := classNetworkActivity
 		if f.DnsQuery != "" {
@@ -101,15 +103,21 @@ func (s *SensorServer) enqueue(ctx context.Context, batch *pb.FlowBatch) error {
 		}
 		id := ingest.StableID(batch.SensorId, strconv.FormatInt(f.StartUnixNs, 10),
 			strconv.FormatInt(f.EndUnixNs, 10), connTuple(f), string(raw))
-		if err := s.Events.Publish(ctx, ingest.Envelope{
+		pending = append(pending, ingest.Envelope{
 			Version: ingest.EnvelopeVersion, ID: id, PartitionKey: partitionKey,
 			Timestamp: time.Unix(0, f.StartUnixNs), ClassUID: classUID, Source: "sensor",
 			AssetID: assetID, AssetOS: assetOS, ConnTuple: connTuple(f), Raw: raw,
-		}); err != nil {
-			return fmt.Errorf("流事件入队: %w", err)
+		})
+		bytes += len(raw)
+		if len(pending) >= eventbus.BatchSize(s.Events) || bytes >= 256<<10 {
+			if err := eventbus.PublishBatch(ctx, s.Events, pending); err != nil {
+				return fmt.Errorf("流事件入队: %w", err)
+			}
+			pending = nil
+			bytes = 0
 		}
 	}
-	return nil
+	return eventbus.PublishBatch(ctx, s.Events, pending)
 }
 
 func (s *SensorServer) ingest(ctx context.Context, batch *pb.FlowBatch, deduper *dedup.Deduper) error {

@@ -68,9 +68,13 @@ type JetStream struct {
 	subs       []*nats.Subscription
 	monitorEnd chan struct{}
 	retry      natsretry.Policy
+	batchSize  int
 }
 
-func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, maxAge time.Duration, processor Processor, metrics Metrics) (*JetStream, error) {
+func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, maxAge time.Duration, processor Processor, metrics Metrics, batchSize int) (*JetStream, error) {
+	if batchSize < 1 || batchSize > MaxBatchSize {
+		return nil, fmt.Errorf("QUEUE_BATCH_SIZE 必须在 1..64")
+	}
 	if shards < 1 || shards > 256 {
 		return nil, fmt.Errorf("QUEUE_SHARDS 必须在 1..256")
 	}
@@ -124,23 +128,23 @@ func NewJetStream(url, instance string, shards, replicas int, maxBytes int64, ma
 		nc.Close()
 		return nil, err
 	}
-	b := &JetStream{nc: nc, js: js, shards: shards, replicas: replicas, metrics: metrics, monitorEnd: make(chan struct{}), retry: natsretry.Default}
+	b := &JetStream{nc: nc, js: js, shards: shards, replicas: replicas, metrics: metrics, monitorEnd: make(chan struct{}), retry: natsretry.Default, batchSize: batchSize}
 	for i := 0; i < shards; i++ {
 		shard := fmt.Sprintf("%02x", i)
 		subject := "openxdr.events." + shard
 		durable := "ingest-" + shard
 		sub, err := js.QueueSubscribe(subject, durable, func(msg *nats.Msg) {
-			e, decodeErr := ingest.Unmarshal(msg.Data)
+			events, decodeErr := decodeMessage(msg.Data)
 			if decodeErr != nil {
 				metrics.Failed("decode")
 				_ = msg.Term()
 				return
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			err := processor.Process(ctx, e)
+			err := processMessage(ctx, processor, events)
 			cancel()
 			if err != nil {
-				slog.Error("队列事件处理失败", "event", e.ID, "err", err)
+				slog.Error("队列事件处理失败", "event", events[0].ID, "batch_size", len(events), "err", err)
 				_ = msg.NakWithDelay(time.Second)
 				return
 			}
@@ -162,21 +166,27 @@ func (b *JetStream) Publish(ctx context.Context, e ingest.Envelope) error {
 	if err != nil {
 		return err
 	}
-	shard := shardOf(e.PartitionKey, b.shards)
+	if err := b.publishMessage(ctx, body, e.PartitionKey, e.ID.String()); err != nil {
+		return err
+	}
+	b.metrics.Published(e.Source)
+	return nil
+}
+
+func (b *JetStream) publishMessage(ctx context.Context, body []byte, partitionKey, id string) error {
+	shard := shardOf(partitionKey, b.shards)
 	msg := nats.NewMsg("openxdr.events." + fmt.Sprintf("%02x", shard))
 	msg.Data = body
-	msg.Header.Set(nats.MsgIdHdr, e.ID.String())
-	// 选主瞬断在这里吸收，不把错误抛给 agent/sensor 让整条上报连接断开重连
-	err = b.retry.Do(ctx, func() error {
+	msg.Header.Set(nats.MsgIdHdr, id)
+	// 仅重试能证明未入队的错误；超时仍交给来源端重投，由事件 ID 保证幂等。
+	err := b.retry.Do(ctx, func() error {
 		_, err := b.js.PublishMsg(msg, nats.Context(ctx))
 		return err
 	}, notStored)
 	if err != nil {
 		b.metrics.PublishFailed()
-		return err
 	}
-	b.metrics.Published(e.Source)
-	return nil
+	return err
 }
 
 // jsClusterNotLeader nats-server 的 JSClusterNotLeaderErr（err_code 10009），nats.go 没有导出常量

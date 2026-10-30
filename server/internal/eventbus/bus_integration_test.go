@@ -40,7 +40,7 @@ func (testMetrics) SetQueueReplicasUnhealthy(int)  {}
 // 流恢复后照常写入；一直不恢复则超限后原样报错。
 func TestJetStreamPublishAbsorbsLeaderGap(t *testing.T) {
 	url := isolatedNATS(t)
-	bus, err := NewJetStream(url, "integration", 1, 1, 1<<30, 0, &testProcessor{done: make(chan struct{})}, testMetrics{})
+	bus, err := NewJetStream(url, "integration", 1, 1, 1<<30, 0, &testProcessor{done: make(chan struct{})}, testMetrics{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestJetStreamPublishAbsorbsLeaderGap(t *testing.T) {
 func TestJetStreamPublishConsumeAndDeduplicate(t *testing.T) {
 	url := isolatedNATS(t)
 	p := &testProcessor{done: make(chan struct{})}
-	bus, err := NewJetStream(url, "integration", 4, 1, 1<<30, 0, p, testMetrics{})
+	bus, err := NewJetStream(url, "integration", 4, 1, 1<<30, 0, p, testMetrics{}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
