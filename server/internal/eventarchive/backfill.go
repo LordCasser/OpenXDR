@@ -30,8 +30,11 @@ import (
 
 // locatorIncompleteCount 数「没有任何 locator 行的块」（覆盖性推导的反连接）。
 // limit<=0 数全量；>0 时最多查 limit 行就停（只用于「是否存在」的判定，LIMIT 1 即可）。
+// 查询句柄同时覆盖 *sql.DB 与 *sql.Tx（LocateTx 在引用事务内做同样的覆盖性判定）。
 // 返回 (数量, 是否被 limit 截断, 错误)；表不存在时包成 ErrNoSchema。
-func locatorIncompleteCount(ctx context.Context, db *sql.DB, limit int) (int64, bool, error) {
+func locatorIncompleteCount(ctx context.Context, q interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}, limit int) (int64, bool, error) {
 	query := `SELECT count(*) FROM (
  SELECT c.id FROM event_archive_chunks c
  LEFT JOIN event_archive_locator l ON l.chunk_id = c.id
@@ -41,7 +44,7 @@ func locatorIncompleteCount(ctx context.Context, db *sql.DB, limit int) (int64, 
 	}
 	query += ") t"
 	var n int64
-	if err := db.QueryRowContext(ctx, query).Scan(&n); err != nil {
+	if err := q.QueryRowContext(ctx, query).Scan(&n); err != nil {
 		return 0, false, wrapErr(err, "判定 locator 覆盖性")
 	}
 	return n, limit > 0 && n >= int64(limit), nil

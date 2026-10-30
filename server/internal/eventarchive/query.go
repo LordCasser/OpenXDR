@@ -459,10 +459,19 @@ func (f Filter) chunkWhere() (string, []any) {
 
 // load 按块 id 取完整内容：一读一块，内存里只有当前这一块（明文上限 16 MiB，见 MaxPlainLen）。
 func (s *sqlSource) load(ctx context.Context, id uuid.UUID) (Chunk, error) {
+	return loadChunkByID(ctx, s.db, id)
+}
+
+// loadChunkByID 是按 id 读块的主体：查询句柄同时覆盖 *sql.DB 与 *sql.Tx——事务内定位
+// （lookup.go 的 LocateTx，R1 引用补链）与库级定位读同一份块载荷与同一套校验，不分叉。
+// （verify.go 另有一个按 run/seq 迭代的 loadChunk，语义不同，不要合并。）
+func loadChunkByID(ctx context.Context, q interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}, id uuid.UUID) (Chunk, error) {
 	var ch Chunk
 	var format, codec int16
 	var sha, payload []byte
-	err := s.db.QueryRowContext(ctx, `SELECT id, run_id, seq, day, class_uid, source, first_ts, last_ts,
+	err := q.QueryRowContext(ctx, `SELECT id, run_id, seq, day, class_uid, source, first_ts, last_ts,
  event_count, format, codec, plain_len, payload_len, plain_sha256, payload
  FROM event_archive_chunks WHERE id = $1`, id).
 		Scan(&ch.ID, &ch.RunID, &ch.Seq, &ch.Day, &ch.ClassUID, &ch.Source, &ch.FirstTs, &ch.LastTs,

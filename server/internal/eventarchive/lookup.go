@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"openxdr/server/internal/eventpart"
 )
 
 // 阶段 B2（按 ID 定位）+ P2（locator 索引）。
@@ -52,7 +54,27 @@ func Locate(ctx context.Context, db *sql.DB, id uuid.UUID) (Event, bool, error) 
 	if db == nil {
 		return Event{}, false, errors.New("冷归档定位需要数据库连接")
 	}
-	rows, err := db.QueryContext(ctx, `SELECT chunk_id FROM event_archive_locator WHERE event_id = $1`, id)
+	return locate(ctx, db, id)
+}
+
+// LocateTx 是 Locate 的事务内版本（R1 引用补链用）：在引用写入事务自己的快照里定位，
+// 保证「冷层有这条事件」与随后同事务的物化、引用写入看到同一份状态。
+// 语义与 Locate 一致（含三档判定强度）。
+func LocateTx(ctx context.Context, tx *sql.Tx, id uuid.UUID) (Event, bool, error) {
+	if tx == nil {
+		return Event{}, false, errors.New("冷归档定位需要事务")
+	}
+	return locate(ctx, tx, id)
+}
+
+// dbQueryer 是 locate 的最小查询接口，*sql.DB 与 *sql.Tx 都满足。
+type dbQueryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func locate(ctx context.Context, q dbQueryer, id uuid.UUID) (Event, bool, error) {
+	rows, err := q.QueryContext(ctx, `SELECT chunk_id FROM event_archive_locator WHERE event_id = $1`, id)
 	if err != nil {
 		return Event{}, false, wrapErr(err, "探查 locator 索引")
 	}
@@ -74,7 +96,7 @@ func Locate(ctx context.Context, db *sql.DB, id uuid.UUID) (Event, bool, error) 
 	if len(chunkIDs) == 0 {
 		// 索引未命中：在「确定不存在」之前必须先确认索引覆盖了全部冷块。
 		// 有任何一块没有 locator 行（P2 之前写的旧块、或回填中断），未命中就说不清。
-		missing, _, err := locatorIncompleteCount(ctx, db, 1)
+		missing, _, err := locatorIncompleteCount(ctx, q, 1)
 		if err != nil {
 			return Event{}, false, err
 		}
@@ -85,9 +107,8 @@ func Locate(ctx context.Context, db *sql.DB, id uuid.UUID) (Event, bool, error) 
 		return Event{}, false, nil
 	}
 
-	src := &sqlSource{db: db}
 	for _, cid := range chunkIDs {
-		ch, err := src.load(ctx, cid)
+		ch, err := loadChunkByID(ctx, q, cid)
 		if err != nil {
 			return Event{}, false, err
 		}
@@ -156,6 +177,10 @@ func Boundary(ctx context.Context, db *sql.DB) (last time.Time, ok bool, err err
 // `INSERT ... ON CONFLICT DO NOTHING`，并发重复物化最多插一行，不会产生第二行，
 // 也不会覆盖 events 里已有的行。events 的 foreign key（asset_id → assets）与分区路由
 // 仍由数据库判定：目标资产已不存在时报错，不静默丢字段。
+//
+// R1 起，独立调用本入口（CLI materialize）也取该事件归属日的共享生命周期锁：
+// 与同日 swap / retire 的排他锁互斥，插入不会恰好落进某次切换的暂存复制与分区替换之间，
+// 被「物化完成但随即随旧分区消失」吃掉。锁在插入前、定位后取（ts 要先从冷层拿到）。
 func Materialize(ctx context.Context, db *sql.DB, id uuid.UUID) (inserted bool, err error) {
 	e, found, err := Locate(ctx, db, id)
 	if err != nil {
@@ -169,22 +194,88 @@ func Materialize(ctx context.Context, db *sql.DB, id uuid.UUID) (inserted bool, 
 		return false, fmt.Errorf("物化事件 %s: %w", id, err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	res, err := tx.ExecContext(ctx, `INSERT INTO events
- (id, ts, class_uid, source, asset_id, process_guid, parent_process_guid, username, conn_tuple, raw)
- VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
-		e.ID, e.Ts, e.ClassUID, e.Source, nullableUUID(e.AssetID), nullableUUID(e.ProcessGUID),
-		nullableUUID(e.ParentProcessGUID), nullableString(e.Username), nullableString(e.ConnTuple), e.Raw)
-	if err != nil {
+	if err := eventpart.LifecycleLockShared(ctx, tx, e.Ts); err != nil {
 		return false, fmt.Errorf("物化事件 %s: %w", id, err)
 	}
-	n, err := res.RowsAffected()
+	inserted, err = insertEventTx(ctx, tx, e)
 	if err != nil {
 		return false, fmt.Errorf("物化事件 %s: %w", id, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("物化事件 %s: %w", id, err)
 	}
+	return inserted, nil
+}
+
+// MaterializeTx 在调用方事务内把一条冷事件物化回 events（R1 引用补链的事务内版本）。
+// 定位与插入同事务：调用方快照里「冷层有这条事件」与随后的物化、引用写入一致。
+// 不取生命周期锁——调用方（引用写入事务）必须已经持有该事件归属日的共享锁。
+func MaterializeTx(ctx context.Context, tx *sql.Tx, id uuid.UUID) (inserted bool, err error) {
+	e, found, err := LocateTx(ctx, tx, id)
+	if err != nil || !found {
+		return false, err
+	}
+	return insertEventTx(ctx, tx, e)
+}
+
+// insertEventTx 是单行物化插入的主体（Materialize 与 MaterializeTx 共用）：
+// 一条 INSERT ... ON CONFLICT DO NOTHING，列映射与 Restore 的批量路径一致。
+func insertEventTx(ctx context.Context, tx *sql.Tx, e Event) (bool, error) {
+	res, err := tx.ExecContext(ctx, `INSERT INTO events
+ (id, ts, class_uid, source, asset_id, process_guid, parent_process_guid, username, conn_tuple, raw)
+ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,
+		e.ID, e.Ts, e.ClassUID, e.Source, nullableUUID(e.AssetID), nullableUUID(e.ProcessGUID),
+		nullableUUID(e.ParentProcessGUID), nullableString(e.Username), nullableString(e.ConnTuple), e.Raw)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
 	return n > 0, nil
+}
+
+// EnsureHotEvents 确保将要被引用（alerts / temporal_evidence / 已出告警的时序锚点）的
+// 事件都在热表（R1 引用补链）。调用方必须已持有这些事件归属日的共享生命周期锁
+// （LockDaysShared）——锁内重读才作数：
+//
+//   - 热行在 → 照常写引用；
+//   - 热行不在 → 按经 LocateTx 在冷层定位，并在**同一事务**物化回热表（单行幂等插入，
+//     引用随之指向热行，证据页面对热表查询可访问）；
+//   - 冷层也没有 / 定位状态说不清（ErrLocatorIncomplete）/ 块损坏 → 返回错误，
+//     调用方必须让整个引用事务失败，**不提交悬空引用**。
+//
+// ingest 热路径下目标事件是本事务刚插入的行，热行必命中，本函数退化为一次存在性核对，
+// 零行为差异；锁由调用方在插入事件前取（store 的时序窗口 span），这里只补「锁内重读」
+// 这一步对老事件（时序候选/锚点）才有实际作用的补链。
+func EnsureHotEvents(ctx context.Context, tx *sql.Tx, ids ...uuid.UUID) error {
+	seen := make(map[uuid.UUID]bool, len(ids))
+	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		var hot bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE id = $1)`, id).
+			Scan(&hot); err != nil {
+			return fmt.Errorf("核对引用目标 %s 是否在热表: %w", id, err)
+		}
+		if hot {
+			continue
+		}
+		e, found, err := LocateTx(ctx, tx, id)
+		if err != nil {
+			return fmt.Errorf("引用目标 %s 不在热表且冷层定位失败，拒绝写入悬空引用: %w", id, err)
+		}
+		if !found {
+			return fmt.Errorf("引用目标 %s 既不在热表也没有冷副本，拒绝写入悬空引用", id)
+		}
+		if _, err := insertEventTx(ctx, tx, e); err != nil {
+			return fmt.Errorf("把冷事件 %s 物化回热表失败，拒绝写入悬空引用: %w", id, err)
+		}
+	}
+	return nil
 }
 
 // nullableUUID / nullableString 把可空列原样交给 database/sql：nil 就是 SQL NULL，

@@ -12,7 +12,12 @@ import (
 
 	"openxdr/server/internal/automation"
 	"openxdr/server/internal/cmdorigin"
+<<<<<<< HEAD
 	"openxdr/server/internal/graphqueue"
+=======
+	"openxdr/server/internal/eventarchive"
+	"openxdr/server/internal/eventpart"
+>>>>>>> 900734a (fix(archive): 同日生命周期锁，关闭终检后引用竞态与 restore 块间隙交错（R1/R2）)
 	"openxdr/server/internal/identity"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/sigma"
@@ -173,6 +178,14 @@ func (p *Processor) store(ctx context.Context, tx *sql.Tx, e Envelope, snapshot 
 	if p.archivedBefore(ctx, e) {
 		return false, 0, nil, nil
 	}
+	// R1 引用生命周期锁：本事务随后写进的全部事件引用（alerts / temporal_evidence /
+	// 已出告警的时序锚点）涉及的 UTC 日，在写任何东西之前一次取齐共享锁。锁内插入事件
+	// 与引用，与同日 swap / retire / 到期清理的排他锁互斥：要么引用先落定（swap 的锁内
+	// 重读把目标行判为 pin 留热），要么破坏性操作先做完（本事务等它提交后按
+	// 「热行缺失 → 冷层物化补链」继续，见 upsertAlert / temporal / EnsureHotEvents）。
+	if err := p.lockReferenceDays(ctx, tx, e, snapshot); err != nil {
+		return false, 0, nil, err
+	}
 	// 不写冲突列：分区表主键是 (id, ts)，老表是 id。稳定 ID 由含时间戳的来源字段算出，同一 id 必是同一 ts，两者等价
 	result, err := tx.ExecContext(ctx, `INSERT INTO events
   (id, ts, class_uid, source, asset_id, process_guid, parent_process_guid, username, conn_tuple, raw)
@@ -279,7 +292,39 @@ type origin struct {
 	watch      bool
 }
 
+// lockReferenceDays 取本接入事务要写的全部事件引用所涉 UTC 日的共享生命周期锁（R1）。
+//
+// 日集合在这里一次算齐、按 UTC 日升序一条语句取完（升序是全局锁序，与按日升序取排他
+// 锁的 swap / retire / 到期清理互相不成环）：
+//   - 无时序规则：引用只有本事件自身（sigma / 情报 / 时序告警的 event_id 都是刚插入的
+//     这条），锁事件所在日即可；
+//   - 有时序规则：时序候选与锚点可能落在 e.Timestamp ± MaxWindow 内的任何一天
+//     （Observe 的候选窗口就是这个区间），一次把整段锁齐。归档只覆盖 min-age 之外的
+//     老日子，常规流量锁的是新日子，与 swap 天然错开；只有迟到事件会在老日子上排队，
+//     这正是要保护的对象。
+//
+// 共享/共享并存：并发接入事务互不阻塞，代价是每事务一条锁语句（多数情况 1 日）。
+// 同事务在 upsertAlert 等写入点的重复取锁是幂等的（lock manager 认出已持有，立即成功）。
+func (p *Processor) lockReferenceDays(ctx context.Context, tx *sql.Tx, e Envelope, snapshot *temporal.Snapshot) error {
+	if snapshot == nil {
+		return eventpart.LifecycleLockShared(ctx, tx, e.Timestamp)
+	}
+	window := snapshot.MaxWindow()
+	return eventpart.LifecycleLockShared(ctx, tx, e.Timestamp.Add(-window), e.Timestamp, e.Timestamp.Add(window))
+}
+
 func (p *Processor) upsertAlert(ctx context.Context, tx *sql.Tx, e Envelope, hit intel.Hit, from origin) (bool, error) {
+	// R1 引用写入点：alerts.event_id 是 PinnedIDs 的第一支。先取目标事件归属日的共享
+	// 生命周期锁（store 的入口已随 ±时序窗口取齐，这里幂等补上独立调用场景），再锁内
+	// 重读目标热行——本事务刚插入的事件必命中（接入热路径零行为差异）；独立路径遇到
+	// 热行缺失时由 EnsureHotEvents 从冷层物化回热表再写引用，物化不了（冷层也没有 /
+	// 定位状态说不清 / 块损坏）就返回错误让整个引用事务失败，不提交悬空引用。
+	if err := eventpart.LifecycleLockShared(ctx, tx, e.Timestamp); err != nil {
+		return false, err
+	}
+	if err := eventarchive.EnsureHotEvents(ctx, tx, e.ID); err != nil {
+		return false, err
+	}
 	fingerprint := alertFingerprint(e, hit, from)
 	// 同一指纹的所有集群节点在事务内串行，窗口判断与告警计数不会竞争。
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, fingerprint); err != nil {

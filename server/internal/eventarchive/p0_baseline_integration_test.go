@@ -30,7 +30,7 @@ import (
 	"openxdr/server/ent"
 	"openxdr/server/internal/eventpart"
 	"openxdr/server/internal/identity"
-	"openxdr/server/internal/ingest"
+	"openxdr/server/internal/temporal"
 	"openxdr/server/internal/testdb"
 )
 
@@ -55,11 +55,22 @@ func p0Open(t *testing.T) (context.Context, *ent.Client, *sql.DB) {
 	}
 	// 专用库是新建的：RewriteDay/Retire 的派生状态清理会碰 temporal_* / identity_* 表，
 	// 生产里由 main.go 启动时统一初始化，这里用同一批入口把它们建出来（幂等）。
-	if err := ingest.EnsureSchema(ctx, db); err != nil {
-		t.Fatalf("建接入侧表: %v", err)
+	// 注意不能 import ingest.EnsureSchema：ingest 为 R1 引用补链反向依赖本包
+	// （eventarchive.EnsureHotEvents），测试同包引用 ingest 会成环；接入侧的
+	// temporal_matches 按 ingest.EnsureSchema 的同一 DDL 建在本夹具里（该处是唯一权威）。
+	if err := temporal.EnsureSchema(ctx, db); err != nil {
+		t.Fatalf("建时序表: %v", err)
 	}
 	if err := identity.EnsureSchema(ctx, db); err != nil {
 		t.Fatalf("建身份图表: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS temporal_matches (
+ rule_id text NOT NULL,
+ event_id uuid NOT NULL,
+ PRIMARY KEY(rule_id,event_id)
+);
+CREATE INDEX IF NOT EXISTS temporal_matches_event ON temporal_matches(event_id);`); err != nil {
+		t.Fatalf("建接入侧 temporal_matches: %v", err)
 	}
 	for _, table := range []string{"event_archive_chunks", "event_archive_runs"} {
 		if _, err := db.ExecContext(ctx, `DELETE FROM `+table); err != nil {

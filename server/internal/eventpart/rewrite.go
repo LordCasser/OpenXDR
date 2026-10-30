@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -12,6 +13,74 @@ import (
 // rewriteSuffix 是暂存表的后缀：日分区 events_pYYYYMMDD 重建时先写成
 // events_pYYYYMMDD_rewrite，核对完再改名接上父表。
 const rewriteSuffix = "_rewrite"
+
+// lifecycleLockPrefix 是同日生命周期 advisory 锁的 key 前缀（冷归档 R1/R2）：
+// 事件归属的 UTC 日是「引用写入者」（alerts / temporal_evidence / 已出告警的时序锚点，
+// 事务级共享锁）与「破坏性操作」（swap / restore / retire / 到期清理，排他锁）的共同
+// 协调对象。key 的唯一权威定义在本包（eventarchive 不能反向 import 本包会成环，
+// 它的 lifecycle.go 经 LifecycleLockKey 取同一 key）；多日操作一律按 UTC 日升序取锁。
+const lifecycleLockPrefix = "openxdr:lifecycle:"
+
+// LifecycleLockKey 返回某 UTC 日的生命周期锁 key（YYYY-MM-DD，UTC）。
+func LifecycleLockKey(day time.Time) string {
+	return lifecycleLockPrefix + dayStart(day).Format("2006-01-02")
+}
+
+// lockExecer 是生命周期锁的最小执行接口：*sql.DB、*sql.Tx 与 ent 的事务都满足，
+// 引用写入者（ingest / temporal）与清理方（janitor）在自己的事务里直接取锁。
+type lockExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+// lifecycleLockDays 把一批时间戳归一成去重、升序的 UTC 日（锁 key 的时间粒度）。
+func lifecycleLockDays(ts ...time.Time) []time.Time {
+	days := make([]time.Time, 0, len(ts))
+	for _, t := range ts {
+		d := dayStart(t)
+		if !slices.Contains(days, d) {
+			days = append(days, d)
+		}
+	}
+	slices.SortFunc(days, func(a, b time.Time) int { return a.Compare(b) })
+	return days
+}
+
+// lifecycleLock 是升序批量取锁的公共实现：modeSQL 是 pg_advisory_xact_lock[_shared]，
+// 一条语句按 unnest 的升序逐日求值。升序求值保证与排他方的逐日升序互相不成环
+// （共享/共享本就不冲突，排序只为与排他方交叉时无死锁）。
+func lifecycleLock(ctx context.Context, q lockExecer, modeSQL string, ts ...time.Time) error {
+	days := lifecycleLockDays(ts...)
+	if len(days) == 0 {
+		return nil
+	}
+	keys := make([]string, len(days))
+	for i, d := range days {
+		keys[i] = LifecycleLockKey(d)
+	}
+	if _, err := q.ExecContext(ctx,
+		`SELECT `+modeSQL+`(hashtext(k)) FROM (SELECT unnest($1::text[]) AS k ORDER BY k) AS days`,
+		keys); err != nil {
+		return fmt.Errorf("取同日生命周期锁（%s，%d 日，%s..%s）: %w", modeSQL, len(days),
+			days[0].Format("2006-01-02"), days[len(days)-1].Format("2006-01-02"), err)
+	}
+	return nil
+}
+
+// LifecycleLockShared 在引用写入事务内取这些时间戳归属日的共享生命周期锁（R1）。
+// 事务级：提交/回滚自动释放；共享/共享并存，并发检测事务互不阻塞；同事务重复取同一日
+// 立即成功（lock manager 认出本会话已持该模式，不会排到排他等待者后面）。
+// 调用方随后必须锁内重读引用目标的热行。
+func LifecycleLockShared(ctx context.Context, q lockExecer, ts ...time.Time) error {
+	return lifecycleLock(ctx, q, "pg_advisory_xact_lock_shared", ts...)
+}
+
+// LifecycleLockExclusive 在破坏性清理事务内取这些时间戳归属日的排他生命周期锁（R1/R2）。
+// 事务级、阻塞等待——调用方应先 SET LOCAL lock_timeout 防呆，等不到就失败重试。
+// 供 retire / janitor 的到期清理等不走 rewriteDayTx 的路径使用；swap 的重写事务在
+// rewriteDayTx 内自取同一 key。
+func LifecycleLockExclusive(ctx context.Context, q lockExecer, ts ...time.Time) error {
+	return lifecycleLock(ctx, q, "pg_advisory_xact_lock", ts...)
+}
 
 // ErrNothingToRewrite 表示事务内核对后没有任何要删除的行（保留口径覆盖了整个分区）：
 // 事务已回滚、分区没有重建，调用方应按「无需操作」报告，不当成失败重试。
@@ -91,6 +160,10 @@ func RewriteDay(ctx context.Context, db *sql.DB, day time.Time, keepSelect strin
 //   - 同一分区的重写一次只允许一个：事务内先取 advisory try 锁（不等待），第二个并发
 //     操作立即明确拒绝，而不是靠后面的 DDL 锁超时兜底；retire 不取这把锁，与它的
 //     串行化由分区 DDL 锁顺序保证；
+//   - 事务内还取同日生命周期排他锁（LifecycleLockKey，在 try 锁之后、任何表锁与数据
+//     访问之前）：与引用写入者的事务级共享锁互斥，把「终检后、DETACH 前新增引用」的
+//     竞态从 verify 收窄的窗口改为锁上排队（R1）；restore / retire / 到期清理取同一
+//     key，多日操作按 UTC 日升序（R2）；
 //   - Verify 在复制后（初检）与分区替换前（终检）各跑一次：SHARE 锁挡得住该日 events
 //     的写入，挡不住引用表（alerts 等）的并发 INSERT，复制之后新到的引用只能靠事务内
 //     重读发现；
@@ -136,6 +209,8 @@ func rewriteDayTx(ctx context.Context, db *sql.DB, day time.Time, keepSelect str
 	if guarded {
 		// 并发闸门：同一日分区的重写一次一个。try 锁不等待，第二个操作立刻得到明确的
 		// 拒绝，而不是在后面的 DDL 锁上排队等超时。事务结束自动释放。
+		// 注意它先于生命周期锁取：并发第二个 swap 必须立即被 try 锁拒绝，而不是先在
+		// 生命周期锁上排队（P3 的 T04a 固定了这个语义）。
 		var locked bool
 		if err := tx.QueryRowContext(ctx,
 			`SELECT pg_try_advisory_xact_lock(hashtext('openxdr:eventpart:rewrite:'||$1))`,
@@ -144,6 +219,15 @@ func rewriteDayTx(ctx context.Context, db *sql.DB, day time.Time, keepSelect str
 		}
 		if !locked {
 			return 0, 0, fmt.Errorf("另一个操作正在重写日分区 %s（advisory 锁被占用），拒绝并发执行", daily)
+		}
+		// 同日生命周期排他锁（R1/R2）：在本事务读写该日任何数据、以及任何表锁之前取得。
+		// 引用写入者（告警/时序证据/已出告警锚点）持事务级共享锁建引用，与这里的排他互斥：
+		// 终检之后、DETACH 之前到达的引用不再只靠 verify 收窄窗口，而是在锁上排队，等本
+		// 事务提交后按「锁内重读热行 → 缺失则物化回热表」补链（eventarchive R1 路径）。
+		// 阻塞等待（受上面的 lock_timeout 约束）：等的是当日并发检测事务提交，属正常串行。
+		if _, err := tx.ExecContext(ctx,
+			`SELECT pg_advisory_xact_lock(hashtext($1))`, LifecycleLockKey(d)); err != nil {
+			return 0, 0, fmt.Errorf("取 %s 的同日生命周期排他锁: %w", d.Format(time.DateOnly), err)
 		}
 	}
 	for _, stmt := range []string{

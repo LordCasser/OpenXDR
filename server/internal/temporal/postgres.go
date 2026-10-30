@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"openxdr/server/internal/eventpart"
 )
 
 // EnsureSchema 创建可重启恢复的候选及命中证据。资产换组会清除候选，
@@ -252,6 +254,13 @@ ORDER BY ts,event_id LIMIT 10001`, s.revision, scope.Group, key, e.Time.Add(-s.w
 		result.skip("candidate_limit")
 		return nil, nil
 	}
+	// R1 引用生命周期锁：本函数随后写 temporal_detections（anchor_id）与
+	// temporal_evidence（event_id，PinnedIDs 的第二支），涉及的 UTC 日 = 候选窗口里每个
+	// 事件的归属日（锚点与证据都在候选集合里）。按日升序一条语句取齐共享锁；processor
+	// 入口已按 ±时序窗口 span 取过（本集合是其子集，重复取幂等），独立调用时这里自足。
+	if err := eventpart.LifecycleLockShared(ctx, tx, lockDaysFor(candidates, e.Time)...); err != nil {
+		return nil, err
+	}
 	matches, err := s.Evaluate(groupBy, candidates)
 	if err != nil {
 		return nil, err
@@ -277,6 +286,10 @@ VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING`, match.Revision, match.
 		}
 		if n == 0 {
 			continue
+		}
+		// R1 锁内重读：将被引用的锚点与证据事件确认仍在热表（见 assertHotReferences）。
+		if err := assertHotReferences(ctx, tx, append([]uuid.UUID{match.Anchor}, match.Evidence...)...); err != nil {
+			return nil, err
 		}
 		for _, evidenceID := range match.Evidence {
 			if evidenceID == match.Anchor {
@@ -311,4 +324,39 @@ func PruneCandidates(ctx context.Context, db *sql.DB, revision string, window ti
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+// lockDaysFor 收集时序引用涉及的 UTC 日：候选窗口里每个事件的归属日（锚点与证据都在
+// 候选集合里），加上当前事件自身。
+func lockDaysFor(candidates []Event, now time.Time) []time.Time {
+	days := make([]time.Time, 0, len(candidates)+1)
+	for _, c := range candidates {
+		days = append(days, c.Time)
+	}
+	return append(days, now)
+}
+
+// assertHotReferences 是 R1 的锁内重读（时序侧）：将被引用的锚点与证据事件确认仍在热表。
+//
+// 时序包不能 import 冷归档做物化补链（eventarchive 的切换闸门 guard.go 反过来要用本包
+// 的迟到余量，会成环）；物化补链由同一接入事务在事件/告警写入点完成——ingest 的
+// eventarchive.EnsureHotEvents。在 processor 的入口锁保护下，候选读出时目标都在热表、
+// 同日切换又被共享锁挡住，这里理论上必命中；独立调用或异常状态下热行缺失时，按底稿
+// R1 的口径「不支持冷物化的入口至少拒绝建立失效引用」明确失败，错误带事件 id 供排查。
+func assertHotReferences(ctx context.Context, tx *sql.Tx, ids ...uuid.UUID) error {
+	var missing []string
+	for _, id := range ids {
+		var hot bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE id = $1)`, id).Scan(&hot); err != nil {
+			return fmt.Errorf("核对时序引用目标 %s 是否在热表: %w", id, err)
+		}
+		if !hot {
+			missing = append(missing, id.String())
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("时序引用目标不在热表，拒绝建立失效引用：%s（检查调用方是否持有当日生命周期锁并完成了冷物化补链）",
+			strings.Join(missing, "、"))
+	}
+	return nil
 }

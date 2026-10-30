@@ -358,7 +358,10 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 		}
 		n, err := eventarchive.Restore(ctx, db, runID, d)
 		if err != nil {
-			return err
+			// 部分完成是合法结果（块级原子）：错误输出必须保留实际插入数——运维按热表
+			// 事实与 run.detail 的恢复记录对账后幂等重跑，不能把错误读成一行都没插。
+			return fmt.Errorf("还原 %s 失败：已插入 %d 行（部分完成，结果以热表与 detail.days 记录为准，可幂等重跑）: %w",
+				d.Format(time.DateOnly), n, err)
 		}
 		fmt.Printf("已把 %s 的冷事件物化回 events：插入 %d 行（已存在的不计，重复执行返回 0）\n",
 			d.Format(time.DateOnly), n)

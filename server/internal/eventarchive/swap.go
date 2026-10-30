@@ -119,6 +119,11 @@ func planDay(ctx context.Context, db *sql.DB, run Run, day time.Time) (SwapPlan,
 //     （eventpart.RewriteDayGuarded 的注入点，eventpart 不感知本包），tx 非空。
 var swapTestHook func(stage string, tx *sql.Tx) error
 
+// restoreTestHook 只用于测试：非 nil 时在每个块提交之后回调（stage 恒为 "after_chunk"），
+// 返回错误即中止恢复（该块已提交，走失败记录路径，模拟「块间隙」处的外部事件）。
+// 生产恒为 nil，零行为差异。R2 的 T04b 用它停在两块之间，验证同日破坏性操作穿不进块间隙。
+var restoreTestHook func(stage string, chunkID uuid.UUID, inserted int64) error
+
 // Swap 在计划核对通过后重建该日分区，只保留「被 pin 的 + 非归档类别/来源的 + 没有冷副本的」行。
 //
 // 前置条件（任一不满足即拒绝，且此时**一个字节都没动**）：
@@ -223,6 +228,12 @@ func Swap(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (Swap
 // 失败语义是**块级原子**：当前块解码、校验或写入失败时只回滚该块，此前已提交的块保留；
 // 此时返回 (已插入数, 错误)，两者同时有效（部分完成）。错误带块 id 与原因。重跑靠
 // events 的主键幂等继续（已恢复的行被 ON CONFLICT DO NOTHING 跳过），不需要进度账本。
+//
+// R2：整次恢复持有同日**会话级排他生命周期锁**（专用连接，从枚举块到最后一块提交 +
+// 完成记录全程）。此前按块独立提交、全程无协调，第一块提交后 swap / retire / 到期清理
+// 可以穿进块间隙，restore 却仍返回「全部完成」——「完成物化 C」的承诺被块间隙破坏。
+// 现在同日破坏性操作要么排队等恢复完成，要么在恢复排队时先做完自己；锁随专用连接的
+// 关闭 / 中断自动消失，每块前确认锁连接仍活着，连接断了后续块立即中止。
 func Restore(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (int64, error) {
 	run, err := LoadRun(ctx, db, runID)
 	if err != nil {
@@ -232,34 +243,82 @@ func Restore(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (i
 	if err := checkDayInRun(run, d); err != nil {
 		return 0, err
 	}
+	guard, err := LockDaySessionExclusive(ctx, db, d)
+	if err != nil {
+		return 0, err
+	}
+	defer guard.Release()
+	startedAt := time.Now().UTC()
+	// failRestore 写失败记录并返回 (已插入数, 原错误)。记录走主池、用独立 ctx（原 ctx
+	// 可能已取消），语义是「结果待核对」：已提交的块保留在热表，不谎称已回滚，也不把
+	// 块级计数冒充整日集合证明。记录写不进去（库不可用）时原错误照旧返回，热表事实
+	// 仍是权威，幂等重跑可对账。
+	failRestore := func(inserted int64, cause error, failedChunk string) (int64, error) {
+		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		rec := restoreDayRecord{
+			Status: "failed", StartedAt: startedAt.Format(time.RFC3339),
+			FinishedAt: time.Now().UTC().Format(time.RFC3339), Inserted: inserted,
+			FailedChunk: failedChunk, Note: "结果待核对：" + cause.Error(),
+		}
+		if rerr := recordRestoreDay(rctx, db, runID, d, rec); rerr != nil {
+			return inserted, fmt.Errorf("%w（且失败记录写入失败：%v）", cause, rerr)
+		}
+		return inserted, cause
+	}
 	ids, err := dayChunkIDs(ctx, db, runID, d)
 	if err != nil {
 		return 0, err
 	}
 	if len(ids) == 0 {
+		// 前置条件不满足：一个块都没枚举到，没有「本次恢复」可记录，直接报错。
 		return 0, fmt.Errorf("run %s 在 %s 没有冷块，没有可还原的事件", runID, d.Format(time.DateOnly))
+	}
+	// 开始记录：running 只表示本次恢复已启动。进程在块提交后退出时残留的 running 是
+	// 「结果待核对」，不表示仍在运行，更不表示已成功；完成/失败记录会覆盖同一键。
+	if err := recordRestoreDay(ctx, db, runID, d, restoreDayRecord{
+		Status: "running", StartedAt: startedAt.Format(time.RFC3339),
+	}); err != nil {
+		return 0, fmt.Errorf("写恢复开始记录（未插入任何行，直接中止）: %w", err)
 	}
 	src := &sqlSource{db: db}
 	var restored int64
 	for _, id := range ids {
+		// 会话锁随专用连接消失：连接断了锁已不在手上，后续块不得在无保护下继续。
+		if err := guard.Alive(ctx); err != nil {
+			return failRestore(restored, err, "")
+		}
 		ch, err := src.load(ctx, id)
 		if err != nil {
-			return restored, err
+			return failRestore(restored, err, id.String())
 		}
 		events, err := ch.Block.Decode()
 		if err != nil {
-			return restored, fmt.Errorf("解码冷块 %s（seq %d，%s/%s）: %w",
-				ch.ID, ch.Seq, ch.Day.Format(time.DateOnly), ch.Source, err)
+			return failRestore(restored, fmt.Errorf("解码冷块 %s（seq %d，%s/%s）: %w",
+				ch.ID, ch.Seq, ch.Day.Format(time.DateOnly), ch.Source, err), ch.ID.String())
 		}
 		if err := ch.check(events); err != nil {
-			return restored, fmt.Errorf("冷块 %s（seq %d）内容与头部不符: %w", ch.ID, ch.Seq, err)
+			return failRestore(restored, fmt.Errorf("冷块 %s（seq %d）内容与头部不符: %w", ch.ID, ch.Seq, err), ch.ID.String())
 		}
 		inserted, err := insertEvents(ctx, db, events)
 		if err != nil {
-			return restored, fmt.Errorf("写入冷块 %s（seq %d，%s/%s）的 %d 条事件: %w",
-				ch.ID, ch.Seq, ch.Day.Format(time.DateOnly), ch.Source, len(events), err)
+			return failRestore(restored, fmt.Errorf("写入冷块 %s（seq %d，%s/%s）的 %d 条事件: %w",
+				ch.ID, ch.Seq, ch.Day.Format(time.DateOnly), ch.Source, len(events), err), ch.ID.String())
 		}
 		restored += inserted
+		if restoreTestHook != nil {
+			if err := restoreTestHook("after_chunk", ch.ID, restored); err != nil {
+				return failRestore(restored, fmt.Errorf("after_chunk 阶段注入: %w", err), ch.ID.String())
+			}
+		}
+	}
+	// 完成记录：只代表该次物化遍历成功（C 已在本操作边界物化）；锁释放后 janitor 仍可按
+	// 原始 ts 与保留期再次清理非 pin 行，不承诺持续调查窗口。
+	if err := recordRestoreDay(ctx, db, runID, d, restoreDayRecord{
+		Status: "done", StartedAt: startedAt.Format(time.RFC3339),
+		FinishedAt: time.Now().UTC().Format(time.RFC3339), Inserted: restored,
+	}); err != nil {
+		return restored, fmt.Errorf("已插入 %d 行但完成记录写入失败（以热表事实为准，幂等重跑可对账）: %w", restored, err)
 	}
 	return restored, nil
 }
@@ -546,6 +605,37 @@ func recordSwapDay(ctx context.Context, tx *sql.Tx, runID uuid.UUID, day time.Ti
  WHERE id = $1`, runID, encoded); err != nil {
 		return fmt.Errorf("run %s 写 detail.days.%s 失败，分区替换将连同本事务一起回滚: %w",
 			runID, day.Format(time.DateOnly), err)
+	}
+	return nil
+}
+
+// restoreDayRecord 是写进 run 的 detail.days.<UTC 日>.restore 的恢复记录（R2）：
+// 最近一次恢复的开始 / 完成 / 失败、实际插入数与失败块。与同一天的切换记录
+// （kept/dropped 等）合并在同一个 day 对象里，互不覆盖。
+type restoreDayRecord struct {
+	Status      string `json:"status"` // running | done | failed
+	StartedAt   string `json:"started_at"`
+	FinishedAt  string `json:"finished_at,omitempty"`
+	Inserted    int64  `json:"inserted"`
+	FailedChunk string `json:"failed_chunk,omitempty"` // 失败块的 id（连接中断时为空）
+	Note        string `json:"note,omitempty"`         // failed 时为「结果待核对：<原因>」
+}
+
+// recordRestoreDay 用**主池**写 run 的恢复记录：Restore 的块事务在主池上、锁在专用连接上，
+// 记录不进块事务（最后一块提交后单独写，写失败不回滚已恢复的行）。合并口径与
+// recordSwapDay 一致：days.<day> 不存在（该日从未切换过）时先补 day 对象，再合并
+// restore 键，不覆盖同一天已有的切换记录；重复恢复覆盖的是同一天的 restore 键。
+func recordRestoreDay(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time, rec restoreDayRecord) error {
+	encoded, err := json.Marshal(rec)
+	if err != nil {
+		return fmt.Errorf("序列化 run %s 的 detail.days.%s.restore: %w", runID, day.Format(time.DateOnly), err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE event_archive_runs
+ SET detail = jsonb_set(COALESCE(detail, '{}'::jsonb), '{days}',
+  COALESCE(detail->'days', '{}'::jsonb) || jsonb_build_object($2::text,
+   COALESCE(detail->'days'->$2::text, '{}'::jsonb) || jsonb_build_object('restore', $3::jsonb)))
+ WHERE id = $1`, runID, day.Format(time.DateOnly), encoded); err != nil {
+		return fmt.Errorf("run %s 写 detail.days.%s.restore: %w", runID, day.Format(time.DateOnly), err)
 	}
 	return nil
 }
