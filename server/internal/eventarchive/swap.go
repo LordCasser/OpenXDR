@@ -25,7 +25,7 @@ import (
 //   - swap 只接受 verified 的 run，且要求「要移出的条数」恰好等于这个 run 落在该日冷块里的条数，
 //     对不上就拒绝——差额通常来自单条超过 MaxEventBytes 未进冷块的事件，删了就是丢数据；
 //   - 分区重建由 eventpart.RewriteDay 在单个事务里完成，失败回滚，原分区原样保留；
-//   - restore 把该日该 run 的冷事件逐条物化回 events（幂等），用于回滚。
+//   - restore 把该日该 run 的冷事件按块批量物化回 events（幂等），用于回滚。
 //
 // 保留口径与归档口径严格互补，且两边共用同一份谓词（scopePredicate）：
 // 归档 = 属于 run 的 (class_uid, source) 且未被钉住；保留 = 被钉住 或 不属于该 (class_uid, source)。
@@ -160,8 +160,14 @@ func Swap(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (Swap
 // Restore 把该日该 run 的冷事件全部物化回 events（幂等），返回实际插入的行数。
 // 已经存在于 events 的事件不计入——重复调用第二次返回 0，用于回滚一次 Swap。
 //
-// 逐事件调用既有的 Materialize（不在这里另写 INSERT）：它按 ID 定位、单事务
-// INSERT ... ON CONFLICT DO NOTHING，不经过检测器、不产告警、不改任何派生表。
+// 按块批量物化（P1）：每块只 load 一次、Decode 一次、check 一次，随后在**单个事务**里
+// 用一条 typed unnest 的 INSERT 把整块写回。不再逐事件走 Materialize → Locate：
+// 那是 O(n × 块数) 的重复定位与重复解压（历史实测 24.9 行/秒），单条物化入口 Materialize
+// 保留给其它调用方。不经过检测器、不产告警、不改任何派生表，也不回写冷块。
+//
+// 失败语义是**块级原子**：当前块解码、校验或写入失败时只回滚该块，此前已提交的块保留；
+// 此时返回 (已插入数, 错误)，两者同时有效（部分完成）。错误带块 id 与原因。重跑靠
+// events 的主键幂等继续（已恢复的行被 ON CONFLICT DO NOTHING 跳过），不需要进度账本。
 func Restore(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (int64, error) {
 	run, err := LoadRun(ctx, db, runID)
 	if err != nil {
@@ -193,17 +199,91 @@ func Restore(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (i
 		if err := ch.check(events); err != nil {
 			return restored, fmt.Errorf("冷块 %s（seq %d）内容与头部不符: %w", ch.ID, ch.Seq, err)
 		}
-		for _, e := range events {
-			inserted, err := Materialize(ctx, db, e.ID)
-			if err != nil {
-				return restored, fmt.Errorf("还原事件 %s: %w", e.ID, err)
-			}
-			if inserted {
-				restored++
-			}
+		inserted, err := insertEvents(ctx, db, events)
+		if err != nil {
+			return restored, fmt.Errorf("写入冷块 %s（seq %d，%s/%s）的 %d 条事件: %w",
+				ch.ID, ch.Seq, ch.Day.Format(time.DateOnly), ch.Source, len(events), err)
 		}
+		restored += inserted
 	}
 	return restored, nil
+}
+
+// insertEvents 在单个事务里把一块已解码并通过校验的事件批量插回 events。
+//
+// 列映射与 Materialize 的单条 INSERT 相同（同样 10 列、同样 ON CONFLICT DO NOTHING、
+// 不覆盖已存在的行），区别只在承载方式：一条固定 10 个参数的 INSERT ... SELECT，
+// 参数个数与块内条数无关，不会把最大块展开成 N×10 个占位符。
+//
+//   - 可空列用指针元素类型（[]*uuid.UUID / []*string）：nil 元素编码为 SQL NULL，
+//     与 Event 里的指针一一对应，不会把 NULL 折成零值或空串；
+//   - raw 以 text[] 传入、逐元素 ::jsonb：块里存的本来就是 events.raw 的 jsonb 文本表示，
+//     转回 jsonb 与单条物化走同一条解析路径；不合法 JSON 会让整块失败回滚，而不是静默入库；
+//   - RowsAffected 就是实际插入数，已存在的行被 ON CONFLICT DO NOTHING 跳过。
+//
+// 失败时本块整体回滚（包括约束失败，如 asset_id 指向已删除的资产）。
+func insertEvents(ctx context.Context, db *sql.DB, events []Event) (int64, error) {
+	n := len(events)
+	cols := restoreColumns{
+		ids:     make([]uuid.UUID, n),
+		ts:      make([]time.Time, n),
+		classes: make([]int64, n),
+		sources: make([]string, n),
+		assets:  make([]*uuid.UUID, n),
+		procs:   make([]*uuid.UUID, n),
+		parents: make([]*uuid.UUID, n),
+		users:   make([]*string, n),
+		conns:   make([]*string, n),
+		raws:    make([]string, n),
+	}
+	for i, e := range events {
+		cols.ids[i], cols.ts[i], cols.classes[i], cols.sources[i] = e.ID, e.Ts, e.ClassUID, e.Source
+		cols.assets[i], cols.procs[i], cols.parents[i] = e.AssetID, e.ProcessGUID, e.ParentProcessGUID
+		cols.users[i], cols.conns[i] = e.Username, e.ConnTuple
+		cols.raws[i] = string(e.Raw)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("开始事务: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.ExecContext(ctx, `INSERT INTO events
+ (`+eventColumns+`)
+ SELECT u.id, u.ts, u.class_uid, u.source, u.asset_id, u.process_guid, u.parent_process_guid,
+        u.username, u.conn_tuple, u.raw::jsonb
+ FROM unnest($1::uuid[], $2::timestamptz[], $3::bigint[], $4::text[], $5::uuid[], $6::uuid[],
+             $7::uuid[], $8::text[], $9::text[], $10::text[])
+      AS u(id, ts, class_uid, source, asset_id, process_guid, parent_process_guid,
+           username, conn_tuple, raw)
+ ON CONFLICT DO NOTHING`,
+		cols.ids, cols.ts, cols.classes, cols.sources, cols.assets, cols.procs,
+		cols.parents, cols.users, cols.conns, cols.raws)
+	if err != nil {
+		return 0, fmt.Errorf("批量插入 %d 行: %w", n, err)
+	}
+	inserted, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("统计批量插入 %d 行的结果: %w", n, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("提交 %d 行: %w", n, err)
+	}
+	return inserted, nil
+}
+
+// restoreColumns 是 insertEvents 的并行列缓冲：一块一分配，块内逐事件填一行。
+// 列清单本身复用 scan.go 的 eventColumns 常量，冷块读取与写回是同一组列。
+type restoreColumns struct {
+	ids     []uuid.UUID
+	ts      []time.Time
+	classes []int64
+	sources []string
+	assets  []*uuid.UUID
+	procs   []*uuid.UUID
+	parents []*uuid.UUID
+	users   []*string
+	conns   []*string
+	raws    []string
 }
 
 // pinnedPredicate 是 PinnedIDs 的 IN 形式：被钉住的事件既不在归档口径里，也一定被保留。
