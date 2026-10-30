@@ -20,6 +20,7 @@ export function AssetVulns({ assetId }: { assetId: string }) {
   if (q.isPending) return <Skeleton active />
   const rep = q.data
   if (!rep) return <Alert type="info" showIcon message={t('vulnNoInventory')} />
+  if (!rep.ecosystem) return <Alert type="info" showIcon message={t('vulnUnsupported', { n: rep.packages })} />
 
   const table = (rows: VulnPackage[], upgrade: boolean) => (
     <Table<VulnPackage> size="small" rowKey="source" dataSource={rows} pagination={{ pageSize: 15, hideOnSinglePage: true }}
