@@ -628,6 +628,14 @@ var (
 				Columns: []*schema.Column{EventsColumns[4]},
 			},
 			{
+				Name:    "event_process_creation_guid",
+				Unique:  false,
+				Columns: []*schema.Column{EventsColumns[4]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "class_uid = 1007 AND process_guid IS NOT NULL",
+				},
+			},
+			{
 				Name:    "event_process_guid_ts",
 				Unique:  false,
 				Columns: []*schema.Column{EventsColumns[4], EventsColumns[1]},

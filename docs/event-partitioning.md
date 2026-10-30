@@ -39,7 +39,7 @@ events (PARTITION BY RANGE (ts))
 - 入库 `INSERT ... ON CONFLICT DO NOTHING` 不写冲突列（`ingest/processor.go`），
   老表（主键 id）与分区表（主键 id, ts）都适用，迁移前后同一份代码。
 - 二级索引与 ent 定义同名同列：`event_ts`、`event_asset_id_ts`、`event_process_guid`、
-  `event_process_guid_ts`、`event_parent_process_guid`、`event_conn_tuple_ts`，外加 server 启动时建的关键词检索索引 `events_search_trgm`（pg_trgm GIN，见下文；老库可能还是旧的 `events_raw_trgm`）。
+  `event_process_guid_ts`、`event_process_creation_guid`、`event_parent_process_guid`、`event_conn_tuple_ts`，外加 server 启动时建的关键词检索索引 `events_search_trgm`（pg_trgm GIN，见下文；老库可能还是旧的 `events_raw_trgm`）。
   在父表上建的是分区索引，新分区自动带上。
 - `events_assets_events` 外键（asset_id → assets，ON DELETE SET NULL）保留：分区表**引用**别的表没有限制。
 
@@ -65,6 +65,19 @@ ON events (process_guid, ts) WHERE process_guid IS NOT NULL;
 
 进程字段通常覆盖绝大多数事件，此索引的空间不能按连接部分索引估算；
 需同时预留索引、排序临时文件和 WAL 的空间，并监控主从复制。验收前保留原单列索引。
+
+资产图谱按进程 GUID 查询 `class_uid=1007` 的进程名，使用 `event_process_creation_guid`。
+普通 GUID 索引也包含该进程的大量网络事件；若启动记录已过保留期，查一个不存在的进程名
+仍会扫描这些网络记录。专用部分索引让不存在的启动记录直接返回，不必读取无关事件：
+
+```sql
+SET lock_timeout = '5s';
+CREATE INDEX CONCURRENTLY event_process_creation_guid
+ON events (process_guid) WHERE class_uid = 1007 AND process_guid IS NOT NULL;
+```
+
+该索引只用于进程事件查询，不能替代跨事件类型的 GUID 回溯索引。
+若进程事件占比很高，仍需按 GB 级估算空间；不要把“部分索引”理解为一定很小。
 
 完成后检查 `pg_index.indisvalid` 与查询计划；中断可能留下无效索引，不能仅凭同名索引存在判断成功。
 并发建索引完成前不要重启 server：启动时的全文索引 DDL 即使带 `IF NOT EXISTS`，
