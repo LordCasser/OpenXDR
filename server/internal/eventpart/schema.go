@@ -28,7 +28,6 @@ const columnDDL = `id uuid NOT NULL, ts timestamptz NOT NULL, class_uid bigint N
 var indexes = []struct{ name, method string }{
 	{"event_ts", "btree (ts)"},
 	{"event_asset_id_ts", "btree (asset_id, ts)"},
-	{"event_process_guid", "btree (process_guid)"},
 	{"event_process_creation_guid", "btree (process_guid) WHERE class_uid = 1007 AND process_guid IS NOT NULL"},
 	{"event_process_guid_ts", "btree (process_guid, ts) WHERE process_guid IS NOT NULL"},
 	{"event_parent_process_guid", "btree (parent_process_guid)"},

@@ -289,3 +289,26 @@ verify 的逐日摘要必然发现，repair 修掉。
 - 不带 ts 的按 id 查询代价随分区数增长（第 8 节）。
 - 迁移期间写放大（镜像），verify 的长快照推迟 VACUUM；switch 要求全部 server 已是本版本。
 - 同步备库的磁盘与 WAL：copy / index 产生的 WAL 与数据量同级，备库同样需要一倍余量，复制延迟会拖慢主库提交。
+
+## 普通表的重复 GUID 索引清理
+
+`event_process_guid_ts(process_guid, ts) WHERE process_guid IS NOT NULL` 已覆盖应用的非空 GUID 等值、
+批量与时间排序查询。新库不再单独创建 `event_process_guid(process_guid)`，避免每条事件维护重复 B-tree。
+`event_process_creation_guid` 和父进程索引仍保留，不属于这次清理范围。
+
+旧表不会在服务启动时自动删索引。先升级全部服务节点，确认联合索引 valid/ready，保存查询计划与旧定义，
+再由数据库管理员在**普通 events 表**执行 [受保护的清理脚本](../deploy/ha/drop-redundant-process-index.sql)。
+脚本核对表类型及两个索引的列、谓词和有效性，使用 5 秒锁等待、2 分钟语句上限并发删除；不删除任何事件。
+不要放进外层事务。分区父索引不支持 `DROP INDEX CONCURRENTLY`，脚本会拒绝，须单独安排分区维护。
+
+完成后确认 `to_regclass('public.event_process_guid') IS NULL`，复核 GUID 查询结果、执行计划、写入队列和复制状态。
+若并发删除被取消，先检查索引状态和阻塞者；索引可能已无效但尚未释放空间，不能仅凭命令退出判断完成。
+迁移工具会保留旧表上的既有索引，因此需要清理的普通表应在分区迁移之前处理。
+
+如出现查询回归，保持联合索引存在，并按保存的旧定义在线重建，例如：
+
+```sql
+CREATE INDEX CONCURRENTLY event_process_guid ON public.events(process_guid);
+```
+
+重建需要时间、磁盘和 WAL 余量；它不是瞬时回滚。清理前应核对非应用的自定义查询是否依赖空 GUID 检索性能。

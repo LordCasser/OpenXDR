@@ -623,11 +623,6 @@ var (
 				Columns: []*schema.Column{EventsColumns[9], EventsColumns[1]},
 			},
 			{
-				Name:    "event_process_guid",
-				Unique:  false,
-				Columns: []*schema.Column{EventsColumns[4]},
-			},
-			{
 				Name:    "event_process_creation_guid",
 				Unique:  false,
 				Columns: []*schema.Column{EventsColumns[4]},
