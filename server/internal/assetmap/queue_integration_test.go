@@ -349,3 +349,23 @@ CREATE TABLE events(id uuid PRIMARY KEY,ts timestamptz,class_uid integer)`); err
 		t.Fatalf("普通 events 表删除后残留待办: %d", n)
 	}
 }
+
+func TestQueuedGraphRPMSoftwareInventory(t *testing.T) {
+	ctx, client, _, p, e, ev := queueFixture(t)
+	ev.ClassUID = ClassSoftware
+	ev.Raw = json.RawMessage(`{"os":{"id":"uos","version_id":"20"},"manager":"rpm","packages":[["openssl","1:1.1.1k-9.uel20","openssl","1.1.1k-9.uel20"],["local","0:1-1","",""]]}`)
+	if err := p.Process(ctx, ev); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := e.batch(ctx); err != nil || n != 1 {
+		t.Fatalf("RPM 物化失败: %d %v", n, err)
+	}
+	a := client.Asset.GetX(ctx, *ev.AssetID)
+	var sw Software
+	if err := json.Unmarshal(a.Software, &sw); err != nil {
+		t.Fatal(err)
+	}
+	if sw.Manager != "rpm" || sw.OS != "uos" || len(sw.Packages) != 2 || sw.Packages[0][1] != "1:1.1.1k-9.uel20" || a.SoftwareAt == nil {
+		t.Fatalf("RPM 数据丢失: %+v", sw)
+	}
+}
