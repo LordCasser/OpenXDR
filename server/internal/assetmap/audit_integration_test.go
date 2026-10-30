@@ -42,17 +42,20 @@ func TestGraphAuditFindsGapsWithoutCountingPending(t *testing.T) {
 		t.Fatal(err)
 	}
 	since, until := ev.Timestamp.Add(-2*time.Minute), ev.Timestamp.Add(time.Minute)
-	report, err := AuditGraph(ctx, db, since, until, 100)
+	report, err := AuditGraph(ctx, db, since, until, 100, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if report.Events != 5 || report.Pending != 1 || report.Contributing != 3 || report.ObservedLinks != 2 || report.MissingLinks != 1 || report.BelowObservedCount != 1 {
 		t.Fatalf("核对口径错误: %+v", report)
 	}
+	if _, err := AuditGraph(ctx, db, since, until, 100, true); err == nil {
+		t.Fatal("备库限定不能放行主库")
+	}
 	if client.AssetLink.Query().OnlyX(ctx).Count != 1 || pendingCount(t, db) != 1 {
 		t.Fatal("只读核对修改了图谱或待办")
 	}
-	if _, err := AuditGraph(ctx, db, since, until, 2); err == nil {
+	if _, err := AuditGraph(ctx, db, since, until, 2, false); err == nil {
 		t.Fatal("超过事件上限不能报告完成")
 	}
 	if client.AssetLink.Query().OnlyX(ctx).Count != 1 || pendingCount(t, db) != 1 {

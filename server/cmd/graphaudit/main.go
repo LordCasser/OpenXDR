@@ -25,6 +25,7 @@ func run() error {
 	untilFlag := flag.String("until", "", "窗口终点 RFC3339（必填，不包含）")
 	maxEvents := flag.Int("max-events", 100000, "最多核对的事件数，超限失败")
 	timeout := flag.Duration("timeout", 2*time.Minute, "整体查询超时")
+	replicaOnly := flag.Bool("replica-only", false, "必须连接备库，否则拒绝扫描")
 	flag.Parse()
 	since, err := time.Parse(time.RFC3339, *sinceFlag)
 	if err != nil {
@@ -46,7 +47,7 @@ func run() error {
 	db.SetMaxOpenConns(1)
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
-	report, err := assetmap.AuditGraph(ctx, db, since, until, *maxEvents)
+	report, err := assetmap.AuditGraph(ctx, db, since, until, *maxEvents, *replicaOnly)
 	if err != nil {
 		return err
 	}

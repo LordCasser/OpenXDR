@@ -64,6 +64,9 @@ WHERE id='assetmap.delivery' AND value='"legacy"'::jsonb;
 go run ./cmd/graphaudit -since 2026-10-30T05:00:00Z -until 2026-10-30T06:00:00Z
 ```
 
+大范围核对建议使用备库直连地址并加 `-replica-only`；工具在同一事务中验证 `pg_is_in_recovery()`，
+连到主库会直接失败。HAProxy 的主库入口即使在备用节点上，也不等于备库连接。
+
 窗口为左闭右开；默认最多核对 10 万条事件、总时限 2 分钟，每次数据库查询最多 30 秒。
 超限或超时直接失败，不能把部分扫描当作核对完成。`pending` 是快照中尚在待办队列里的记录，
 不参与差异统计；`missingLinks` 是窗口内观测到、图谱却没有的边，`belowObservedCount` 是已有累计计数

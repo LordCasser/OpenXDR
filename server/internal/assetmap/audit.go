@@ -43,7 +43,7 @@ type GraphAudit struct {
 
 // AuditGraph 在同一只读快照里核对原始事件、待办和图谱。窗口内观测数只是
 // 已存累计计数的下界；不能据此判断窗口外的历史计数是否正确，也不修改计数。
-func AuditGraph(ctx context.Context, db *sql.DB, since, until time.Time, maxEvents int) (GraphAudit, error) {
+func AuditGraph(ctx context.Context, db *sql.DB, since, until time.Time, maxEvents int, replicaOnly bool) (GraphAudit, error) {
 	report := GraphAudit{Since: since, Until: until, Examples: []GraphDifference{}}
 	if !since.Before(until) || maxEvents < 1 {
 		return report, fmt.Errorf("无效的图谱核对窗口或事件上限")
@@ -55,6 +55,9 @@ func AuditGraph(ctx context.Context, db *sql.DB, since, until time.Time, maxEven
 	defer tx.Rollback()
 	if err = tx.QueryRowContext(ctx, `SELECT current_timestamp, pg_is_in_recovery()`).Scan(&report.SnapshotAt, &report.Replica); err != nil {
 		return report, err
+	}
+	if replicaOnly && !report.Replica {
+		return report, fmt.Errorf("核对要求备库，但实际连接的是主库")
 	}
 	if _, err = tx.ExecContext(ctx, `SET LOCAL statement_timeout='30s'`); err != nil {
 		return report, err
