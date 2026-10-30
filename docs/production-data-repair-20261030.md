@@ -47,3 +47,27 @@ Registry 待办仍 open，标题/详情更新为已禁写但匿名读取边界�
 补充复核：最近 24 小时的 6 次失败研判均已有后续成功结论，当前无首次研判积压。
 留存业务日志显示最近一组为上游 LLM HTTP 503 和一次读取超时，已有退避重试恢复；
 这批记录不能认定为当前结果解析器故障，因此没有无证据地修改解析逻辑或缩减调查范围。
+
+## Registry 访问来源收口（后续已完成）
+
+用户授权按最优方案处理后，进一步核实 193 的 Dispatcher 正在运行，且配置同样引用该仓库。
+最终采用**已确认消费者的网络白名单 + 仓库只读**，保留现有客户端兼容性；没有冒充已配置应用层认证。
+
+- 允许 189 本机、192 和 193；其他来源访问宿主接口的 TCP 5000 被拒绝，IPv6 没有隐式放行。
+- 独立 `inet openxdr_registry_guard` 表在 Docker DNAT 前检查原始目的地址和端口，未改 Docker 自管规则。
+  现有 Docker raw 表另有禁止外部接口直达 Registry 容器 IP 的规则；本次未删除或放宽它。
+- 配置对应 [registry-access.nft](../deploy/operations/registry-access.nft) 与
+  [registry-access.service](../deploy/operations/registry-access.service)，是本环境专用配置，不自动应用到其他安装。
+  实机路径为 `/etc/nftables.d/openxdr-registry-guard.nft` 和
+  `/etc/systemd/system/openxdr-registry-guard.service`，服务 active/enabled。
+- 192、193 的 `/v2/`、worker manifest 均为 200；进一步读取 linux/amd64 镜像层首 1024 字节，均返回 206。
+  没有拉取或执行整个镜像。上传初始化仍为 405。
+- 197 非授权内网来源连接超时；临时网络命名空间中的非授权 IPv4/IPv6 同样被拒绝，DROP 计数增长。
+  测试 netns/veth 和三分钟回滚 timer 已清理；未改 SSH 或其他业务端口。
+- 首次 Python urllib 验证因环境代理不支持 Docker 使用的 CIDR 免代理规则而返回代理 502；
+  显式直连复测成功。两个 Docker daemon 的 NO_PROXY 已含 10.0.0.0/8，无需重启或修改消费者。
+- Registry 待办通过平台 API resolved，说明保留匿名只读的允许源信任边界，写入 `finding_status` 审计。
+  后续新增消费者必须先确认用途，再更新白名单并验证读取/拒绝；不能整段开放回退。
+
+应急回退：停止并禁用 `openxdr-registry-guard.service` 仅撤销本次独立表，会重新暴露匿名读取，
+不得把它当常态；仓库只读配置保持生效。若出现合法消费者遗漏，优先补充经核实的精确地址。
