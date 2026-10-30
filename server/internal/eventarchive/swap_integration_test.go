@@ -357,7 +357,7 @@ func TestSwapMovesOnlyArchivedRows(t *testing.T) {
 		t.Fatal("被移出事件的规则命中应随分区重建清理（与 retire 同一口径）")
 	}
 
-	// detail.swapped 记下这一天与计数，status 不变
+	// detail.days 按日记下实际切换结果（P3 起取代单个 detail.swapped 值），status 不变
 	run, err := eventarchive.LoadRun(ctx, db, runID)
 	if err != nil {
 		t.Fatal(err)
@@ -366,23 +366,26 @@ func TestSwapMovesOnlyArchivedRows(t *testing.T) {
 		t.Fatalf("Swap 不该改 status，实际 %s", run.Status)
 	}
 	var detail struct {
-		Swapped *struct {
-			Day        string `json:"day"`
-			Archived   int64  `json:"archived"`
-			KeepPinned int64  `json:"keep_pinned"`
-			KeepOther  int64  `json:"keep_other"`
-			Total      int64  `json:"total"`
-		} `json:"swapped"`
+		Days map[string]struct {
+			SwappedAt      string `json:"swapped_at"`
+			Kept           int64  `json:"kept"`
+			Dropped        int64  `json:"dropped"`
+			RunDayVerified bool   `json:"run_day_verified"`
+		} `json:"days"`
 	}
 	if err := json.Unmarshal(run.Detail, &detail); err != nil {
 		t.Fatalf("解析 detail: %v（%s）", err, run.Detail)
 	}
-	if detail.Swapped == nil {
-		t.Fatalf("detail 里应记录 swapped：%s", run.Detail)
+	rec, ok := detail.Days[f.day.Format(time.DateOnly)]
+	if !ok {
+		t.Fatalf("detail.days 应记录 %s：%s", f.day.Format(time.DateOnly), run.Detail)
 	}
-	if detail.Swapped.Day != f.day.Format(time.DateOnly) || detail.Swapped.Archived != 4 ||
-		detail.Swapped.KeepPinned != 1 || detail.Swapped.KeepOther != 2 || detail.Swapped.Total != 7 {
-		t.Fatalf("detail.swapped 内容不符：%+v", *detail.Swapped)
+	if rec.Kept != 3 || rec.Dropped != 4 || !rec.RunDayVerified {
+		t.Fatalf("detail.days.%s 应是 kept=3（钉住1+其它2）dropped=4 run_day_verified=true，实际 %+v",
+			f.day.Format(time.DateOnly), rec)
+	}
+	if p.Kept != 3 || p.Dropped != 4 {
+		t.Fatalf("Swap 返回的事务内实测应是 kept=3 dropped=4，实际 kept=%d dropped=%d", p.Kept, p.Dropped)
 	}
 	if relExistsInDB(t, ctx, db, eventpart.DailyName(f.day)+"_rewrite") {
 		t.Fatal("切换后不应留下暂存表")
@@ -583,9 +586,10 @@ func TestSwapRefusesWhenNothingArchived(t *testing.T) {
 	}
 }
 
-// 5e. 该日冷块比待移出的行少一条：阶段 A 会跳过编码后超过 4 MiB 的事件，这类事件在热表里、
-// 却不在冷块里。按口径删就是永久丢数据，必须拒绝。
-func TestSwapRefusesWhenColdLayerIsShort(t *testing.T) {
+// 5e. 超大事件不在冷块（阶段 A 跳过编码后超过 4 MiB 的事件）：这类行在热表里、却不在
+// 本 run 的 locator。P3 起它不进删除集——留在热表，Swap 照常移出其余行（旧实现整日拒绝）；
+// 断言超大行留热、其余移出、无静默丢，事务内实测数写进 detail.days。
+func TestSwapKeepsOversizedRowHot(t *testing.T) {
 	ctx, client, db := swapOpen(t)
 	f := seedSwap(t, ctx, client)
 	big := client.Event.Create().SetTs(f.day.Add(8 * time.Minute)).SetClassUID(4001).SetSource("agent").
@@ -599,12 +603,42 @@ func TestSwapRefusesWhenColdLayerIsShort(t *testing.T) {
 	if p.Archived != 5 || p.Total != 8 {
 		t.Fatalf("超大事件也在归档口径里，计划应是 8 = 5 + 1 + 2，实际 %+v", p)
 	}
-	assertRefused(t, ctx, db, f.day, func() error {
-		_, err := eventarchive.Swap(ctx, db, runID, f.day)
-		return err
-	}, "必须相等")
+	out, err := eventarchive.Swap(ctx, db, runID, f.day)
+	if err != nil {
+		t.Fatalf("P3：超大行留热、其余照常移出，Swap 不再整日拒绝，实际 %v", err)
+	}
+	if out.Kept != 4 || out.Dropped != 4 {
+		t.Fatalf("事务内实测应是 kept=4（钉住1+其它2+超大1）dropped=4，实际 kept=%d dropped=%d",
+			out.Kept, out.Dropped)
+	}
 	if !rowExists(t, ctx, db, big.ID) {
 		t.Fatal("没有被归档的事件绝不能随切换消失")
+	}
+	for _, id := range f.archived {
+		if rowExists(t, ctx, db, id) {
+			t.Fatalf("有冷副本的事件 %s 应已移出热表", id)
+		}
+	}
+	if got := partitionRows(t, ctx, db, f.day); got != 4 {
+		t.Fatalf("切换后分区应有 4 行（钉住+其它+超大），实际 %d 行", got)
+	}
+	run, err := eventarchive.LoadRun(ctx, db, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var detail struct {
+		Days map[string]struct {
+			Kept    int64  `json:"kept"`
+			Dropped int64  `json:"dropped"`
+			Note    string `json:"note"`
+		} `json:"days"`
+	}
+	if err := json.Unmarshal(run.Detail, &detail); err != nil {
+		t.Fatalf("解析 detail: %v（%s）", err, run.Detail)
+	}
+	rec, ok := detail.Days[f.day.Format(time.DateOnly)]
+	if !ok || rec.Kept != 4 || rec.Dropped != 4 || !strings.Contains(rec.Note, "没有冷副本") {
+		t.Fatalf("detail.days 应记录 kept=4 dropped=4 且 note 说明差额，实际 %+v", rec)
 	}
 }
 
@@ -626,7 +660,7 @@ func assertRefused(t *testing.T, ctx context.Context, db *sql.DB, day time.Time,
 		t.Fatal("被拒绝的操作留下了暂存表")
 	}
 	if got := coldSwapRecords(t, ctx, db); got != 0 {
-		t.Fatalf("被拒绝的操作不该写 detail.swapped，实际有 %d 条记录", got)
+		t.Fatalf("被拒绝的操作不该写 detail.days，实际有 %d 条记录", got)
 	}
 }
 
@@ -654,8 +688,8 @@ func allEventsInDay(t *testing.T, ctx context.Context, db *sql.DB, day time.Time
 func coldSwapRecords(t *testing.T, ctx context.Context, db *sql.DB) int {
 	t.Helper()
 	var n int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM event_archive_runs WHERE detail ? 'swapped'`).Scan(&n); err != nil {
-		t.Fatalf("统计 detail.swapped: %v", err)
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM event_archive_runs WHERE detail ? 'days'`).Scan(&n); err != nil {
+		t.Fatalf("统计 detail.days: %v", err)
 	}
 	return n
 }
@@ -740,7 +774,7 @@ func TestSwapFailureLeavesPartitionIntact(t *testing.T) {
 		t.Fatalf("失败后分区行数应为 7，实际 %d", got)
 	}
 	if got := coldSwapRecords(t, ctx, db); got != 0 {
-		t.Fatalf("失败的切换不该写 detail.swapped，实际 %d 条", got)
+		t.Fatalf("失败的切换不该写 detail.days，实际 %d 条", got)
 	}
 	if _, err := db.ExecContext(ctx, `DROP TABLE `+staging); err != nil {
 		t.Fatal(err)
@@ -766,7 +800,7 @@ func TestSwapFailureLeavesPartitionIntact(t *testing.T) {
 		t.Fatal("回滚后不该留下暂存表")
 	}
 	if got := coldSwapRecords(t, ctx, db); got != 0 {
-		t.Fatalf("失败的切换不该写 detail.swapped，实际 %d 条", got)
+		t.Fatalf("失败的切换不该写 detail.days，实际 %d 条", got)
 	}
 	if _, err := db.ExecContext(ctx, `DROP VIEW `+view); err != nil {
 		t.Fatal(err)

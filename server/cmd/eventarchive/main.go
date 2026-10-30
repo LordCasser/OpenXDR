@@ -12,7 +12,7 @@
 //	locate -id <uuid>                                按事件 ID 找一条冷事件（只读）
 //	materialize -id <uuid> -confirm                  把一条冷事件物化回 events（幂等，不产告警）
 //	plan -run <uuid> -day YYYY-MM-DD                 单日切换计划（只读，用于人工核对）
-//	swap -run <uuid> -day YYYY-MM-DD -confirm        重建该日分区，移出已归档的行（阶段 C）
+//	swap -run <uuid> -day YYYY-MM-DD -confirm        重建该日分区，移出有冷副本的归档行（阶段 C，P3 原子切换）
 //	restore -run <uuid> -day YYYY-MM-DD -confirm     把该日冷事件物化回 events（幂等，用于回滚）
 //
 // shadow / materialize / swap / restore / backfill-locator 会写库，不加 -confirm 直接拒绝
@@ -76,8 +76,8 @@ func usage() {
   report -run <uuid>                                归档前后大小、压缩比与含索引对比
   locate -id <uuid>                                 按事件 ID 找一条冷事件（只读）
   materialize -id <uuid> -confirm                   把一条冷事件物化回 events（幂等，不产告警）
-  plan -run <uuid> -day YYYY-MM-DD                  单日切换计划：分区总行数 / 将移出 / 钉住保留 / 其它保留（只读）
-  swap -run <uuid> -day YYYY-MM-DD -confirm         重建该日分区，只保留钉住的与非归档类别/来源的行
+  plan -run <uuid> -day YYYY-MM-DD                  单日切换计划（只读估计，实际以事务内实测为准）
+  swap -run <uuid> -day YYYY-MM-DD -confirm         重建该日分区：只保留钉住的、非归档类别/来源的、没有冷副本的行
   restore -run <uuid> -day YYYY-MM-DD -confirm      把该日冷事件物化回 events（幂等，用于回滚 swap）`)
 	os.Exit(2)
 }
@@ -269,7 +269,7 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 			run.ID, run.Status, run.DayFrom.Format(time.DateOnly), run.DayTo.Format(time.DateOnly),
 			run.Classes, run.Sources)
 		fmt.Printf("日 %s 的切换计划（只读，未写任何东西）：\n", p.Day.Format(time.DateOnly))
-		fmt.Printf("  分区行数 %d = 将移出 %d（已归档）+ 钉住保留 %d + 其它类别/来源保留 %d\n",
+		fmt.Printf("  分区行数 %d = 将移出 %d（口径内已归档，估计）+ 钉住保留 %d + 其它类别/来源保留 %d\n",
 			p.Total, p.Archived, p.KeepPinned, p.KeepOther)
 		switch {
 		case run.Status != eventarchive.StatusVerified:
@@ -277,6 +277,8 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 		case p.Archived == 0:
 			fmt.Println("  swap 会拒绝：这一天没有被归档的事件（Archived=0）")
 		default:
+			fmt.Println("  计划是事务外估计值，不是冻结快照：没有冷副本的行（超大、shadow 之后到达）执行时留热，")
+			fmt.Println("  实际结果以事务内实测为准（写入 detail.days，与分区替换同一事务）")
 			fmt.Printf("  下一步（会删数据，需 -confirm）：eventarchive swap -run %s -day %s -confirm\n",
 				runID, p.Day.Format(time.DateOnly))
 		}
@@ -303,10 +305,15 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("已切换 %s 的分区：保留 %d 行（钉住 %d + 其它类别/来源 %d），移出 %d 行\n",
-			p.Day.Format(time.DateOnly), p.Total-p.Archived, p.KeepPinned, p.KeepOther, p.Archived)
-		fmt.Printf("  移出的 %d 行仍在冷块里，可按 ID 定位（locate）或整日还原：eventarchive restore -run %s -day %s -confirm\n",
-			p.Archived, runID, p.Day.Format(time.DateOnly))
+		fmt.Printf("已切换 %s 的分区：事务内实测保留 %d 行、移出 %d 行（预检估计：口径内未钉住 %d、钉住 %d、其它 %d，共 %d）\n",
+			p.Day.Format(time.DateOnly), p.Kept, p.Dropped, p.Archived, p.KeepPinned, p.KeepOther, p.Total)
+		if p.Kept > p.KeepPinned+p.KeepOther {
+			fmt.Printf("  保留数比预检多 %d 行：这些行没有冷副本（超大或 shadow 之后到达），按事务内核对留热\n",
+				p.Kept-(p.KeepPinned+p.KeepOther))
+		}
+		fmt.Printf("  实际结果已写入 run 的 detail.days.%s（与分区替换同一事务提交）；移出的行仍在冷块，"+
+			"可按 ID 定位（locate）或整日还原：eventarchive restore -run %s -day %s -confirm\n",
+			p.Day.Format(time.DateOnly), runID, p.Day.Format(time.DateOnly))
 		// 切走之后重放判重就落在冷层上，server 那边必须是开着的。CLI 读不到 server 的环境变量，
 		// 所以这里只陈述要求，不去猜配置。
 		fmt.Println("  提醒：此后重放已切走的事件，server 必须设 EVENT_ARCHIVE_DEDUP=1（与 EVENT_ARCHIVE_READ 独立），" +

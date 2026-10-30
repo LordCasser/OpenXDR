@@ -505,18 +505,18 @@ func TestP0MaterializeFieldFidelityBaseline(t *testing.T) {
 	assertHotEquals(t, ctx, db, all, before)
 }
 
-// 2f（超大事件现状，T01 的边界补充）：raw 编码后超过 MaxEventBytes 的事件不进冷块，
-// shadow 如实记 detail.oversized / oversized_ids；Swap 因「冷块条数 != 待移出条数」整日拒绝，
-// 日分区与事件原样保留。现状：这是现行闸门，P3 改为「超大行留热」，不再要求整日计数恰好相等。
-func TestP0OversizedEventBlocksSwapBaseline(t *testing.T) {
+// 2f（超大事件，已翻转，HEAD=本次改动）：raw 编码后超过 MaxEventBytes 的事件不进冷块，
+// shadow 如实记 detail.oversized / oversized_ids。旧实现要求「冷块条数 == 待移出条数」，
+// 差额整日拒绝。P3 起超大行不在本 run 的 locator → 不进删除集 D → 留热，Swap 照常移出
+// 其余有冷副本的行；断言超大行留热、其余移出、无静默丢失（§P3 第 8 条的「执行时没有
+// 可删事件则报告无需操作」由 p3_swap_guards 的 noop 用例覆盖）。
+func TestP0OversizedEventStaysHotOnSwap(t *testing.T) {
 	ctx, client, db := p0Open(t)
 	day := p0Day(t, ctx, db, 1)
 	a := p0Event(t, ctx, client, day.Add(1*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 	b := p0Event(t, ctx, client, day.Add(2*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 	big := p0Event(t, ctx, client, day.Add(3*time.Minute), 4001, "agent",
 		`{"blob":"`+strings.Repeat("x", MaxEventBytes)+`"}`)
-	ids := []uuid.UUID{a, b, big}
-	before := hotSnapshot(t, ctx, db, ids)
 
 	runID := p0VerifiedRun(t, ctx, db, day, day)
 	run, err := LoadRun(ctx, db, runID)
@@ -544,23 +544,40 @@ func TestP0OversizedEventBlocksSwapBaseline(t *testing.T) {
 	if cold := p0ColdDayCount(t, ctx, db, runID, day); cold != 2 {
 		t.Fatalf("冷块里应只有 A/B 共 2 条，实际 %d", cold)
 	}
-	if _, err := Swap(ctx, db, runID, day); err == nil || !strings.Contains(err.Error(), "必须相等") {
-		t.Fatalf("现状：冷块(2) != 待移出(3) 时 Swap 必须整日拒绝，实际 %v", err)
+	// P3 翻转：不再整日拒绝——超大行留热，其余照常移出
+	got, err := Swap(ctx, db, runID, day)
+	if err != nil {
+		t.Fatalf("P3：超大行留热、A/B 移出，Swap 应照常执行，实际 %v", err)
 	}
-	// 拒绝时一个字节都没动：三条事件原样在热表，分区完好，没有暂存表与切换记录
-	assertHotEquals(t, ctx, db, ids, before)
-	if got := p0PartitionRows(t, ctx, db, day); got != 3 {
-		t.Fatalf("被拒绝后日分区应仍有 3 行，实际 %d", got)
+	if got.Kept != 1 || got.Dropped != 2 {
+		t.Fatalf("事务内实测应是 kept=1（超大行）/ dropped=2（A/B），实际 kept=%d dropped=%d", got.Kept, got.Dropped)
+	}
+	if !p0HotExists(t, ctx, db, big) {
+		t.Fatal("P3：超大行没有冷副本，必须留在热表（无静默丢）")
+	}
+	for _, id := range []uuid.UUID{a, b} {
+		if p0HotExists(t, ctx, db, id) {
+			t.Fatalf("事件 %s 有冷副本，应已移出热表", id)
+		}
+		if _, found, err := Locate(ctx, db, id); err != nil || !found {
+			t.Fatalf("事件 %s 的冷副本必须可定位：found=%v err=%v", id, found, err)
+		}
+	}
+	if n := p0PartitionRows(t, ctx, db, day); n != 1 {
+		t.Fatalf("切换后日分区应只剩超大行 1 行，实际 %d 行", n)
 	}
 	if p0RelExists(t, ctx, db, eventpart.DailyName(day)+"_rewrite") {
-		t.Fatal("被拒绝的操作不该留下暂存表")
+		t.Fatal("成功的切换不该留下暂存表")
 	}
-	var swapped int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM event_archive_runs WHERE detail ? 'swapped'`).Scan(&swapped); err != nil {
-		t.Fatal(err)
+	// 逐日记录如实写差额：预检 note 解释了 3 − 2 = 1 行没有冷副本留热
+	days := p3DayRecords(t, ctx, db, runID)
+	rec, ok := days[day.Format(time.DateOnly)]
+	if !ok || rec.Kept != 1 || rec.Dropped != 2 || !rec.RunDayVerified {
+		t.Fatalf("detail.days.%s 应是 kept=1 dropped=2 run_day_verified=true，实际 %+v",
+			day.Format(time.DateOnly), days[day.Format(time.DateOnly)])
 	}
-	if swapped != 0 {
-		t.Fatalf("被拒绝的操作不该写 detail.swapped，实际 %d 条", swapped)
+	if !strings.Contains(rec.Note, "没有冷副本") {
+		t.Fatalf("预检发现的差额应写进 note 供运维解释，实际 %q", rec.Note)
 	}
 }
 

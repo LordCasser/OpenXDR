@@ -13,6 +13,45 @@ import (
 // events_pYYYYMMDD_rewrite，核对完再改名接上父表。
 const rewriteSuffix = "_rewrite"
 
+// ErrNothingToRewrite 表示事务内核对后没有任何要删除的行（保留口径覆盖了整个分区）：
+// 事务已回滚、分区没有重建，调用方应按「无需操作」报告，不当成失败重试。
+var ErrNothingToRewrite = errors.New("该分区没有可删的行，无需重建")
+
+// RewriteInfo 描述一次重写的对象。eventpart 不知道调用方要校验什么，
+// 只把表名交给注入点（冷归档用它拼集合校验与逐日记账的 SQL）。
+type RewriteInfo struct {
+	Day     time.Time // UTC 日（分区下界）
+	Daily   string    // 日分区表名 events_pYYYYMMDD
+	Staging string    // 暂存表名 events_pYYYYMMDD_rewrite（保留行已复制进去）
+}
+
+// 重写事务里测试注入点的阶段值（RewriteHooks.Observe 的 stage 参数）。
+const (
+	// RewriteAfterCopy 保留行已复制进暂存表、集合校验（Verify）之前。
+	RewriteAfterCopy = "after_copy"
+	// RewriteAfterIndexes 索引克隆完成、分区替换 DDL 之前。
+	RewriteAfterIndexes = "after_indexes"
+	// RewriteBeforeReplace 分区替换（DETACH/DROP/RENAME/ATTACH）之前、终检之前。
+	RewriteBeforeReplace = "before_replace"
+	// RewriteAfterRecord 逐日记账（Record）完成、COMMIT 之前。
+	RewriteAfterRecord = "after_record"
+)
+
+// RewriteHooks 是 RewriteDayGuarded 的注入点，字段全部可空；eventpart 不感知调用方
+// （冷归档）的表结构与口径，校验与记账内容由调用方以闭包注入。
+type RewriteHooks struct {
+	// Verify 在锁内、删除前执行「删除依据」的集合校验：不一致返回错误即整体回滚，
+	// 原分区一行不动。在复制后（初检）与分区替换前（终检）各跑一次：终检把并发 pin
+	// 一类的竞态窗口压缩到 [终检, commit]。
+	Verify func(ctx context.Context, tx *sql.Tx, info RewriteInfo) error
+	// Record 在分区替换完成、提交之前执行：与切换同一事务记账，杜绝
+	// 「分区已切成功、成功记录单独写失败」的窗口。kept/dropped 是事务内实测数。
+	Record func(ctx context.Context, tx *sql.Tx, info RewriteInfo, kept, dropped int64) error
+	// Observe 只用于测试：在固定阶段回调，返回错误即在该位置注入失败让事务回滚。
+	// 生产恒为 nil，零行为差异。
+	Observe func(ctx context.Context, tx *sql.Tx, info RewriteInfo, stage string) error
+}
+
 // RewriteDay 把一个日分区重建成只保留 keepSelect 选出的行，返回保留数与删除数。
 //
 // keepSelect 必须是「SELECT id FROM ...」形式的**只读**查询，由调用方给出保留口径
@@ -32,7 +71,32 @@ const rewriteSuffix = "_rewrite"
 //
 // 不用 TRUNCATE，也不 DELETE FROM events：逐行删除会触发证据保护与级联触发器，
 // 代价和语义都不是这里要的。失败一律返回错误，不吞。
+//
+// 冷归档的 swap 走 RewriteDayGuarded（同一份事务序列，外加锁内集合校验、同事务记账与
+// advisory 并发闸门）；本函数保持原语义，供需要「裸重建」的调用方使用。
 func RewriteDay(ctx context.Context, db *sql.DB, day time.Time, keepSelect string) (kept, dropped int64, err error) {
+	return rewriteDayTx(ctx, db, day, keepSelect, RewriteHooks{}, false)
+}
+
+// RewriteDayGuarded 是带删除依据校验的分区重写：事务序列与 RewriteDay 相同（见上），
+// 由调用方经 RewriteHooks 注入锁内校验、同事务记账与测试观察点，并且：
+//
+//   - 同一分区的重写一次只允许一个：事务内先取 advisory try 锁（不等待），第二个并发
+//     操作立即明确拒绝，而不是靠后面的 DDL 锁超时兜底；retire 不取这把锁，与它的
+//     串行化由分区 DDL 锁顺序保证；
+//   - Verify 在复制后（初检）与分区替换前（终检）各跑一次：SHARE 锁挡得住该日 events
+//     的写入，挡不住引用表（alerts 等）的并发 INSERT，复制之后新到的引用只能靠事务内
+//     重读发现；
+//   - 事务内核对后没有可删行（保留口径覆盖整个分区）时回滚并返回 ErrNothingToRewrite，
+//     不做无谓的重建 DDL；
+//   - Record 与分区替换同一事务提交，不存在「分区已切成功、成功记录单独写失败」的窗口。
+//
+// 失败一律返回 (0, 0, err)；提交失败同样整体回滚，计数不能当成已生效。
+func RewriteDayGuarded(ctx context.Context, db *sql.DB, day time.Time, keepSelect string, hooks RewriteHooks) (kept, dropped int64, err error) {
+	return rewriteDayTx(ctx, db, day, keepSelect, hooks, true)
+}
+
+func rewriteDayTx(ctx context.Context, db *sql.DB, day time.Time, keepSelect string, hooks RewriteHooks, guarded bool) (kept, dropped int64, err error) {
 	keep, err := checkKeepSelect(ctx, db, keepSelect)
 	if err != nil {
 		return 0, 0, err
@@ -49,6 +113,7 @@ func RewriteDay(ctx context.Context, db *sql.DB, day time.Time, keepSelect strin
 	}
 	staging := daily + rewriteSuffix
 	lo, hi := literal(d), literal(d.AddDate(0, 0, 1))
+	info := RewriteInfo{Day: d, Daily: daily, Staging: staging}
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -56,8 +121,25 @@ func RewriteDay(ctx context.Context, db *sql.DB, day time.Time, keepSelect strin
 	}
 	defer func() { _ = tx.Rollback() }()
 	exec := func(stmt string) (sql.Result, error) { return tx.ExecContext(ctx, stmt) }
+	for _, stmt := range []string{`SET LOCAL lock_timeout = '` + LockTimeout + `'`} {
+		if _, err := exec(stmt); err != nil {
+			return 0, 0, err
+		}
+	}
+	if guarded {
+		// 并发闸门：同一日分区的重写一次一个。try 锁不等待，第二个操作立刻得到明确的
+		// 拒绝，而不是在后面的 DDL 锁上排队等超时。事务结束自动释放。
+		var locked bool
+		if err := tx.QueryRowContext(ctx,
+			`SELECT pg_try_advisory_xact_lock(hashtext('openxdr:eventpart:rewrite:'||$1))`,
+			d.Format(time.DateOnly)).Scan(&locked); err != nil {
+			return 0, 0, err
+		}
+		if !locked {
+			return 0, 0, fmt.Errorf("另一个操作正在重写日分区 %s（advisory 锁被占用），拒绝并发执行", daily)
+		}
+	}
 	for _, stmt := range []string{
-		`SET LOCAL lock_timeout = '` + LockTimeout + `'`,
 		fmt.Sprintf(`LOCK TABLE %s IN SHARE MODE`, daily),
 		fmt.Sprintf(`CREATE TABLE %s (LIKE %s INCLUDING DEFAULTS)`, staging, Parent),
 	} {
@@ -91,6 +173,27 @@ func RewriteDay(ctx context.Context, db *sql.DB, day time.Time, keepSelect strin
 	if keptRows > total {
 		return 0, 0, fmt.Errorf("保留 %d 条超过 %s 的 %d 条，中止，原分区未改动", keptRows, daily, total)
 	}
+	observe := func(stage string) error {
+		if hooks.Observe == nil {
+			return nil
+		}
+		return hooks.Observe(ctx, tx, info, stage)
+	}
+	if guarded {
+		if err := observe(RewriteAfterCopy); err != nil {
+			return 0, 0, err
+		}
+		// 初检：锁内、删除前，用事务内重读的数据核对删除依据（保留集与冷副本覆盖）。
+		if hooks.Verify != nil {
+			if err := hooks.Verify(ctx, tx, info); err != nil {
+				return 0, 0, err
+			}
+		}
+		if keptRows == total {
+			// 没有可删的行：回滚（defer），分区不重建，明确报告无需操作。
+			return keptRows, 0, ErrNothingToRewrite
+		}
+	}
 	for _, dv := range derived {
 		stmt := fmt.Sprintf(`DELETE FROM %s WHERE %s IN (SELECT id FROM %s EXCEPT SELECT id FROM %s)`,
 			dv.table, dv.column, daily, staging)
@@ -101,6 +204,21 @@ func RewriteDay(ctx context.Context, db *sql.DB, day time.Time, keepSelect strin
 	if err := cloneIndexes(ctx, tx, Parent, staging); err != nil {
 		return 0, 0, err
 	}
+	if guarded {
+		if err := observe(RewriteAfterIndexes); err != nil {
+			return 0, 0, err
+		}
+		if err := observe(RewriteBeforeReplace); err != nil {
+			return 0, 0, err
+		}
+		// 终检：分区替换前把同一份集合校验再跑一遍，把并发引用（pin）的竞态窗口
+		// 压缩到 [终检, commit]；终检之后到达的引用最多指向删除集（已有冷副本）里的行。
+		if hooks.Verify != nil {
+			if err := hooks.Verify(ctx, tx, info); err != nil {
+				return 0, 0, err
+			}
+		}
+	}
 	for _, stmt := range []string{
 		fmt.Sprintf(`ALTER TABLE %s DETACH PARTITION %s`, Parent, daily),
 		`DROP TABLE ` + daily,
@@ -108,6 +226,17 @@ func RewriteDay(ctx context.Context, db *sql.DB, day time.Time, keepSelect strin
 		fmt.Sprintf(`ALTER TABLE %s ATTACH PARTITION %s FOR VALUES FROM (%s) TO (%s)`, Parent, daily, lo, hi),
 	} {
 		if _, err := exec(stmt); err != nil {
+			return 0, 0, err
+		}
+	}
+	if guarded && hooks.Record != nil {
+		// 逐日记账与分区替换同一事务：记账失败连分区替换一起回滚。
+		if err := hooks.Record(ctx, tx, info, keptRows, total-keptRows); err != nil {
+			return 0, 0, err
+		}
+	}
+	if guarded {
+		if err := observe(RewriteAfterRecord); err != nil {
 			return 0, 0, err
 		}
 	}
