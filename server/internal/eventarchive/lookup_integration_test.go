@@ -242,7 +242,7 @@ func TestLocateMissingEvent(t *testing.T) {
 	}
 
 	// 表都不存在（没跑过 ensure-schema）：部署状态，报 ErrNoSchema 而不是 found=false
-	if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS event_archive_chunks, event_archive_runs`); err != nil {
+	if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS event_archive_locator, event_archive_chunks, event_archive_runs`); err != nil {
 		t.Fatal(err)
 	}
 	if _, found, err := eventarchive.Locate(ctx, db, f.full); !errors.Is(err, eventarchive.ErrNoSchema) {
@@ -295,16 +295,13 @@ func TestLocateCorruptChunk(t *testing.T) {
 	f := seedLocate(t, ctx, client)
 	locateShadow(t, ctx, db, f.day)
 
-	// 全部当老块，保证坏块一定在候选里（不受 filter 排除影响）
-	if _, err := db.ExecContext(ctx, `UPDATE event_archive_chunks SET id_bloom = NULL`); err != nil {
-		t.Fatal(err)
-	}
+	// 目标 id 的 locator 行指向哪块就改坏哪块：索引命中后必须解压校验，坏块一定被碰到
 	var chunkID uuid.UUID
-	if err := db.QueryRowContext(ctx, `SELECT id FROM event_archive_chunks
- ORDER BY first_ts DESC, last_ts DESC, id LIMIT 1`).Scan(&chunkID); err != nil {
-		t.Fatal(err)
+	if err := db.QueryRowContext(ctx, `SELECT chunk_id FROM event_archive_locator WHERE event_id = $1`,
+		f.other).Scan(&chunkID); err != nil {
+		t.Fatalf("读 %s 的 locator 行: %v", f.other, err)
 	}
-	// 改坏第一个候选块的载荷：翻 payload 第 5 个字节
+	// 改坏该块载荷：翻 payload 第 5 个字节
 	if _, err := db.ExecContext(ctx, `UPDATE event_archive_chunks
  SET payload = set_byte(payload, 4, (get_byte(payload, 4) + 1) % 256) WHERE id = $1`, chunkID); err != nil {
 		t.Fatal(err)
@@ -320,17 +317,57 @@ func TestLocateCorruptChunk(t *testing.T) {
 	if !strings.Contains(err.Error(), chunkID.String()) {
 		t.Fatalf("错误里应带坏块 id %s: %v", chunkID, err)
 	}
-	if errors.Is(err, eventarchive.ErrChunkBudget) {
-		t.Fatalf("坏块不是预算问题: %v", err)
+	if errors.Is(err, eventarchive.ErrLocatorIncomplete) {
+		t.Fatalf("坏块不是索引覆盖问题: %v", err)
 	}
 }
 
-// 9. 候选块超预算：带 filter 时全部块都能被排除，不报错；老块（无 filter）时候选立刻超预算，
-// 此时必须报错而不是 found=false——否则「不存在」会被误判。
-func TestLocateChunkBudget(t *testing.T) {
+// 9. 索引行与载荷不一致（改块不并行）：locator 说事件在这块里，块解出来却没有——
+// 必须报错而不是 found=false。改坏 payload 让解码直接失败已由上一条覆盖，这里改
+// event_count 与实际内容脱节的方式：把目标块的 payload 换成另一块的内容，块自洽
+// 校验（check）与逐 id 比对至少有一个会失败。
+func TestLocateIndexPayloadMismatch(t *testing.T) {
+	ctx, client, db := open(t)
+	f := seedLocate(t, ctx, client)
+	locateShadow(t, ctx, db, f.day)
+
+	var target, donor uuid.UUID
+	if err := db.QueryRowContext(ctx, `SELECT chunk_id FROM event_archive_locator WHERE event_id = $1`,
+		f.full).Scan(&target); err != nil {
+		t.Fatal(err)
+	}
+	// 供体块：不含 full 的另一来源块
+	if err := db.QueryRowContext(ctx, `SELECT c.id FROM event_archive_chunks c
+ JOIN event_archive_locator l ON l.chunk_id = c.id AND l.event_id = $1
+ WHERE c.id <> $2`, f.other, target).Scan(&donor); err != nil {
+		t.Fatalf("找供体块: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE event_archive_chunks c
+ SET payload = d.payload, plain_sha256 = d.plain_sha256, plain_len = d.plain_len,
+     payload_len = d.payload_len, first_ts = d.first_ts, last_ts = d.last_ts
+ FROM (SELECT payload, plain_sha256, plain_len, payload_len, first_ts, last_ts
+       FROM event_archive_chunks WHERE id = $1) d
+ WHERE c.id = $2`, donor, target); err != nil {
+		t.Fatalf("替换目标块载荷: %v", err)
+	}
+	_, found, err := eventarchive.Locate(ctx, db, f.full)
+	if err == nil || found {
+		t.Fatalf("索引行指向的块解不出该事件时必须报错，实际 found=%v err=%v", found, err)
+	}
+	if !strings.Contains(err.Error(), "不一致") && !strings.Contains(err.Error(), "不符") {
+		t.Fatalf("错误应说明 locator 与块内容不一致: %v", err)
+	}
+}
+
+// 9b. P2 之前 ErrChunkBudget 承担的「候选块超预算」保护已随全表扫路径删除：
+// 候选块数量现在由主键探查直接界定（一个 id 最多几个跨 run 副本），不再有
+// 「扫多少块」的预算概念；读取侧的资源边界只剩 Query 的时间窗扫描预算
+// （maxScannedChunks，P5 处理）。本用例把原来 201 块的语料改证新语义：
+// 大量块存在时未命中仍是确定的 (false, nil)，且命中不受块数影响。
+func TestLocateWithManyChunksNoBudgetPath(t *testing.T) {
 	ctx, client, db := open(t)
 	day := eventpartToday().AddDate(0, 0, -1)
-	const total = 201 // 比预算多一块
+	const total = 201 // 旧预算上限是 200，故意多一块
 	for i := 0; i < total; i++ {
 		client.Event.Create().SetTs(day.Add(time.Duration(i) * time.Second)).SetClassUID(4001).
 			SetSource("agent").SetRaw(json.RawMessage(`{"conn": {"dst": "10.0.0.9:443"}}`)).SaveX(ctx)
@@ -349,41 +386,22 @@ func TestLocateChunkBudget(t *testing.T) {
 		t.Fatalf("每个事件应单独成块（共 %d 块），实际 %d 块", total, run.Chunks)
 	}
 
-	// 有 filter：目标 id 不在任何块里，全部被排除，结论是确定的「没有」
+	// 未命中：201 块 > 旧预算 200，结论仍是确定的「没有」，不再是 ErrChunkBudget
 	absent := uuid.New()
 	if _, found, err := eventarchive.Locate(ctx, db, absent); err != nil || found {
-		t.Fatalf("有 filter 时不该超预算：found=%v err=%v", found, err)
+		t.Fatalf("索引未命中且覆盖完整时应为确定的 (false, nil)，实际 found=%v err=%v", found, err)
 	}
-
-	// 老块（没有 filter）：每个块都是候选，超过 200 块预算必须报错
-	if _, err := db.ExecContext(ctx, `UPDATE event_archive_chunks SET id_bloom = NULL`); err != nil {
-		t.Fatal(err)
+	if ok, err := eventarchive.Exists(ctx, db, absent); err != nil || ok {
+		t.Fatalf("Exists 同样应为 (false, nil)，实际 (%v, %v)", ok, err)
 	}
-	if _, found, err := eventarchive.Locate(ctx, db, absent); !errors.Is(err, eventarchive.ErrChunkBudget) {
-		t.Fatalf("候选块超预算必须返回 ErrChunkBudget，实际 found=%v err=%v", found, err)
-	} else if found {
-		t.Fatal("超预算时不能报 found=true")
-	} else if !strings.Contains(err.Error(), "预算") {
-		t.Fatalf("错误信息应说明预算不足: %v", err)
-	}
-	if ok, err := eventarchive.Exists(ctx, db, absent); !errors.Is(err, eventarchive.ErrChunkBudget) || ok {
-		t.Fatalf("Exists 同样要报 ErrChunkBudget，实际 (%v, %v)", ok, err)
-	}
-	// 目标事件本身存在时仍然优先返回命中：命中在候选顺序最前面，不受预算影响
-	if _, found, err := eventarchive.Locate(ctx, db, latestEventID(t, ctx, client)); err != nil || !found {
-		t.Fatalf("存在的事件应优先命中，实际 found=%v err=%v", found, err)
-	}
-}
-
-// latestEventID 取预算测试里最新的一条事件 id：它就是候选顺序（first_ts 倒序）的第一个块，
-// 因此在预算之内就能命中。顺序更靠后的事件会被预算挡住——那正是 ErrChunkBudget 的语义。
-func latestEventID(t *testing.T, ctx context.Context, client *ent.Client) uuid.UUID {
-	t.Helper()
-	e, err := client.Event.Query().Order(ent.Desc("ts")).First(ctx)
+	// 命中：不再受候选顺序与预算影响，最旧的一块（旧路径里预算最靠后的）也能命中
+	oldest, err := client.Event.Query().Order(ent.Asc("ts")).First(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return e.ID
+	if _, found, err := eventarchive.Locate(ctx, db, oldest.ID); err != nil || !found {
+		t.Fatalf("存在的事件应命中（与块数无关），实际 found=%v err=%v", found, err)
+	}
 }
 
 // 10. Materialize 幂等：第一次 inserted=true，第二次 false；events 里只有一行，

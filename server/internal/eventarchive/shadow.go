@@ -267,7 +267,8 @@ func (w *shadowWriter) add(ctx context.Context, e Event) error {
 	return nil
 }
 
-// flush 编码当前块并写库：块与 run 的计数在同一个事务里，崩在中途不会留下对不上的账。
+// flush 编码当前块并写库：块、该块的 locator 行与 run 的计数在同一个事务里
+// （writeChunk），崩在中途不会留下对不上的账，也不会留下没有索引的块。
 func (w *shadowWriter) flush(ctx context.Context) error {
 	if w.count == 0 {
 		return nil
@@ -283,7 +284,9 @@ func (w *shadowWriter) flush(ctx context.Context) error {
 		EventCount: w.count, Block: block,
 		// ID Bloom filter 与块一起落库：只用来排除不可能命中的块，漏报会让按 ID 定位
 		// 与重传判重失效，所以按实际写进块里的 id 建（与 event_count 一致）。
-		Bloom: BuildIDBloom(w.ids, w.count),
+		// P2 起 locator 行同样从这份 w.ids 生成（writeChunk），与块同事务。
+		Bloom:    BuildIDBloom(w.ids, w.count),
+		EventIDs: w.ids,
 	}
 	if err := writeChunk(ctx, w.db, chunk); err != nil {
 		return err
@@ -293,7 +296,8 @@ func (w *shadowWriter) flush(ctx context.Context) error {
 	return nil
 }
 
-// chunkRow 是 event_archive_chunks 的一行。Bloom 是阶段 B2 的 ID Bloom filter（可空列）。
+// chunkRow 是 event_archive_chunks 的一行。Bloom 是阶段 B2 的 ID Bloom filter（可空列），
+// EventIDs 是实际编码进这块的事件 id（P2 起与块同事务写进 event_archive_locator）。
 type chunkRow struct {
 	ID         uuid.UUID
 	RunID      uuid.UUID
@@ -305,10 +309,17 @@ type chunkRow struct {
 	LastTs     time.Time
 	EventCount int
 	Bloom      []byte
+	EventIDs   []uuid.UUID
 	Block
 }
 
-// writeChunk 在一个事务里写块并累加 run 的 archived / chunks。
+// shadowTestHook 只用于测试：非 nil 时在「块已 INSERT、locator 尚未 INSERT」的确切位置
+// （stage == "locator_before_insert"）回调，返回错误即让该事务回滚，用来确定性验证
+// 「块行、run 计数、locator 行」三者同事务原子（T07）。生产恒为 nil，零行为差异。
+var shadowTestHook func(stage string) error
+
+// writeChunk 在一个事务里写块、写该块的 locator 行并累加 run 的 archived / chunks：
+// 三者必须同生共死，崩在中途不会留下「有块没索引」或「计数对不上」的账。
 func writeChunk(ctx context.Context, db *sql.DB, ch chunkRow) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -323,6 +334,19 @@ func writeChunk(ctx context.Context, db *sql.DB, ch chunkRow) error {
 		int16(ch.Format), int16(ch.Codec), ch.PlainLen, len(ch.Payload), ch.PlainSHA256[:], ch.Payload,
 		ch.Bloom); err != nil {
 		return fmt.Errorf("写第 %d 块: %w", ch.Seq, err)
+	}
+	if shadowTestHook != nil {
+		if err := shadowTestHook("locator_before_insert"); err != nil {
+			return fmt.Errorf("写第 %d 块（locator 插入前注入）: %w", ch.Seq, err)
+		}
+	}
+	// locator 行来自实际编码进块的 id 集合（w.ids），不是重新扫 events：块里有什么就索引什么。
+	// 一条 typed unnest 的 INSERT，参数个数固定为 2，与块内条数无关（同 insertEvents 的风格）。
+	// 不加 ON CONFLICT：块内 id 天然唯一（events 主键 + 单趟扫描），撞主键说明编码口径出了问题，
+	// 宁可整块失败也不静默吞掉。
+	if _, err := tx.ExecContext(ctx, `INSERT INTO event_archive_locator (event_id, chunk_id)
+ SELECT u.event_id, $2::uuid FROM unnest($1::uuid[]) AS u(event_id)`, ch.EventIDs, ch.ID); err != nil {
+		return fmt.Errorf("写第 %d 块的 locator 行: %w", ch.Seq, err)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE event_archive_runs
  SET archived = archived + $2, chunks = chunks + 1 WHERE id = $1`, ch.RunID, ch.EventCount); err != nil {

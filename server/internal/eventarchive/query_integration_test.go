@@ -211,7 +211,7 @@ func TestQueryWithoutArchiveData(t *testing.T) {
 // 不能当成数据损坏。
 func TestQueryWithoutSchema(t *testing.T) {
 	ctx, _, db := open(t)
-	if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS event_archive_chunks, event_archive_runs`); err != nil {
+	if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS event_archive_locator, event_archive_chunks, event_archive_runs`); err != nil {
 		t.Fatal(err)
 	}
 	ext, err := eventarchive.ArchiveExtent(ctx, db)

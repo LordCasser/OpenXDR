@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -96,9 +98,16 @@ type Chunk struct {
 // Verify 重新按 run 的口径只读重扫 events，与所有冷块解出来的事件逐条全字段比对：
 // 条数、id 序列、每个字段（raw 逐字节）任一不符都返回错误并给出首个差异。
 //
+// P2 起对拍还核 locator：每块解出的成员集合必须与 event_archive_locator 里该块的
+// 成员集合**精确相等**（缺行、多行、错指块都报错，不以条数相同代替集合相同；
+// 见 checkLocatorMembers）。同一 id 跨 run 多副本合法（不同块各有一行），同 run 内
+// 集合必须精确——因为块解码顺序按 seq 全量遍历，任何一块的索引偏差都会在这里露出来。
+//
 // 两侧顺序一致（类别、来源、ts、id 升序），所以可以边扫边比，内存里只有一批事件加一块冷块。
 // 单条编码后超过 4 MiB 的事件与影子构建同规则跳过（它们本来就不在冷块里），不是遗漏。
 // 通过后 run 置 verified；候选集变了则报 ErrCandidatesChanged，不会误报成编码错误。
+//
+// 老块（P2 之前写的、没有 locator 行）对拍会在这里报错：它们必须先跑 backfill-locator。
 func Verify(ctx context.Context, db *sql.DB, runID uuid.UUID) error {
 	run, err := LoadRun(ctx, db, runID)
 	if err != nil {
@@ -166,7 +175,9 @@ func Verify(ctx context.Context, db *sql.DB, runID uuid.UUID) error {
 	return nil
 }
 
-// chunkIter 按 seq 顺序逐块解码，内存里只留一块。
+// chunkIter 按 seq 顺序逐块解码，内存里只留一块。P2 起 next 解出的每块同时做
+// locator 成员集合校验（checkLocatorMembers）：块解码成员集合 == locator 成员集合，
+// 缺行、多行或错指块都是数据不一致，不以条数相同代替集合相同。
 type chunkIter struct {
 	db    *sql.DB
 	runID uuid.UUID
@@ -196,6 +207,9 @@ func (it *chunkIter) next(ctx context.Context) (Event, bool, error) {
 			return Event{}, false, fmt.Errorf("解码第 %d 块 %s: %w", ch.Seq, ch.ID, err)
 		}
 		if err := ch.check(items); err != nil {
+			return Event{}, false, fmt.Errorf("第 %d 块 %s: %w", ch.Seq, ch.ID, err)
+		}
+		if err := checkLocatorMembers(ctx, it.db, ch, items); err != nil {
 			return Event{}, false, fmt.Errorf("第 %d 块 %s: %w", ch.Seq, ch.ID, err)
 		}
 		it.items, it.pos = items, 0
@@ -232,6 +246,66 @@ func loadChunk(ctx context.Context, db *sql.DB, runID uuid.UUID, after int) (Chu
 		return ch, false, fmt.Errorf("payload_len 记 %d 字节，实际 %d 字节", ch.PayloadLen, len(payload))
 	}
 	return ch, true, nil
+}
+
+// checkLocatorMembers 核对一块的 locator 成员集合与块解码成员集合是否**精确相等**：
+// 读出该块的全部 locator 行（chunk_id 索引上的顺序读），与解码成员做成两个 set 后
+// 双向求差。缺行（在块里、不在索引里）、多行（在索引里、不在块里——含错指块的行）
+// 都如实报差异数量与样本 id；条数相同但成员错位同样会在这里露出来，不以条数代替集合。
+//
+// 同一 id 跨 run 多副本不受影响：那是「同一 event_id 在别的块也有行」，这里只看本块的行。
+func checkLocatorMembers(ctx context.Context, db *sql.DB, ch Chunk, events []Event) error {
+	rows, err := db.QueryContext(ctx,
+		`SELECT event_id FROM event_archive_locator WHERE chunk_id = $1`, ch.ID)
+	if err != nil {
+		return wrapErr(err, "读块 %s 的 locator 成员", ch.ID)
+	}
+	defer rows.Close()
+	indexed := make(map[uuid.UUID]struct{}, ch.EventCount)
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return wrapErr(err, "读块 %s 的 locator 成员行", ch.ID)
+		}
+		indexed[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return wrapErr(err, "读块 %s 的 locator 成员", ch.ID)
+	}
+	decoded := make(map[uuid.UUID]struct{}, len(events))
+	for _, e := range events {
+		decoded[e.ID] = struct{}{}
+	}
+	var missing, extra []string
+	for _, e := range events {
+		if _, ok := indexed[e.ID]; !ok {
+			missing = append(missing, e.ID.String())
+		}
+	}
+	for id := range indexed {
+		if _, ok := decoded[id]; !ok {
+			extra = append(extra, id.String())
+		}
+	}
+	sort.Strings(missing)
+	sort.Strings(extra)
+	const sample = 5
+	if len(missing) > 0 || len(extra) > 0 {
+		return fmt.Errorf("locator 成员集合与块解码成员不一致：块里有而索引缺 %d 行（%s），"+
+			"索引里有而块里没有 %d 行（%s）", len(missing), firstN(missing, sample),
+			len(extra), firstN(extra, sample))
+	}
+	return nil
+}
+
+func firstN(list []string, n int) string {
+	if len(list) == 0 {
+		return ""
+	}
+	if len(list) > n {
+		return strings.Join(list[:n], ",")
+	}
+	return strings.Join(list, ",")
 }
 
 // check 核对块的列与解出来的内容自洽：块内只有一个 (日, 类别, 来源)，首末 ts 与事件顺序一致。

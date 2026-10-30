@@ -47,7 +47,7 @@ func archiveDB(t *testing.T, ctx context.Context) *sql.DB {
 
 func dropArchive(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
-	if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS event_archive_chunks, event_archive_runs`); err != nil {
+	if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS event_archive_locator, event_archive_chunks, event_archive_runs`); err != nil {
 		t.Fatalf("清掉冷归档表: %v", err)
 	}
 }

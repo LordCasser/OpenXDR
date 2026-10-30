@@ -7,6 +7,7 @@
 //	shadow -from 2026-09-01 -to 2026-09-14 [-classes 4001,4003] [-sources agent,sensor]
 //	       [-chunk-events 2048] [-chunk-bytes 1048576] -confirm
 //	verify -run <uuid>                               按 run 口径重扫对拍，通过才置 verified
+//	backfill-locator -confirm                        给缺索引的旧块一次性补 locator 行（幂等）
 //	report -run <uuid>                               归档前后的真实大小与压缩比
 //	locate -id <uuid>                                按事件 ID 找一条冷事件（只读）
 //	materialize -id <uuid> -confirm                  把一条冷事件物化回 events（幂等，不产告警）
@@ -14,9 +15,10 @@
 //	swap -run <uuid> -day YYYY-MM-DD -confirm        重建该日分区，移出已归档的行（阶段 C）
 //	restore -run <uuid> -day YYYY-MM-DD -confirm     把该日冷事件物化回 events（幂等，用于回滚）
 //
-// shadow / materialize / swap / restore 会写库，不加 -confirm 直接拒绝（没有演练模式）。
-// verify 只改 run 的状态列；ensure-schema 只建冷归档两张表；locate / plan 只读。
-// 设计与阶段见 docs/event-archive.md；分区侧的工程口径见 docs/event-partitioning.md。
+// shadow / materialize / swap / restore / backfill-locator 会写库，不加 -confirm 直接拒绝
+// （没有演练模式）。verify 只改 run 的状态列；ensure-schema 只建冷归档表；
+// locate / plan 只读。设计与阶段见 docs/event-archive.md；分区侧的工程口径见
+// docs/event-partitioning.md。
 package main
 
 import (
@@ -70,6 +72,7 @@ func usage() {
        -chunk-events 2048     单块事件条数上限
        -chunk-bytes 1048576   单块未压缩明文字节上限
   verify -run <uuid>                                重扫对拍，通过后置 verified
+  backfill-locator -confirm                         给缺索引的旧冷块补 locator 行（一次性迁移，幂等）
   report -run <uuid>                                归档前后大小、压缩比与含索引对比
   locate -id <uuid>                                 按事件 ID 找一条冷事件（只读）
   materialize -id <uuid> -confirm                   把一条冷事件物化回 events（幂等，不产告警）
@@ -143,6 +146,30 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 			return err
 		}
 		fmt.Printf("run %s 对拍通过：逐事件全字段一致，已置 verified\n", runID)
+		return nil
+
+	case "backfill-locator":
+		fs := flag.NewFlagSet("backfill-locator", flag.ExitOnError)
+		confirm := fs.Bool("confirm", false, "确认执行会写库的步骤")
+		fs.Parse(args)
+		if !*confirm {
+			// 先报当前缺口（只读），让运维知道要补多少，再决定加不加 -confirm。
+			missing, _, err := eventarchive.LocatorMissing(ctx, db)
+			if err != nil {
+				return fmt.Errorf("回填需要 -confirm；查当前缺口也失败了: %w", err)
+			}
+			return fmt.Errorf("回填会往 event_archive_locator 写行，必须显式确认（-confirm）；当前有 %d 块缺 locator 行", missing)
+		}
+		blocks, err := eventarchive.BackfillLocator(ctx, db)
+		if err != nil {
+			return err
+		}
+		if blocks == 0 {
+			fmt.Println("locator 已完整：没有任何冷块缺索引行（无需回填）")
+			return nil
+		}
+		fmt.Printf("已回填 %d 块的 locator 行，覆盖性核对通过（没有缺行的块）\n", blocks)
+		fmt.Println("  下一步：Locate/Exists 未命中恢复「确定不存在」语义；重跑本命令幂等（返回 0 块）")
 		return nil
 
 	case "report":
