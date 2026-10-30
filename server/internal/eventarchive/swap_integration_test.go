@@ -43,20 +43,45 @@ type swapFixture struct {
 	nextDay  []uuid.UUID // 另一天的事件 → 一切操作都不该碰
 }
 
-// swapOpen 连测试库、清冷归档表，并确保「昨天」有独立日分区（testdb 只预建今天起的分区）。
+// swapOpen 连测试库、清冷归档表，并确保「3 天前」有独立日分区（testdb 只预建今天起的分区；
+// P4 闸门上线后昨天/前天的日结束都过不了 temporal 安全边界，夹具统一用 3 天前）。
+// 同时满足 P4 闸门的夹具前提：min-age 归零 + 播种 beacon/assetmap 的持久进度
+// （本文件验证 swap/restore 自身语义，闸门有专项测试 p4_guards_integration_test.go）。
 func swapOpen(t *testing.T) (context.Context, *ent.Client, *sql.DB) {
 	t.Helper()
 	ctx, client, db := open(t)
-	day := eventpartToday().AddDate(0, 0, -1)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	day := eventpartToday().AddDate(0, 0, -8)
 	if _, err := eventpart.EnsureDays(ctx, db, eventpart.Parent, day, 0); err != nil {
-		t.Fatalf("建昨天的日分区: %v", err)
+		t.Fatalf("建 8 天前的日分区: %v", err)
 	}
+	// 同 p0Day:老日分区用完即拆，别落进 janitor 集成测试的退役窗口
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DROP TABLE IF EXISTS ` + eventpart.DailyName(day))
+	})
+	seedGuardConsumers(t, ctx, db, day)
 	return ctx, client, db
+}
+
+// seedGuardConsumers 让 4001 口径的 run 通过消费进度闸门：beacon 最早基线早于日结束、
+// assetmap 游标越过日结束（与 eventarchive 包内 p4SeedConsumed 同口径，外部测试包够不着它）。
+func seedGuardConsumers(t *testing.T, ctx context.Context, db *sql.DB, day time.Time) {
+	t.Helper()
+	if _, err := db.ExecContext(ctx, `INSERT INTO beacon_baselines (id, asset_id, flow, first_seen)
+ VALUES ($1, gen_random_uuid(), 'swap-test|guard|1', $2)`, uuid.Must(uuid.NewV7()), day.Add(-24*time.Hour)); err != nil {
+		t.Fatalf("播种 beacon 基线: %v", err)
+	}
+	cursor, _ := json.Marshal(time.Now())
+	if _, err := db.ExecContext(ctx, `INSERT INTO settings (id, value, updated_at)
+ VALUES ('assetmap.cursor', $1::jsonb, now()) ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value`,
+		string(cursor)); err != nil {
+		t.Fatalf("播种 assetmap 游标: %v", err)
+	}
 }
 
 func seedSwap(t *testing.T, ctx context.Context, client *ent.Client) swapFixture {
 	t.Helper()
-	day := eventpartToday().AddDate(0, 0, -1)
+	day := eventpartToday().AddDate(0, 0, -8)
 	f := swapFixture{day: day}
 	add := func(ts time.Time, class int, source, raw string) uuid.UUID {
 		t.Helper()
@@ -80,7 +105,8 @@ func seedSwap(t *testing.T, ctx context.Context, client *ent.Client) swapFixture
 		add(day.Add(7*time.Minute), 4001, "syslog", `{"message": "other source", "mark": "other"}`),
 	}
 	f.nextDay = []uuid.UUID{
-		add(day.AddDate(0, 0, 1).Add(time.Minute), 4001, "agent", `{"conn": {"dst": "10.0.0.4:443"}, "mark": "day2"}`),
+		// 「另一天」放在今天：run 跨到今天，但切换只动被指定的那一天
+		add(eventpartToday().Add(time.Minute), 4001, "agent", `{"conn": {"dst": "10.0.0.4:443"}, "mark": "day2"}`),
 	}
 	client.Alert.Create().SetTs(day.Add(5 * time.Minute)).SetRuleID("test-pin").SetSeverity(3).
 		SetEventID(f.pinned[0]).SaveX(ctx)
@@ -109,11 +135,11 @@ var (
 	swapSources = []string{"agent", "sensor"}
 )
 
-// fixtureRun 跑一轮覆盖「要切换的那天 + 另一天」的归档：真实的 run 往往跨多天，
+// fixtureRun 跑一轮覆盖「要切换的那天 + 今天的另一批事件」的归档：真实的 run 往往跨多天，
 // 切换只应动被指定的那一天。
 func fixtureRun(t *testing.T, ctx context.Context, db *sql.DB, f swapFixture) uuid.UUID {
 	t.Helper()
-	return archiveRun(t, ctx, db, f.day, f.day.AddDate(0, 0, 1), swapClasses, swapSources)
+	return archiveRun(t, ctx, db, f.day, eventpartToday(), swapClasses, swapSources)
 }
 
 func allIDs(f swapFixture) []uuid.UUID {

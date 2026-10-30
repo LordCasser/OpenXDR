@@ -39,6 +39,16 @@ func clean(t *testing.T, ctx context.Context, db *sql.DB) {
 	if err := eventarchive.EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
+	// 拆掉可能残留的月归档分区（events_aYYYYMM 跨整月，会挡住要建的历史日分区）。
+	// 已知来源：janitor 集成测试的 t.Cleanup 里 DROP，但其 defer db.Close() 先于 cleanup
+	// 执行而静默失败；本包对共享测试库的残留自身免疫（与 p0Open 同一口径）。
+	if _, err := db.ExecContext(ctx, `DO $$ DECLARE r record; BEGIN
+ FOR r IN SELECT c.relname FROM pg_class c JOIN pg_inherits i ON c.oid=i.inhrelid
+  WHERE i.inhparent='events'::regclass AND c.relname LIKE 'events_a%' LOOP
+  EXECUTE format('DROP TABLE IF EXISTS %I', r.relname);
+ END LOOP; END $$`); err != nil {
+		t.Fatalf("清理残留月归档分区: %v", err)
+	}
 	for _, table := range []string{"event_archive_chunks", "event_archive_runs"} {
 		if _, err := db.ExecContext(ctx, `DELETE FROM `+table); err != nil {
 			t.Fatalf("清空 %s: %v", table, err)

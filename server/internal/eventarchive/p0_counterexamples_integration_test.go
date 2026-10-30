@@ -34,7 +34,10 @@ import (
 // 在同一份删除依据下不可兼得；以底稿 §1.2/§P3 验收与 T02 条目的「C 留热、其余移出」为准。
 func TestP0T01SerialCancellationKeepsUncoveredRowHot(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	a := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 	b := p0Event(t, ctx, client, day.Add(20*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 
@@ -108,7 +111,10 @@ func TestP0T01SerialCancellationKeepsUncoveredRowHot(t *testing.T) {
 // detail.days 记录事务内实测 kept=1 / dropped=2。
 func TestP0T02InsertBetweenPrecheckAndLockKeepsRowHot(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	a := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 	b := p0Event(t, ctx, client, day.Add(20*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 

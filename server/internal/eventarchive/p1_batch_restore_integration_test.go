@@ -61,7 +61,10 @@ func p1ChunkCount(t *testing.T, ctx context.Context, db *sql.DB, runID uuid.UUID
 // 行原样不动；稳定环境第二次恢复插入 0；证据关联内容（alerts / temporal_*）前后不变。
 func TestP1BatchRestoreFieldFidelity(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 
 	// 证据关联放在今天（不在被切换的那天），保证「不变」不是「本来就是空的」
 	anchor := p0Event(t, ctx, client, p0Today().Add(time.Minute), 4001, "agent", `{"mark":"anchor"}`)
@@ -125,7 +128,10 @@ func TestP1BatchRestoreFieldFidelity(t *testing.T) {
 // 最大块规模下同样保真；该块是单事务（T11 另测块级回滚，这里断言块数与往返内容）。
 func TestP1BatchRestoreMaxChunk(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 2)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 
 	// 8188 条用 SQL 侧生成（快），4 条边界特征行用 ent 写，合计正好 MaxCount 条
 	if _, err := db.ExecContext(ctx, `INSERT INTO events (id, ts, class_uid, source, raw)
@@ -201,7 +207,10 @@ func TestP1BatchRestoreMaxChunk(t *testing.T) {
 // 第 2 块 0 行无部分提交；恢复 payload 后重跑补齐剩余 200 行；再跑插入 0。
 func TestP1BatchRestoreChunkFailureAndRerun(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 3)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 
 	// 300 条 ts 严格递增（每秒一条）：扫描顺序确定，前/中/后 100 条分别落在 3 个块里
 	const total, perChunk = 300, 100

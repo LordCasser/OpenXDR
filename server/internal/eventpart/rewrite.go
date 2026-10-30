@@ -47,6 +47,12 @@ type RewriteHooks struct {
 	// Record 在分区替换完成、提交之前执行：与切换同一事务记账，杜绝
 	// 「分区已切成功、成功记录单独写失败」的窗口。kept/dropped 是事务内实测数。
 	Record func(ctx context.Context, tx *sql.Tx, info RewriteInfo, kept, dropped int64) error
+	// DerivedSkip 在派生状态清理阶段逐表询问：返回 true 表示本次重写跳过该表的清理。
+	// 派生清理删除的是「事件列 ∈ 本分区−暂存表」的行（事件随分区消失后不再可关联的派生行）；
+	// 冷归档用它把 swap 与 retire 的清理口径分开——同一张派生表，retire 随保留期删是既有策略，
+	// swap 顺带删则可能销毁尚未证明允许销毁的诊断记录（V09）。nil = derived 清单里的表全部
+	// 照旧清理（retire 与裸 RewriteDay 的行为不变）。eventpart 不感知各表语义，只转发表名。
+	DerivedSkip func(table string) bool
 	// Observe 只用于测试：在固定阶段回调，返回错误即在该位置注入失败让事务回滚。
 	// 生产恒为 nil，零行为差异。
 	Observe func(ctx context.Context, tx *sql.Tx, info RewriteInfo, stage string) error
@@ -66,6 +72,7 @@ type RewriteHooks struct {
 //  4. 独立数一遍 keepSelect 的行数，与暂存表实际行数不符即中止：keepSelect 指到别的表、
 //     别的日分区或已被搬走的行时，这里会立刻露出来。删掉的若是整分区，那是事故不是本意；
 //  5. 派生状态按 retire 的同一份清单清理（删分区不触发逐行级联触发器，必须显式做）；
+//     RewriteHooks.DerivedSkip 非 nil 时按其决定逐表跳过（swap 与 retire 的清理口径可以不同）；
 //  6. DETACH → DROP → RENAME → ATTACH 全在同一事务里：PostgreSQL 的 DDL 是事务性的，
 //     任何一步失败都整体回滚，原分区及其索引、触发器原样保留。
 //
@@ -195,6 +202,9 @@ func rewriteDayTx(ctx context.Context, db *sql.DB, day time.Time, keepSelect str
 		}
 	}
 	for _, dv := range derived {
+		if hooks.DerivedSkip != nil && hooks.DerivedSkip(dv.table) {
+			continue
+		}
 		stmt := fmt.Sprintf(`DELETE FROM %s WHERE %s IN (SELECT id FROM %s EXCEPT SELECT id FROM %s)`,
 			dv.table, dv.column, daily, staging)
 		if _, err := exec(stmt); err != nil {

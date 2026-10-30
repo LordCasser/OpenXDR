@@ -95,12 +95,35 @@ func newSwappedFixture(t *testing.T) swappedFixture {
 		t.Fatalf("空归档的边界应返回 ok=false：%v %v %v", last, ok, err)
 	}
 
-	// testdb 只预建今天起的分区；这里要切的是「昨天」，先补出独立日分区（Swap 拒绝默认分区里的行）。
-	day := archiveDayStart().AddDate(0, 0, -1)
+	// testdb 只预建今天起的分区；这里要切的是 3 天前（P4 起 min-age/消费进度闸门拒绝更近的日子，
+	// 该文件验证的是判重接线而不是闸门本身），先补出独立日分区（Swap 拒绝默认分区里的行）。
+	day := archiveDayStart().AddDate(0, 0, -3)
+	// janitor 的集成测试会留下跨整月的归档分区（其 defer db.Close() 先于 t.Cleanup 执行，
+	// cleanup 里的 DROP 静默失败——该测试自身的问题），挡住这里要建的历史日分区；拆掉再建。
+	if _, err := db.ExecContext(ctx, `DO $$ DECLARE r record; BEGIN
+ FOR r IN SELECT c.relname FROM pg_class c JOIN pg_inherits i ON c.oid=i.inhrelid
+  WHERE i.inhparent='events'::regclass AND c.relname LIKE 'events_a%' LOOP
+  EXECUTE format('DROP TABLE IF EXISTS %I', r.relname);
+ END LOOP; END $$`); err != nil {
+		t.Fatalf("清理残留月归档分区: %v", err)
+	}
 	if _, err := eventpart.EnsureDays(ctx, db, eventpart.Parent, day, 0); err != nil {
-		t.Fatalf("建昨天的日分区: %v", err)
+		t.Fatalf("建日分区: %v", err)
 	}
 	asset := client.Asset.Create().SetHostname("archive-replay").SetOs("linux").SaveX(ctx)
+	// P4 闸门的夹具适配（经上游裁决，仅本夹具）：关掉运营下限（temporal 边界仍生效，
+	// 3 天前的日结束已足够老），并给 ueba 播种一条越过待切日的基线——run 口径是
+	// 1007/agent，ueba 是唯一口径相交的消费者，空表会被按 unknown 拒绝。
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	if _, err := db.ExecContext(ctx, `INSERT INTO process_baselines (id, asset_id, exe_path, first_seen)
+ VALUES ($1, $2, '/usr/bin/sshd', $3)`, uuid.Must(uuid.NewV7()), asset.ID, day.AddDate(0, 0, 2)); err != nil {
+		t.Fatalf("播种 ueba 进度: %v", err)
+	}
+	// 这一天的日分区落在 janitor 集成测试的退役窗口里（它按个数断言退役的分区），
+	// 用完即拆，不跨包泄漏。
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DROP TABLE IF EXISTS ` + eventpart.DailyName(day))
+	})
 	e := Envelope{
 		Version: EnvelopeVersion, ID: StableID(t.Name(), "replay"), PartitionKey: asset.ID.String(),
 		Timestamp: day.Add(5 * time.Minute), ClassUID: 1007, Source: "agent", AssetOS: "linux",

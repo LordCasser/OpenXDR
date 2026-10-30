@@ -43,6 +43,11 @@ type SwapPlan struct {
 	KeepOther  int64     // 该日其它类别/来源的行数
 	Total      int64     // 该日分区当前总行数
 
+	// Guard 是 P4 切换闸门的只读评估（min-age 有效下限 + 消费者追平）。
+	// Plan 与 Swap 都会填：Plan 带给人核对（不据此拒绝），Swap 据此拒绝。
+	// Swap 因闸门拒绝时返回的 SwapPlan 也带着它，错误信息与报告同源。
+	Guard *GuardReport
+
 	// Kept / Dropped 是 Swap 执行后事务内实测的保留/移出数；Plan（只读）恒为零值。
 	// 与上面四个估计值可能不同：没有冷副本的行（超大、shadow 之后到达）按事务内核对留热。
 	Kept    int64
@@ -51,13 +56,24 @@ type SwapPlan struct {
 
 // Plan 只读地统计某天的切换计划，用于人工核对。不写任何东西，也不改 run。
 // 拒绝条件只有「结构上没法切」：run 不存在、day 不在 run 的日期范围内、该日没有独立日分区。
-// 状态与条数是否满足切换条件由 Swap 判定（plan 的职责是如实报数，不是拦住运维看一眼）。
+// 状态与条数是否满足切换条件由 Swap 判定（plan 的职责是如实报数，不是拦住运维看一眼）；
+// P4 的切换闸门（min-age / 消费者追平）在这里只评估并附在返回值 Guard 上，不拒绝——
+// 是否可切与原因给人看，拦截发生在 Swap。
 func Plan(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (SwapPlan, error) {
 	run, err := LoadRun(ctx, db, runID)
 	if err != nil {
 		return SwapPlan{}, err
 	}
-	return planDay(ctx, db, run, day)
+	p, err := planDay(ctx, db, run, day)
+	if err != nil {
+		return p, err
+	}
+	report, err := Guard(ctx, db, run, p.Day)
+	if err != nil {
+		return p, err
+	}
+	p.Guard = &report
+	return p, nil
 }
 
 // planDay 是 Plan 的主体，Swap 复用同一份统计，保证「核对的」与「执行的」是同一套口径。
@@ -109,7 +125,10 @@ var swapTestHook func(stage string, tx *sql.Tx) error
 //   - run 存在且 status=verified（没对拍通过的归档不能作为删除依据）；
 //   - day 在 run 的 DayFrom..DayTo 内；
 //   - 该日有独立日分区（行在默认分区时报错，要求先 EnsureDays，不去默认分区搬行）；
-//   - Plan 的 Archived > 0（事务外快路径：口径内连一个候选都没有）。
+//   - Plan 的 Archived > 0（事务外快路径：口径内连一个候选都没有）；
+//   - P4 切换闸门（事务外预检，Guard）：日结束不早于「有效下限 = max(min-age, temporal
+//     安全边界, 适用的消费者回读窗口)」之前，且口径相交的消费者都有越过待切日的持久进度
+//     （unknown 拒绝）。拒绝信息带日结束时间、下限数值、贡献最大值的来源与各消费者原因。
 //
 // 删除依据完全由重写事务内的集合校验承担（swapVerify，在 SHARE 锁内、删除前执行），
 // 事务外的 coldCount 只作警告性预检：与 Archived 不相等（超大、shadow 之后到达的行留热）
@@ -130,6 +149,16 @@ func Swap(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (Swap
 	}
 	if p.Archived == 0 {
 		return p, fmt.Errorf("%s 没有被 run %s 归档的事件（Archived=0），无需切换", p.Day.Format(time.DateOnly), runID)
+	}
+	// P4 闸门（事务外预检的一部分：任何写入之前）。结构检查（分区存在、口径内有候选）
+	// 在前，闸门在后——闸门只对「本来能切」的日子发表意见。
+	report, err := Guard(ctx, db, run, p.Day)
+	if err != nil {
+		return p, err
+	}
+	p.Guard = &report
+	if !report.Allow {
+		return p, report.refusal()
 	}
 	// 警告性预检：不再作为删除依据，只把差额记进逐日记录的 note，供运维解释
 	// 「计划移出 N、实际移出 M」的差。真正的删除依据是事务内 swapVerify 的集合校验。
@@ -156,6 +185,9 @@ func Swap(ctx context.Context, db *sql.DB, runID uuid.UUID, day time.Time) (Swap
 				RunDayVerified: true, Note: note,
 			})
 		},
+		// V09：swap 的派生清理按 guard.go 的逐表决策表收紧——temporal_evaluation_gaps
+		// 是有读者的诊断记录，不在 swap 里顺带删；retire 不受影响（走 eventpart 默认清单）。
+		DerivedSkip: swapDerivedSkip,
 		Observe: func(ctx context.Context, tx *sql.Tx, info eventpart.RewriteInfo, stage string) error {
 			if swapTestHook == nil {
 				return nil

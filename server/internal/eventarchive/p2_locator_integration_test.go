@@ -74,7 +74,7 @@ func p2LocatorRows(t *testing.T, ctx context.Context, db *sql.DB) int64 {
 // 三者同生共死，不会留下「有块没索引」。钩子置 nil 后重跑 shadow 成功且账目完整。
 func TestP2T07ChunkCountLocatorAtomicRollback(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
 	a := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 	b := p0Event(t, ctx, client, day.Add(20*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 
@@ -158,7 +158,7 @@ func TestP2T08LocatorIntegrityFailures(t *testing.T) {
 	// 每个子场景独立开库，互不污染。ChunkEvents=3：6 条事件封 2 块，错指块场景需要两块。
 	newCase := func(t *testing.T) (context.Context, *sql.DB, uuid.UUID, []uuid.UUID) {
 		ctx, client, db := p0Open(t)
-		day := p0Day(t, ctx, db, 1)
+		day := p0Day(t, ctx, db, 8)
 		var ids []uuid.UUID
 		for i := 1; i <= 6; i++ {
 			ids = append(ids, p0Event(t, ctx, client, day.Add(time.Duration(i*10)*time.Minute),
@@ -240,7 +240,7 @@ func TestP2T08LocatorIntegrityFailures(t *testing.T) {
 	})
 	t.Run("跨 run 重复副本合法", func(t *testing.T) {
 		ctx, client, db, runID, ids := newCaseWithClient(t)
-		day := p0Today().AddDate(0, 0, -1)
+		day := p0Today().AddDate(0, 0, -8)
 		// 第二轮 run 覆盖同一天：同一批事件再进一次冷块（跨 run 多副本）
 		runID2, err := Shadow(ctx, db, Options{From: day, To: day, Classes: p0Classes, Sources: p0Sources, Confirm: true})
 		if err != nil {
@@ -308,7 +308,7 @@ func TestP2T08LocatorIntegrityFailures(t *testing.T) {
 func newCaseWithClient(t *testing.T) (context.Context, *ent.Client, *sql.DB, uuid.UUID, []uuid.UUID) {
 	t.Helper()
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
 	var ids []uuid.UUID
 	for i := 1; i <= 6; i++ {
 		ids = append(ids, p0Event(t, ctx, client, day.Add(time.Duration(i*10)*time.Minute),
@@ -323,7 +323,7 @@ func newCaseWithClient(t *testing.T) (context.Context, *ent.Client, *sql.DB, uui
 // 回填 → 幂等重跑 0 块、覆盖性成立 → Exists 恢复确定语义。已 swap（热行已删）的块同样回填成功。
 func TestP2T09BackfillLegacyChunks(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
 	var ids []uuid.UUID
 	for i := 1; i <= 6; i++ {
 		ids = append(ids, p0Event(t, ctx, client, day.Add(time.Duration(i*10)*time.Minute),
@@ -331,8 +331,12 @@ func TestP2T09BackfillLegacyChunks(t *testing.T) {
 	}
 	runID := p0VerifiedRun(t, ctx, db, day, day)
 
-	// 再造一个「已 swap」的块（热行已删）：证明回填不依赖热行存在
-	swapDay := p0Day(t, ctx, db, 2)
+	// 再造一个「已 swap」的块（热行已删）：证明回填不依赖热行存在。
+	// 用另一天（比上面更老一天）：两个 run 各管各的日,结尾 Verify(第一个 run) 仍要求它的事件都在热表。
+	swapDay := p0Day(t, ctx, db, 9)
+	// P4 闸门夹具前提(同上)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, swapDay)
 	swapEvt := p0Event(t, ctx, client, swapDay.Add(time.Minute), 4001, "agent", `{"mark":"swapped"}`)
 	swapRun := p0VerifiedRun(t, ctx, db, swapDay, swapDay)
 	if _, err := Swap(ctx, db, swapRun, swapDay); err != nil {
@@ -427,7 +431,7 @@ func TestP2T09BackfillEmptyArchive(t *testing.T) {
 // 返回错误且第一块保留；恢复 payload 后重跑补齐。覆盖性推导在中间态如实判不完整。
 func TestP2T09BackfillInterruptAndRerun(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
 	for i := 1; i <= 6; i++ {
 		p0Event(t, ctx, client, day.Add(time.Duration(i*10)*time.Minute),
 			4001, "agent", `{"mark":"e","conn":{"dst":"10.0.0.1:443"}}`)
@@ -512,7 +516,7 @@ func TestP2T09BackfillInterruptAndRerun(t *testing.T) {
 // 不存在 id 未命中且覆盖完整 → 确定 false。
 func TestP2LocateAcrossRuns(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
 	target := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"t"}`)
 	for i := 0; i < 300; i++ {
 		p0Event(t, ctx, client, day.Add(time.Duration(20+i)*time.Second), 4001, "agent", `{"mark":"pad"}`)
@@ -584,7 +588,7 @@ func TestP2LocateAcrossRuns(t *testing.T) {
 // 实际发出的形态。反连接（覆盖性推导）的计划一并记录，形态由规划器按规模选择。
 func TestP2LocatorProbeUsesIndex(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
 	// 6000 条进 3 块（默认 2048/块）：locator 6000 行，足以让索引成为更优计划
 	if _, err := db.ExecContext(ctx, `INSERT INTO events (id, ts, class_uid, source, raw)
  SELECT gen_random_uuid(), $1::timestamptz + (g * interval '1 second'), 4001, 'agent',

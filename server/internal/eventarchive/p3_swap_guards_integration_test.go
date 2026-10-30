@@ -138,7 +138,10 @@ func TestP3T03PinRaceRollsBackSwap(t *testing.T) {
 	for _, stage := range []string{"after_copy", "before_replace"} {
 		t.Run(stage, func(t *testing.T) {
 			ctx, client, db := p0Open(t)
-			day := p0Day(t, ctx, db, 1)
+			day := p0Day(t, ctx, db, 8)
+			// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+			t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+			p4SeedConsumed(t, ctx, db, day)
 			a := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 			b := p0Event(t, ctx, client, day.Add(20*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 			runID := p0VerifiedRun(t, ctx, db, day, day)
@@ -149,6 +152,11 @@ func TestP3T03PinRaceRollsBackSwap(t *testing.T) {
 			select {
 			case <-parked:
 			case <-time.After(time.Minute):
+				select {
+				case out := <-done:
+					t.Fatalf("Swap 提前返回（没到注入阶段）: %v", out.err)
+				default:
+				}
 				t.Fatal("Swap 没有停在注入阶段：阶段名或注入方式与实现不符")
 			}
 
@@ -199,7 +207,10 @@ func TestP3T03PinRaceRollsBackSwap(t *testing.T) {
 // 排队只会放大锁窗口；不依赖 DDL 锁超时兜底（那要白等 3 秒）。
 func TestP3T04ConcurrentSecondSwapRejected(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	a := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 	b := p0Event(t, ctx, client, day.Add(20*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 	runID := p0VerifiedRun(t, ctx, db, day, day)
@@ -250,7 +261,10 @@ func TestP3T04ConcurrentSecondSwapRejected(t *testing.T) {
 // 悄悄排队），swap 提交后重跑 restore 幂等完成，不存在交错破坏。
 func TestP3T04SwapAndRestoreSerialize(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	a := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 	b := p0Event(t, ctx, client, day.Add(20*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 	runID := p0VerifiedRun(t, ctx, db, day, day)
@@ -299,6 +313,9 @@ func TestP3T04SwapAndRestoreSerialize(t *testing.T) {
 func TestP3T04SwapAndRetireSerialize(t *testing.T) {
 	ctx, client, db := p0Open(t)
 	day := p0Day(t, ctx, db, 40)
+	// P4 闸门夹具前提(同上)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	pin := p0Event(t, ctx, client, day.Add(1*time.Minute), 4001, "agent", `{"mark":"pin","conn":{"dst":"10.0.0.9:22"}}`)
 	p0Pin(t, ctx, client, day.Add(1*time.Minute), pin)
 	a := p0Event(t, ctx, client, day.Add(2*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
@@ -361,7 +378,10 @@ func TestP3T05FailuresRollBackAtomically(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, client, db := p0Open(t)
-			day := p0Day(t, ctx, db, 1)
+			day := p0Day(t, ctx, db, 8)
+			// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+			t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+			p4SeedConsumed(t, ctx, db, day)
 			a := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 			b := p0Event(t, ctx, client, day.Add(20*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 			runID := p0VerifiedRun(t, ctx, db, day, day)
@@ -440,7 +460,10 @@ func TestP3T05FailuresRollBackAtomically(t *testing.T) {
 //     已提交的切换不会二次删除）。下方的成功路径断言就是这条对账路径本身。
 func TestP3T06CommitUnknownDocumented(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	a := p0Event(t, ctx, client, day.Add(10*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 	b := p0Event(t, ctx, client, day.Add(20*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 	runID := p0VerifiedRun(t, ctx, db, day, day)
@@ -506,7 +529,10 @@ func TestP3T06CommitUnknownDocumented(t *testing.T) {
 // 重复执行（预检 Archived=0 快路径）。两者都不做 DETACH/DROP/RENAME/ATTACH。
 func TestP3SwapNoopWhenNothingDroppable(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	// 该日只有一条超大（无冷副本）与一条类别外的行：预检 Archived=1，但 D=∅
 	big := p0Event(t, ctx, client, day.Add(1*time.Minute), 4001, "agent",
 		`{"blob":"`+strings.Repeat("x", MaxEventBytes)+`"}`)
@@ -530,7 +556,8 @@ func TestP3SwapNoopWhenNothingDroppable(t *testing.T) {
 	}
 
 	// 换一天正常切换成功后，重复执行同一日：快路径同样报告无需操作
-	other := p0Day(t, ctx, db, 2)
+	other := p0Day(t, ctx, db, 8)
+	p4SeedConsumed(t, ctx, db, other)
 	c := p0Event(t, ctx, client, other.Add(time.Minute), 4001, "agent", `{"mark":"C","conn":{"dst":"10.0.0.3:443"}}`)
 	run2 := p0VerifiedRun(t, ctx, db, other, other)
 	if _, err := Swap(ctx, db, run2, other); err != nil {

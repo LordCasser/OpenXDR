@@ -66,6 +66,17 @@ func p0Open(t *testing.T) (context.Context, *ent.Client, *sql.DB) {
 			t.Fatalf("清空 %s: %v", table, err)
 		}
 	}
+	// 拆掉可能残留的月归档分区（events_aYYYYMM，跨整月会挡住本包要建的历史日分区）。
+	// 已知来源：janitor 的集成测试在其 t.Cleanup 里 DROP，但它的 defer db.Close() 先于
+	// cleanup 执行，DROP 静默失败（该测试自身的问题，不在本包修）；本包对共享测试库的
+	// 残留要自身免疫，不依赖跑测试前手工清库。
+	if _, err := db.ExecContext(ctx, `DO $$ DECLARE r record; BEGIN
+ FOR r IN SELECT c.relname FROM pg_class c JOIN pg_inherits i ON c.oid=i.inhrelid
+  WHERE i.inhparent='events'::regclass AND c.relname LIKE 'events_a%' LOOP
+  EXECUTE format('DROP TABLE IF EXISTS %I', r.relname);
+ END LOOP; END $$`); err != nil {
+		t.Fatalf("清理残留月归档分区: %v", err)
+	}
 	if swapTestHook != nil {
 		t.Fatal("测试前提：swapTestHook 必须为 nil（上一个用例的清理没执行）")
 	}
@@ -80,12 +91,17 @@ func p0Today() time.Time {
 
 // p0Day 取「今天减 daysAgo 天」的 UTC 日，并确保该日有独立日分区
 // （testdb 只预建今天起的分区，历史日必须显式建，否则 Swap 会因行在默认分区而拒绝）。
+// P4 起夹具要用一周以上的老日子（min-age/beacon/assetmap 回读窗口之外），这些日分区
+// 会落进 janitor 集成测试的退役窗口（它按个数断言自己退役的分区），用完即拆，不跨包泄漏。
 func p0Day(t *testing.T, ctx context.Context, db *sql.DB, daysAgo int) time.Time {
 	t.Helper()
 	day := p0Today().AddDate(0, 0, -daysAgo)
 	if _, err := eventpart.EnsureDays(ctx, db, eventpart.Parent, day, 0); err != nil {
 		t.Fatalf("建 %s 的日分区: %v", day.Format(time.DateOnly), err)
 	}
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DROP TABLE IF EXISTS ` + eventpart.DailyName(day))
+	})
 	return day
 }
 
@@ -374,7 +390,10 @@ func seedDiverseDay(t *testing.T, ctx context.Context, client *ent.Client, day t
 // 重复 Restore 插入 0 行；alerts / temporal_* 的关联内容前后不变。
 func TestP0RestoreBaselineKeepsLaterRowsAndEvidence(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 
 	// 证据关联放在今天（不在被切换的那天），保证「不变」不是「本来就是空的」
 	anchor := p0Event(t, ctx, client, p0Today().Add(time.Minute), 4001, "agent", `{"mark":"anchor"}`)
@@ -435,7 +454,10 @@ func TestP0RestoreBaselineKeepsLaterRowsAndEvidence(t *testing.T) {
 // 已在热表（冷层没有）的行不覆盖；冷层确实没有的事件返回 false 且不插行；重复物化幂等。
 func TestP0MaterializeFieldFidelityBaseline(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	f := seedDiverseDay(t, ctx, client, day)
 
 	all := f.allIDs()
@@ -512,7 +534,10 @@ func TestP0MaterializeFieldFidelityBaseline(t *testing.T) {
 // 可删事件则报告无需操作」由 p3_swap_guards 的 noop 用例覆盖）。
 func TestP0OversizedEventStaysHotOnSwap(t *testing.T) {
 	ctx, client, db := p0Open(t)
-	day := p0Day(t, ctx, db, 1)
+	day := p0Day(t, ctx, db, 8)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 	a := p0Event(t, ctx, client, day.Add(1*time.Minute), 4001, "agent", `{"mark":"A","conn":{"dst":"10.0.0.1:443"}}`)
 	b := p0Event(t, ctx, client, day.Add(2*time.Minute), 4001, "agent", `{"mark":"B","conn":{"dst":"10.0.0.2:443"}}`)
 	big := p0Event(t, ctx, client, day.Add(3*time.Minute), 4001, "agent",
@@ -591,6 +616,9 @@ func TestP0OversizedEventStaysHotOnSwap(t *testing.T) {
 func TestP0RestoreRoutingAfterRetireBaseline(t *testing.T) {
 	ctx, client, db := p0Open(t)
 	day := p0Day(t, ctx, db, 40)
+	// P4 闸门夹具前提:min-age 归零 + 播种消费者持久进度(闸门语义在 p4_*.go 正面覆盖)
+	t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
+	p4SeedConsumed(t, ctx, db, day)
 
 	pin := p0Event(t, ctx, client, day.Add(1*time.Minute), 4001, "agent", `{"mark":"pin","conn":{"dst":"10.0.0.9:22"}}`)
 	p0Pin(t, ctx, client, day.Add(1*time.Minute), pin)
