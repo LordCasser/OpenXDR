@@ -8,7 +8,8 @@
 //	       [-chunk-events 2048] [-chunk-bytes 1048576] -confirm
 //	verify -run <uuid>                               按 run 口径重扫对拍，通过才置 verified
 //	status -run <uuid>                               三类状态分层汇总：对拍资格 / 当前自校验 / 逐日操作记录（只读）
-//	backfill-locator -confirm                        给缺索引的旧块一次性补 locator 行（幂等）
+//	backfill-locator -confirm                        给缺索引的旧块一次性补 locator 行（幂等），
+//	                                               成功后发布 settings[archive.locator.complete] 完成标记
 //	report -run <uuid>                               归档前后的真实大小与压缩比
 //	locate -id <uuid>                                按事件 ID 找一条冷事件（只读）
 //	materialize -id <uuid> -confirm                  把一条冷事件物化回 events（幂等，不产告警）
@@ -74,7 +75,9 @@ func usage() {
        -chunk-bytes 1048576   单块未压缩明文字节上限
   verify -run <uuid>                                重扫对拍，通过后置 verified
   status -run <uuid>                                三类状态分层：对拍资格 / 当前自校验 / 逐日记录（只读，自校验要解压全部块）
-  backfill-locator -confirm                         给缺索引的旧冷块补 locator 行（一次性迁移，幂等）
+  backfill-locator -confirm                         给缺索引的旧冷块补 locator 行（一次性迁移，幂等）；
+                                                    成功后发布完成标记 settings[archive.locator.complete]，
+                                                    手工动过 locator 行后必须重跑本命令校正标记
   report -run <uuid>                                归档前后大小、压缩比与含索引对比
   locate -id <uuid>                                 按事件 ID 找一条冷事件（只读）
   materialize -id <uuid> -confirm                   把一条冷事件物化回 events（幂等，不产告警）
@@ -185,10 +188,21 @@ func run(ctx context.Context, db *sql.DB, cmd string, args []string) error {
 		}
 		if blocks == 0 {
 			fmt.Println("locator 已完整：没有任何冷块缺索引行（无需回填）")
-			return nil
+		} else {
+			fmt.Printf("已回填 %d 块的 locator 行，覆盖性核对通过（没有缺行的块）\n", blocks)
 		}
-		fmt.Printf("已回填 %d 块的 locator 行，覆盖性核对通过（没有缺行的块）\n", blocks)
-		fmt.Println("  下一步：Locate/Exists 未命中恢复「确定不存在」语义；重跑本命令幂等（返回 0 块）")
+		// R4：完成标记决定未命中路径是「确定不存在」还是反连接判定，必须打印让运维核对。
+		complete, err := eventarchive.LocatorComplete(ctx, db)
+		if err != nil {
+			return fmt.Errorf("回填成功但读完成标记失败: %w", err)
+		}
+		if complete {
+			fmt.Println("完成标记 settings[archive.locator.complete]=true：Locate/Exists 未命中为「确定不存在」，不再反连接全部块")
+			fmt.Println("  注意：手工增删 locator 行（不经过本命令）不会使该标记失效——动过 locator 必须重跑 backfill-locator 校正")
+		} else {
+			fmt.Println("完成标记未发布（false/缺失）：未命中仍按反连接判定，有缺行块时报 ErrLocatorIncomplete")
+		}
+		fmt.Println("  重跑本命令幂等（返回 0 块）")
 		return nil
 
 	case "report":

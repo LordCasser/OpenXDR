@@ -63,13 +63,13 @@ func swapOpen(t *testing.T) (context.Context, *ent.Client, *sql.DB) {
 	return ctx, client, db
 }
 
-// seedGuardConsumers 让 4001 口径的 run 通过消费进度闸门：beacon 最早基线早于日结束、
-// assetmap 游标越过日结束（与 eventarchive 包内 p4SeedConsumed 同口径，外部测试包够不着它）。
+// seedGuardConsumers 让 4001 口径的 run 通过消费进度闸门：beacon 的扫描完成标记
+// 与 assetmap 游标都越过日结束（与 eventarchive 包内 p4SeedConsumed 同口径，
+// 外部测试包够不着它）。R3 起走引擎同款写入器，不再播种 beacon_baselines.first_seen。
 func seedGuardConsumers(t *testing.T, ctx context.Context, db *sql.DB, day time.Time) {
 	t.Helper()
-	if _, err := db.ExecContext(ctx, `INSERT INTO beacon_baselines (id, asset_id, flow, first_seen)
- VALUES ($1, gen_random_uuid(), 'swap-test|guard|1', $2)`, uuid.Must(uuid.NewV7()), day.Add(-24*time.Hour)); err != nil {
-		t.Fatalf("播种 beacon 基线: %v", err)
+	if err := eventarchive.RecordBeaconScan(ctx, db, time.Now(), time.Now(), 7*24*time.Hour, 12*time.Hour); err != nil {
+		t.Fatalf("播种 beacon 扫描完成标记: %v", err)
 	}
 	cursor, _ := json.Marshal(time.Now())
 	if _, err := db.ExecContext(ctx, `INSERT INTO settings (id, value, updated_at)

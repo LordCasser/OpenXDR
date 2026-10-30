@@ -12,12 +12,9 @@ import (
 
 	"openxdr/server/internal/automation"
 	"openxdr/server/internal/cmdorigin"
-<<<<<<< HEAD
-	"openxdr/server/internal/graphqueue"
-=======
 	"openxdr/server/internal/eventarchive"
 	"openxdr/server/internal/eventpart"
->>>>>>> 900734a (fix(archive): 同日生命周期锁，关闭终检后引用竞态与 restore 块间隙交错（R1/R2）)
+	"openxdr/server/internal/graphqueue"
 	"openxdr/server/internal/identity"
 	"openxdr/server/internal/intel"
 	"openxdr/server/internal/sigma"

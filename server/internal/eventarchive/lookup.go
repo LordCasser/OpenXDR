@@ -30,10 +30,10 @@ import (
 // 它只经 main.go 的适配器调用 Exists 与 Boundary，且只在「事件时间不晚于归档边界」时
 // 发按 ID 查询；本包不知道自己被谁调用。
 
-// ErrLocatorIncomplete 表示「库里还有没有任何 locator 行的冷块（P2 之前的旧块尚未回填），
-// 探查未命中时**不能**断言冷层没有这条事件」。覆盖性推导见 backfill.go：
-// 「没有缺 locator 行的块」= 迁移完成。未回填期间未命中一律返回本错误，
-// 由调用方决定怎么处理（接入判重按既有策略 fail-open）。
+// ErrLocatorIncomplete 表示「冷层的 locator 覆盖性没有证明（持久完成标记未发布，且
+// 反连接仍发现没有 locator 行的块），探查未命中时**不能**断言冷层没有这条事件」。
+// 覆盖性见 backfill.go：标记 archive.locator.complete 未发布时退回反连接推导。
+// 未回填期间未命中一律返回本错误，由调用方决定怎么处理（接入判重按既有策略 fail-open）。
 // 命中语义不受覆盖性影响：索引行指向的块解出该 id 就是命中。
 var ErrLocatorIncomplete = errors.New("locator 索引不完整（存在未回填的冷块），无法确认事件不存在")
 
@@ -45,9 +45,10 @@ var ErrLocatorIncomplete = errors.New("locator 索引不完整（存在未回填
 //
 // 判定的强度分三档，调用方必须分清：
 //   - found=true：确定存在，返回的就是冷块里的那条事件；
-//   - found=false + err=nil：locator 覆盖完整（没有缺行的块），且索引里没有这个 id，
-//     确定冷层没有；
-//   - err=ErrLocatorIncomplete：索引未命中，但库里还有没回填的块，**无法确认**不存在。
+//   - found=false + err=nil：locator 覆盖完整（持久完成标记为 true，或反连接推导无缺行块），
+//     且索引里没有这个 id，确定冷层没有——R4 起证明从「每次未命中全库反连接」变为
+//     「持久标记 + 写入原子性」（新块经 writeChunk 同事务携带 locator，删块连带 CASCADE）；
+//   - err=ErrLocatorIncomplete：标记未发布，索引未命中且反连接仍发现缺行块，**无法确认**不存在。
 //
 // 与 Query 一样，块损坏整体报错、不跳过：跳过坏块等于把「查不到」伪装成「不存在」。
 func Locate(ctx context.Context, db *sql.DB, id uuid.UUID) (Event, bool, error) {
@@ -94,8 +95,18 @@ func locate(ctx context.Context, q dbQueryer, id uuid.UUID) (Event, bool, error)
 	rows.Close()
 
 	if len(chunkIDs) == 0 {
-		// 索引未命中：在「确定不存在」之前必须先确认索引覆盖了全部冷块。
-		// 有任何一块没有 locator 行（P2 之前写的旧块、或回填中断），未命中就说不清。
+		// 索引未命中：在「确定不存在」之前先证明覆盖了全部冷块。R4 起先读持久完成标记
+		//（settings 一次主键探查）——true 表示全库块都已带 locator（回填收尾核验过，
+		// 之后新块原子携带、删块 CASCADE），未命中即可确定不存在，不再对全部块元数据做
+		// 反连接（3.8 万块规模下每次未命中都全扫，D1 复活）。标记缺失/false 时保持原判定：
+		// 反连接查出缺口报 ErrLocatorIncomplete，由调用方按既有策略处理（接入 fail-open）。
+		complete, err := locatorComplete(ctx, q)
+		if err != nil {
+			return Event{}, false, err
+		}
+		if complete {
+			return Event{}, false, nil
+		}
 		missing, _, err := locatorIncompleteCount(ctx, q, 1)
 		if err != nil {
 			return Event{}, false, err

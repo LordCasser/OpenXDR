@@ -47,13 +47,13 @@ func p4VerifiedRun(t *testing.T, ctx context.Context, db *sql.DB, from, to time.
 	return runID
 }
 
-// p4SeedBeaconBaseline 播种一条 beacon 基线：让 min(first_seen) 落到指定时间
-// （ConsumedThrough 里 beacon 项的进度就是这张表的 min(first_seen)）。
-func p4SeedBeaconBaseline(t *testing.T, ctx context.Context, db *sql.DB, asset uuid.UUID, flow string, firstSeen time.Time) {
+// p4SeedBeaconScan 播种 beacon 的扫描完成标记：走真实写入器 RecordBeaconScan（引擎每轮
+// 收尾写的是同一行）。R3 起 ConsumedThrough 的 beacon 项读 settings[archive.beacon.scan]，
+// 不再读 beacon_baselines 的 min(first_seen)——基线是业务数据，不是读游标。
+func p4SeedBeaconScan(t *testing.T, ctx context.Context, db *sql.DB, through time.Time) {
 	t.Helper()
-	if _, err := db.ExecContext(ctx, `INSERT INTO beacon_baselines (id, asset_id, flow, first_seen)
- VALUES ($1, $2, $3, $4)`, uuid.Must(uuid.NewV7()), asset, flow, firstSeen); err != nil {
-		t.Fatalf("播种 beacon 基线: %v", err)
+	if err := RecordBeaconScan(ctx, db, through, time.Now(), beaconLearningDefault, beaconWindowDefault); err != nil {
+		t.Fatalf("播种 beacon 扫描完成标记: %v", err)
 	}
 }
 
@@ -68,11 +68,11 @@ func p4SeedAssetmapCursor(t *testing.T, ctx context.Context, db *sql.DB, at time
 	}
 }
 
-// p4SeedConsumed 让 4001/agent 口径的 run 通过消费进度闸门：beacon 的最早基线早于日结束、
-// assetmap 游标越过日结束（取 now）。日子的年龄条件由各用例自己控制环境变量。
+// p4SeedConsumed 让 4001/agent 口径的 run 通过消费进度闸门：beacon 的扫描完成标记
+// 与 assetmap 游标都越过日结束（取 now）。日子的年龄条件由各用例自己控制环境变量。
 func p4SeedConsumed(t *testing.T, ctx context.Context, db *sql.DB, day time.Time) {
 	t.Helper()
-	p4SeedBeaconBaseline(t, ctx, db, uuid.Must(uuid.NewV7()), "p4|consumed-marker|1", day.Add(-24*time.Hour))
+	p4SeedBeaconScan(t, ctx, db, time.Now())
 	p4SeedAssetmapCursor(t, ctx, db, time.Now())
 }
 
@@ -266,7 +266,7 @@ func TestP4T15bConsumerProgress(t *testing.T) {
 		ctx, client, db := p0Open(t)
 		t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
 		runID, day := seedDay(t, ctx, client, db, 20)
-		// 什么都不播种：beacon_baselines 空、settings 无游标 → 双 unknown
+		// 什么都不播种：settings 无 beacon 扫描标记、无 assetmap 游标 → 双 unknown
 		_, err := Swap(ctx, db, runID, day)
 		if err == nil {
 			t.Fatal("消费者 unknown 时必须拒绝")
@@ -283,12 +283,11 @@ func TestP4T15bConsumerProgress(t *testing.T) {
 		ctx, client, db := p0Open(t)
 		t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
 		runID, day := seedDay(t, ctx, client, db, 20)
-		p4SeedAssetmapCursor(t, ctx, db, time.Now())              // assetmap 追平
-		p4SeedBeaconBaseline(t, ctx, db, uuid.Must(uuid.NewV7()), // 最早基线比待切日还新
-			"p4|too-new|443", time.Now().Add(-time.Hour))
+		p4SeedAssetmapCursor(t, ctx, db, time.Now())         // assetmap 追平
+		p4SeedBeaconScan(t, ctx, db, day.Add(-24*time.Hour)) // 扫描完成上界还停在待切日之前
 		_, err := Swap(ctx, db, runID, day)
-		if err == nil || !strings.Contains(err.Error(), "beacon") || !strings.Contains(err.Error(), "first_seen") {
-			t.Fatalf("beacon 最早基线晚于日结束应拒绝并带 first_seen 依据，实际：%v", err)
+		if err == nil || !strings.Contains(err.Error(), "beacon") {
+			t.Fatalf("beacon 扫描完成上界早于日结束应拒绝并带 beacon 依据，实际：%v", err)
 		}
 		if err == nil || strings.Contains(err.Error(), "assetmap") {
 			t.Fatalf("assetmap 已追平，不应出现在拒绝原因里：%v", err)
@@ -299,7 +298,7 @@ func TestP4T15bConsumerProgress(t *testing.T) {
 		ctx, client, db := p0Open(t)
 		t.Setenv("EVENT_ARCHIVE_MIN_AGE_DAYS", "0")
 		runID, day := seedDay(t, ctx, client, db, 20)
-		p4SeedBeaconBaseline(t, ctx, db, uuid.Must(uuid.NewV7()), "p4|ok|443", day.Add(-24*time.Hour))
+		p4SeedBeaconScan(t, ctx, db, time.Now())
 		p4SeedAssetmapCursor(t, ctx, db, day.Add(-5*24*time.Hour)) // 游标还停在待切日之前
 		_, err := Swap(ctx, db, runID, day)
 		if err == nil || !strings.Contains(err.Error(), "assetmap") {
@@ -368,9 +367,8 @@ func p4BeaconBranch(t *testing.T, swap bool) (baselines, alerts []string) {
 	old := p0Day(t, ctx, db, 20)
 	asset := client.Asset.Create().SetHostname("p4-beacon").SetOs("linux").
 		SetFirstSeen(time.Now().Add(-40 * 24 * time.Hour)).SaveX(ctx)
-	// beacon 闸门：min(first_seen) ≤ 待切日结束。真实引擎不可能在 20 天前留下基线
-	//（学习期回放只到 now−LearningPeriod），这行代表「beacon 已运行超过 20 天」的持久证据。
-	p4SeedBeaconBaseline(t, ctx, db, asset.ID, "p4|seed-old|1", old.AddDate(0, 0, -5))
+	// beacon 闸门：R3 起读引擎自己写的扫描完成标记（archive.beacon.scan），下面引擎 #1
+	// 跑完一轮后该标记的 through≈now−30s，自然越过 20 天前的日结束；不再播种 first_seen。
 	p4SeedAssetmapCursor(t, ctx, db, time.Now()) // 4001 口径下 assetmap 同样相关
 
 	// 待切日内容：5 条普通出站（非周期，只作为被切走的行）
@@ -403,6 +401,9 @@ func p4BeaconBranch(t *testing.T, swap bool) (baselines, alerts []string) {
 	}
 	stop1 := runEngine()
 	p4PollCountAtLeast(t, ctx, db, `SELECT count(*) FROM beacon_baselines WHERE flow='|curl|443'`, 1)
+	// 扫描完成标记在基线之后、整轮收尾写入：见到它即证明引擎 #1 完整跑完了一轮
+	//（F1 已学进、副作用已提交）。这是 swap 分支过闸门用的真实标记，不是播种值。
+	p4PollCountAtLeast(t, ctx, db, `SELECT count(*) FROM settings WHERE id='archive.beacon.scan'`, 1)
 	stop1()
 
 	if swap {
@@ -489,8 +490,8 @@ func p4AssetmapBranch(t *testing.T, swap bool) []string {
 	// 这一行代表「图谱引擎从 21 天前就在跑」，引擎 #1 因此真的会消费待切日的事件
 	//（否则 swap 掉的是它从没读过的行，对照就测不到「已物化的边不因 swap 消失」）。
 	p4SeedAssetmapCursor(t, ctx, db, old.AddDate(0, 0, -1))
-	// 4001 口径下 beacon 闸门同样相关（本分支不跑 beacon，播种持久证据）
-	p4SeedBeaconBaseline(t, ctx, db, web.ID, "p4|amap-beacon|1", old.AddDate(0, 0, -5))
+	// 4001 口径下 beacon 闸门同样相关（本分支不跑 beacon，用引擎同款写入器播种标记）
+	p4SeedBeaconScan(t, ctx, db, time.Now())
 	// stop 等引擎 goroutine 真正退出（同 beacon 分支：不与 Swap/播种并发，也不在测试收尾后刷错误日志）
 	runEngine := func() (stop func()) {
 		e := &assetmap.Engine{DB: client, SQL: db, Interval: time.Hour}

@@ -239,35 +239,39 @@ func scopeIntersects(run Run, classes []int64, sources []string) bool {
 }
 
 // ConsumerProgress 是一个消费者的持久进度（只读汇总）。Classes/Sources 描述它回读的
-// 事件范围，用来判断它与某个 run 的口径是否相关。
+// 事件范围，用来判断它与某个 run 的口径是否相关。Note 在 Known=false 时给出
+// 「为什么 unknown」的具体说明（如配置指纹不一致），没有则用默认文案。
 type ConsumerProgress struct {
 	Name    string
 	Classes []int64
 	Sources []string // 空 = 任意来源
 	Through time.Time
 	Known   bool
+	Note    string
 }
 
 // ConsumedThrough 汇总会回读 events 的各消费者的持久进度（只读）。这是「轻量证明」，
 // 不是通用水位平台：每个消费者的持久状态语义不同，下面逐个写明这个值证明什么、
 // 不证明什么——它不得被当成「已消费到该时间」以外的任何保证。
 //
-// beacon — beacon_baselines 的 min(first_seen)（该表没有 created_at/updated_at 类的
+// beacon — settings[archive.beacon.scan]（引擎每完成一轮有固定上界的扫描后写入，
 //
-//	写入时间列，first_seen 是唯一的事件时间列：基线建立时该规律外联在窗口内的最早一次连接）：
-//	证明：外联心跳检测至少在 first_seen 这个事件时间处理过出站连接并留下持久基线
-//	     （基线只在处理事件时写入）。
-//	不证明：当前游标位置——游标只在内存，重启回退到 now−Window（有基线）或
-//	     now−LearningPeriod（无基线）；也不证明 [first_seen, now] 之间的事件都已消费，
-//	     重启后的重复告警只靠基线唯一性挡。
-//	闸门方向：min(first_seen) 晚于待切日结束、或表为空（unknown），都说明 beacon 的
-//	     持久证据没有延伸到待切日之前，拒绝。
+//	见 progress.go 的 RecordBeaconScan；载荷 {"through","at","rev"}）：
+//	证明：ts ≤ through 的 4001/agent 事件已全部读过，且该轮全部业务副作用（基线、
+//	     告警）成功提交后才发布；空区间/无命中同样推进（扫描完成 ≠ 有数据）。
+//	不证明：through 之后的迟到事件——那遵循既有接入契约，扫描上界不是迟到截止水位；
+//	     也不约束重启行为：游标回退到 now−窗口/学习期重新回放，重复告警由基线唯一性挡住。
+//	闸门方向：标记缺失、载荷损坏，或 rev 与当前配置指纹不一致（窗口扩大/版本切换使
+//	     旧证明失效）都按 unknown 拒绝；through 早于待切日结束同样拒绝。
 //
-// assetmap — settings[assetmap.cursor]（每批处理完与事件同事务落库的持久游标）：
+// assetmap — settings[assetmap.cursor]（jsonb {"ts":…,"id":…}，旧格式是裸时间）：
 //
-//	证明：4001/5001/5020 事件已物化进资产画像与依赖边到该时间为止（ts ≤ 游标）。
-//	不证明：游标之后的事件；也没有 settings 行（unknown）说明从未跑过，或首次启用的
-//	     7 天回填还没落第一批。
+//	证明：每批的依赖边/清单物化与游标 upsert 在同一事务提交，整批成功才推进
+//	     （批内任何一步失败整体回滚，游标不动）；ts ≤ 游标的 4001/5001/5020 事件
+//	     已物化。(ts,id) 元组游标保证同一时刻的多条事件不被批次边界或重启跳过
+//	     （R3 核对结论，见 assetmap/engine.go 的 batch）。
+//	不证明：游标之后的事件；没有 settings 行（unknown）说明从未跑过，或首次启用的
+//	     7 天回填还没落第一批。空区间（游标后没有事件）不推进——闸门按未追平保守拒绝。
 //	闸门方向：游标早于待切日结束 → 该日事件还没物化，拒绝。
 //
 // ueba — process_baselines 的 max(first_seen)（引擎重启从它恢复游标，只往前读）：
@@ -290,16 +294,39 @@ type ConsumerProgress struct {
 // 落下持久进度即可。宁可保守。
 func ConsumedThrough(ctx context.Context, db *sql.DB) ([]ConsumerProgress, error) {
 	out := make([]ConsumerProgress, 0, 4)
-	// beacon：min(first_seen)。NULL（表空）= unknown。
-	var beacon sql.NullTime
-	if err := db.QueryRowContext(ctx, `SELECT min(first_seen) FROM beacon_baselines`).Scan(&beacon); err != nil {
-		return nil, fmt.Errorf("读 beacon 基线进度: %w", err)
+	// beacon：settings[archive.beacon.scan]。R3 起不再读 beacon_baselines 的
+	// min(first_seen)——基线是业务数据不是读游标。无标记/载荷损坏/指纹不一致 = unknown。
+	var beaconRaw []byte
+	err := db.QueryRowContext(ctx, `SELECT value FROM settings WHERE id = $1`, BeaconScanKey).Scan(&beaconRaw)
+	beacon := ConsumerProgress{Name: "beacon", Classes: []int64{4001}, Sources: []string{"agent"}}
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		out = append(out, beacon)
+	case err != nil:
+		return nil, fmt.Errorf("读 beacon 扫描完成标记: %w", err)
+	default:
+		rev, rerr := beaconScanRevFromEnv()
+		if rerr != nil {
+			return nil, rerr
+		}
+		var m beaconScanMarker
+		switch {
+		case json.Unmarshal(beaconRaw, &m) != nil || m.Through.IsZero():
+			beacon.Note = "扫描完成标记存在但载荷读不懂（through 缺失或格式损坏），按 unknown 拒绝"
+			out = append(out, beacon)
+		case m.Rev != rev:
+			beacon.Note = fmt.Sprintf(
+				"扫描完成标记的配置指纹与当前不一致（标记 rev=%q，当前 rev=%q）：学习期/窗口变化使旧证明失效，等引擎用新配置跑完一轮后再切",
+				m.Rev, rev)
+			out = append(out, beacon)
+		default:
+			beacon.Through, beacon.Known = m.Through, true
+			out = append(out, beacon)
+		}
 	}
-	out = append(out, ConsumerProgress{Name: "beacon", Classes: []int64{4001}, Sources: []string{"agent"},
-		Through: beacon.Time, Known: beacon.Valid})
-	// assetmap：settings 里的游标（jsonb 编码的时间）。
+	// assetmap：settings 里的游标（jsonb {"ts":…,"id":…}；旧格式是裸时间，同值读取）。
 	var raw []byte
-	err := db.QueryRowContext(ctx, `SELECT value FROM settings WHERE id = 'assetmap.cursor'`).Scan(&raw)
+	err = db.QueryRowContext(ctx, `SELECT value FROM settings WHERE id = 'assetmap.cursor'`).Scan(&raw)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		out = append(out, ConsumerProgress{Name: "assetmap", Classes: []int64{4001, 5001, 5020}})
@@ -307,7 +334,13 @@ func ConsumedThrough(ctx context.Context, db *sql.DB) ([]ConsumerProgress, error
 		return nil, fmt.Errorf("读 assetmap 游标: %w", err)
 	default:
 		var at time.Time
-		if json.Unmarshal(raw, &at) != nil {
+		var tuple struct {
+			Ts time.Time `json:"ts"`
+		}
+		if json.Unmarshal(raw, &tuple) == nil && !tuple.Ts.IsZero() {
+			out = append(out, ConsumerProgress{Name: "assetmap", Classes: []int64{4001, 5001, 5020},
+				Through: tuple.Ts, Known: true})
+		} else if json.Unmarshal(raw, &at) != nil {
 			out = append(out, ConsumerProgress{Name: "assetmap", Classes: []int64{4001, 5001, 5020}})
 		} else {
 			out = append(out, ConsumerProgress{Name: "assetmap", Classes: []int64{4001, 5001, 5020},
@@ -330,9 +363,9 @@ func ConsumedThrough(ctx context.Context, db *sql.DB) ([]ConsumerProgress, error
 	return out, nil
 }
 
-// checkConsumption 把各消费者的持久进度对照待切日结束逐个判定。beacon 的方向与其余
-// 三个相反：它的进度是「持久证据覆盖到的最早时间」（min），要延伸到待切日之前才算数；
-// assetmap/ueba/automation 的进度是「游标已推进到的最晚时间」（max），要越过待切日才算数。
+// checkConsumption 把各消费者的持久进度对照待切日结束逐个判定。R3 起四项进度同向：
+// 都是「游标/完成上界已推进到的位置」（max 语义），要越过待切日才算数——beacon 此前
+// 「min(first_seen) 反向覆盖」的判定已随代理证明一起废弃（见 ConsumedThrough 的 beacon 注释）。
 // 纯函数：只消费 ConsumedThrough 读出的值与 run 口径。
 func checkConsumption(run Run, dayEnd time.Time, progress []ConsumerProgress) []ConsumerCheck {
 	checks := make([]ConsumerCheck, 0, len(progress))
@@ -345,15 +378,13 @@ func checkConsumption(run Run, dayEnd time.Time, progress []ConsumerProgress) []
 				p.Classes, p.Sources, run.Classes, run.Sources)
 		case !p.Known:
 			c.OK = false
-			c.Reason = "没有持久进度可读（unknown）：表/游标为空，无法证明已处理待切日"
-		case p.Name == "beacon":
-			// min(first_seen) 必须不晚于日结束：最早基线都晚于待切日 ⇒ 持久证据没覆盖到它之前。
-			c.Through = p.Through
-			c.OK = !p.Through.After(dayEnd)
-			c.Reason = fmt.Sprintf("beacon 最早基线 first_seen=%s（min），要求 ≤ 日结束 %s",
-				p.Through.Format(time.RFC3339), dayEnd.Format(time.RFC3339))
+			if p.Note != "" {
+				c.Reason = p.Note
+			} else {
+				c.Reason = "没有持久进度可读（unknown）：游标/完成标记为空，无法证明已处理待切日"
+			}
 		default:
-			// 游标类进度必须不早于日结束：还落在待切日之前 ⇒ 该日事件尚未消费。
+			// 游标/扫描完成上界必须不早于日结束：还落在待切日之前 ⇒ 该日事件尚未消费。
 			c.Through = p.Through
 			c.OK = !p.Through.Before(dayEnd)
 			c.Reason = fmt.Sprintf("%s 持久进度=%s，要求 ≥ 日结束 %s",
