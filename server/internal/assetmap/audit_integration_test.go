@@ -41,7 +41,7 @@ func TestGraphAuditFindsGapsWithoutCountingPending(t *testing.T) {
 	if err := p.Process(ctx, pending); err != nil {
 		t.Fatal(err)
 	}
-	since, until := ev.Timestamp.Add(-2*time.Minute), ev.Timestamp.Add(time.Minute)
+	since, until := ev.Timestamp.Add(-2*time.Hour), ev.Timestamp.Add(time.Hour)
 	report, err := AuditGraph(ctx, db, since, until, 100, false)
 	if err != nil {
 		t.Fatal(err)

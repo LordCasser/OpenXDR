@@ -196,12 +196,13 @@ server 原样落库）；sensor 与 syslog 的归一化在 **server 侧**完成�
 - 路径按 /lib/modules/$(uname -r)/ 解析，解析失败只报名字不编造路径；
   /proc/modules 拿不到加载者——进程与 username 留空（那是 audit/eBPF 的领域）
 
-### 软件清单（software，Linux dpkg）
+### 软件清单（software，Linux dpkg / RPM）
 
 `software.rs` 每 30 分钟跑一次 `dpkg-query`，取状态 `ii` 的包名、版本、源码包与源码版本，连同 `/etc/os-release`
-的发行版与版本号报 OCSF 5020；清单变了才报，最长 24 小时补报。没有 dpkg 的主机健康快照里 `software` 为不可用。
-监听清单里每个服务进程的可执行文件用 `dpkg -S` 查所属包（按路径缓存），攻击面据此标出暴露服务的漏洞。
-匹配逻辑见 [vulns.md](vulns.md)。
+的发行版与版本号报 OCSF 5020；清单变了才报，最长 24 小时补报。没有 dpkg-query 时改用 `rpm -qa`，
+保留 RPM 二进制包 epoch 与源码包信息，排除 GPG 密钥条目；没有两类查询器的主机标为不可用。
+监听清单里每个服务进程的可执行文件用 `dpkg -S` 或 `rpm -qf` 查所属包（按路径缓存）。
+RPM 当前只支持清单，不支持漏洞匹配；Debian / Ubuntu 的 dpkg 清单可关联 OSV 公告，详见 [vulns.md](vulns.md)。
 
 ### 设备清单（inventory，监听端口与云环境）
 

@@ -72,49 +72,60 @@ func AuditGraph(ctx context.Context, db *sql.DB, since, until time.Time, maxEven
 			managed[ip] = true
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `DECLARE graph_audit NO SCROLL CURSOR FOR
-SELECT id,ts,class_uid,source,asset_id,process_guid,conn_tuple,raw FROM events
-WHERE class_uid=4001 AND ts >= $1 AND ts < $2`, since, until); err != nil {
-		return report, err
-	}
 	observed := map[linkKey]int64{}
-	for {
-		events, err := auditBatch(ctx, tx)
-		if err != nil {
+	// 保持同一个 MVCC 快照；按小时限制稀疏事件区间的扫描量。
+	for windowStart := since; windowStart.Before(until); windowStart = windowStart.Add(time.Hour) {
+		windowEnd := windowStart.Add(time.Hour)
+		if until.Before(windowEnd) {
+			windowEnd = until
+		}
+		if _, err = tx.ExecContext(ctx, `DECLARE graph_audit NO SCROLL CURSOR FOR
+SELECT id,ts,class_uid,source,asset_id,process_guid,conn_tuple,raw FROM events
+WHERE class_uid=4001 AND ts >= $1 AND ts < $2`, windowStart, windowEnd); err != nil {
 			return report, err
 		}
-		if len(events) == 0 {
-			break
-		}
-		report.Events += len(events)
-		if report.Events > maxEvents {
-			return report, fmt.Errorf("图谱核对超过 %d 条事件上限，未完成核对", maxEvents)
-		}
-		pending, err := auditPending(ctx, tx, events)
-		if err != nil {
-			return report, err
-		}
-		eligible := events[:0]
-		for _, ev := range events {
-			if pending[ev.ID] {
-				report.Pending++
-				continue
+		for {
+			events, err := auditBatch(ctx, tx)
+			if err != nil {
+				return report, fmt.Errorf("扫描网络事件 %s 至 %s：%w", windowStart.Format(time.RFC3339), windowEnd.Format(time.RFC3339), err)
 			}
-			eligible = append(eligible, ev)
-		}
-		names, err := processNamesFrom(ctx, tx, eligible)
-		if err != nil {
-			return report, err
-		}
-		for _, ev := range eligible {
-			key, _, ok := eventLink(ev, own, names, managed)
-			if !ok {
-				continue
+			if len(events) == 0 {
+				break
 			}
-			observed[key]++
-			report.Contributing++
+			report.Events += len(events)
+			if report.Events > maxEvents {
+				return report, fmt.Errorf("图谱核对超过 %d 条事件上限，未完成核对", maxEvents)
+			}
+			pending, err := auditPending(ctx, tx, events)
+			if err != nil {
+				return report, err
+			}
+			eligible := events[:0]
+			for _, ev := range events {
+				if pending[ev.ID] {
+					report.Pending++
+					continue
+				}
+				eligible = append(eligible, ev)
+			}
+			names, err := processNamesFrom(ctx, tx, eligible)
+			if err != nil {
+				return report, fmt.Errorf("回查进程名称：%w", err)
+			}
+			for _, ev := range eligible {
+				key, _, ok := eventLink(ev, own, names, managed)
+				if !ok {
+					continue
+				}
+				observed[key]++
+				report.Contributing++
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `CLOSE graph_audit`); err != nil {
+			return report, err
 		}
 	}
+
 	report.ObservedLinks = len(observed)
 	rows, err := tx.QueryContext(ctx, `SELECT src_ip,dst_ip,dst_port,proto,process,count FROM asset_links`)
 	if err != nil {

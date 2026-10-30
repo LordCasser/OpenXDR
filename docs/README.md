@@ -23,7 +23,7 @@
 | [open-integrations-design.md](open-integrations-design.md) | 资产导出与系统联动详细设计（待实施）：集成身份、API、事件订阅、工单回写及验收 | 实施导出、CMDB 对接或工单联动前 |
 | [roadmap.md](roadmap.md) | 路线图：2026-10-29 实现/部署/验收状态、当前 P0/P1/P2 与完成条件、历史记录 | 决定"接下来做什么"之前 |
 | [pi-backend.md](pi-backend.md) | AI 助手后端：会话与后台运行、命令名单与审批、只读查询、运维待办、预设任务 | 配置 AI 助手与巡检；改 `agentchat`、`commandgate` |
-| [vulns.md](vulns.md) | 软件漏洞：dpkg 软件清单、OSV 漏洞库同步、版本比较与暴露服务标注、已知限制 | 看主机漏洞；改 `vuln` 或 agent 软件清单 |
+| [vulns.md](vulns.md) | 软件漏洞：dpkg / RPM 软件清单、OSV 漏洞库同步、版本比较与暴露服务标注、已知限制 | 看主机漏洞；改 `vuln` 或 agent 软件清单 |
 | [temporal-detection.md](temporal-detection.md) | 时序检测（开发中）：计数与序列规则格式、加载约束、求值与存储 | 写时序规则；改 `temporal` |
 | [identity-correlation.md](identity-correlation.md) | 身份关联（开发中）：Linux / Windows 登录归一化、本地账号、Keycloak / Entra ID / Authentik / AD-LDAP 目录同步 | 接入身份来源；改 `identity` |
 | [asset-map.md](asset-map.md) | 资产图谱与攻击面：设备清单、依赖边、区域与暴露级别、风险分、AI 标注 | 看资产关系与暴露面；改 `assetmap` 或 agent inventory |
